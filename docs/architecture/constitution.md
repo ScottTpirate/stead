@@ -30,7 +30,7 @@ Feature implementation may begin only after the project owner records approval o
 - canonical entity/resource/relationship schemas;
 - the security-label schema, profile rules, and join/lattice contract;
 - OpenFGA model v0.1 and model/migration tests;
-- OPA input/output and decision contract;
+- policy-decision input/output and decision contract;
 - capability-specific provider interfaces;
 - the OpenAPI 3.1.1 skeleton and RFC 9457 error profile;
 - the AsyncAPI 3.1.x skeleton, CloudEvents profile, and event naming rules;
@@ -57,7 +57,7 @@ The following decisions are locked. Changing any one requires an ADR and explici
 6. NATS JetStream is present from the first vertical slice.
 7. Domain events use a transactional outbox.
 8. OpenFGA owns relationship and need-to-know authorization.
-9. OPA/Rego owns classification, ABAC, handling, context, and explicit-deny policy.
+9. A separate deterministic policy layer owns classification, ABAC/context, handling, information-flow, infrastructure, and explicit-deny decisions; its implementation is selected by ADR, and OPA/Rego is an allowed option rather than a required dependency.
 10. Documentation uses Git, Markdown, and an OKF-compatible profile.
 11. The canonical ontology and workflow are fixed and opinionated, with universal `deliverable`, `task`, and `problem` Work Item semantics.
 12. Every Platform Project has exactly one dedicated Gitea tracker repository.
@@ -80,7 +80,7 @@ The following decisions are locked. Changing any one requires an ADR and explici
 29. Project lifecycle states are planned, active, paused, completed, and canceled; archive is separate and reversible.
 30. Canonical document types use universal semantics; software-specific names are display labels only.
 
-The project/repository name is **Stead**. Directive-defined component and API names such as `platform-web`, `platform-core`, `platform-worker`, and `platformctl` remain unchanged unless an approved ADR updates their public naming and migration plan.
+The project/repository and deployable component names are **Stead**, `stead-web`, `stead-api`, `stead-worker`, and `steadctl`. These names are concrete interfaces; generic architectural uses of “platform” remain descriptive prose.
 
 ## 4. Architectural invariants
 
@@ -88,7 +88,7 @@ The project/repository name is **Stead**. Directive-defined component and API na
 
 Routine users receive one shell, navigation model, search, inbox, identity, and authorization model. The browser calls only the versioned platform API. Raw upstream interfaces are restricted administrative escape routes and are never the normal workflow.
 
-Every protected operation is deny-by-default and evaluates authentication, trusted attributes/session context, canonical resource and effective label, OpenFGA, OPA, provider/path enforcement, and audit metadata. No administrator role implies a classification or need-to-know bypass. UI hiding is not authorization.
+Every protected operation is deny-by-default and evaluates authentication, trusted attributes/session context, canonical resource and effective label, OpenFGA, the policy-decision layer, provider/path enforcement, and audit metadata. No administrator role implies a classification or need-to-know bypass. UI hiding is not authorization.
 
 All new contracts distinguish a human identity from the acting principal. `PrincipalRef` permits `user`, `agent`, `service_account`, and non-acting `directory_group`; Agent and Agent Run are canonical entities, but runtime execution remains outside Phase 0. Actors, assignees, creators, reviewers, subscribers, and request principals are not assumed to be human. Agents inherit no broad human permission set. The authorization seam preserves explicit delegation, task scope, independently revocable agent authority, runtime/environment context, and the intersection of delegator, agent, task, runtime-domain/session, and resource-label constraints.
 
@@ -97,8 +97,8 @@ All new contracts distinguish a human identity from the acting principal. `Princ
 - Platform modules own their tables and migrations; a module never writes another module's tables.
 - Gitea and OpenFGA retain supported datastore boundaries.
 - Gitea integration uses supported APIs, webhooks, Git protocols, authentication, and configuration only.
-- `platform-core` performs synchronous domain operations and writes its outbox atomically.
-- `platform-worker` publishes/consumes/reconciles/indexes/notifies/audits/imports with idempotent at-least-once semantics.
+- `stead-api` performs synchronous domain operations and writes its outbox atomically.
+- `stead-worker` publishes/consumes/reconciles/indexes/notifies/audits/imports with idempotent at-least-once semantics.
 - NATS, search, activity, graph, inbox-derived views, and analytics are transport or rebuildable projections, not authoritative business stores.
 - Provider implementations sit behind narrow capability interfaces. Provider-specific locators and types do not leak into canonical clients or domain schemas.
 - Future agents use canonical Platform APIs and the platform-wide MCP interface for business resources. They do not use provider-specific business APIs. Direct Git protocol access is permitted only with scoped credentials that remain subject to central/provider enforcement.

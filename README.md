@@ -37,7 +37,7 @@ scripts/validate_json_schemas.sh
 
 ## Naming
 
-**Stead** is the project and repository name. Directive-defined component contract names (`platform-web`, `platform-core`, `platform-worker`, and `platformctl`) remain in force unless an approved ADR supplies a compatibility and migration plan.
+**Stead** is the project and repository name. Directive-defined component contract names (`stead-web`, `stead-api`, `stead-worker`, and `steadctl`) remain in force unless an approved ADR supplies a compatibility and migration plan.
 
 ## License
 

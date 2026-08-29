@@ -1,7 +1,7 @@
 name: Stead OpenFGA v0.1 authorization contract
 model_file: ./model.fga
 
-# Every OpenFGA allow remains subject to OPA and provider/path enforcement.
+# Every OpenFGA allow remains subject to policy-decision layer and provider/path enforcement.
 # Resource-delegation tuples are written only after the delegator is authorized
 # for that action. The separate enabled tuple is the independently removable
 # revocation fence; the tuple lifecycle is audited by the platform.

@@ -13,15 +13,16 @@ DOCUMENTS = %w[
   specs/schema-registry.yaml
   specs/work-graph-profile/owgp-v0.1.schema.json
   specs/openapi/platform-v1.yaml
-  specs/asyncapi/platform.yaml
+  specs/asyncapi/stead.yaml
   specs/provider-interfaces.yaml
+  specs/mcp/compatibility-v0.1.yaml
   specs/migration/migration-job-v0.1.schema.json
   specs/migration/canonical-model-v0.1.yaml
   packages/event-schemas/common/actor-context/actor-context-v0.1.schema.json
-  packages/event-schemas/platform/platform-event-v0.1.schema.json
-  policies/opa/input-v0.1.schema.json
-  policies/opa/output-v0.1.schema.json
-  policies/opa/decision-table.yaml
+  packages/event-schemas/stead/stead-event-v0.1.schema.json
+  policies/policy-decision/input-v0.1.schema.json
+  policies/policy-decision/output-v0.1.schema.json
+  policies/policy-decision/decision-table.yaml
   policies/security-label-profiles/profile-v0.1.schema.json
   policies/security-label-profiles/commercial.yaml
   policies/security-label-profiles/us-government.yaml
@@ -34,9 +35,9 @@ DOCUMENTS = %w[
 JSON_SCHEMA_DOCUMENTS = %w[
   specs/work-graph-profile/owgp-v0.1.schema.json
   packages/event-schemas/common/actor-context/actor-context-v0.1.schema.json
-  packages/event-schemas/platform/platform-event-v0.1.schema.json
-  policies/opa/input-v0.1.schema.json
-  policies/opa/output-v0.1.schema.json
+  packages/event-schemas/stead/stead-event-v0.1.schema.json
+  policies/policy-decision/input-v0.1.schema.json
+  policies/policy-decision/output-v0.1.schema.json
   specs/migration/migration-job-v0.1.schema.json
   policies/security-label-profiles/profile-v0.1.schema.json
   policies/deployment-domains/domain-profile-v0.1.schema.json
@@ -57,25 +58,25 @@ FINAL_DEFINITIONS = %w[
 ].freeze
 
 EXPECTED_EVENT_CATALOG = {
-  "organizationEvents" => %w[platform.organization.created.v1 platform.organization.updated.v1 platform.team.created.v1 platform.team.updated.v1 platform.team.reparented.v1 platform.team.membership_changed.v1],
-  "identityEvents" => %w[platform.identity.provisioned.v1 platform.identity.updated.v1 platform.identity.suspended.v1 platform.agent.registered.v1 platform.agent.revoked.v1],
-  "authorizationEvents" => %w[platform.authorization.model_activated.v1 platform.authorization.tuple_changed.v1 platform.authorization.delegation_revoked.v1 platform.authorization.policy_activated.v1],
-  "classificationEvents" => %w[platform.classification.label_raised.v1 platform.classification.label_lowered.v1 platform.classification.profile_activated.v1 platform.classification.ceiling_changed.v1 platform.classification.attribute_changed.v1],
-  "projectEvents" => %w[platform.project.created.v1 platform.project.updated.v1 platform.project.capability_changed.v1 platform.initiative.changed.v1 platform.cycle.changed.v1],
-  "workEvents" => %w[platform.workitem.created.v1 platform.workitem.updated.v1 platform.workitem.assigned.v1 platform.workitem.related.v1],
-  "commentEvents" => %w[platform.comment.created.v1 platform.comment.updated.v1 platform.comment.deleted.v1],
-  "knowledgeEvents" => %w[platform.document.created.v1 platform.document.updated.v1 platform.document.review_requested.v1 platform.document.approved.v1 platform.document.superseded.v1],
-  "scmEvents" => %w[platform.scm.repository_changed.v1 platform.scm.branch_changed.v1 platform.scm.commit_recorded.v1 platform.scm.pull_request_changed.v1 platform.scm.reconciled.v1],
-  "ciEvents" => %w[platform.ci.build_changed.v1 platform.ci.deployment_changed.v1 platform.ci.runner_changed.v1 platform.ci.action_changed.v1],
-  "artifactEvents" => %w[platform.artifact.artifact_changed.v1 platform.artifact.package_changed.v1 platform.artifact.release_changed.v1],
-  "attachmentEvents" => %w[platform.attachment.created.v1 platform.attachment.scanned.v1 platform.attachment.deleted.v1],
-  "storageEvents" => %w[platform.storage.scan_changed.v1 platform.storage.retention_changed.v1 platform.storage.provider_operation_changed.v1],
-  "searchGraphEvents" => %w[platform.search_graph.rebuild_started.v1 platform.search_graph.rebuild_completed.v1 platform.search_graph.rebuild_failed.v1],
-  "notificationEvents" => %w[platform.notification.created.v1 platform.notification.read.v1 platform.notification.delivery_changed.v1 platform.notification.suppressed.v1],
-  "auditEvents" => %w[platform.audit.checkpoint_created.v1 platform.audit.export_changed.v1],
-  "migrationEvents" => %w[platform.migration.stage_changed.v1 platform.migration.reconciled.v1 platform.migration.cutover_changed.v1],
-  "operationsEvents" => %w[platform.operations.install_changed.v1 platform.operations.upgrade_changed.v1 platform.operations.backup_changed.v1 platform.operations.restore_changed.v1 platform.operations.doctor_changed.v1],
-  "deadLetterEvents" => %w[platform.dead_letter.recorded.v1 platform.dead_letter.replayed.v1]
+  "organizationEvents" => %w[stead.organization.created.v1 stead.organization.updated.v1 stead.team.created.v1 stead.team.updated.v1 stead.team.reparented.v1 stead.team.membership_changed.v1],
+  "identityEvents" => %w[stead.identity.provisioned.v1 stead.identity.updated.v1 stead.identity.suspended.v1 stead.agent.registered.v1 stead.agent.revoked.v1],
+  "authorizationEvents" => %w[stead.authorization.model_activated.v1 stead.authorization.tuple_changed.v1 stead.authorization.delegation_revoked.v1 stead.authorization.policy_activated.v1],
+  "classificationEvents" => %w[stead.classification.label_raised.v1 stead.classification.label_lowered.v1 stead.classification.profile_activated.v1 stead.classification.ceiling_changed.v1 stead.classification.attribute_changed.v1],
+  "projectEvents" => %w[stead.project.created.v1 stead.project.updated.v1 stead.project.capability_changed.v1 stead.initiative.changed.v1 stead.cycle.changed.v1],
+  "workEvents" => %w[stead.workitem.created.v1 stead.workitem.updated.v1 stead.workitem.assigned.v1 stead.workitem.related.v1],
+  "commentEvents" => %w[stead.comment.created.v1 stead.comment.updated.v1 stead.comment.deleted.v1],
+  "knowledgeEvents" => %w[stead.document.created.v1 stead.document.updated.v1 stead.document.review_requested.v1 stead.document.approved.v1 stead.document.superseded.v1],
+  "scmEvents" => %w[stead.scm.repository_changed.v1 stead.scm.branch_changed.v1 stead.scm.commit_recorded.v1 stead.scm.pull_request_changed.v1 stead.scm.reconciled.v1],
+  "ciEvents" => %w[stead.ci.build_changed.v1 stead.ci.deployment_changed.v1 stead.ci.runner_changed.v1 stead.ci.action_changed.v1],
+  "artifactEvents" => %w[stead.artifact.artifact_changed.v1 stead.artifact.package_changed.v1 stead.artifact.release_changed.v1],
+  "attachmentEvents" => %w[stead.attachment.created.v1 stead.attachment.scanned.v1 stead.attachment.deleted.v1],
+  "storageEvents" => %w[stead.storage.scan_changed.v1 stead.storage.retention_changed.v1 stead.storage.provider_operation_changed.v1],
+  "searchGraphEvents" => %w[stead.search_graph.rebuild_started.v1 stead.search_graph.rebuild_completed.v1 stead.search_graph.rebuild_failed.v1],
+  "notificationEvents" => %w[stead.notification.created.v1 stead.notification.read.v1 stead.notification.delivery_changed.v1 stead.notification.suppressed.v1],
+  "auditEvents" => %w[stead.audit.checkpoint_created.v1 stead.audit.export_changed.v1],
+  "migrationEvents" => %w[stead.migration.stage_changed.v1 stead.migration.reconciled.v1 stead.migration.cutover_changed.v1],
+  "operationsEvents" => %w[stead.operations.install_changed.v1 stead.operations.upgrade_changed.v1 stead.operations.backup_changed.v1 stead.operations.restore_changed.v1 stead.operations.doctor_changed.v1],
+  "deadLetterEvents" => %w[stead.dead_letter.recorded.v1 stead.dead_letter.replayed.v1]
 }.freeze
 
 def parse(path)
@@ -247,8 +248,10 @@ failures << "OpenAPI Problem must reject undeclared disclosure fields" unless op
 search_results_schema = openapi.dig("components", "responses", "SearchResults", "content", "application/json", "schema") || {}
 failures << "OpenAPI SearchResults wrapper must reject undeclared aggregate fields" unless search_results_schema["additionalProperties"] == false
 
-asyncapi = documents["specs/asyncapi/platform.yaml"] || {}
+asyncapi = documents["specs/asyncapi/stead.yaml"] || {}
 failures << "AsyncAPI version must be 3.1.x" unless asyncapi["asyncapi"].to_s.start_with?("3.1.")
+event_type_pattern = asyncapi.dig("components", "schemas", "SteadCloudEventEnvelope", "properties", "type", "pattern")
+failures << "AsyncAPI base CloudEvent envelope must enforce the Stead event namespace" unless event_type_pattern == '^stead\\.[a-z0-9_]+\\.[a-z0-9_]+\\.v[1-9][0-9]*$'
 operation_refs = Array(asyncapi["operations"]).each_with_object(Hash.new { |hash, key| hash[key] = Set.new }) do |(_name, operation), refs|
   refs[operation["action"]] << operation.dig("channel", "$ref")
 end
@@ -263,6 +266,11 @@ failures << "AsyncAPI omits event catalog channels: #{missing_event_channels.joi
 unexpected_event_channels = (asyncapi["channels"] || {}).keys - required_event_channels
 failures << "AsyncAPI adds unapproved event catalog channels: #{unexpected_event_channels.join(', ')}" unless unexpected_event_channels.empty?
 (asyncapi["channels"] || {}).each do |channel, contract|
+  address = contract["address"]
+  unless address.is_a?(String) && address.match?(%r{\Astead\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*\.v[1-9][0-9]*\z})
+    failures << "AsyncAPI channel #{channel} address must use stead.<domain>.<action>.v<major>"
+  end
+
   declared_types = contract["x-event-types"]
   failures << "AsyncAPI channel #{channel} must enumerate event types" unless declared_types.is_a?(Array) && !declared_types.empty?
   failures << "AsyncAPI channel #{channel} differs from the approved event catalog" unless declared_types == EXPECTED_EVENT_CATALOG[channel]
@@ -286,7 +294,7 @@ end
 all_event_types = (asyncapi["channels"] || {}).values.flat_map { |contract| Array(contract["x-event-types"]) }
 failures << "AsyncAPI event type values must belong to exactly one channel family" unless all_event_types.uniq.length == all_event_types.length
 
-event_data = documents["packages/event-schemas/platform/platform-event-v0.1.schema.json"] || {}
+event_data = documents["packages/event-schemas/stead/stead-event-v0.1.schema.json"] || {}
 event_required = event_data["required"] || []
 failures << "Event data must require idempotency_key" unless event_required.include?("idempotency_key")
 failures << "Event data must not require capability context" if event_required.include?("capability_context") || event_required.include?("capabilities")
@@ -320,21 +328,45 @@ deployment_schema = documents["policies/deployment-domains/domain-profile-v0.1.s
   validate_instance(profile, deployment_schema, "#{name} deployment-domain profile", failures)
 end
 
-opa_input = documents["policies/opa/input-v0.1.schema.json"] || {}
-failures << "OPA input must use structured authorization" unless Array(opa_input["required"]).include?("authorization") && !opa_input.key?("relationship_authorized")
-agent_terms = opa_input.dig("properties", "authorization", "properties", "agent_intersection", "required") || []
+policy_input = documents["policies/policy-decision/input-v0.1.schema.json"] || {}
+failures << "policy-decision input must use structured authorization" unless Array(policy_input["required"]).include?("authorization") && !policy_input.key?("relationship_authorized")
+agent_terms = policy_input.dig("properties", "authorization", "properties", "agent_intersection", "required") || []
 expected_agent_terms = %w[delegator_authority agent_authority task_scope runtime_domain session_environment resource_handling revocation_current]
-failures << "OPA input omits agent authorization intersection terms" unless agent_terms == expected_agent_terms
+failures << "policy-decision input omits agent authorization intersection terms" unless agent_terms == expected_agent_terms
 %w[data_flow_context ci_context infrastructure_context].each do |context|
-  failures << "OPA input omits #{context}" unless opa_input.dig("properties", context).is_a?(Hash)
+  failures << "policy-decision input omits #{context}" unless policy_input.dig("properties", context).is_a?(Hash)
 end
-required_policy_context = opa_input.dig("properties", "policy_context", "required") || []
-failures << "OPA input must declare required policy contexts" unless required_policy_context.include?("required_contexts")
-opa_cases = Array(documents.dig("policies/opa/decision-table.yaml", "cases"))
-opa_ids = opa_cases.filter_map { |entry| entry["id"] }
-%w[OPA-001B OPA-007 OPA-008 OPA-009 OPA-010 OPA-011 OPA-011A OPA-012 OPA-013 OPA-013A OPA-014 OPA-014A OPA-AGENT-008 OPA-HIERARCHY-001 OPA-LEAK-001].each do |id|
-  failures << "OPA decision table omits #{id}" unless opa_ids.include?(id)
+required_policy_context = policy_input.dig("properties", "policy_context", "required") || []
+failures << "policy-decision input must declare required policy contexts" unless required_policy_context.include?("required_contexts")
+policy_cases = Array(documents.dig("policies/policy-decision/decision-table.yaml", "cases"))
+policy_ids = policy_cases.filter_map { |entry| entry["id"] }
+failures << "policy decision case IDs must use the implementation-neutral POLICY prefix" unless policy_ids.all? { |id| id.start_with?("POLICY-") }
+failures << "policy decision case IDs must be unique" unless policy_ids.uniq.length == policy_ids.length
+policy_table = documents["policies/policy-decision/decision-table.yaml"] || {}
+expected_combining_rule = "allow = authorization.relationship.allowed AND policy decision allow AND authorization.provider_path.allowed AND no explicit deny; agents additionally require every authorization.agent_intersection term"
+failures << "policy decision table must preserve the central combining rule" unless policy_table["combining_rule"] == expected_combining_rule
+failures << "policy decision table must default to deny" unless policy_table["default"] == "deny"
+%w[POLICY-001B POLICY-007 POLICY-008 POLICY-009 POLICY-010 POLICY-011 POLICY-011A POLICY-012 POLICY-013 POLICY-013A POLICY-014 POLICY-014A POLICY-AGENT-008 POLICY-HIERARCHY-001 POLICY-LEAK-001].each do |id|
+  failures << "policy decision table omits #{id}" unless policy_ids.include?(id)
 end
+policy_coverage = documents.dig("policies/policy-decision/decision-table.yaml", "coverage_rules") || {}
+expected_policy_coverage = {
+  "decision_rows" => "100_percent",
+  "critical_policy_mutation_score" => "at_least_90_percent",
+  "deterministic_replay" => "identical_input_and_policy_bundle_revision_produces_semantically_identical_output_excluding_decision_id",
+  "differential_conformance" => "required_when_multiple_evaluators_are_supported",
+  "missing_input" => "deny",
+  "unknown_profile_or_bundle" => "deny",
+  "stale_consistency_fence" => "deny",
+  "evaluator_timeout_or_unavailable" => "deny",
+  "malformed_result_or_unsupported_obligation" => "deny"
+}
+expected_policy_coverage.each do |rule, expected|
+  failures << "policy decision coverage rule #{rule} must be #{expected}" unless policy_coverage[rule] == expected
+end
+
+mcp_authorization = documents.dig("specs/mcp/compatibility-v0.1.yaml", "authorization")
+failures << "MCP must reuse the central implementation-neutral authorization decision" unless mcp_authorization == "same_central_authorization_decision_as_platform_api"
 
 fga_tests = documents["policies/openfga/model-tests.yaml"] || {}
 test_suites = Array(fga_tests["tests"])

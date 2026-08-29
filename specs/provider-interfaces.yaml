@@ -4,7 +4,7 @@ normative_source: docs/architecture/MASTER_BUILD_DIRECTIVE.md
 common_contract:
   canonical_ids: required
   provider_locators: opaque_adapter_state_only
-  authorization: "OpenFGA allow AND OPA allow AND provider/path allow AND no explicit deny"
+  authorization: "OpenFGA allow AND policy-decision layer allow AND provider/path allow AND no explicit deny"
   errors: RFC_9457_non_leaking
   telemetry: OpenTelemetry_correlation_without_protected_bodies
   audit: actor_requester_delegation_task_and_policy_versions

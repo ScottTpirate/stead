@@ -212,7 +212,7 @@ examples:
     decision: allow
     authorization_context: {relationship: editor, action: work.assignment.update, reason_codes: [relationship_allow, classification_allow]}
     authorization_model_id: fga-v1
-    policy_bundle_id: opa-v1
+    policy_bundle_id: policy-bundle-v1
     request_id: request-1
     source_ip: 192.0.2.10
     network_zone: corporate

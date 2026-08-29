@@ -10,80 +10,80 @@ servers:
     protocol: nats
 channels:
   organizationEvents:
-    address: platform.organization.changed.v1
-    x-event-types: [platform.organization.created.v1, platform.organization.updated.v1, platform.team.created.v1, platform.team.updated.v1, platform.team.reparented.v1, platform.team.membership_changed.v1]
+    address: stead.organization.changed.v1
+    x-event-types: [stead.organization.created.v1, stead.organization.updated.v1, stead.team.created.v1, stead.team.updated.v1, stead.team.reparented.v1, stead.team.membership_changed.v1]
     messages: {OrganizationCloudEvent: {$ref: '#/components/messages/OrganizationCloudEvent'}}
   identityEvents:
-    address: platform.identity.changed.v1
-    x-event-types: [platform.identity.provisioned.v1, platform.identity.updated.v1, platform.identity.suspended.v1, platform.agent.registered.v1, platform.agent.revoked.v1]
+    address: stead.identity.changed.v1
+    x-event-types: [stead.identity.provisioned.v1, stead.identity.updated.v1, stead.identity.suspended.v1, stead.agent.registered.v1, stead.agent.revoked.v1]
     messages: {IdentityCloudEvent: {$ref: '#/components/messages/IdentityCloudEvent'}}
   authorizationEvents:
-    address: platform.authorization.changed.v1
-    x-event-types: [platform.authorization.model_activated.v1, platform.authorization.tuple_changed.v1, platform.authorization.delegation_revoked.v1, platform.authorization.policy_activated.v1]
+    address: stead.authorization.changed.v1
+    x-event-types: [stead.authorization.model_activated.v1, stead.authorization.tuple_changed.v1, stead.authorization.delegation_revoked.v1, stead.authorization.policy_activated.v1]
     messages: {AuthorizationCloudEvent: {$ref: '#/components/messages/AuthorizationCloudEvent'}}
   classificationEvents:
-    address: platform.classification.changed.v1
-    x-event-types: [platform.classification.label_raised.v1, platform.classification.label_lowered.v1, platform.classification.profile_activated.v1, platform.classification.ceiling_changed.v1, platform.classification.attribute_changed.v1]
+    address: stead.classification.changed.v1
+    x-event-types: [stead.classification.label_raised.v1, stead.classification.label_lowered.v1, stead.classification.profile_activated.v1, stead.classification.ceiling_changed.v1, stead.classification.attribute_changed.v1]
     messages: {ClassificationCloudEvent: {$ref: '#/components/messages/ClassificationCloudEvent'}}
   projectEvents:
-    address: platform.project.changed.v1
-    x-event-types: [platform.project.created.v1, platform.project.updated.v1, platform.project.capability_changed.v1, platform.initiative.changed.v1, platform.cycle.changed.v1]
+    address: stead.project.changed.v1
+    x-event-types: [stead.project.created.v1, stead.project.updated.v1, stead.project.capability_changed.v1, stead.initiative.changed.v1, stead.cycle.changed.v1]
     messages: {ProjectCloudEvent: {$ref: '#/components/messages/ProjectCloudEvent'}}
   workEvents:
-    address: platform.workitem.changed.v1
-    x-event-types: [platform.workitem.created.v1, platform.workitem.updated.v1, platform.workitem.assigned.v1, platform.workitem.related.v1]
+    address: stead.workitem.changed.v1
+    x-event-types: [stead.workitem.created.v1, stead.workitem.updated.v1, stead.workitem.assigned.v1, stead.workitem.related.v1]
     messages: {WorkCloudEvent: {$ref: '#/components/messages/WorkCloudEvent'}}
   commentEvents:
-    address: platform.comment.changed.v1
-    x-event-types: [platform.comment.created.v1, platform.comment.updated.v1, platform.comment.deleted.v1]
+    address: stead.comment.changed.v1
+    x-event-types: [stead.comment.created.v1, stead.comment.updated.v1, stead.comment.deleted.v1]
     messages: {CommentCloudEvent: {$ref: '#/components/messages/CommentCloudEvent'}}
   knowledgeEvents:
-    address: platform.document.changed.v1
-    x-event-types: [platform.document.created.v1, platform.document.updated.v1, platform.document.review_requested.v1, platform.document.approved.v1, platform.document.superseded.v1]
+    address: stead.document.changed.v1
+    x-event-types: [stead.document.created.v1, stead.document.updated.v1, stead.document.review_requested.v1, stead.document.approved.v1, stead.document.superseded.v1]
     messages: {KnowledgeCloudEvent: {$ref: '#/components/messages/KnowledgeCloudEvent'}}
   scmEvents:
-    address: platform.scm.changed.v1
-    x-event-types: [platform.scm.repository_changed.v1, platform.scm.branch_changed.v1, platform.scm.commit_recorded.v1, platform.scm.pull_request_changed.v1, platform.scm.reconciled.v1]
+    address: stead.scm.changed.v1
+    x-event-types: [stead.scm.repository_changed.v1, stead.scm.branch_changed.v1, stead.scm.commit_recorded.v1, stead.scm.pull_request_changed.v1, stead.scm.reconciled.v1]
     messages: {ScmCloudEvent: {$ref: '#/components/messages/ScmCloudEvent'}}
   ciEvents:
-    address: platform.ci.changed.v1
-    x-event-types: [platform.ci.build_changed.v1, platform.ci.deployment_changed.v1, platform.ci.runner_changed.v1, platform.ci.action_changed.v1]
+    address: stead.ci.changed.v1
+    x-event-types: [stead.ci.build_changed.v1, stead.ci.deployment_changed.v1, stead.ci.runner_changed.v1, stead.ci.action_changed.v1]
     messages: {CiCloudEvent: {$ref: '#/components/messages/CiCloudEvent'}}
   artifactEvents:
-    address: platform.artifact.changed.v1
-    x-event-types: [platform.artifact.artifact_changed.v1, platform.artifact.package_changed.v1, platform.artifact.release_changed.v1]
+    address: stead.artifact.changed.v1
+    x-event-types: [stead.artifact.artifact_changed.v1, stead.artifact.package_changed.v1, stead.artifact.release_changed.v1]
     messages: {ArtifactCloudEvent: {$ref: '#/components/messages/ArtifactCloudEvent'}}
   attachmentEvents:
-    address: platform.attachment.changed.v1
-    x-event-types: [platform.attachment.created.v1, platform.attachment.scanned.v1, platform.attachment.deleted.v1]
+    address: stead.attachment.changed.v1
+    x-event-types: [stead.attachment.created.v1, stead.attachment.scanned.v1, stead.attachment.deleted.v1]
     messages: {AttachmentCloudEvent: {$ref: '#/components/messages/AttachmentCloudEvent'}}
   storageEvents:
-    address: platform.storage.changed.v1
-    x-event-types: [platform.storage.scan_changed.v1, platform.storage.retention_changed.v1, platform.storage.provider_operation_changed.v1]
+    address: stead.storage.changed.v1
+    x-event-types: [stead.storage.scan_changed.v1, stead.storage.retention_changed.v1, stead.storage.provider_operation_changed.v1]
     messages: {StorageCloudEvent: {$ref: '#/components/messages/StorageCloudEvent'}}
   searchGraphEvents:
-    address: platform.search_graph.changed.v1
-    x-event-types: [platform.search_graph.rebuild_started.v1, platform.search_graph.rebuild_completed.v1, platform.search_graph.rebuild_failed.v1]
+    address: stead.search_graph.changed.v1
+    x-event-types: [stead.search_graph.rebuild_started.v1, stead.search_graph.rebuild_completed.v1, stead.search_graph.rebuild_failed.v1]
     messages: {SearchGraphCloudEvent: {$ref: '#/components/messages/SearchGraphCloudEvent'}}
   notificationEvents:
-    address: platform.notification.changed.v1
-    x-event-types: [platform.notification.created.v1, platform.notification.read.v1, platform.notification.delivery_changed.v1, platform.notification.suppressed.v1]
+    address: stead.notification.changed.v1
+    x-event-types: [stead.notification.created.v1, stead.notification.read.v1, stead.notification.delivery_changed.v1, stead.notification.suppressed.v1]
     messages: {NotificationCloudEvent: {$ref: '#/components/messages/NotificationCloudEvent'}}
   auditEvents:
-    address: platform.audit.changed.v1
-    x-event-types: [platform.audit.checkpoint_created.v1, platform.audit.export_changed.v1]
+    address: stead.audit.changed.v1
+    x-event-types: [stead.audit.checkpoint_created.v1, stead.audit.export_changed.v1]
     messages: {AuditCloudEvent: {$ref: '#/components/messages/AuditCloudEvent'}}
   migrationEvents:
-    address: platform.migration.changed.v1
-    x-event-types: [platform.migration.stage_changed.v1, platform.migration.reconciled.v1, platform.migration.cutover_changed.v1]
+    address: stead.migration.changed.v1
+    x-event-types: [stead.migration.stage_changed.v1, stead.migration.reconciled.v1, stead.migration.cutover_changed.v1]
     messages: {MigrationCloudEvent: {$ref: '#/components/messages/MigrationCloudEvent'}}
   operationsEvents:
-    address: platform.operations.changed.v1
-    x-event-types: [platform.operations.install_changed.v1, platform.operations.upgrade_changed.v1, platform.operations.backup_changed.v1, platform.operations.restore_changed.v1, platform.operations.doctor_changed.v1]
+    address: stead.operations.changed.v1
+    x-event-types: [stead.operations.install_changed.v1, stead.operations.upgrade_changed.v1, stead.operations.backup_changed.v1, stead.operations.restore_changed.v1, stead.operations.doctor_changed.v1]
     messages: {OperationsCloudEvent: {$ref: '#/components/messages/OperationsCloudEvent'}}
   deadLetterEvents:
-    address: platform.dead_letter.recorded.v1
-    x-event-types: [platform.dead_letter.recorded.v1, platform.dead_letter.replayed.v1]
+    address: stead.dead_letter.recorded.v1
+    x-event-types: [stead.dead_letter.recorded.v1, stead.dead_letter.replayed.v1]
     messages: {DeadLetterCloudEvent: {$ref: '#/components/messages/DeadLetterCloudEvent'}}
 operations:
   sendOrganizationEvents: {action: send, channel: {$ref: '#/channels/organizationEvents'}}
@@ -222,96 +222,96 @@ components:
       correlationId: {location: '$message.payload#/data/actor_context/correlation_id'}
       payload: {$ref: '#/components/schemas/DeadLetterCloudEventEnvelope'}
   schemas:
-    PlatformCloudEventEnvelope:
+    SteadCloudEventEnvelope:
       type: object
       required: [specversion, id, source, type, subject, time, datacontenttype, dataschema, data]
       properties:
         specversion: {const: '1.0'}
         id: {type: string}
         source: {type: string, format: uri-reference}
-        type: {type: string, pattern: '^platform\.[a-z0-9_]+\.[a-z0-9_]+\.v1$'}
+        type: {type: string, pattern: '^stead\.[a-z0-9_]+\.[a-z0-9_]+\.v[1-9][0-9]*$'}
         subject: {type: string}
         time: {type: string, format: date-time}
         datacontenttype: {const: application/json}
         dataschema: {type: string, format: uri}
-        data: {$ref: '../../packages/event-schemas/platform/platform-event-v0.1.schema.json'}
+        data: {$ref: '../../packages/event-schemas/stead/stead-event-v0.1.schema.json'}
       additionalProperties: false
     OrganizationCloudEventEnvelope:
       allOf:
-        - {$ref: '#/components/schemas/PlatformCloudEventEnvelope'}
-        - {type: object, properties: {type: {enum: [platform.organization.created.v1, platform.organization.updated.v1, platform.team.created.v1, platform.team.updated.v1, platform.team.reparented.v1, platform.team.membership_changed.v1]}}}
+        - {$ref: '#/components/schemas/SteadCloudEventEnvelope'}
+        - {type: object, properties: {type: {enum: [stead.organization.created.v1, stead.organization.updated.v1, stead.team.created.v1, stead.team.updated.v1, stead.team.reparented.v1, stead.team.membership_changed.v1]}}}
     IdentityCloudEventEnvelope:
       allOf:
-        - {$ref: '#/components/schemas/PlatformCloudEventEnvelope'}
-        - {type: object, properties: {type: {enum: [platform.identity.provisioned.v1, platform.identity.updated.v1, platform.identity.suspended.v1, platform.agent.registered.v1, platform.agent.revoked.v1]}}}
+        - {$ref: '#/components/schemas/SteadCloudEventEnvelope'}
+        - {type: object, properties: {type: {enum: [stead.identity.provisioned.v1, stead.identity.updated.v1, stead.identity.suspended.v1, stead.agent.registered.v1, stead.agent.revoked.v1]}}}
     AuthorizationCloudEventEnvelope:
       allOf:
-        - {$ref: '#/components/schemas/PlatformCloudEventEnvelope'}
-        - {type: object, properties: {type: {enum: [platform.authorization.model_activated.v1, platform.authorization.tuple_changed.v1, platform.authorization.delegation_revoked.v1, platform.authorization.policy_activated.v1]}}}
+        - {$ref: '#/components/schemas/SteadCloudEventEnvelope'}
+        - {type: object, properties: {type: {enum: [stead.authorization.model_activated.v1, stead.authorization.tuple_changed.v1, stead.authorization.delegation_revoked.v1, stead.authorization.policy_activated.v1]}}}
     ClassificationCloudEventEnvelope:
       allOf:
-        - {$ref: '#/components/schemas/PlatformCloudEventEnvelope'}
-        - {type: object, properties: {type: {enum: [platform.classification.label_raised.v1, platform.classification.label_lowered.v1, platform.classification.profile_activated.v1, platform.classification.ceiling_changed.v1, platform.classification.attribute_changed.v1]}}}
+        - {$ref: '#/components/schemas/SteadCloudEventEnvelope'}
+        - {type: object, properties: {type: {enum: [stead.classification.label_raised.v1, stead.classification.label_lowered.v1, stead.classification.profile_activated.v1, stead.classification.ceiling_changed.v1, stead.classification.attribute_changed.v1]}}}
     ProjectCloudEventEnvelope:
       allOf:
-        - {$ref: '#/components/schemas/PlatformCloudEventEnvelope'}
-        - {type: object, properties: {type: {enum: [platform.project.created.v1, platform.project.updated.v1, platform.project.capability_changed.v1, platform.initiative.changed.v1, platform.cycle.changed.v1]}}}
+        - {$ref: '#/components/schemas/SteadCloudEventEnvelope'}
+        - {type: object, properties: {type: {enum: [stead.project.created.v1, stead.project.updated.v1, stead.project.capability_changed.v1, stead.initiative.changed.v1, stead.cycle.changed.v1]}}}
     WorkCloudEventEnvelope:
       allOf:
-        - {$ref: '#/components/schemas/PlatformCloudEventEnvelope'}
-        - {type: object, properties: {type: {enum: [platform.workitem.created.v1, platform.workitem.updated.v1, platform.workitem.assigned.v1, platform.workitem.related.v1]}}}
+        - {$ref: '#/components/schemas/SteadCloudEventEnvelope'}
+        - {type: object, properties: {type: {enum: [stead.workitem.created.v1, stead.workitem.updated.v1, stead.workitem.assigned.v1, stead.workitem.related.v1]}}}
     CommentCloudEventEnvelope:
       allOf:
-        - {$ref: '#/components/schemas/PlatformCloudEventEnvelope'}
-        - {type: object, properties: {type: {enum: [platform.comment.created.v1, platform.comment.updated.v1, platform.comment.deleted.v1]}}}
+        - {$ref: '#/components/schemas/SteadCloudEventEnvelope'}
+        - {type: object, properties: {type: {enum: [stead.comment.created.v1, stead.comment.updated.v1, stead.comment.deleted.v1]}}}
     KnowledgeCloudEventEnvelope:
       allOf:
-        - {$ref: '#/components/schemas/PlatformCloudEventEnvelope'}
-        - {type: object, properties: {type: {enum: [platform.document.created.v1, platform.document.updated.v1, platform.document.review_requested.v1, platform.document.approved.v1, platform.document.superseded.v1]}}}
+        - {$ref: '#/components/schemas/SteadCloudEventEnvelope'}
+        - {type: object, properties: {type: {enum: [stead.document.created.v1, stead.document.updated.v1, stead.document.review_requested.v1, stead.document.approved.v1, stead.document.superseded.v1]}}}
     ScmCloudEventEnvelope:
       allOf:
-        - {$ref: '#/components/schemas/PlatformCloudEventEnvelope'}
-        - {type: object, properties: {type: {enum: [platform.scm.repository_changed.v1, platform.scm.branch_changed.v1, platform.scm.commit_recorded.v1, platform.scm.pull_request_changed.v1, platform.scm.reconciled.v1]}}}
+        - {$ref: '#/components/schemas/SteadCloudEventEnvelope'}
+        - {type: object, properties: {type: {enum: [stead.scm.repository_changed.v1, stead.scm.branch_changed.v1, stead.scm.commit_recorded.v1, stead.scm.pull_request_changed.v1, stead.scm.reconciled.v1]}}}
     CiCloudEventEnvelope:
       allOf:
-        - {$ref: '#/components/schemas/PlatformCloudEventEnvelope'}
-        - {type: object, properties: {type: {enum: [platform.ci.build_changed.v1, platform.ci.deployment_changed.v1, platform.ci.runner_changed.v1, platform.ci.action_changed.v1]}}}
+        - {$ref: '#/components/schemas/SteadCloudEventEnvelope'}
+        - {type: object, properties: {type: {enum: [stead.ci.build_changed.v1, stead.ci.deployment_changed.v1, stead.ci.runner_changed.v1, stead.ci.action_changed.v1]}}}
     ArtifactCloudEventEnvelope:
       allOf:
-        - {$ref: '#/components/schemas/PlatformCloudEventEnvelope'}
-        - {type: object, properties: {type: {enum: [platform.artifact.artifact_changed.v1, platform.artifact.package_changed.v1, platform.artifact.release_changed.v1]}}}
+        - {$ref: '#/components/schemas/SteadCloudEventEnvelope'}
+        - {type: object, properties: {type: {enum: [stead.artifact.artifact_changed.v1, stead.artifact.package_changed.v1, stead.artifact.release_changed.v1]}}}
     AttachmentCloudEventEnvelope:
       allOf:
-        - {$ref: '#/components/schemas/PlatformCloudEventEnvelope'}
-        - {type: object, properties: {type: {enum: [platform.attachment.created.v1, platform.attachment.scanned.v1, platform.attachment.deleted.v1]}}}
+        - {$ref: '#/components/schemas/SteadCloudEventEnvelope'}
+        - {type: object, properties: {type: {enum: [stead.attachment.created.v1, stead.attachment.scanned.v1, stead.attachment.deleted.v1]}}}
     StorageCloudEventEnvelope:
       allOf:
-        - {$ref: '#/components/schemas/PlatformCloudEventEnvelope'}
-        - {type: object, properties: {type: {enum: [platform.storage.scan_changed.v1, platform.storage.retention_changed.v1, platform.storage.provider_operation_changed.v1]}}}
+        - {$ref: '#/components/schemas/SteadCloudEventEnvelope'}
+        - {type: object, properties: {type: {enum: [stead.storage.scan_changed.v1, stead.storage.retention_changed.v1, stead.storage.provider_operation_changed.v1]}}}
     SearchGraphCloudEventEnvelope:
       allOf:
-        - {$ref: '#/components/schemas/PlatformCloudEventEnvelope'}
-        - {type: object, properties: {type: {enum: [platform.search_graph.rebuild_started.v1, platform.search_graph.rebuild_completed.v1, platform.search_graph.rebuild_failed.v1]}}}
+        - {$ref: '#/components/schemas/SteadCloudEventEnvelope'}
+        - {type: object, properties: {type: {enum: [stead.search_graph.rebuild_started.v1, stead.search_graph.rebuild_completed.v1, stead.search_graph.rebuild_failed.v1]}}}
     NotificationCloudEventEnvelope:
       allOf:
-        - {$ref: '#/components/schemas/PlatformCloudEventEnvelope'}
-        - {type: object, properties: {type: {enum: [platform.notification.created.v1, platform.notification.read.v1, platform.notification.delivery_changed.v1, platform.notification.suppressed.v1]}}}
+        - {$ref: '#/components/schemas/SteadCloudEventEnvelope'}
+        - {type: object, properties: {type: {enum: [stead.notification.created.v1, stead.notification.read.v1, stead.notification.delivery_changed.v1, stead.notification.suppressed.v1]}}}
     AuditCloudEventEnvelope:
       allOf:
-        - {$ref: '#/components/schemas/PlatformCloudEventEnvelope'}
-        - {type: object, properties: {type: {enum: [platform.audit.checkpoint_created.v1, platform.audit.export_changed.v1]}}}
+        - {$ref: '#/components/schemas/SteadCloudEventEnvelope'}
+        - {type: object, properties: {type: {enum: [stead.audit.checkpoint_created.v1, stead.audit.export_changed.v1]}}}
     MigrationCloudEventEnvelope:
       allOf:
-        - {$ref: '#/components/schemas/PlatformCloudEventEnvelope'}
-        - {type: object, properties: {type: {enum: [platform.migration.stage_changed.v1, platform.migration.reconciled.v1, platform.migration.cutover_changed.v1]}}}
+        - {$ref: '#/components/schemas/SteadCloudEventEnvelope'}
+        - {type: object, properties: {type: {enum: [stead.migration.stage_changed.v1, stead.migration.reconciled.v1, stead.migration.cutover_changed.v1]}}}
     OperationsCloudEventEnvelope:
       allOf:
-        - {$ref: '#/components/schemas/PlatformCloudEventEnvelope'}
-        - {type: object, properties: {type: {enum: [platform.operations.install_changed.v1, platform.operations.upgrade_changed.v1, platform.operations.backup_changed.v1, platform.operations.restore_changed.v1, platform.operations.doctor_changed.v1]}}}
+        - {$ref: '#/components/schemas/SteadCloudEventEnvelope'}
+        - {type: object, properties: {type: {enum: [stead.operations.install_changed.v1, stead.operations.upgrade_changed.v1, stead.operations.backup_changed.v1, stead.operations.restore_changed.v1, stead.operations.doctor_changed.v1]}}}
     DeadLetterCloudEventEnvelope:
       allOf:
-        - {$ref: '#/components/schemas/PlatformCloudEventEnvelope'}
-        - {type: object, properties: {type: {enum: [platform.dead_letter.recorded.v1, platform.dead_letter.replayed.v1]}}}
+        - {$ref: '#/components/schemas/SteadCloudEventEnvelope'}
+        - {type: object, properties: {type: {enum: [stead.dead_letter.recorded.v1, stead.dead_letter.replayed.v1]}}}
 x-delivery-contract:
   delivery: at-least-once
   producer: transactional-outbox

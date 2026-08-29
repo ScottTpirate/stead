@@ -1,7 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://stead.example/policies/opa/input-v0.1.schema.json",
-  "title": "Stead authorization and classification decision input",
+  "$id": "https://stead.example/policies/policy-decision/input-v0.1.schema.json",
+  "title": "Stead deterministic policy-decision input",
+  "description": "Implementation-neutral input for classification, contextual, handling, information-flow, CI/infrastructure, explicit-deny, and future agent-intersection evaluation.",
   "type": "object",
   "required": ["action", "actor", "session", "resource", "authorization", "policy_context"],
   "properties": {

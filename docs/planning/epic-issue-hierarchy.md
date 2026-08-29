@@ -52,14 +52,14 @@ The rows are topologically ordered. Issues in the same wave may proceed concurre
 | 2 | STEAD-P0-003 | WS-02 | P0-001, P0-002 | Runtime responsibilities, module/table ownership, provider ports, work-item ownership, transactions and the transactional outbox; ARCH-003…004, DOM-004, EVT-002 |
 | 3 | STEAD-P0-004 | WS-03 | P0-001…003 | Capability-scoped Gitea interfaces, tracker mapping, reconciliation, provider enforcement and compatibility; SCM-001…006 |
 | 4 | STEAD-P0-005 | WS-04 | P0-001, P0-002, P0-004 | Git/OKF knowledge and document model, Commonplace upstream/patch/fallback, review and repository security boundary; DOM-005, DOC-001…005 |
-| 4 | STEAD-P0-007 | WS-06 | P0-001…004 | OIDC/SCIM, groups/principals, hierarchy non-inheritance, OpenFGA v0.1, OPA I/O/agent intersection, label lattice, domains, downgrade and bypass; PRIN-007,011–012,015, DOM-007,009–010, AUTH-001…006, CLS-001…008 |
+| 4 | STEAD-P0-007 | WS-06 | P0-001…004 | OIDC/SCIM, groups/principals, hierarchy non-inheritance, OpenFGA v0.1, policy-decision layer I/O/agent intersection, label lattice, domains, downgrade and bypass; PRIN-007,011–012,015, DOM-007,009–010, AUTH-001…006, CLS-001…008 |
 | 5 | STEAD-P0-006 | WS-05 | P0-001, P0-002, P0-005 | Universal/capability IA, presets, object surface, six persona flows, design constitution, Devlane boundary, markings/accessibility/performance; PRIN-001,013–014, DOM-008,011, UX-001…009 |
 | 5 | STEAD-P0-008 | WS-07 | P0-002, P0-003, P0-007 | CloudEvents/AsyncAPI, NATS and the WS-02 outbox publisher/consumer binding, delivery, activity, inbox, notification and audit contracts; EVT-001,003…004, ACT-001, NOTIF-001…002, AUD-001…002 |
 | 5 | STEAD-P0-011 | WS-10 | P0-002, P0-007 | BlobStore, portable object metadata, authorized URL, retention, scan and partition contracts; STOR-001…003; supports WS-09's ART-001 integration through the BlobStore port |
 | 6 | STEAD-P0-009 | WS-08 | P0-002, P0-007, P0-008 | Multi-resource SearchProvider, Work Graph, non-disclosing query/rebuild, contract-only MCP/A2A seams; DOM-010, AUTH-006, SRCH-001…003, GRAPH-001…002 |
 | 6 | STEAD-P0-010 | WS-09 | P0-004, P0-007, P0-008, P0-011 | OCI/package integration, Actions, internal catalog, runners, artifact/provenance and SecretProvider contracts; ART-001, CICD-001…005 |
 | 6 | STEAD-P0-012 | WS-11 | P0-002, P0-004, P0-005, P0-007, P0-011 | Resumable migration stages, mappings, preservation, reconciliation, cutover and redirects; MIG-001…005 |
-| 7 | STEAD-P0-013 | WS-12 | P0-003, P0-004, P0-007, P0-008, P0-010, P0-011 | Infrastructure-agnostic/simple operation, install profiles, platformctl, Helm/air-gap, OTel/health, backup/restore and safe upgrades; PRIN-008…009, DEP-001…005, OPS-001…005 |
+| 7 | STEAD-P0-013 | WS-12 | P0-003, P0-004, P0-007, P0-008, P0-010, P0-011 | Infrastructure-agnostic/simple operation, install profiles, steadctl, Helm/air-gap, OTel/health, backup/restore and safe upgrades; PRIN-008…009, DEP-001…005, OPS-001…005 |
 | 7 | STEAD-P0-015 | WS-01 | P0-002, P0-003, P0-004, P0-007, P0-008, P0-009 | Principal/assignment seams, agent-ready auth/classification, dual actor/requester event and audit fields, API/MCP/scoped-Git boundary, future A2A direction, and the Phase 0 runtime non-goal; AGENT-001…007 |
 | 8 | STEAD-P0-014 | WS-13 | P0-001…013, P0-015 | 128-ID traceability, 33-threat/47-bypass baseline, license/scope gates, TEST-009/010 plans, closeout packet and independent approval rules; PRIN-010, SEC-001…006, TEST-001…010, AGENT-001…007 |
 | 9 | GATE-P0-APPROVED | Project owner + WS-01 + WS-06 + distinct independent WS-13 QA/security identities | P0-001…015 | Recorded approval of every Phase 0 artifact; opens, but does not complete, Phase 1 |
@@ -73,7 +73,7 @@ The Phase 1 records preserve the approved principal, assignment, authorization, 
 | Order | Issue | Owner | Direct predecessors | Deliverable |
 |---:|---|---|---|---|
 | 1 | STEAD-P1-001 | WS-01 | GATE-P0-APPROVED | Locked monorepo/toolchains, schema/API lint, license/dependency guardrails |
-| 2 | STEAD-P1-006 | WS-06 | GATE-P0-APPROVED, P1-001 | Bootstrap/OIDC identity and central OpenFGA + OPA decision path |
+| 2 | STEAD-P1-006 | WS-06 | GATE-P0-APPROVED, P1-001 | Bootstrap/OIDC identity and central OpenFGA + policy-decision path |
 | 3 | STEAD-P1-002 | WS-02 | P1-001, P1-006, approved core/auth contracts | Canonical modular core, PrincipalRef-based User/Agent Work assignment, PostgreSQL ownership, optimistic concurrency and atomic outbox |
 | 4 | STEAD-P1-003 | WS-03 | P1-002, P1-006 | Stock Gitea adapter, hidden tracker/board, provider-neutral Work backing and docs Git; no general code repo |
 | 4 | STEAD-P1-010 | WS-10 | P1-002, P1-006 | Filesystem BlobStore and authorized attachment path |
@@ -140,7 +140,7 @@ Any future child implementation issue must restate these fields with a narrower 
 
 ## Agent-ready compatibility boundary
 
-Phase 0 models identity as a principal union containing at least `user`, `agent`, and `service_account`; permits an agent principal in canonical work-item assignment; reserves agent relationships and future delegation/task/runtime inputs in OpenFGA and OPA; and lets CloudEvents and audit records distinguish an acting principal from the initiating/requesting principal.
+Phase 0 models identity as a principal union containing at least `user`, `agent`, and `service_account`; permits an agent principal in canonical work-item assignment; reserves agent relationships and future delegation/task/runtime inputs in OpenFGA and the policy-decision layer; and lets CloudEvents and audit records distinguish an acting principal from the initiating/requesting principal.
 
 Future agent business access is through canonical Platform APIs and the platform-wide MCP boundary. Scoped direct Git credentials are the only permitted direct provider path. Phase 0 delivers only the canonical Agent/AgentRun schemas and MCP/A2A compatibility contracts; MCP tools, A2A dispatch, Agent Registry behavior, and agent execution remain out of scope.
 

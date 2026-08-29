@@ -129,7 +129,7 @@ requirements:
     release: "phase-1"
   - requirement_id: "PRIN-015"
     title: "Organizational hierarchy is not authorization inheritance"
-    implementation_modules: ["modules/organization", "modules/authorization", "policies/openfga", "policies/opa"]
+    implementation_modules: ["modules/organization", "modules/authorization", "policies/openfga", "policies/policy-decision"]
     issue_ids: ["STEAD-P0-001", "STEAD-P0-007", "STEAD-P1-006"]
     test_ids: ["T-PRIN-015-ACCEPTANCE"]
     documentation: ["docs/architecture/authorization-contract.md", "policies/openfga/model-tests.yaml"]
@@ -441,7 +441,7 @@ requirements:
     release: "phase-1"
   - requirement_id: "AUTH-001"
     title: "Authentication and provisioning"
-    implementation_modules: ["modules/identity", "modules/authorization", "policies/openfga", "policies/opa", "providers/identity-oidc", "providers/identity-scim"]
+    implementation_modules: ["modules/identity", "modules/authorization", "policies/openfga", "policies/policy-decision", "providers/identity-oidc", "providers/identity-scim"]
     issue_ids: ["STEAD-P0-007", "STEAD-P1-006"]
     test_ids: ["T-AUTH-001-ACCEPTANCE"]
     documentation: ["docs/architecture/authorization-contract.md", "docs/operator/identity-and-trusted-attributes.md"]
@@ -449,7 +449,7 @@ requirements:
     release: "phase-1"
   - requirement_id: "AUTH-002"
     title: "Combined authorization architecture"
-    implementation_modules: ["modules/identity", "modules/authorization", "policies/openfga", "policies/opa", "providers/identity-oidc", "providers/identity-scim"]
+    implementation_modules: ["modules/identity", "modules/authorization", "policies/openfga", "policies/policy-decision", "providers/identity-oidc", "providers/identity-scim"]
     issue_ids: ["STEAD-P0-007", "STEAD-P1-006"]
     test_ids: ["T-AUTH-002-ACCEPTANCE"]
     documentation: ["docs/architecture/authorization-contract.md", "docs/operator/identity-and-trusted-attributes.md"]
@@ -457,15 +457,15 @@ requirements:
     release: "phase-1"
   - requirement_id: "AUTH-003"
     title: "OpenFGA responsibilities"
-    implementation_modules: ["modules/identity", "modules/authorization", "policies/openfga", "policies/opa", "providers/identity-oidc", "providers/identity-scim"]
+    implementation_modules: ["modules/identity", "modules/authorization", "policies/openfga", "policies/policy-decision", "providers/identity-oidc", "providers/identity-scim"]
     issue_ids: ["STEAD-P0-007", "STEAD-P1-006"]
     test_ids: ["T-AUTH-003-ACCEPTANCE"]
     documentation: ["docs/architecture/authorization-contract.md", "docs/operator/identity-and-trusted-attributes.md"]
     status: BLOCKED_PENDING_PHASE_0_APPROVAL
     release: "phase-1"
   - requirement_id: "AUTH-004"
-    title: "OPA responsibilities"
-    implementation_modules: ["modules/identity", "modules/authorization", "policies/openfga", "policies/opa", "providers/identity-oidc", "providers/identity-scim"]
+    title: "Deterministic policy-decision layer responsibilities"
+    implementation_modules: ["modules/identity", "modules/authorization", "policies/openfga", "policies/policy-decision", "providers/identity-oidc", "providers/identity-scim"]
     issue_ids: ["STEAD-P0-007", "STEAD-P1-006"]
     test_ids: ["T-AUTH-004-ACCEPTANCE"]
     documentation: ["docs/architecture/authorization-contract.md", "docs/operator/identity-and-trusted-attributes.md"]
@@ -473,7 +473,7 @@ requirements:
     release: "phase-1"
   - requirement_id: "AUTH-005"
     title: "Trusted attributes"
-    implementation_modules: ["modules/identity", "modules/authorization", "policies/openfga", "policies/opa", "providers/identity-oidc", "providers/identity-scim"]
+    implementation_modules: ["modules/identity", "modules/authorization", "policies/openfga", "policies/policy-decision", "providers/identity-oidc", "providers/identity-scim"]
     issue_ids: ["STEAD-P0-007", "STEAD-P1-006", "STEAD-P2-004"]
     test_ids: ["T-AUTH-005-ACCEPTANCE"]
     documentation: ["docs/architecture/authorization-contract.md", "docs/operator/identity-and-trusted-attributes.md"]
@@ -481,7 +481,7 @@ requirements:
     release: "phase-2"
   - requirement_id: "AUTH-006"
     title: "Agent, service, and group principals"
-    implementation_modules: ["modules/identity", "modules/authorization", "modules/agent", "policies/openfga", "policies/opa", "providers/agent-a2a"]
+    implementation_modules: ["modules/identity", "modules/authorization", "modules/agent", "policies/openfga", "policies/policy-decision", "providers/agent-a2a"]
     issue_ids: ["STEAD-P0-007", "STEAD-P0-009", "STEAD-P0-015", "STEAD-P1-006", "STEAD-P2-006"]
     test_ids: ["T-AUTH-006-ACCEPTANCE"]
     documentation: ["docs/architecture/authorization-contract.md", "docs/architecture/agent-ready-compatibility.md"]
@@ -489,7 +489,7 @@ requirements:
     release: "phase-1"
   - requirement_id: "CLS-001"
     title: "Generic security-label model"
-    implementation_modules: ["modules/classification", "modules/authorization", "policies/opa", "policies/security-label-profiles"]
+    implementation_modules: ["modules/classification", "modules/authorization", "policies/policy-decision", "policies/security-label-profiles"]
     issue_ids: ["STEAD-P0-007", "STEAD-P1-006", "STEAD-P2-004"]
     test_ids: ["T-CLS-001-ACCEPTANCE"]
     documentation: ["docs/architecture/security-label-lattice.md", "docs/security/classification-bypass-inventory.md"]
@@ -497,7 +497,7 @@ requirements:
     release: "phase-2"
   - requirement_id: "CLS-002"
     title: "US government profile"
-    implementation_modules: ["modules/classification", "modules/authorization", "policies/opa", "policies/security-label-profiles"]
+    implementation_modules: ["modules/classification", "modules/authorization", "policies/policy-decision", "policies/security-label-profiles"]
     issue_ids: ["STEAD-P0-007", "STEAD-P2-004", "STEAD-P3-002"]
     test_ids: ["T-CLS-002-ACCEPTANCE"]
     documentation: ["docs/architecture/security-label-lattice.md", "docs/security/classification-bypass-inventory.md"]
@@ -505,7 +505,7 @@ requirements:
     release: "phase-3"
   - requirement_id: "CLS-003"
     title: "Deployment security domain"
-    implementation_modules: ["modules/classification", "modules/authorization", "policies/opa", "policies/security-label-profiles"]
+    implementation_modules: ["modules/classification", "modules/authorization", "policies/policy-decision", "policies/security-label-profiles"]
     issue_ids: ["STEAD-P0-007", "STEAD-P1-006", "STEAD-P2-004"]
     test_ids: ["T-CLS-003-ACCEPTANCE"]
     documentation: ["docs/architecture/security-label-lattice.md", "docs/security/classification-bypass-inventory.md"]
@@ -513,7 +513,7 @@ requirements:
     release: "phase-2"
   - requirement_id: "CLS-004"
     title: "Container boundary rules"
-    implementation_modules: ["modules/classification", "modules/authorization", "policies/opa", "policies/security-label-profiles"]
+    implementation_modules: ["modules/classification", "modules/authorization", "policies/policy-decision", "policies/security-label-profiles"]
     issue_ids: ["STEAD-P0-007", "STEAD-P1-006", "STEAD-P2-004"]
     test_ids: ["T-CLS-004-ACCEPTANCE"]
     documentation: ["docs/architecture/security-label-lattice.md", "docs/security/classification-bypass-inventory.md"]
@@ -521,7 +521,7 @@ requirements:
     release: "phase-1"
   - requirement_id: "CLS-005"
     title: "Label inheritance and downgrade"
-    implementation_modules: ["modules/classification", "modules/authorization", "policies/opa", "policies/security-label-profiles"]
+    implementation_modules: ["modules/classification", "modules/authorization", "policies/policy-decision", "policies/security-label-profiles"]
     issue_ids: ["STEAD-P0-007", "STEAD-P2-004"]
     test_ids: ["T-CLS-005-ACCEPTANCE"]
     documentation: ["docs/architecture/security-label-lattice.md", "docs/security/classification-bypass-inventory.md"]
@@ -529,7 +529,7 @@ requirements:
     release: "phase-2"
   - requirement_id: "CLS-006"
     title: "No unauthorized existence leakage"
-    implementation_modules: ["modules/classification", "modules/authorization", "policies/opa", "policies/security-label-profiles"]
+    implementation_modules: ["modules/classification", "modules/authorization", "policies/policy-decision", "policies/security-label-profiles"]
     issue_ids: ["STEAD-P0-007", "STEAD-P1-006", "STEAD-P2-004"]
     test_ids: ["T-CLS-006-ACCEPTANCE"]
     documentation: ["docs/architecture/security-label-lattice.md", "docs/security/classification-bypass-inventory.md"]
@@ -537,7 +537,7 @@ requirements:
     release: "phase-1"
   - requirement_id: "CLS-007"
     title: "Direct Git and provider paths"
-    implementation_modules: ["modules/classification", "modules/authorization", "policies/opa", "policies/security-label-profiles"]
+    implementation_modules: ["modules/classification", "modules/authorization", "policies/policy-decision", "policies/security-label-profiles"]
     issue_ids: ["STEAD-P0-007", "STEAD-P1-003", "STEAD-P2-001", "STEAD-P2-004"]
     test_ids: ["T-CLS-007-ACCEPTANCE"]
     documentation: ["docs/architecture/security-label-lattice.md", "docs/security/classification-bypass-inventory.md"]
@@ -545,7 +545,7 @@ requirements:
     release: "phase-2"
   - requirement_id: "CLS-008"
     title: "Cross-domain prohibition"
-    implementation_modules: ["modules/classification", "modules/authorization", "policies/opa", "policies/security-label-profiles"]
+    implementation_modules: ["modules/classification", "modules/authorization", "policies/policy-decision", "policies/security-label-profiles"]
     issue_ids: ["STEAD-P0-007", "STEAD-P1-006", "STEAD-P3-002"]
     test_ids: ["T-CLS-008-ACCEPTANCE"]
     documentation: ["docs/architecture/security-label-lattice.md", "docs/security/classification-bypass-inventory.md"]
@@ -556,7 +556,7 @@ requirements:
     implementation_modules: ["apps/core", "apps/worker", "packages/event-schemas"]
     issue_ids: ["STEAD-P0-008", "STEAD-P1-007"]
     test_ids: ["T-EVT-001-ACCEPTANCE"]
-    documentation: ["docs/architecture/event-contract.md", "specs/asyncapi/platform.yaml"]
+    documentation: ["docs/architecture/event-contract.md", "specs/asyncapi/stead.yaml"]
     status: BLOCKED_PENDING_PHASE_0_APPROVAL
     release: "phase-1"
   - requirement_id: "EVT-002"
@@ -564,7 +564,7 @@ requirements:
     implementation_modules: ["apps/core", "apps/worker", "packages/event-schemas"]
     issue_ids: ["STEAD-P0-003", "STEAD-P1-002", "STEAD-P1-007"]
     test_ids: ["T-EVT-002-ACCEPTANCE"]
-    documentation: ["docs/architecture/event-contract.md", "specs/asyncapi/platform.yaml"]
+    documentation: ["docs/architecture/event-contract.md", "specs/asyncapi/stead.yaml"]
     status: BLOCKED_PENDING_PHASE_0_APPROVAL
     release: "phase-1"
   - requirement_id: "EVT-003"
@@ -572,7 +572,7 @@ requirements:
     implementation_modules: ["apps/core", "apps/worker", "packages/event-schemas"]
     issue_ids: ["STEAD-P0-008", "STEAD-P1-007"]
     test_ids: ["T-EVT-003-ACCEPTANCE"]
-    documentation: ["docs/architecture/event-contract.md", "specs/asyncapi/platform.yaml"]
+    documentation: ["docs/architecture/event-contract.md", "specs/asyncapi/stead.yaml"]
     status: BLOCKED_PENDING_PHASE_0_APPROVAL
     release: "phase-1"
   - requirement_id: "EVT-004"
@@ -580,7 +580,7 @@ requirements:
     implementation_modules: ["apps/core", "apps/worker", "packages/event-schemas"]
     issue_ids: ["STEAD-P0-008", "STEAD-P1-007"]
     test_ids: ["T-EVT-004-ACCEPTANCE"]
-    documentation: ["docs/architecture/event-contract.md", "specs/asyncapi/platform.yaml"]
+    documentation: ["docs/architecture/event-contract.md", "specs/asyncapi/stead.yaml"]
     status: BLOCKED_PENDING_PHASE_0_APPROVAL
     release: "phase-1"
   - requirement_id: "ACT-001"
@@ -737,7 +737,7 @@ requirements:
     release: "phase-2"
   - requirement_id: "MIG-001"
     title: "Migration is a product subsystem"
-    implementation_modules: ["modules/migration", "apps/platformctl", "apps/worker"]
+    implementation_modules: ["modules/migration", "apps/steadctl", "apps/worker"]
     issue_ids: ["STEAD-P0-012", "STEAD-P2-009", "STEAD-P3-006"]
     test_ids: ["T-MIG-001-ACCEPTANCE"]
     documentation: ["docs/architecture/migration-contract.md", "docs/operator/migration.md"]
@@ -745,7 +745,7 @@ requirements:
     release: "phase-2"
   - requirement_id: "MIG-002"
     title: "Migration stages"
-    implementation_modules: ["modules/migration", "apps/platformctl", "apps/worker"]
+    implementation_modules: ["modules/migration", "apps/steadctl", "apps/worker"]
     issue_ids: ["STEAD-P0-012", "STEAD-P2-009", "STEAD-P3-006"]
     test_ids: ["T-MIG-002-ACCEPTANCE"]
     documentation: ["docs/architecture/migration-contract.md", "docs/operator/migration.md"]
@@ -753,7 +753,7 @@ requirements:
     release: "phase-3"
   - requirement_id: "MIG-003"
     title: "Preservation"
-    implementation_modules: ["modules/migration", "apps/platformctl", "apps/worker"]
+    implementation_modules: ["modules/migration", "apps/steadctl", "apps/worker"]
     issue_ids: ["STEAD-P0-012", "STEAD-P2-009", "STEAD-P3-006"]
     test_ids: ["T-MIG-003-ACCEPTANCE"]
     documentation: ["docs/architecture/migration-contract.md", "docs/operator/migration.md"]
@@ -761,7 +761,7 @@ requirements:
     release: "phase-2"
   - requirement_id: "MIG-004"
     title: "Canonicalization"
-    implementation_modules: ["modules/migration", "apps/platformctl", "apps/worker"]
+    implementation_modules: ["modules/migration", "apps/steadctl", "apps/worker"]
     issue_ids: ["STEAD-P0-012", "STEAD-P2-009"]
     test_ids: ["T-MIG-004-ACCEPTANCE"]
     documentation: ["docs/architecture/migration-contract.md", "docs/operator/migration.md"]
@@ -769,7 +769,7 @@ requirements:
     release: "phase-2"
   - requirement_id: "MIG-005"
     title: "Redirects and compatibility"
-    implementation_modules: ["modules/migration", "apps/platformctl", "apps/worker"]
+    implementation_modules: ["modules/migration", "apps/steadctl", "apps/worker"]
     issue_ids: ["STEAD-P0-012", "STEAD-P3-006"]
     test_ids: ["T-MIG-005-ACCEPTANCE"]
     documentation: ["docs/architecture/migration-contract.md", "docs/operator/migration.md"]
@@ -777,7 +777,7 @@ requirements:
     release: "phase-3"
   - requirement_id: "DEP-001"
     title: "Supported installation profiles"
-    implementation_modules: ["apps/platformctl", "deploy/compose", "deploy/helm", "deploy/airgap"]
+    implementation_modules: ["apps/steadctl", "deploy/compose", "deploy/helm", "deploy/airgap"]
     issue_ids: ["STEAD-P0-013", "STEAD-P1-011", "STEAD-P2-010", "STEAD-P3-007"]
     test_ids: ["T-DEP-001-ACCEPTANCE"]
     documentation: ["docs/architecture/deployment-profiles.md", "docs/operator/install-upgrade-rollback.md"]
@@ -785,7 +785,7 @@ requirements:
     release: "phase-3"
   - requirement_id: "DEP-002"
     title: "Guided install flow"
-    implementation_modules: ["apps/platformctl", "deploy/compose", "deploy/helm", "deploy/airgap"]
+    implementation_modules: ["apps/steadctl", "deploy/compose", "deploy/helm", "deploy/airgap"]
     issue_ids: ["STEAD-P0-013", "STEAD-P1-011", "STEAD-P2-010", "STEAD-P3-007"]
     test_ids: ["T-DEP-002-ACCEPTANCE"]
     documentation: ["docs/architecture/deployment-profiles.md", "docs/operator/install-upgrade-rollback.md"]
@@ -793,7 +793,7 @@ requirements:
     release: "phase-3"
   - requirement_id: "DEP-003"
     title: "Helm"
-    implementation_modules: ["apps/platformctl", "deploy/compose", "deploy/helm", "deploy/airgap"]
+    implementation_modules: ["apps/steadctl", "deploy/compose", "deploy/helm", "deploy/airgap"]
     issue_ids: ["STEAD-P0-013", "STEAD-P2-010"]
     test_ids: ["T-DEP-003-ACCEPTANCE"]
     documentation: ["docs/architecture/deployment-profiles.md", "docs/operator/install-upgrade-rollback.md"]
@@ -801,7 +801,7 @@ requirements:
     release: "phase-2"
   - requirement_id: "DEP-004"
     title: "Air gap"
-    implementation_modules: ["apps/platformctl", "deploy/compose", "deploy/helm", "deploy/airgap"]
+    implementation_modules: ["apps/steadctl", "deploy/compose", "deploy/helm", "deploy/airgap"]
     issue_ids: ["STEAD-P0-013", "STEAD-P3-007"]
     test_ids: ["T-DEP-004-ACCEPTANCE"]
     documentation: ["docs/architecture/deployment-profiles.md", "docs/operator/install-upgrade-rollback.md"]
@@ -809,7 +809,7 @@ requirements:
     release: "phase-3"
   - requirement_id: "DEP-005"
     title: "Upgrade behavior"
-    implementation_modules: ["apps/platformctl", "deploy/compose", "deploy/helm", "deploy/airgap"]
+    implementation_modules: ["apps/steadctl", "deploy/compose", "deploy/helm", "deploy/airgap"]
     issue_ids: ["STEAD-P0-013", "STEAD-P2-010", "STEAD-P3-007"]
     test_ids: ["T-DEP-005-ACCEPTANCE"]
     documentation: ["docs/architecture/deployment-profiles.md", "docs/operator/install-upgrade-rollback.md"]
@@ -817,7 +817,7 @@ requirements:
     release: "phase-2"
   - requirement_id: "OPS-001"
     title: "OpenTelemetry"
-    implementation_modules: ["apps/platformctl", "apps/core", "apps/worker", "deploy"]
+    implementation_modules: ["apps/steadctl", "apps/core", "apps/worker", "deploy"]
     issue_ids: ["STEAD-P0-013", "STEAD-P1-011"]
     test_ids: ["T-OPS-001-ACCEPTANCE"]
     documentation: ["docs/architecture/observability-contract.md", "docs/operator/backup-restore.md", "docs/operator/reliability.md"]
@@ -825,7 +825,7 @@ requirements:
     release: "phase-1"
   - requirement_id: "OPS-002"
     title: "Health and diagnostics"
-    implementation_modules: ["apps/platformctl", "apps/core", "apps/worker", "deploy"]
+    implementation_modules: ["apps/steadctl", "apps/core", "apps/worker", "deploy"]
     issue_ids: ["STEAD-P0-013", "STEAD-P1-011"]
     test_ids: ["T-OPS-002-ACCEPTANCE"]
     documentation: ["docs/architecture/observability-contract.md", "docs/operator/backup-restore.md", "docs/operator/reliability.md"]
@@ -833,7 +833,7 @@ requirements:
     release: "phase-1"
   - requirement_id: "OPS-003"
     title: "Backup"
-    implementation_modules: ["apps/platformctl", "apps/core", "apps/worker", "deploy"]
+    implementation_modules: ["apps/steadctl", "apps/core", "apps/worker", "deploy"]
     issue_ids: ["STEAD-P0-013", "STEAD-P2-010"]
     test_ids: ["T-OPS-003-ACCEPTANCE"]
     documentation: ["docs/architecture/observability-contract.md", "docs/operator/backup-restore.md", "docs/operator/reliability.md"]
@@ -841,7 +841,7 @@ requirements:
     release: "phase-2"
   - requirement_id: "OPS-004"
     title: "Restore testing"
-    implementation_modules: ["apps/platformctl", "apps/core", "apps/worker", "deploy"]
+    implementation_modules: ["apps/steadctl", "apps/core", "apps/worker", "deploy"]
     issue_ids: ["STEAD-P0-013", "STEAD-P2-010"]
     test_ids: ["T-OPS-004-ACCEPTANCE"]
     documentation: ["docs/architecture/observability-contract.md", "docs/operator/backup-restore.md", "docs/operator/reliability.md"]
@@ -849,7 +849,7 @@ requirements:
     release: "phase-2"
   - requirement_id: "OPS-005"
     title: "Reliability targets"
-    implementation_modules: ["apps/platformctl", "apps/core", "apps/worker", "deploy"]
+    implementation_modules: ["apps/steadctl", "apps/core", "apps/worker", "deploy"]
     issue_ids: ["STEAD-P0-013", "STEAD-P2-010", "STEAD-P3-007"]
     test_ids: ["T-OPS-005-ACCEPTANCE"]
     documentation: ["docs/architecture/observability-contract.md", "docs/operator/backup-restore.md", "docs/operator/reliability.md"]
@@ -1001,7 +1001,7 @@ requirements:
     release: "phase-0-contract"
   - requirement_id: "AGENT-003"
     title: "Authorization"
-    implementation_modules: ["modules/authorization", "modules/classification", "policies/openfga", "policies/opa", "packages/domain-schemas"]
+    implementation_modules: ["modules/authorization", "modules/classification", "policies/openfga", "policies/policy-decision", "packages/domain-schemas"]
     issue_ids: ["STEAD-P0-007", "STEAD-P0-014", "STEAD-P0-015", "STEAD-P1-006", "STEAD-P2-004", "STEAD-P2-006"]
     test_ids: ["T-AGENT-003-ACCEPTANCE"]
     documentation: ["docs/architecture/agent-ready-compatibility.md", "docs/architecture/authorization-contract.md"]
@@ -1025,7 +1025,7 @@ requirements:
     release: "phase-0-contract"
   - requirement_id: "AGENT-006"
     title: "Classification"
-    implementation_modules: ["modules/authorization", "modules/classification", "policies/openfga", "policies/opa", "packages/domain-schemas"]
+    implementation_modules: ["modules/authorization", "modules/classification", "policies/openfga", "policies/policy-decision", "packages/domain-schemas"]
     issue_ids: ["STEAD-P0-007", "STEAD-P0-014", "STEAD-P0-015", "STEAD-P1-006", "STEAD-P2-004", "STEAD-P2-006"]
     test_ids: ["T-AGENT-006-ACCEPTANCE"]
     documentation: ["docs/architecture/agent-ready-compatibility.md", "docs/architecture/security-label-lattice.md"]

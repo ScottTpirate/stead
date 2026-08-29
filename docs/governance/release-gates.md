@@ -57,7 +57,7 @@ The project owner must approve immutable versions of all items below after WS-01
 - Team hierarchy/Project ownership, fixed capability/preset, universal Work/Document, and Project lifecycle contracts;
 - security-label schema/profile/lattice and inheritance/join/downgrade rules;
 - OpenFGA model v0.1 with model and migration test vectors;
-- OPA input/output, trusted-context, deny/error, bundle/version/signature contract and decision table;
+- policy-decision input/output, trusted-context, deny/error, bundle/version/signature contract and decision table;
 - capability-specific provider interfaces;
 - OpenAPI 3.1.1 skeleton, JSON Schema 2020-12 linkage and RFC 9457 error profile;
 - AsyncAPI 3.1.x skeleton, CloudEvents extensions, naming/subject, replay and idempotency contract;
@@ -67,7 +67,7 @@ The project owner must approve immutable versions of all items below after WS-01
 - Phase 0 artifact backlog and ADR disposition;
 - golden vertical-slice scenario/test plan and this release-gate policy.
 - product/UX information architecture, design constitution, object surface, preset and persona-flow contracts;
-- agent-ready principal, assignment, OpenFGA, OPA, audit/event, Platform API/MCP and scoped-direct-Git compatibility seams for AGENT-001–006, together with the AGENT-007 non-goal.
+- agent-ready principal, assignment, OpenFGA, the policy-decision layer, audit/event, Platform API/MCP and scoped-direct-Git compatibility seams for AGENT-001–006, together with the AGENT-007 non-goal.
 - reconciliation report and Phase 0 Closeout Packet.
 
 ### `GATE-P0-APPROVED` pass criteria
@@ -79,7 +79,7 @@ The project owner must approve immutable versions of all items below after WS-01
 5. All required Phase 0 artifacts are internally consistent, versioned, dependency-complete, and have no unresolved Critical/High **Phase 0 artifact defect**. Open implementation risks in the threat register are acceptable at Phase 0 only when they have an owned control/test/release gate; they remain blockers for the applicable executable milestone.
 6. Genuine unresolved implementation choices are either resolved by approved ADR or explicitly deferred with a decision deadline before the dependent issue. Locked decisions are not relabeled as open choices.
 7. The golden plan separately covers TEST-009 general work with no code repository and TEST-010 additive software delivery, plus the complete TEST-004 matrix, direct paths, hierarchy non-inheritance, capability absence, events, audit, backup/restore and upgrade without implementing features.
-8. PrincipalRef contracts accept `user`, `agent`, `service_account`, and non-acting `directory_group`; assignment does not expose Gitea’s user-only limitation as canonical; OpenFGA reserves explicit agent/delegation/task/resource/revocation seams; OPA inputs reserve runtime domain/ceiling/compartment/model-provider/tool-scope/environment; events/audit preserve `requested_by` and `actor`; API/MCP/direct-Git boundaries are specified.
+8. PrincipalRef contracts accept `user`, `agent`, `service_account`, and non-acting `directory_group`; assignment does not expose Gitea’s user-only limitation as canonical; OpenFGA reserves explicit agent/delegation/task/resource/revocation seams; policy-decision inputs reserve runtime domain/ceiling/compartment/model-provider/tool-scope/environment; events/audit preserve `requested_by` and `actor`; API/MCP/direct-Git boundaries are specified.
 9. The Phase 0 scope audit proves no agent execution/orchestration/prompting/model-hosting/memory/A2A-dispatch/full-MCP implementation or mandatory model/SDK/provider dependency was introduced.
 10. Distinct independent QA and security reviewer identities verify completeness and contradiction checks from source, not only author summaries.
 11. The project owner records `APPROVED` against the exact commit/tag and artifact versions. Merge, publication, silence, or partial sign-off is not approval.
@@ -112,11 +112,11 @@ One machine-readable, signed manifest is the index to all evidence. It contains 
 - exact image, chart, CLI/archive, web, air-gap and other artifact digests;
 - dependency manifests/lockfiles, approved-dependency snapshot, SPDX 3.0 SBOMs, third-party notices and license scan;
 - checksums, signatures, verification material and SLSA-compatible provenance bound to the same digests;
-- platform, database/schema, OpenFGA model, OPA bundle, label profile, OpenAPI/AsyncAPI/schema, Gitea/provider, browser, Kubernetes/Helm/Compose and fixture versions;
+- platform, database/schema, OpenFGA model, policy-decision bundle, label profile, OpenAPI/AsyncAPI/schema, Gitea/provider, browser, Kubernetes/Helm/Compose and fixture versions;
 - requirement-to-implementation-to-test-to-document status snapshot;
 - every required test ID, applicability, result, first-failure/retry history and evidence reference;
 - unit/branch, policy decision-table/mutation, provider contract, accessibility, performance, vulnerability, secret, SAST, image, IaC, fuzz and chaos reports;
-- install, `platformctl doctor`, backup, restore, upgrade, forward-recovery/rollback and compatibility reports;
+- install, `steadctl doctor`, backup, restore, upgrade, forward-recovery/rollback and compatibility reports;
 - audit-event completeness and telemetry/protected-content canary results;
 - when agent-compatible or agent functionality is in scope, principal/delegation/task/revocation and trusted runtime-context versions plus requester/actor attribution and API/MCP/scoped-Git boundary results;
 - open defects, accepted residual risks, time-bounded waivers and their approvals/expiry/remediation issues;
@@ -132,7 +132,7 @@ All gates are cumulative. `PASS` means the exact candidate has complete, success
 |---|---|---|---|---|
 | `RG-00-CANDIDATE` Candidate freeze | §0, §22 | Exact commit/input/artifact/contract/provider versions and signed evidence-manifest skeleton; change freeze | Mutable tag, unpinned input, missing artifact, evidence from a different digest | Release manager + QA |
 | `RG-01-TRACE` Requirements traceability | TEST-001 | Machine-readable `requirement_id → implementation_modules → test_ids → documentation → status → release`; every completed requirement has acceptance evidence or allowed automation rationale | Missing requirement ID, orphan implementation/test, false complete status, issue missing mandatory fields | Independent QA |
-| `RG-02-LAYERS` Complete test layers | TEST-002 | Applicable unit, property, OpenFGA, OPA, schema, provider contract, module integration, event, browser E2E, accessibility, security, classification, performance, migration, upgrade, install, backup/restore, chaos and parser fuzz suites all pass | Any applicable suite absent or required test failed/flaky on final run | Independent QA; security co-approval for security layers |
+| `RG-02-LAYERS` Complete test layers | TEST-002 | Applicable unit, property, OpenFGA, the policy-decision layer, schema, provider contract, module integration, event, browser E2E, accessibility, security, classification, performance, migration, upgrade, install, backup/restore, chaos and parser fuzz suites all pass | Any applicable suite absent or required test failed/flaky on final run | Independent QA; security co-approval for security layers |
 | `RG-03-COVERAGE` Coverage and regression floors | TEST-003 | Core Go ≥80% line and branch; authorization/classification 100% decision-table/policy-rule coverage and ≥90% critical-policy mutation score; provider ≥80% plus full contracts; critical UI flows E2E; every prior security/data-loss defect has regression | Below floor, excluded critical rule, missing regression, coverage computed on wrong candidate | QA + security for policy/regression evidence |
 | `RG-04-CLASS` Authorization/classification matrix | TEST-004, CLS-006–008, AGENT-001–006 | Every mandated allow/deny, propagation, direct-provider, non-disclosure, backup/log, runner and cross-domain case passes; all applicable `CBI-*` rows `VERIFIED`; agent-capable releases also prove no broad human inheritance, the six-way authority intersection, independent revoke and external-runtime context | Admin/agent bypass, stale label/permission/delegation allow, metadata leak, lower runner/runtime access, direct provider exceeds policy, cross-domain export | Independent security; QA witnesses reproducibility |
 | `RG-05-EVENT` Event reliability/security | TEST-005, EVT-001–004 | Atomic outbox, retry idempotency, restart, DLQ/replay, out-of-order safety, schema compatibility, subject authorization and projection rebuild pass | Acknowledged mutation without recoverable outbox; duplicate side effect; unauthorized subscription; corrupt replay | QA + security for subject/content controls |
@@ -202,7 +202,7 @@ The following are not waivable under this release process:
 - any failed required test or unmet coverage floor;
 - a known unauthorized disclosure or direct-provider/classification bypass;
 - a cross-domain/write-down route in core;
-- failed OpenFGA/OPA model/policy tests or a fail-open decision path;
+- failed OpenFGA/policy-decision model/policy tests or a fail-open decision path;
 - failed backup/restore, install, upgrade or mandatory audit coverage;
 - unknown or unapproved-disallowed distributed license;
 - missing SBOM, required third-party notices, signature, checksum or provenance;

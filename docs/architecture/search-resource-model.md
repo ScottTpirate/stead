@@ -5,7 +5,7 @@ Requirements: `SRCH-001`–`SRCH-003`, `GRAPH-001`, `GRAPH-002`, `UX-008`
 
 Search indexes a typed envelope for Organization, Team, Project, Work Item, Document, Person, Agent, and, where the corresponding Project capability is active, Repository, Branch, Commit, code file/symbol, Pull Request, Build, Deployment, Package, Artifact, Release, Attachment, and Comment resources. Every entry carries only canonical ID/URI, resource type, container, effective label/profile version, projection version, authorized display fields, and source event checkpoint. It never becomes authoritative. Software resources are neither required nor synthesized for general Projects.
 
-Query order is fixed: choose Organization/security-domain/container/label partitions; apply coarse authorized partitions; obtain candidate IDs; perform authoritative OpenFGA+OPA checks; only then form titles, snippets, suggestions, counts, facets, rollups, graph edges, and errors. Denied resources contribute nothing—including to zero/nonzero differences or timing buckets exposed to a caller.
+Query order is fixed: choose Organization/security-domain/container/label partitions; apply coarse authorized partitions; obtain candidate IDs; perform authoritative OpenFGA+policy-decision checks; only then form titles, snippets, suggestions, counts, facets, rollups, graph edges, and errors. Denied resources contribute nothing—including to zero/nonzero differences or timing buckets exposed to a caller.
 
 The public `SearchResult`, result wrapper, and RFC 9457 problem shapes are closed contracts. Provider locators, hidden candidate counts, protected facets, and undeclared metadata therefore cannot be added to a conforming response.
 

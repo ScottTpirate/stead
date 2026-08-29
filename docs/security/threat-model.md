@@ -15,7 +15,7 @@ This document is the initial threat-model contract required by Phase 0. It does 
 
 The following constraints are inherited unchanged from the master build directive:
 
-1. Every protected operation is deny-by-default and passes authentication, trusted-attribute resolution, canonical-resource and effective-label resolution, OpenFGA, OPA, provider/path enforcement, and audit. No module may substitute its own authorization path.
+1. Every protected operation is deny-by-default and passes authentication, trusted-attribute resolution, canonical-resource and effective-label resolution, OpenFGA, the policy-decision layer, provider/path enforcement, and audit. No module may substitute its own authorization path.
 2. Administrators, security officers, service principals, agents, and operators receive no implicit content or classification bypass.
 3. A repository or other cloneable/provider container has one effective security label and security domain. Per-item markings cannot promise access restrictions the container cannot enforce.
 4. Derived data uses the least-upper-bound/join of its sources and may not silently become less restrictive. A downgrade is a separate, denied-by-default workflow.
@@ -48,7 +48,7 @@ Network location is not trusted. External identity, attribute, object-storage, n
 | AST-01 | Source repositories, Git history, LFS objects, pull requests, reviews | Confidentiality by repository/security-domain boundary; Git hash and review integrity; availability and portable recovery |
 | AST-02 | Work items, documents, comments, relationships, attachments | Content and existence confidentiality; canonical-schema and history integrity; label/provenance preservation |
 | AST-03 | Identities, groups, trusted attributes, sessions, service principals | Authenticity, freshness, provenance, expiry, least privilege, revocation |
-| AST-04 | OpenFGA models, tuples, OPA bundles, security-label profiles | Signed/versioned integrity, controlled rollout and rollback, complete audit, fail-closed evaluation |
+| AST-04 | OpenFGA models, tuples, policy-decision bundles, security-label profiles | Signed/versioned integrity, controlled rollout and rollback, complete audit, fail-closed evaluation |
 | AST-05 | Credentials, secrets, signing keys, HMAC keys, encryption/KMS references | Non-disclosure, short lifetime where applicable, scoped use, rotation and revocation |
 | AST-06 | Domain events, outbox, NATS streams, dead-letter records | Atomicity, integrity, authorization, minimization, replay safety, scoped ordering |
 | AST-07 | Search, graph, activity, inbox, counts, facets, caches | Rebuildability, label propagation, non-disclosure including existence and inference |
@@ -63,18 +63,18 @@ Network location is not trusted. External identity, attribute, object-storage, n
 
 ```mermaid
 flowchart LR
-  U[Human client] -->|OIDC/session; API request| W[platform-web / platform API]
+  U[Human client] -->|OIDC/session; API request| W[stead-web / platform API]
   AR[External agent runtime] -->|canonical Platform API / platform-wide MCP| W
   IDP[OIDC, SCIM, attribute authorities] -->|signed identity and attributes| W
-  CTL[Operator via platformctl] -->|admin API / install / upgrade / recovery| W
+  CTL[Operator via steadctl] -->|admin API / install / upgrade / recovery| W
   W -->|relationship decision| FGA[OpenFGA]
-  W -->|label, context, deny decision| OPA[OPA]
+  W -->|label, context, deny decision| PD[Deterministic policy-decision layer]
   W -->|module transaction plus outbox| PG[(Platform PostgreSQL)]
   W -->|capability interface| P[Provider adapters]
   P -->|documented APIs and supported auth| G[Gitea / Commonplace-compatible boundary]
   AR -->|direct Git only; scoped credential| G
   D[Direct Git, LFS, package and artifact clients] -->|provider/path enforcement| G
-  G -->|HMAC webhook| WK[platform-worker]
+  G -->|HMAC webhook| WK[stead-worker]
   PG -->|undelivered outbox| WK
   WK -->|CloudEvents| N[NATS JetStream]
   N -->|authorized, idempotent consumers| WK
@@ -98,7 +98,7 @@ All arrows that carry protected resource information also carry or resolve organ
 |---|---|---|---|
 | TB-01 | Client/browser ↔ platform API | Token theft, request tampering, UI-only enforcement, overbroad responses | Production TLS; server-side authorization; conditional writes; RFC 9457 non-leaking errors; CSP/CSRF/session controls; audit |
 | TB-02 | Identity/attribute authorities ↔ platform | Forged, stale, self-asserted, or mis-mapped attributes | Issuer/audience/signature validation; trusted-source allowlist; provenance and expiry; fail closed; SCIM reconciliation |
-| TB-03 | Core ↔ OpenFGA/OPA | Policy bypass, stale model, split decision, outage fail-open | One decision contract; pinned model/bundle versions; signed OPA bundle; timeouts deny; decision metadata in audit; conformance tests |
+| TB-03 | Core ↔ OpenFGA/policy-decision | Policy bypass, stale model, split decision, outage fail-open | One decision contract; pinned model/bundle versions; signed policy-decision bundle; timeouts deny; decision metadata in audit; conformance tests |
 | TB-04 | Core/worker ↔ module-owned PostgreSQL data | Cross-module writes, SQL privilege escalation, partial transaction | Owned schemas/migrations; least-privilege DB roles; service interfaces; transactional outbox; integration tests |
 | TB-05 | Worker ↔ NATS/consumers | Unauthorized subscription, replay duplication, poison event, content overexposure | Scoped credentials/subjects; minimal CloudEvents; idempotency; DLQ and controlled replay; retention policy |
 | TB-06 | Platform ↔ stock Gitea/provider | Confused deputy, permission drift, undocumented dependency, malicious webhook | Capability-scoped adapter; scoped credentials; HMAC; reconciliation; compatibility tests; no internal DB/file access |
@@ -118,18 +118,18 @@ All arrows that carry protected resource information also carry or resolve organ
 | ID | Flow | Security and classification behavior |
 |---|---|---|
 | DF-01 | Sign-in, provisioning, and attribute synchronization | Accept configured authorities only; preserve authority, issue/review/expiry, version, provenance and sensitivity; reject expired or unverifiable attributes. |
-| DF-02 | Synchronous read/write through platform API | Resolve canonical resource and effective label before OpenFGA and OPA; apply explicit denies and provider check; return only authorized fields and non-leaking errors; audit decision metadata. |
+| DF-02 | Synchronous read/write through platform API | Resolve canonical resource and effective label before OpenFGA and the policy-decision layer; apply explicit denies and provider check; return only authorized fields and non-leaking errors; audit decision metadata. |
 | DF-03 | Domain mutation → outbox → NATS → consumer | Domain write and outbox are atomic; event carries required security metadata and minimized content; publish/consume is idempotent; subscription and replay remain domain-scoped. |
 | DF-04 | Platform core/worker ↔ Gitea/Commonplace/provider | Use only owned capability interface and documented upstream contract; bind scoped credential to organization/domain; validate response; reconcile drift; audit mutation. |
 | DF-05 | Direct Git clone/push, LFS, API, package, artifact and release access | Provider enforcement cannot exceed the central grant. Context the provider cannot evaluate is enforced by gateway, network/security domain, or credential issuance; tests cover every direct route. |
 | DF-06 | Git/OKF document edit, review, publish and clone | Repository is the secrecy boundary; deterministic safe Markdown; no executable MDX/scripts/unsafe HTML; approved revision hash, provenance and label remain intact. |
-| DF-07 | Event → search/graph/activity/inbox projection → query | Project using label/domain metadata; invalidate on label/permission change; coarse prefilter then authoritative OpenFGA/OPA; never leak totals, snippets, edges, identifiers or existence. |
+| DF-07 | Event → search/graph/activity/inbox projection → query | Project using label/domain metadata; invalidate on label/permission change; coarse prefilter then authoritative OpenFGA/policy-decision; never leak totals, snippets, edges, identifiers or existence. |
 | DF-08 | Notification → external channel | In-app record remains canonical. Evaluate channel/destination against label; redact to a generic protected-update notice when allowed, otherwise deny; preserve audit without copying content. |
 | DF-09 | Workflow → runner → secret/artifact callback | Assign only to matching domain/classification pool; issue short-lived job-bound credentials; redact logs; verify cleanup; label outputs by source join. |
 | DF-10 | Attachment/object upload and download | Validate size/type/hash and optional malware status; bind owner/container/label/retention; authorize each access or issue narrowly scoped, short-lived URL; prevent locator disclosure. |
 | DF-11 | External source → migration inventory/dry run/import/reconciliation | Treat source data as untrusted; map identities, ontology and labels explicitly; quarantine uncertain data; preserve provenance and unsupported constructs; prevent partial visibility before validation. |
 | DF-12 | Authoritative stores → backup → restore | Capture the complete required set consistently; protect at maximum applicable domain/label; verify manifest/signature/encryption; restore into compatible domain and revalidate IDs, labels, permissions and hashes. |
-| DF-13 | Export/share/copy/print or cross-domain request | Apply OPA data-flow and downgrade rules; deny cross-domain/write-down in core; require external accredited transfer; include markings and audit. |
+| DF-13 | Export/share/copy/print or cross-domain request | Apply policy-decision data-flow and downgrade rules; deny cross-domain/write-down in core; require external accredited transfer; include markings and audit. |
 | DF-14 | Policy/model/schema/config upgrade and rollback | Authenticate and authorize change; validate signature/version/migration; canary/preflight where applicable; record before/after hashes; roll back only to compatible, non-weaker state. |
 | DF-15 | User/principal → agent delegation/assignment → external runtime → Platform API/MCP or direct Git | Record `user`/`agent`/`service_account`, delegator, task/resource scope and independent revocation. Evaluate the intersection of delegator, agent, task, runtime domain/ceiling/compartments, session/environment and resource policy. API/MCP uses the shared authorization path; direct Git receives a separate minimum-scope credential. Events/audit record both requester and actor. |
 
@@ -140,7 +140,7 @@ All arrows that carry protected resource information also carry or resolve organ
 | Resource label exceeds installation ceiling | Reject creation/import; do not persist a lower substitute label. |
 | Derived resource has sources at different levels/compartments | Apply the defined least-upper-bound/join and retain derivation sources. |
 | Principal has project administration but insufficient clearance/compartment | Deny content access; administrative role is not a bypass. |
-| Same security domain, but missing need-to-know | Deny through OpenFGA even if OPA classification dominance succeeds. |
+| Same security domain, but missing need-to-know | Deny through OpenFGA even if the policy-decision layer's classification-dominance check succeeds. |
 | Provider cannot evaluate device, network, time, or session context | Enforce through access gateway, security-domain network controls, or scoped credential issuance; otherwise disable that path. |
 | Label is raised | Invalidate and reconcile provider grants, credentials, search, counts, graphs, notifications, exports, caches and outstanding object URLs before further access. |
 | Label is lowered/declassified/decontrolled | Deny by default; require authorized role, written reason/source authority, complete audit and US-government two-person approval. |
@@ -189,10 +189,10 @@ Severity expresses the worst credible impact before implementation controls. `OP
 | TM-F015 | T, E | Compromised dependency, action, image, chart or build produces a trusted release | Approval workflow, pinning, scans, SBOM, provenance and signing; quarantine/rebuild/revocation drill | WS-09 with WS-12/13 | Critical | OPEN-P0 |
 | TM-F016 | T, I, D | Incomplete, mislabeled or compromised backup/restore loses data or restores it into a weaker domain | Consistent manifest, domain binding, encryption/integrity verification; generated-data restore and wrong-domain rejection tests | WS-12 Installation/operations with WS-13 | Critical | OPEN-P0 |
 | TM-F017 | I, E | Export, copy/share or integration implements unapproved cross-domain/write-down transfer | No core route; explicit deny; channel/destination allowlist; cross-domain negative tests and audit | WS-06 with WS-10/12/13 | Critical | OPEN-P0 |
-| TM-F018 | T, E, D | Unsigned, incompatible or rolled-back OpenFGA/OPA/schema/config weakens decisions or locks out service | Signed/versioned artifacts; model/policy migration tests; preflight; compatible rollback; before/after audit | WS-06 with WS-01/12/13 | Critical | OPEN-P0 |
+| TM-F018 | T, E, D | Unsigned, incompatible or rolled-back OpenFGA/policy-decision/schema/config weakens decisions or locks out service | Signed/versioned artifacts; model/policy migration tests; preflight; compatible rollback; before/after audit | WS-06 with WS-01/12/13 | Critical | OPEN-P0 |
 | TM-F019 | T, E, I | Direct Gitea changes or provider-version drift violates canonical workflow, permissions or labels | Accept/reconcile only valid changes; reject/reset invalid ones with audit; pinned compatibility matrix and nightly/RC tests | WS-03 | High | OPEN-P0 |
 | TM-F020 | T, E, I, D | Markdown/frontmatter, archive, API or import parser executes active content or consumes unbounded resources | Reject executable MDX/scripts/unsafe HTML; safe extraction; size/depth/time limits; fuzz and malicious-corpus tests | WS-04 Knowledge with WS-11/13 | High | OPEN-P0 |
-| TM-F021 | D, E | OpenFGA/OPA/provider outage causes fail-open behavior or unsafe partial writes | Explicit timeout/error deny; transactional boundaries; degraded-mode contract; failure/chaos tests and recovery audit | WS-02/06 with WS-13 | Critical | OPEN-P0 |
+| TM-F021 | D, E | OpenFGA/policy-decision/provider outage causes fail-open behavior or unsafe partial writes | Explicit timeout/error deny; transactional boundaries; degraded-mode contract; failure/chaos tests and recovery audit | WS-02/06 with WS-13 | Critical | OPEN-P0 |
 | TM-F022 | E, I, R | MCP/agent gains direct repository, DB, NATS, search or object-store access or unattributed writes | Same platform API/authorization path as humans; scoped service principal; no direct stores; attribution/audit tests | WS-08 Search/work graph/AI with WS-06/13 | High | OPEN-P0 |
 | TM-F023 | S, T, R | Signature/provenance metadata is valid but bound to the wrong artifact/version | Bind digest, version, builder identity and source revision; verify before install/upgrade; substitution tests | WS-09 with WS-12/13 | High | OPEN-P0 |
 | TM-F024 | I, D | Telemetry, diagnostics, crash reports or support bundles capture protected bodies or secrets | Allowlisted structured fields, redaction at source, domain-aware export, canary-secret/content leakage tests | WS-12 Installation/operations with WS-13 | High | OPEN-P0 |
@@ -279,7 +279,7 @@ Required controls are immutable pinning, an internally mirrored approved action 
 
 | Failure or compromise | Fail-safe behavior | Recovery evidence required |
 |---|---|---|
-| OpenFGA/OPA or trusted-attribute authority unavailable | Deny protected operations that need an unavailable decision; do not reuse attributes beyond their authorized validity | Chaos test, denial audit, service recovery and decision-version check |
+| OpenFGA/policy-decision or trusted-attribute authority unavailable | Deny protected operations that need an unavailable decision; do not reuse attributes beyond their authorized validity | Chaos test, denial audit, service recovery and decision-version check |
 | Provider unavailable or webhook delivery lost | Preserve acknowledged platform transaction/outbox; queue retry; do not invent provider success; reconcile from documented APIs | Outage/retry test, idempotent reconciliation report |
 | NATS unavailable or stream lost | Keep authoritative domain/outbox state; resume publication; rebuild projections from stores/events where available | Atomic outbox, restart, DLQ/replay and projection rebuild tests |
 | Search/activity/inbox unavailable | Degrade without bypassing through raw unfiltered results; core authorized reads/writes remain defined | Failure E2E and non-disclosure assertions |
@@ -305,7 +305,7 @@ Before Phase 0 approval, tests may be specifications rather than executable code
 - wrong-domain backup/restore and cross-domain export denials;
 - release artifact substitution, signing and offline verification tests.
 - principal-schema tests proving acting/requesting contexts accept `user`, `agent`, and `service_account` where applicable, Work assignment accepts exactly `user` or `agent`, and no principal kinds are treated as interchangeable;
-- OpenFGA/OPA future-compatibility vectors for explicit delegation, task/resource scope, independent revocation, no broad human inheritance, and runtime domain/ceiling/compartment/model-provider/tool-scope/execution-environment inputs;
+- OpenFGA/policy-decision future-compatibility vectors for explicit delegation, task/resource scope, independent revocation, no broad human inheritance, and runtime domain/ceiling/compartment/model-provider/tool-scope/execution-environment inputs;
 - event/audit schema vectors with `requested_by = user:alice` and `actor = agent:backend-agent`, principal type, delegation/task, correlation and causation;
 - API/MCP and direct-Git negative contracts showing an agent cannot call provider business APIs, exceed task scope, reuse a revoked delegation, or use a Git credential outside its exact repository/domain/task.
 

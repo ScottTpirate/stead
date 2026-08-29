@@ -20,7 +20,7 @@ flowchart TD
   P005 --> P009[P0-09 Event and AsyncAPI contracts]
   P003 --> P010[P0-10 Database ownership map]
   P006 --> P011[P0-11 OpenFGA model v0.1]
-  P006 --> P012[P0-12 OPA decision contract]
+  P006 --> P012[P0-12 Policy-decision contract]
   P007 --> P013[P0-13 Threat and bypass baseline]
   P009 --> P013
   P010 --> P013
@@ -86,7 +86,7 @@ The compact `P0-00`…`P0-21` labels in this document are artifact work packages
 | 9 | `P0-09` Event/AsyncAPI contracts | WS-07 sole event-schema/publisher/consumer editor; WS-02 owns `EVT-002` transactional outbox; WS-01/06/13 and producers/consumers review | EVT-001,003–004; EVT-002; ACT-001; NOTIF-001; AUD-002; AGENT-004 | CloudEvents/AsyncAPI, container/capability/classification and actor/requester/delegation-task/correlation fields, replay/DLQ/idempotency | P0-05 | Ready for approval |
 | 10 | `P0-10` Database ownership map | WS-02 boundary integrator; each namespace owner is sole migration/write editor; WS-01 architecture reviewer | ARCH-003–004; EVT-002; GRAPH-001 | Every module/table/migration namespace has one owner; cross-module write/read policy and projection rebuild contract are explicit | P0-03 | Ready for approval |
 | 11 | `P0-11` OpenFGA model v0.1 | WS-06 | AUTH-002–003,006; DOM-003,006,009–010; AGENT-001–003,006 | Model separates Team hierarchy/accountability from access and covers groups, agents, assignment, explicit task scope and no broad inheritance; complete matrix | P0-06 | Ready for approval |
-| 12 | `P0-12` OPA input/output contract | WS-06 | AUTH-002,004–006; CLS-001–008; AGENT-003,006 | Trusted input provenance, principal/runtime/task/delegation/classification seams, fail-closed output/cache/version contract and complete decision table | P0-06 | Ready for approval |
+| 12 | `P0-12` Policy-decision input/output contract | WS-06 | AUTH-002,004–006; CLS-001–008; AGENT-003,006 | Trusted input provenance, principal/runtime/task/delegation/classification seams, fail-closed output/cache/version contract and complete decision table | P0-06 | Ready for approval |
 | 13 | `P0-13` Threat model and bypass inventory | WS-13 (independent); all technical owners consulted | SEC-003–006; CLS-006–008; TEST-004,008; AGENT-003–006 | 33 threats and 47 bypass paths, including hierarchy, capabilities, knowledge scopes, general Work/provider leakage, and Phase 0 agent scope | P0-07,09–12 | Ready for approval |
 | 14 | `P0-14` License/dependency workflow | WS-13; project owner/legal for exceptions | SEC-001–002; CICD-002,004 | Default allow/reject rules, evidence, quarantine, ADR/legal exception, CI gates, notices/SBOM, upgrade/rollback handling | P0-01 | Ready for approval |
 | 15 | `P0-15` Golden scenarios | WS-13 owns assertions; component owners supply contracts and fixtures | TEST-002–010; AGENT-001–007; §23 | TEST-009 general Project without code plus TEST-010 software extension; hierarchy/capability/non-disclosure, install/recovery/event/provider coverage | P0-03,07–09,11–13 | Ready for approval |

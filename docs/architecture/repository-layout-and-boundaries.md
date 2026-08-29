@@ -9,10 +9,10 @@ This document records the required monorepo shape, exclusive edit ownership, dep
 
 ```text
 /apps
-  /web                    WS-05  Devlane-derived unified frontend
-  /core                   WS-02  Go public API/BFF and composition root
-  /worker                 WS-07  Go async composition root and eventing runtime
-  /platformctl            WS-12  install/upgrade/backup/restore/doctor CLI
+  /web                    WS-05  Devlane-derived unified frontend; deploys as stead-web
+  /core                   WS-02  Go public API/BFF and composition root; deploys as stead-api
+  /worker                 WS-07  Go async composition root and eventing runtime; deploys as stead-worker
+  /steadctl               WS-12  install/upgrade/backup/restore/doctor CLI
 
 /modules
   /organization           WS-02
@@ -56,7 +56,7 @@ This document records the required monorepo shape, exclusive edit ownership, dep
 
 /policies
   /openfga                WS-06
-  /opa                    WS-06
+  /policy-decision        WS-06  implementation-neutral classification/context/information-flow contracts
   /security-label-profiles WS-06
 
 /specs
@@ -203,17 +203,17 @@ Implementation unit/property tests live beside owned module/provider code. Cross
 Allowed compile-time/runtime dependency direction is:
 
 ```text
-platform-web
+stead-web
   -> generated api-client + design-system
   -> versioned platform HTTP API only
 
-platform-core composition root
+stead-api composition root
   -> module public contracts
   -> central authorization/classification contract
   -> provider interfaces
   -> platform PostgreSQL through module-owned repositories
 
-platform-worker composition root
+stead-worker composition root
   -> event/outbox framework
   -> module-owned handlers/reconcilers/projectors through registered ports
   -> provider interfaces
@@ -230,7 +230,7 @@ provider implementation
   -> documented upstream API/protocol/client
   -> no domain table and no alternate authorization logic
 
-platformctl
+steadctl
   -> supported administrative platform API and deployment/backup interfaces
   -> never ad hoc writes to module or upstream tables
 
@@ -248,7 +248,7 @@ Cross-module cycles are prohibited. A proposed module dependency must be documen
 - `WS-02` alone edits `/apps/core` wiring. Other owners expose module/provider constructors and submit an integration request; `WS-02` binds them after contract and boundary tests pass.
 - `WS-07` alone edits `/apps/worker` wiring. Other owners expose idempotent handlers through module contracts and submit a registration request; `WS-07` binds subjects, queues, DLQ, telemetry, and shutdown behavior.
 - `WS-05` alone edits `/apps/web`; no backend owner may add a direct provider call to accelerate a feature.
-- `WS-12` alone edits `/apps/platformctl` and deployment composition; component owners contribute health/config/backup/upgrade contracts, not ad hoc CLI code.
+- `WS-12` alone edits `/apps/steadctl` and deployment composition; component owners contribute health/config/backup/upgrade contracts, not ad hoc CLI code.
 - `WS-08` alone edits the Phase 0 future-agent interoperability seam under `/docs/architecture/search-graph/mcp-a2a-compatibility.md`. It preserves MCP, A2A, and Agent Card compatibility without implementing a tool catalog, registry behavior, dispatch, runtime, model, orchestration, prompting, or memory.
 
 ## Database and system-of-record boundaries
@@ -292,7 +292,7 @@ The following are merge blockers, not style preferences:
 
 | Boundary ID | Prohibited behavior | Required automated guard |
 |---|---|---|
-| `BND-001` | web/browser calls Gitea, Commonplace, OpenFGA, OPA, NATS, object storage, or another provider directly | frontend import/URL allowlist plus E2E network assertion |
+| `BND-001` | web/browser calls Gitea, Commonplace, OpenFGA, the policy-decision layer, NATS, object storage, or another provider directly | frontend import/URL allowlist plus E2E network assertion |
 | `BND-002` | platform queries/writes Gitea or OpenFGA internal tables | SQL/import static rule, runtime least-privilege DB credentials, provider contract tests |
 | `BND-003` | module writes another module namespace | migration/path ownership check, DB role/privilege tests, integration mutation audit |
 | `BND-004` | module imports provider implementation rather than port | Go dependency/layer rule and architecture test |
@@ -308,7 +308,7 @@ The following are merge blockers, not style preferences:
 | `BND-014` | implementation owner changes shared contract/test/gate concurrently or self-approves | contract lock/CODEOWNERS check and approval identity/separation gate |
 | `BND-015` | unapproved license/dependency/action/image enters distributed output | dependency/SBOM/license/action pin/image digest gates |
 | `BND-016` | actor/assignee/reviewer/subscriber/request contracts assume a human user rather than the principal kinds allowed at that field | schema lint and fixtures for acting `user`/`agent`/`service_account` contexts and the narrower `user`/`agent` Work-assignee union across API, event, and audit contracts |
-| `BND-017` | agent broadly inherits delegator authority or omits task/runtime/classification intersection seams | OpenFGA/OPA model tests for explicit delegation, independent revocation, task scope, principal type, and reserved runtime/environment attributes |
+| `BND-017` | agent broadly inherits delegator authority or omits task/runtime/classification intersection seams | OpenFGA plus policy-decision contract tests for explicit delegation, independent revocation, task scope, principal type, and reserved runtime/environment attributes |
 | `BND-018` | future agent uses provider business API or unrestricted access instead of Platform API/MCP | agent-access architecture tests; only scoped direct Git protocol credentials are exempt |
 | `BND-019` | Phase 0 implements agent orchestration, prompting, model hosting, agent memory, AgentRun execution, Agent Registry behavior, A2A dispatch, or full MCP tool catalog | scope/backlog and dependency guard; such work requires later approved issue/phase and any applicable ADR |
 

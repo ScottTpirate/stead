@@ -62,7 +62,7 @@ body:
     id: auth_classification
     attributes:
       label: Authorization and classification behavior
-      description: Principal types and requester/actor context; server-side OpenFGA/OPA/provider checks; label propagation; non-disclosure; direct paths; fail-closed cases.
+      description: Principal types and requester/actor context; server-side OpenFGA/policy-decision/provider checks; label propagation; non-disclosure; direct paths; fail-closed cases.
     validations:
       required: true
   - type: textarea

@@ -11,7 +11,7 @@ Phase 1 must prove two paths in one product and canonical model. The general-wor
 - `ID-AUTHOR`, `ID-REVIEWER`, `ID-LOW`, `ID-NO-NTK`, and `ID-SECURITY-OFFICER` with synthetic trusted attributes.
 - `AGENT-BACKEND` and contract-only `AGENT-RUN-SHAPE`; no runtime or execution endpoint.
 - commercial protected label below the deployment ceiling plus negative compartment/ceiling fixtures.
-- clean local install with pinned Gitea, PostgreSQL, NATS, OpenFGA, OPA, filesystem BlobStore, and PostgreSQL SearchProvider.
+- clean local install with pinned Gitea, PostgreSQL, NATS, OpenFGA, the policy-decision layer, filesystem BlobStore, and PostgreSQL SearchProvider.
 
 The harness records source revision; component/image/provider/schema/model/policy/profile versions and digests; fixture versions; OpenTelemetry correlation; safe state hashes; test results; retries; and reviewer identities.
 
@@ -30,7 +30,7 @@ The harness records source revision; component/image/provider/schema/model/polic
 | `GWS-009-EVENTS` | Process create/update/webhook events; force duplicate, restart, out-of-order, DLQ, replay. | Atomic outbox; one durable effect; per-resource order only; controlled replay; projections rebuild; actor/requester/correlation/causation preserved. |
 | `GWS-010-ATTENTION` | Inspect Home, Inbox, Team/Project rollups, Activity, notifications, and search. | Useful authorized results across Team/Project/Work/Document/Person/Agent; counts/facets/suggestions/relationships filtered before response. |
 | `GWS-011-NONDISCLOSURE` | Probe as low, no-need-to-know, security-officer, and parent-only principals via UI/API/search/graph/inbox/export/errors/raw Gitea/Git. | No title, ID, existence, count, snippet, suggestion, notification, relationship, timing/error distinction, or direct-path access. Security officer can manage policy metadata without content read. |
-| `GWS-012-AGENT-SEAM` | Validate Agent, AgentRun, assignment, OpenFGA/OPA, audit/event, MCP/A2A schemas. | `requested_by=user:alice` and `actor=agent:backend-agent`; task/delegation/runtime/classification inputs; explicit independent revocation; no broad inheritance, runtime endpoint, dispatch, model/prompt/memory, or tool catalog. |
+| `GWS-012-AGENT-SEAM` | Validate Agent, AgentRun, assignment, OpenFGA/policy-decision, audit/event, MCP/A2A schemas. | `requested_by=user:alice` and `actor=agent:backend-agent`; task/delegation/runtime/classification inputs; explicit independent revocation; no broad inheritance, runtime endpoint, dispatch, model/prompt/memory, or tool catalog. |
 | `GWS-013-RECOVERY` | Backup; destroy only disposable deployment; restore cleanly. | All authoritative state/config/policy/audit/Git/blob data restored; IDs, hashes, labels, access, links stable; projections rebuild without NATS as sole source. |
 | `GWS-014-UPGRADE` | Upgrade within supported matrix with injected failure. | Preflight, backup, expand/contract order, smoke, report, audit, and documented rollback or forward recovery; no acknowledged-write loss. |
 
@@ -57,7 +57,7 @@ Begin from the same shell/model and create a `software` Project `STEAD`, owned b
 | Layer | Required coverage |
 |---|---|
 | Schema/API/event | OWGP examples; OpenAPI/RFC 9457; AsyncAPI/CloudEvents; principal/container/capability/lifecycle; compatible evolution. |
-| OpenFGA/OPA | Every relation/decision row; hierarchy non-inheritance; assignment non-grant; trusted expiry; agent intersection/revocation; 100% decision-row and ≥90% critical mutation coverage. |
+| OpenFGA/policy-decision | Every relation/decision row; hierarchy non-inheritance; assignment non-grant; trusted expiry; agent intersection/revocation; 100% decision-row and ≥90% critical mutation coverage. |
 | Unit/property/fuzz | fixed enums/cardinality, UUIDv7, hierarchy cycles/depth, capability dependencies, label join/no-lowering, Markdown/frontmatter, webhooks/importers. |
 | Integration/replay | transaction+outbox, provider reconciliation, duplicate/out-of-order/restart/DLQ, authorized projection rebuild, audit completeness. |
 | Browser/accessibility | both paths, six persona journeys, keyboard/screen reader parity, WCAG 2.2 AA, deep links/context preservation, no Devlane route/ontology dependency. |

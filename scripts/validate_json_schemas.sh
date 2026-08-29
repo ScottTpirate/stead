@@ -19,9 +19,9 @@ actor="packages/event-schemas/common/actor-context/actor-context-v0.1.schema.jso
 
 ajv_compile -s "$owgp"
 ajv_compile -r "$owgp" -s "$actor"
-ajv_compile -r "$owgp" -r "$actor" -s packages/event-schemas/platform/platform-event-v0.1.schema.json
-ajv_compile -r "$owgp" -s policies/opa/input-v0.1.schema.json
-ajv_compile -s policies/opa/output-v0.1.schema.json
+ajv_compile -r "$owgp" -r "$actor" -s packages/event-schemas/stead/stead-event-v0.1.schema.json
+ajv_compile -r "$owgp" -s policies/policy-decision/input-v0.1.schema.json
+ajv_compile -s policies/policy-decision/output-v0.1.schema.json
 ajv_compile -r "$owgp" -s specs/migration/migration-job-v0.1.schema.json
 ajv_compile -s policies/security-label-profiles/profile-v0.1.schema.json
 ajv_compile -s policies/deployment-domains/domain-profile-v0.1.schema.json

@@ -1,12 +1,13 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://stead.example/policies/opa/output-v0.1.schema.json",
-  "title": "Stead policy decision",
+  "$id": "https://stead.example/policies/policy-decision/output-v0.1.schema.json",
+  "title": "Stead deterministic policy-decision output",
+  "description": "Implementation-neutral, reason-safe result consumed alongside OpenFGA and provider/path enforcement.",
   "type": "object",
   "required": ["allow", "decision_id", "policy_bundle_id", "reason_codes", "obligations", "cache"],
   "properties": {
     "allow": {"type": "boolean"},
-    "decision_id": {"type": "string"},
+    "decision_id": {"type": "string", "description": "Opaque per-evaluation identifier for audit correlation; excluded from semantic determinism comparisons."},
     "policy_bundle_id": {"type": "string"},
     "reason_codes": {"type": "array", "items": {"type": "string"}, "minItems": 1},
     "obligations": {"type": "array", "items": {"enum": ["display_marking", "watermark_export", "redact_notification", "audit_access", "require_two_person_approval", "disable_download"]}, "uniqueItems": true},

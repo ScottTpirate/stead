@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://stead.example/packages/event-schemas/platform/platform-event-v0.1.schema.json",
+  "$id": "https://stead.example/packages/event-schemas/stead/stead-event-v0.1.schema.json",
   "title": "Stead CloudEvent data",
   "type": "object",
   "required": ["schema_version", "organization_id", "security_domain_id", "container", "effective_security_label", "actor_context", "resource", "idempotency_key"],

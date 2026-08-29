@@ -96,19 +96,19 @@ REQUIRED_PHASE_ZERO_FILES = %w[
   specs/work-graph-profile/owgp-v0.1.schema.json
   specs/work-graph-profile/examples.yaml
   specs/openapi/platform-v1.yaml
-  specs/asyncapi/platform.yaml
+  specs/asyncapi/stead.yaml
   specs/provider-interfaces.yaml
   specs/migration/migration-job-v0.1.schema.json
   specs/migration/canonical-model-v0.1.yaml
   specs/mcp/compatibility-v0.1.yaml
   specs/a2a/compatibility-v0.1.yaml
   packages/event-schemas/common/actor-context/actor-context-v0.1.schema.json
-  packages/event-schemas/platform/platform-event-v0.1.schema.json
+  packages/event-schemas/stead/stead-event-v0.1.schema.json
   policies/openfga/model.fga
   policies/openfga/model-tests.yaml
-  policies/opa/input-v0.1.schema.json
-  policies/opa/output-v0.1.schema.json
-  policies/opa/decision-table.yaml
+  policies/policy-decision/input-v0.1.schema.json
+  policies/policy-decision/output-v0.1.schema.json
+  policies/policy-decision/decision-table.yaml
   policies/security-label-profiles/profile-v0.1.schema.json
   policies/security-label-profiles/commercial.yaml
   policies/security-label-profiles/us-government.yaml
@@ -879,6 +879,39 @@ REQUIRED_PHASE_ZERO_FILES.each do |path|
   failures << "#{path}: missing required Phase 0 closeout artifact" unless File.file?(File.join(ROOT, path))
 end
 
+normalization_paths = Dir.glob(
+  File.join(ROOT, "{README.md,.github/**/*.yml,.github/**/*.yaml,docs/**/*.{md,yml,yaml},specs/**/*.{md,yml,yaml,json},packages/**/*.{md,yml,yaml,json},policies/**/*.{md,yml,yaml,json,fga},scripts/**/*.{rb,js,sh}}"),
+  File::FNM_EXTGLOB
+).select { |path| File.file?(path) }
+legacy_component_names = [
+  ["platform", "web"].join("-"),
+  ["platform", "core"].join("-"),
+  ["platform", "worker"].join("-"),
+  ["platform", "ctl"].join
+]
+legacy_component_pattern = Regexp.union(legacy_component_names.map { |name| /\b#{Regexp.escape(name)}\b/ })
+legacy_event_prefix = ["plat", "form"].join
+legacy_event_namespace_pattern = Regexp.new("\\b#{Regexp.escape(legacy_event_prefix)}\\.[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*\\.v[1-9][0-9]*\\b")
+legacy_opa_root = ["policies", "opa"].join("/")
+mandatory_opa_patterns = [
+  Regexp.new(Regexp.escape(legacy_opa_root)),
+  Regexp.new("\\bbundled " + "OPA\\b"),
+  Regexp.new("\\bOPA " + "MUST\\b"),
+  Regexp.new("OpenFGA\\s*(?:\\+|/|and)\\s*" + "OPA")
+]
+
+normalization_paths.each do |path|
+  source = File.read(path, encoding: "UTF-8")
+  relative = relative_path(path)
+  failures << "#{relative}: legacy deployable component name remains" if source.match?(legacy_component_pattern)
+  failures << "#{relative}: legacy platform event namespace remains" if source.match?(legacy_event_namespace_pattern)
+  if mandatory_opa_patterns.any? { |pattern| source.match?(pattern) }
+    failures << "#{relative}: OPA remains mandatory instead of an optional policy-decision implementation"
+  end
+rescue EncodingError => error
+  failures << "#{relative_path(path)}: invalid text encoding while checking naming normalization (#{error.message})"
+end
+
 markdown_paths = [File.join(ROOT, "README.md"), *Dir.glob(File.join(ROOT, "docs/**/*.md"))].uniq.sort
 markdown_paths.each do |markdown_path|
   source = File.read(markdown_path, encoding: "UTF-8")
@@ -905,9 +938,9 @@ end
 json_contract_paths = %w[
   specs/work-graph-profile/owgp-v0.1.schema.json
   packages/event-schemas/common/actor-context/actor-context-v0.1.schema.json
-  packages/event-schemas/platform/platform-event-v0.1.schema.json
-  policies/opa/input-v0.1.schema.json
-  policies/opa/output-v0.1.schema.json
+  packages/event-schemas/stead/stead-event-v0.1.schema.json
+  policies/policy-decision/input-v0.1.schema.json
+  policies/policy-decision/output-v0.1.schema.json
   policies/security-label-profiles/profile-v0.1.schema.json
   policies/deployment-domains/domain-profile-v0.1.schema.json
   specs/migration/migration-job-v0.1.schema.json
@@ -925,12 +958,12 @@ end
 
 yaml_contract_paths = %w[
   specs/openapi/platform-v1.yaml
-  specs/asyncapi/platform.yaml
+  specs/asyncapi/stead.yaml
   specs/provider-interfaces.yaml
   specs/mcp/compatibility-v0.1.yaml
   specs/a2a/compatibility-v0.1.yaml
   policies/openfga/model-tests.yaml
-  policies/opa/decision-table.yaml
+  policies/policy-decision/decision-table.yaml
   policies/security-label-profiles/commercial.yaml
   policies/security-label-profiles/us-government.yaml
   policies/deployment-domains/commercial.yaml

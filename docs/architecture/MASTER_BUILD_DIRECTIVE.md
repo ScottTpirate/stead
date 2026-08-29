@@ -121,15 +121,15 @@ The initial product MUST be a modular monolith plus replaceable upstream service
 
 The baseline deployable application components are:
 
-1. `platform-web`
-2. `platform-core`
-3. `platform-worker`
-4. `platformctl`
+1. `stead-web`
+2. `stead-api`
+3. `stead-worker`
+4. `steadctl`
 5. stock Gitea
 6. PostgreSQL
 7. NATS with JetStream
 8. OpenFGA
-9. Open Policy Agent (OPA)
+9. a separate deterministic classification/context/information-flow policy layer
 
 Optional scale or enterprise components include OpenSearch, Valkey, an external object store, and an external identity provider.
 
@@ -171,7 +171,7 @@ The normal installation path MUST be guided and short.
 
 Users MUST NOT be required to manually compose a large configuration file, follow a ten-page sequence, or understand every internal service.
 
-Advanced customization MAY have detailed documentation, but the supported installation profiles MUST be executable by `platformctl` with validated defaults.
+Advanced customization MAY have detailed documentation, but the supported installation profiles MUST be executable by `steadctl` with validated defaults.
 
 ## PRIN-010 — Testing is part of the architecture
 
@@ -281,7 +281,8 @@ The project MUST NOT attempt to provide:
 
 - The primary frontend MUST use React and TypeScript, derived from Devlane’s web application and design language.
 - The platform API, background worker, provider adapters, and CLI MUST use Go unless an ADR demonstrates a compelling technical reason otherwise.
-- Authorization policy MUST use OpenFGA models and Rego policies evaluated by OPA.
+- Relationship and need-to-know authorization MUST use OpenFGA models.
+- Classification, contextual/attribute, handling, information-flow, infrastructure, and explicit-deny rules MUST use the versioned deterministic policy-decision contract. The implementation is selected by ADR; OPA/Rego is permitted but is not required.
 - Persistent relational data MUST use PostgreSQL.
 - Event transport MUST use NATS JetStream.
 - Document editing MUST use a Markdown-capable TipTap-based editor. Real-time collaborative editing SHOULD use Yjs.
@@ -293,10 +294,10 @@ The initial repository MUST use this logical layout. Names may be adjusted only 
 
 ```text
 /apps
-  /web                    # Devlane-derived unified frontend
-  /core                   # Go platform API/BFF and modular domain core
-  /worker                 # Go asynchronous consumers/reconcilers/indexers
-  /platformctl            # installer, upgrade, backup, restore, doctor CLI
+  /web                    # Devlane-derived unified frontend; deploys as stead-web
+  /core                   # Go platform API/BFF and modular domain core; deploys as stead-api
+  /worker                 # Go asynchronous consumers/reconcilers/indexers; deploys as stead-worker
+  /steadctl               # installer, upgrade, backup, restore, doctor CLI
 
 /modules
   /organization
@@ -340,7 +341,7 @@ The initial repository MUST use this logical layout. Names may be adjusted only 
 
 /policies
   /openfga
-  /opa
+  /policy-decision        # implementation-neutral deterministic policy contract
   /security-label-profiles
 
 /specs
@@ -378,9 +379,9 @@ The initial repository MUST use this logical layout. Names may be adjusted only 
 
 ## ARCH-003 — Runtime boundaries
 
-`platform-web` MUST call only the versioned platform API. It MUST NOT call Gitea, Commonplace, OpenFGA, OPA, NATS, or storage providers directly from the browser.
+`stead-web` MUST call only the versioned platform API. It MUST NOT call Gitea, Commonplace, OpenFGA, the policy-decision layer, NATS, or storage providers directly from the browser.
 
-`platform-core` MUST:
+`stead-api` MUST:
 
 - expose the public/BFF API;
 - enforce authentication and authorization;
@@ -389,7 +390,7 @@ The initial repository MUST use this logical layout. Names may be adjusted only 
 - call provider interfaces rather than provider-specific code;
 - return canonical platform resources to the UI.
 
-`platform-worker` MUST:
+`stead-worker` MUST:
 
 - publish outbox events to NATS;
 - consume Gitea/Commonplace/provider events;
@@ -400,7 +401,7 @@ The initial repository MUST use this logical layout. Names may be adjusted only 
 - perform migrations and imports;
 - execute retryable asynchronous work.
 
-`platformctl` MUST:
+`steadctl` MUST:
 
 - install;
 - validate;
@@ -458,7 +459,7 @@ The implementation MUST follow this matrix.
 | Authentication | OpenID Connect | Human SSO |
 | Provisioning | SCIM 2.0, RFC 7643/7644 | Users and groups |
 | Authorization model | OpenFGA plus NIST SP 800-162 ABAC principles | Relationships and attributes |
-| Policy as code | OPA/Rego | Classification, handling, context, infrastructure policy |
+| Policy as code | Versioned deterministic policy-decision contract; implementation selected by ADR | Classification, handling, context, information-flow, infrastructure, and explicit-deny policy |
 | Security controls | NIST SP 800-53 Rev. 5.x; NIST SP 800-171 Rev. 3 where CUI applies | Control mapping and secure profiles |
 | Security automation | NIST OSCAL | Component definition and control mappings |
 | Zero trust | NIST SP 800-207/207A principles | No implicit network trust |
@@ -894,7 +895,7 @@ A Gitea version may be declared supported only after the full provider contract 
 
 Gitea images MUST be pinned by version and digest.
 
-`platformctl upgrade` MUST run compatibility preflight checks before changing Gitea.
+`steadctl upgrade` MUST run compatibility preflight checks before changing Gitea.
 
 ## SCM-006 — Branch and repository policy
 
@@ -1150,7 +1151,7 @@ Service-to-service authentication MUST use short-lived credentials and SHOULD su
 The platform MUST use a central authorization service that combines:
 
 1. **OpenFGA** for relationship and need-to-know decisions;
-2. **OPA/Rego** for attribute-based, classification, handling, context, and deny policies;
+2. a separate **deterministic classification/context/information-flow policy layer** for attribute-based, classification, handling, contextual, infrastructure, and explicit-deny rules;
 3. provider-level enforcement for direct Git, package, artifact, and runner access.
 
 An access decision is allowed only when all required checks allow it and no deny rule applies.
@@ -1162,7 +1163,7 @@ Authenticate principal
 → Resolve trusted principal attributes and session context
 → Resolve canonical resource and effective security label
 → OpenFGA relationship/permission check
-→ OPA classification, handling, context, and explicit-deny evaluation
+→ Deterministic classification, handling, context, information-flow, and explicit-deny evaluation
 → Provider/path-specific enforcement check
 → Audit the decision metadata
 → Allow or deny
@@ -1191,9 +1192,9 @@ The Team parent/child relationship MUST NOT automatically imply viewer, editor, 
 
 All OpenFGA models MUST have model tests and migration tests before deployment.
 
-## AUTH-004 — OPA responsibilities
+## AUTH-004 — Deterministic policy-decision layer responsibilities
 
-OPA MUST evaluate:
+The policy-decision layer MUST evaluate:
 
 - sensitivity/classification dominance;
 - compartments/program access;
@@ -1211,7 +1212,7 @@ OPA MUST evaluate:
 - CI runner, artifact, and deployment policy;
 - infrastructure admission policy where enabled.
 
-OPA policy bundles MUST be versioned, signed, tested, and auditable.
+Its policy bundles and decisions MUST be deterministic, versioned, signed, tested, portable, and auditable. The contract is implementation-neutral. OPA/Rego MAY be selected through an approved ADR, but no OPA service, Rego representation, or OPA-specific API is required by this directive.
 
 ## AUTH-005 — Trusted attributes
 
@@ -1415,13 +1416,13 @@ Every event MUST:
 Required naming pattern:
 
 ```text
-platform.<domain>.<action>.v<major>
+stead.<domain>.<action>.v<major>
 ```
 
 Example:
 
 ```text
-platform.workitem.updated.v1
+stead.workitem.updated.v1
 ```
 
 ## EVT-004 — Delivery semantics
@@ -1570,7 +1571,7 @@ Search is a projection and MUST be fully rebuildable from authoritative stores a
 
 Search indexes MUST include organization, security domain, container, and security-label metadata.
 
-The search service MUST apply coarse partition/scope filtering before retrieval and authoritative OpenFGA/OPA filtering before returning results, counts, facets, snippets, or suggestions.
+The search service MUST apply coarse partition/scope filtering before retrieval and authoritative OpenFGA/policy-decision filtering before returning results, counts, facets, snippets, or suggestions.
 
 Post-filtering alone is insufficient if it leaks totals or protected metadata.
 
@@ -1792,7 +1793,7 @@ A limited compatibility gateway MAY later implement common legacy API calls, but
 
 ## DEP-001 — Supported installation profiles
 
-`platformctl install` MUST support these profiles:
+`steadctl install` MUST support these profiles:
 
 ### `local`
 
@@ -1802,7 +1803,7 @@ For evaluation, development, and small trusted installations.
 - bundled PostgreSQL
 - bundled NATS
 - bundled OpenFGA
-- bundled OPA
+- bundled deterministic policy evaluator implementing the policy-decision contract
 - bundled Gitea
 - filesystem BlobStore
 - local bootstrap identity allowed
@@ -1816,7 +1817,7 @@ For normal production.
 - Helm deployment
 - bundled or external PostgreSQL
 - NATS JetStream
-- OpenFGA and OPA
+- OpenFGA and a deterministic evaluator implementing the policy-decision contract
 - external OIDC recommended/required
 - filesystem/PVC or external object storage
 - PostgreSQL search or OpenSearch
@@ -1866,15 +1867,15 @@ All other values use validated defaults and may be changed later through advance
 Required commands:
 
 ```text
-platformctl install
-platformctl status
-platformctl doctor
-platformctl config show
-platformctl upgrade
-platformctl backup
-platformctl restore
-platformctl export
-platformctl airgap bundle
+steadctl install
+steadctl status
+steadctl doctor
+steadctl config show
+steadctl upgrade
+steadctl backup
+steadctl restore
+steadctl export
+steadctl airgap bundle
 ```
 
 ## DEP-003 — Helm
@@ -1913,7 +1914,7 @@ A government-airgap install MUST make no unapproved network call.
 
 ## DEP-005 — Upgrade behavior
 
-`platformctl upgrade` MUST:
+`steadctl upgrade` MUST:
 
 1. detect current versions;
 2. validate target compatibility;
@@ -1955,14 +1956,14 @@ Every service MUST expose:
 - migration status;
 - metrics.
 
-`platformctl doctor` MUST check:
+`steadctl doctor` MUST check:
 
 - DNS/TLS;
 - database connectivity and schema;
 - Gitea API compatibility;
 - NATS streams/consumers;
 - OpenFGA model;
-- OPA policy bundle;
+- policy-decision bundle;
 - object storage;
 - search;
 - identity provider;
@@ -2112,7 +2113,7 @@ Required test suites:
 1. unit tests;
 2. property-based tests;
 3. OpenFGA model tests;
-4. OPA/Rego policy tests;
+4. policy decision-table, rule, property, and mutation tests;
 5. schema tests;
 6. provider contract tests;
 7. module integration tests;
@@ -2210,7 +2211,7 @@ CI/release automation MUST test:
 - upgrade from every supported prior platform version;
 - upgrade across every supported Gitea version;
 - failed upgrade rollback/recovery;
-- `platformctl doctor`;
+- `steadctl doctor`;
 - Helm chart tests and schema validation.
 
 ## TEST-008 — Security release gates
@@ -2274,7 +2275,7 @@ No feature implementation begins until these are approved:
 - Project capability schema and preset contract;
 - security-label schema and lattice;
 - OpenFGA model v0.1;
-- OPA policy input/output contract;
+- policy-decision input/output contract;
 - provider interfaces;
 - OpenAPI skeleton;
 - AsyncAPI/event naming;
@@ -2290,10 +2291,10 @@ No feature implementation begins until these are approved:
 Deliver:
 
 - monorepo/tooling;
-- `platform-web`, `platform-core`, `platform-worker`, `platformctl`;
+- `stead-web`, `stead-api`, `stead-worker`, `steadctl`;
 - local installation;
 - OIDC/local bootstrap;
-- OpenFGA + OPA decision path;
+- OpenFGA plus deterministic policy-decision path;
 - stock Gitea adapter;
 - Organization, Directory Group binding, hierarchical Team, and Project;
 - automatic tracker and Organization/Team/Project docs repository creation as required;
@@ -2373,7 +2374,7 @@ The project-manager agent MUST create separate workstreams with explicit interfa
    - Devlane fork, design constitution, capability-driven shell, universal object surfaces, global Knowledge, Team hierarchy views, shared editor/components, accessibility, visual regression.
 
 6. **Identity/authorization/classification**
-   - OIDC/SCIM, OpenFGA, OPA, security labels, government profile, bypass testing.
+   - OIDC/SCIM, OpenFGA, the policy-decision layer, security labels, government profile, bypass testing.
 
 7. **Events/activity/inbox/audit**
    - NATS, CloudEvents, AsyncAPI, notifications, audit, replay.
@@ -2391,7 +2392,7 @@ The project-manager agent MUST create separate workstreams with explicit interfa
     - GitHub/Jira/Confluence connectors, mapping, dry run, sync, redirects.
 
 12. **Installation/operations**
-    - platformctl, Compose, Helm, air gap, upgrades, backup/restore, OTel.
+    - steadctl, Compose, Helm, air gap, upgrades, backup/restore, OTel.
 
 13. **QA/security/release**
     - traceability, test harnesses, threat testing, load, accessibility, release gates.
@@ -2421,7 +2422,7 @@ These decisions are locked and require an ADR plus project-owner approval to cha
 6. NATS JetStream from the beginning.
 7. Transactional outbox for reliable domain events.
 8. OpenFGA for relationship authorization.
-9. OPA for classification/ABAC/context policy.
+9. A separate deterministic classification/context/information-flow policy layer, with its implementation selected by ADR.
 10. Git + Markdown + OKF for documentation.
 11. Fixed canonical workflow and ontology, including universal `deliverable`, `task`, and `problem` Work Item semantics.
 12. Dedicated Gitea tracker repository per Platform Project.
@@ -2539,7 +2540,7 @@ The initial OpenFGA model MUST reserve `agent` as a first-class principal type.
 
 The authorization architecture MUST support future agent-specific permissions, explicit delegation from users to agents, task-scoped authorization, revocation independent of the delegating user, and agent assignment to specific resources.
 
-OPA policy inputs MUST identify principal type and MUST permit future evaluation of agent runtime, security-domain, classification-ceiling, compartment, model-provider, tool-scope, and execution-environment attributes.
+Classification policy inputs MUST identify principal type and MUST permit future evaluation of agent runtime, security-domain, classification-ceiling, compartment, model-provider, tool-scope, and execution-environment attributes.
 
 No broad human permission inheritance for agents may be assumed.
 

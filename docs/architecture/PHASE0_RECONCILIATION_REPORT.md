@@ -6,6 +6,14 @@ Reconciled: 2026-08-28
 
 The v0.2 open-work direction was merged with the previously approved agent-ready architecture and compatible Phase 0 work. No completed compatible work was restarted. Existing IDs were preserved when their core purpose survived; semantic replacements are explicit below.
 
+Before the Phase 0 baseline was frozen, a bounded naming and contract normalization applied the approved Stead product name and corrected the classification-policy implementation boundary:
+
+| Area | Existing state | Required change | Impact | Requirement IDs |
+|---|---|---|---|---|
+| Deployable and CLI names | Placeholder `platform-*` component names | Use `stead-web`, `stead-api`, `stead-worker`, and `steadctl` for concrete interfaces | MINOR UPDATE REQUIRED | PRIN-005, ARCH-002–003, DEP-001–005, OPS-001–004 |
+| Event namespace | Placeholder `platform.<domain>.<action>.v<major>` with no production consumers | Use `stead.<domain>.<action>.v<major>`; no migration or compatibility alias | MINOR UPDATE REQUIRED | EVT-003 |
+| Classification policy implementation | OPA/Rego was prescribed in addition to OpenFGA | Keep OpenFGA mandatory and require a separate deterministic, implementation-neutral classification/context/information-flow policy layer; an evaluator such as OPA/Rego requires an ADR | MATERIAL UPDATE REQUIRED | ARCH-001, AUTH-002, AUTH-004, TEST-002 |
+
 | Area | Existing state | Required change | Impact | Requirement IDs |
 |---|---|---|---|---|
 | OWGP schemas | Project/software-centered planned profile | Add generic containers, general Work/Docs, Team hierarchy, capabilities/presets/lifecycle, groups, Agent/AgentRun | MATERIAL UPDATE REQUIRED | DOM-001–011, PRIN-013–015 |
@@ -13,7 +21,7 @@ The v0.2 open-work direction was merged with the previously approved agent-ready
 | OpenAPI | Planned canonical API skeleton | Add multi-scope Docs, capabilities, typed search, PrincipalRef and agent schemas; no provider/Devlane ontology | MATERIAL UPDATE REQUIRED | ARCH-005, DOM-008–011, AUTH-006 |
 | AsyncAPI | Planned CloudEvents envelope | Add container/capability, acting/requesting principals, delegation/task, correlation/causation | MATERIAL UPDATE REQUIRED | EVT-001–004, AGENT-004 |
 | OpenFGA | Agent-ready but flat Team model | Add groups/Agents and explicit Team/Project relations with no hierarchy/accountability inheritance | MATERIAL UPDATE REQUIRED | DOM-009–010, AUTH-002–003, AUTH-006 |
-| OPA input/decision | Future agent attributes reserved | Add explicit principal/requester/task/delegation/runtime intersection and capability/hierarchy leak cases | MATERIAL UPDATE REQUIRED | AUTH-004–006, CLS-006 |
+| Policy-decision input/decision | Future agent attributes reserved | Add explicit principal/requester/task/delegation/runtime intersection and capability/hierarchy leak cases | MATERIAL UPDATE REQUIRED | AUTH-004–006, CLS-006 |
 | Security-label model | Generic label/lattice already approved in principle | Clarify Organization/Team/Project containers and capability metadata protection | MINOR UPDATE REQUIRED | CLS-001–008, DOM-003 |
 | Provider interfaces | Gitea/software capability focus | Keep Gitea preferred, make Work/provider contract general, capability-gate software, add contract-only A2A provider | MATERIAL UPDATE REQUIRED | PRIN-013, SCM-001–006, GRAPH-002 |
 | Search resource model | Work/Docs/Code projection planned | Use typed multi-resource envelope; filter Team/Project rollups, capabilities, agents, counts and suggestions | MATERIAL UPDATE REQUIRED | SRCH-001–003, CLS-006, UX-006–008 |
@@ -55,7 +63,7 @@ No existing requirement was silently deleted. Historical v0.1 and review-diff co
 | Team hierarchy without inherited permissions | PASS — `parent` exists in schema/OpenFGA, with no `viewer/member/editor from parent`; the 80-assertion OpenFGA matrix covers parent/child and owning/contributing non-grants. |
 | Organization/Team Docs | PASS — `ContainerRef` and Document schema permit exactly Organization/Team/Project; examples and golden cover all. |
 | Principal user/agent/service account | PASS — `PrincipalRef` includes those acting kinds plus non-acting Directory Group. |
-| No human-only assignee/actor | PASS — assignment, actor context, events, audit, API and OPA use typed principal references. |
+| No human-only assignee/actor | PASS — assignment, actor context, events, audit, API and policy-decision layer use typed principal references. |
 | Multi-resource Search | PASS — typed SearchResult and search resource model cover universal and applicable optional resources. |
 | Capability-driven navigation | PASS — fixed capability schema and UX contract suppress inactive/unauthorized surfaces. |
 | General and software goldens | PASS — executable plans for TEST-009 and TEST-010 are separate. |
