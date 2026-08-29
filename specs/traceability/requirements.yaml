@@ -1,15 +1,15 @@
 schema_version: "1.0"
-normative_source: unified_open_work_platform_master_build_directive.md
-scope: phase-0-traceability
-documentation_semantics: "Each documentation entry is a required target. An existing path is a Phase 0 draft; a not-yet-created path is an explicitly planned obligation and does not imply completion. Current security, governance, golden-test, and boundary targets use their actual repository paths."
+normative_source: docs/architecture/MASTER_BUILD_DIRECTIVE.md
+scope: phase-0-reconciled-traceability
+documentation_semantics: "Each documentation entry is a required target. Existing Phase 0 contract paths are review-ready artifacts unless their issue explicitly remains blocked; later-phase documentation paths are planned obligations and do not imply implementation completion."
 related_security_traceability: specs/traceability/security-findings.yaml
 status_semantics:
-  DRAFT_PENDING_PHASE_0_APPROVAL: Phase 0 contract work exists but is not yet approved.
-  BLOCKED_PENDING_PHASE_0_APPROVAL: Phase 1-3 implementation must not begin before Phase 0 approval.
+  READY_FOR_PHASE_0_APPROVAL: The requirement is satisfied by a Phase 0 contract artifact that is complete for review but still requires the recorded approval gate.
+  BLOCKED_PENDING_PHASE_0_APPROVAL: The requirement has a reviewed Phase 0 contract seam but its runtime/product acceptance remains assigned to Phase 1-3 and must not begin before Phase 0 approval.
 coverage:
-  expected_requirement_count: 115
-  registered_requirement_count: 115
-  unique_requirement_count: 115
+  expected_requirement_count: 128
+  registered_requirement_count: 128
+  unique_requirement_count: 128
   duplicate_requirement_ids: []
   missing_requirement_ids: []
   source_heading_pattern: "^## [A-Z]+-[0-9]{3}"
@@ -111,6 +111,30 @@ requirements:
     documentation: ["docs/architecture/constitution.md", "docs/contributor/architecture-governance.md"]
     status: BLOCKED_PENDING_PHASE_0_APPROVAL
     release: "phase-3"
+  - requirement_id: "PRIN-013"
+    title: "Universal core, additive capabilities"
+    implementation_modules: ["docs/architecture", "modules/project", "apps/web", "packages/domain-schemas"]
+    issue_ids: ["STEAD-P0-001", "STEAD-P0-003", "STEAD-P0-006", "STEAD-P1-002", "STEAD-P1-005", "STEAD-P1-013", "STEAD-P1-014"]
+    test_ids: ["T-PRIN-013-ACCEPTANCE"]
+    documentation: ["docs/architecture/MASTER_BUILD_DIRECTIVE.md", "docs/architecture/product-and-ux-contracts.md"]
+    status: BLOCKED_PENDING_PHASE_0_APPROVAL
+    release: "phase-1"
+  - requirement_id: "PRIN-014"
+    title: "Progressive disclosure and one mental model"
+    implementation_modules: ["apps/web", "packages/design-system", "packages/api-client"]
+    issue_ids: ["STEAD-P0-001", "STEAD-P0-006", "STEAD-P1-005", "STEAD-P1-014", "STEAD-P2-003"]
+    test_ids: ["T-PRIN-014-ACCEPTANCE"]
+    documentation: ["docs/architecture/product-and-ux-contracts.md"]
+    status: BLOCKED_PENDING_PHASE_0_APPROVAL
+    release: "phase-1"
+  - requirement_id: "PRIN-015"
+    title: "Organizational hierarchy is not authorization inheritance"
+    implementation_modules: ["modules/organization", "modules/authorization", "policies/openfga", "policies/opa"]
+    issue_ids: ["STEAD-P0-001", "STEAD-P0-007", "STEAD-P1-006"]
+    test_ids: ["T-PRIN-015-ACCEPTANCE"]
+    documentation: ["docs/architecture/authorization-contract.md", "policies/openfga/model-tests.yaml"]
+    status: BLOCKED_PENDING_PHASE_0_APPROVAL
+    release: "phase-1"
   - requirement_id: "ARCH-001"
     title: "Required implementation languages"
     implementation_modules: ["apps", "modules", "providers", "packages", "policies", "specs", "deploy", "tests"]
@@ -138,7 +162,7 @@ requirements:
   - requirement_id: "ARCH-004"
     title: "Database ownership"
     implementation_modules: ["apps", "modules", "providers", "packages", "policies", "specs", "deploy", "tests"]
-    issue_ids: ["STEAD-P0-001", "STEAD-P0-003", "STEAD-P1-002", "STEAD-P1-003"]
+    issue_ids: ["STEAD-P0-001", "STEAD-P0-003", "STEAD-P1-002", "STEAD-P1-003", "STEAD-P1-013"]
     test_ids: ["T-ARCH-004-ACCEPTANCE"]
     documentation: ["docs/architecture/constitution.md", "docs/architecture/repository-layout-and-boundaries.md"]
     status: BLOCKED_PENDING_PHASE_0_APPROVAL
@@ -157,7 +181,7 @@ requirements:
     issue_ids: ["STEAD-P0-002", "STEAD-P1-001"]
     test_ids: ["T-STD-001-ACCEPTANCE"]
     documentation: ["docs/architecture/standards-matrix.md", "specs/work-graph-profile/owgp-v0.1.md"]
-    status: DRAFT_PENDING_PHASE_0_APPROVAL
+    status: READY_FOR_PHASE_0_APPROVAL
     release: "phase-0-contract"
   - requirement_id: "STD-002"
     title: "Platform resource profile"
@@ -165,7 +189,7 @@ requirements:
     issue_ids: ["STEAD-P0-002", "STEAD-P1-002"]
     test_ids: ["T-STD-002-ACCEPTANCE"]
     documentation: ["docs/architecture/standards-matrix.md", "specs/work-graph-profile/owgp-v0.1.md"]
-    status: DRAFT_PENDING_PHASE_0_APPROVAL
+    status: READY_FOR_PHASE_0_APPROVAL
     release: "phase-0-contract"
   - requirement_id: "DOM-001"
     title: "Common resource envelope"
@@ -178,7 +202,7 @@ requirements:
   - requirement_id: "DOM-002"
     title: "Canonical entities"
     implementation_modules: ["modules/organization", "modules/project", "modules/work", "modules/knowledge", "packages/domain-schemas"]
-    issue_ids: ["STEAD-P0-002", "STEAD-P1-002"]
+    issue_ids: ["STEAD-P0-002", "STEAD-P1-002", "STEAD-P2-006"]
     test_ids: ["T-DOM-002-ACCEPTANCE"]
     documentation: ["specs/work-graph-profile/owgp-v0.1.md", "docs/architecture/canonical-domain-model.md"]
     status: BLOCKED_PENDING_PHASE_0_APPROVAL
@@ -194,7 +218,7 @@ requirements:
   - requirement_id: "DOM-004"
     title: "Work-item model"
     implementation_modules: ["modules/organization", "modules/project", "modules/work", "modules/knowledge", "packages/domain-schemas"]
-    issue_ids: ["STEAD-P0-002", "STEAD-P0-003", "STEAD-P1-002", "STEAD-P1-003"]
+    issue_ids: ["STEAD-P0-002", "STEAD-P0-003", "STEAD-P1-002", "STEAD-P1-003", "STEAD-P1-013"]
     test_ids: ["T-DOM-004-ACCEPTANCE"]
     documentation: ["specs/work-graph-profile/owgp-v0.1.md", "docs/architecture/canonical-domain-model.md"]
     status: BLOCKED_PENDING_PHASE_0_APPROVAL
@@ -202,7 +226,7 @@ requirements:
   - requirement_id: "DOM-005"
     title: "Document model"
     implementation_modules: ["modules/organization", "modules/project", "modules/work", "modules/knowledge", "packages/domain-schemas"]
-    issue_ids: ["STEAD-P0-002", "STEAD-P0-005", "STEAD-P1-002", "STEAD-P1-004"]
+    issue_ids: ["STEAD-P0-002", "STEAD-P0-005", "STEAD-P1-004"]
     test_ids: ["T-DOM-005-ACCEPTANCE"]
     documentation: ["specs/work-graph-profile/owgp-v0.1.md", "docs/architecture/canonical-domain-model.md"]
     status: BLOCKED_PENDING_PHASE_0_APPROVAL
@@ -223,10 +247,42 @@ requirements:
     documentation: ["specs/work-graph-profile/owgp-v0.1.md", "docs/architecture/canonical-domain-model.md"]
     status: BLOCKED_PENDING_PHASE_0_APPROVAL
     release: "phase-1"
+  - requirement_id: "DOM-008"
+    title: "Project capability model"
+    implementation_modules: ["modules/project", "packages/domain-schemas", "apps/web"]
+    issue_ids: ["STEAD-P0-002", "STEAD-P0-003", "STEAD-P0-006", "STEAD-P1-002", "STEAD-P1-005", "STEAD-P1-013", "STEAD-P1-014"]
+    test_ids: ["T-DOM-008-ACCEPTANCE"]
+    documentation: ["specs/work-graph-profile/owgp-v0.1.md", "docs/architecture/product-and-ux-contracts.md"]
+    status: BLOCKED_PENDING_PHASE_0_APPROVAL
+    release: "phase-1"
+  - requirement_id: "DOM-009"
+    title: "Team hierarchy and accountability"
+    implementation_modules: ["modules/organization", "modules/project", "modules/authorization", "packages/domain-schemas"]
+    issue_ids: ["STEAD-P0-002", "STEAD-P0-003", "STEAD-P0-007", "STEAD-P1-002", "STEAD-P1-006"]
+    test_ids: ["T-DOM-009-ACCEPTANCE"]
+    documentation: ["specs/work-graph-profile/owgp-v0.1.md", "docs/architecture/authorization-contract.md"]
+    status: BLOCKED_PENDING_PHASE_0_APPROVAL
+    release: "phase-1"
+  - requirement_id: "DOM-010"
+    title: "Principal and assignment model"
+    implementation_modules: ["modules/identity", "modules/authorization", "modules/work", "modules/agent", "packages/domain-schemas"]
+    issue_ids: ["STEAD-P0-002", "STEAD-P0-003", "STEAD-P0-007", "STEAD-P0-009", "STEAD-P0-015", "STEAD-P1-002", "STEAD-P1-006", "STEAD-P2-006"]
+    test_ids: ["T-DOM-010-ACCEPTANCE"]
+    documentation: ["specs/work-graph-profile/owgp-v0.1.md", "docs/architecture/agent-ready-compatibility.md"]
+    status: BLOCKED_PENDING_PHASE_0_APPROVAL
+    release: "phase-1"
+  - requirement_id: "DOM-011"
+    title: "Project model and lifecycle"
+    implementation_modules: ["modules/project", "packages/domain-schemas", "apps/web"]
+    issue_ids: ["STEAD-P0-002", "STEAD-P0-003", "STEAD-P0-006", "STEAD-P1-002", "STEAD-P1-005"]
+    test_ids: ["T-DOM-011-ACCEPTANCE"]
+    documentation: ["specs/work-graph-profile/owgp-v0.1.md", "docs/architecture/product-and-ux-contracts.md"]
+    status: BLOCKED_PENDING_PHASE_0_APPROVAL
+    release: "phase-1"
   - requirement_id: "SCM-001"
     title: "Stock Gitea integration"
     implementation_modules: ["modules/scm", "providers/gitea"]
-    issue_ids: ["STEAD-P0-004", "STEAD-P1-003"]
+    issue_ids: ["STEAD-P0-004", "STEAD-P1-003", "STEAD-P1-013"]
     test_ids: ["T-SCM-001-ACCEPTANCE"]
     documentation: ["docs/architecture/provider-contracts/gitea.md", "docs/operator/gitea-compatibility.md"]
     status: BLOCKED_PENDING_PHASE_0_APPROVAL
@@ -234,7 +290,7 @@ requirements:
   - requirement_id: "SCM-002"
     title: "Project tracker repository"
     implementation_modules: ["modules/scm", "providers/gitea"]
-    issue_ids: ["STEAD-P0-004", "STEAD-P1-003"]
+    issue_ids: ["STEAD-P0-004", "STEAD-P1-003", "STEAD-P1-013"]
     test_ids: ["T-SCM-002-ACCEPTANCE"]
     documentation: ["docs/architecture/provider-contracts/gitea.md", "docs/operator/gitea-compatibility.md"]
     status: BLOCKED_PENDING_PHASE_0_APPROVAL
@@ -242,7 +298,7 @@ requirements:
   - requirement_id: "SCM-003"
     title: "Canonical mapping to Gitea"
     implementation_modules: ["modules/scm", "providers/gitea"]
-    issue_ids: ["STEAD-P0-004", "STEAD-P1-003"]
+    issue_ids: ["STEAD-P0-004", "STEAD-P1-003", "STEAD-P1-013"]
     test_ids: ["T-SCM-003-ACCEPTANCE"]
     documentation: ["docs/architecture/provider-contracts/gitea.md", "docs/operator/gitea-compatibility.md"]
     status: BLOCKED_PENDING_PHASE_0_APPROVAL
@@ -250,7 +306,7 @@ requirements:
   - requirement_id: "SCM-004"
     title: "Direct-provider changes"
     implementation_modules: ["modules/scm", "providers/gitea"]
-    issue_ids: ["STEAD-P0-004", "STEAD-P1-003"]
+    issue_ids: ["STEAD-P0-004", "STEAD-P1-003", "STEAD-P1-013"]
     test_ids: ["T-SCM-004-ACCEPTANCE"]
     documentation: ["docs/architecture/provider-contracts/gitea.md", "docs/operator/gitea-compatibility.md"]
     status: BLOCKED_PENDING_PHASE_0_APPROVAL
@@ -258,7 +314,7 @@ requirements:
   - requirement_id: "SCM-005"
     title: "Compatibility and upgrades"
     implementation_modules: ["modules/scm", "providers/gitea"]
-    issue_ids: ["STEAD-P0-004", "STEAD-P1-003", "STEAD-P2-001"]
+    issue_ids: ["STEAD-P0-004", "STEAD-P1-003", "STEAD-P1-013", "STEAD-P2-001"]
     test_ids: ["T-SCM-005-ACCEPTANCE"]
     documentation: ["docs/architecture/provider-contracts/gitea.md", "docs/operator/gitea-compatibility.md"]
     status: BLOCKED_PENDING_PHASE_0_APPROVAL
@@ -266,7 +322,7 @@ requirements:
   - requirement_id: "SCM-006"
     title: "Branch and repository policy"
     implementation_modules: ["modules/scm", "providers/gitea"]
-    issue_ids: ["STEAD-P0-004", "STEAD-P2-001"]
+    issue_ids: ["STEAD-P0-004", "STEAD-P1-013", "STEAD-P2-001"]
     test_ids: ["T-SCM-006-ACCEPTANCE"]
     documentation: ["docs/architecture/provider-contracts/gitea.md", "docs/operator/gitea-compatibility.md"]
     status: BLOCKED_PENDING_PHASE_0_APPROVAL
@@ -314,7 +370,7 @@ requirements:
   - requirement_id: "UX-001"
     title: "Single application shell"
     implementation_modules: ["apps/web", "packages/design-system", "packages/api-client"]
-    issue_ids: ["STEAD-P0-006", "STEAD-P1-005"]
+    issue_ids: ["STEAD-P0-006", "STEAD-P1-005", "STEAD-P1-014"]
     test_ids: ["T-UX-001-ACCEPTANCE"]
     documentation: ["docs/architecture/unified-ux-contract.md", "docs/user/navigation-and-accessibility.md"]
     status: BLOCKED_PENDING_PHASE_0_APPROVAL
@@ -322,7 +378,7 @@ requirements:
   - requirement_id: "UX-002"
     title: "Shared interaction vocabulary"
     implementation_modules: ["apps/web", "packages/design-system", "packages/api-client"]
-    issue_ids: ["STEAD-P0-006", "STEAD-P1-005"]
+    issue_ids: ["STEAD-P0-006", "STEAD-P1-005", "STEAD-P1-014"]
     test_ids: ["T-UX-002-ACCEPTANCE"]
     documentation: ["docs/architecture/unified-ux-contract.md", "docs/user/navigation-and-accessibility.md"]
     status: BLOCKED_PENDING_PHASE_0_APPROVAL
@@ -330,7 +386,7 @@ requirements:
   - requirement_id: "UX-003"
     title: "Classification and handling display"
     implementation_modules: ["apps/web", "packages/design-system", "packages/api-client"]
-    issue_ids: ["STEAD-P0-006", "STEAD-P1-005", "STEAD-P2-003"]
+    issue_ids: ["STEAD-P0-006", "STEAD-P1-005", "STEAD-P1-014", "STEAD-P2-003"]
     test_ids: ["T-UX-003-ACCEPTANCE"]
     documentation: ["docs/architecture/unified-ux-contract.md", "docs/user/navigation-and-accessibility.md"]
     status: BLOCKED_PENDING_PHASE_0_APPROVAL
@@ -338,7 +394,7 @@ requirements:
   - requirement_id: "UX-004"
     title: "Accessibility and performance"
     implementation_modules: ["apps/web", "packages/design-system", "packages/api-client"]
-    issue_ids: ["STEAD-P0-006", "STEAD-P1-005", "STEAD-P2-003"]
+    issue_ids: ["STEAD-P0-006", "STEAD-P1-005", "STEAD-P1-014", "STEAD-P2-003"]
     test_ids: ["T-UX-004-ACCEPTANCE"]
     documentation: ["docs/architecture/unified-ux-contract.md", "docs/user/navigation-and-accessibility.md"]
     status: BLOCKED_PENDING_PHASE_0_APPROVAL
@@ -346,9 +402,41 @@ requirements:
   - requirement_id: "UX-005"
     title: "No configuration-induced UX fragmentation"
     implementation_modules: ["apps/web", "packages/design-system", "packages/api-client"]
-    issue_ids: ["STEAD-P0-006", "STEAD-P1-005"]
+    issue_ids: ["STEAD-P0-006", "STEAD-P1-005", "STEAD-P1-014"]
     test_ids: ["T-UX-005-ACCEPTANCE"]
     documentation: ["docs/architecture/unified-ux-contract.md", "docs/user/navigation-and-accessibility.md"]
+    status: BLOCKED_PENDING_PHASE_0_APPROVAL
+    release: "phase-1"
+  - requirement_id: "UX-006"
+    title: "Capability-driven progressive disclosure"
+    implementation_modules: ["apps/web", "packages/design-system", "packages/api-client", "modules/project"]
+    issue_ids: ["STEAD-P0-006", "STEAD-P1-005", "STEAD-P1-014", "STEAD-P2-003"]
+    test_ids: ["T-UX-006-ACCEPTANCE"]
+    documentation: ["docs/architecture/product-and-ux-contracts.md"]
+    status: BLOCKED_PENDING_PHASE_0_APPROVAL
+    release: "phase-1"
+  - requirement_id: "UX-007"
+    title: "Universal object surfaces and context preservation"
+    implementation_modules: ["apps/web", "packages/design-system", "packages/api-client"]
+    issue_ids: ["STEAD-P0-006", "STEAD-P1-005", "STEAD-P1-014", "STEAD-P2-003"]
+    test_ids: ["T-UX-007-ACCEPTANCE"]
+    documentation: ["docs/architecture/product-and-ux-contracts.md"]
+    status: BLOCKED_PENDING_PHASE_0_APPROVAL
+    release: "phase-1"
+  - requirement_id: "UX-008"
+    title: "Work and Knowledge are visibly connected"
+    implementation_modules: ["apps/web", "modules/work", "modules/knowledge", "modules/search"]
+    issue_ids: ["STEAD-P0-005", "STEAD-P0-006", "STEAD-P0-009", "STEAD-P1-004", "STEAD-P1-005", "STEAD-P1-008", "STEAD-P1-014"]
+    test_ids: ["T-UX-008-ACCEPTANCE"]
+    documentation: ["docs/architecture/product-and-ux-contracts.md", "docs/testing/golden-vertical-slice.md"]
+    status: BLOCKED_PENDING_PHASE_0_APPROVAL
+    release: "phase-1"
+  - requirement_id: "UX-009"
+    title: "Simplicity and visual design constitution"
+    implementation_modules: ["apps/web", "packages/design-system"]
+    issue_ids: ["STEAD-P0-006", "STEAD-P1-005", "STEAD-P1-014", "STEAD-P2-003"]
+    test_ids: ["T-UX-009-ACCEPTANCE"]
+    documentation: ["docs/architecture/product-and-ux-contracts.md"]
     status: BLOCKED_PENDING_PHASE_0_APPROVAL
     release: "phase-1"
   - requirement_id: "AUTH-001"
@@ -391,6 +479,14 @@ requirements:
     documentation: ["docs/architecture/authorization-contract.md", "docs/operator/identity-and-trusted-attributes.md"]
     status: BLOCKED_PENDING_PHASE_0_APPROVAL
     release: "phase-2"
+  - requirement_id: "AUTH-006"
+    title: "Agent, service, and group principals"
+    implementation_modules: ["modules/identity", "modules/authorization", "modules/agent", "policies/openfga", "policies/opa", "providers/agent-a2a"]
+    issue_ids: ["STEAD-P0-007", "STEAD-P0-009", "STEAD-P0-015", "STEAD-P1-006", "STEAD-P2-006"]
+    test_ids: ["T-AUTH-006-ACCEPTANCE"]
+    documentation: ["docs/architecture/authorization-contract.md", "docs/architecture/agent-ready-compatibility.md"]
+    status: BLOCKED_PENDING_PHASE_0_APPROVAL
+    release: "phase-1"
   - requirement_id: "CLS-001"
     title: "Generic security-label model"
     implementation_modules: ["modules/classification", "modules/authorization", "policies/opa", "policies/security-label-profiles"]
@@ -560,11 +656,11 @@ requirements:
     status: BLOCKED_PENDING_PHASE_0_APPROVAL
     release: "phase-2"
   - requirement_id: "GRAPH-002"
-    title: "MCP and agent access"
-    implementation_modules: ["modules/search", "modules/project", "packages/domain-schemas"]
+    title: "MCP, A2A, and agent access"
+    implementation_modules: ["modules/search", "modules/agent", "providers/agent-a2a", "specs/mcp", "specs/a2a"]
     issue_ids: ["STEAD-P0-009", "STEAD-P2-006", "STEAD-P3-004"]
     test_ids: ["T-GRAPH-002-ACCEPTANCE"]
-    documentation: ["docs/architecture/work-graph.md", "docs/architecture/agent-access.md"]
+    documentation: ["docs/architecture/search-resource-model.md", "docs/architecture/agent-ready-compatibility.md"]
     status: BLOCKED_PENDING_PHASE_0_APPROVAL
     release: "phase-3"
   - requirement_id: "STOR-001"
@@ -765,7 +861,7 @@ requirements:
     issue_ids: ["STEAD-P0-014", "STEAD-P1-001", "STEAD-P1-012"]
     test_ids: ["T-SEC-001-ACCEPTANCE"]
     documentation: ["docs/security/threat-model.md", "docs/governance/license-and-dependency-approval.md", "specs/oscal"]
-    status: DRAFT_PENDING_PHASE_0_APPROVAL
+    status: READY_FOR_PHASE_0_APPROVAL
     release: "phase-0-contract"
   - requirement_id: "SEC-002"
     title: "Dependency and supply-chain controls"
@@ -789,7 +885,7 @@ requirements:
     issue_ids: ["STEAD-P0-014", "STEAD-P1-012", "STEAD-P2-011", "STEAD-P3-008"]
     test_ids: ["T-SEC-004-ACCEPTANCE"]
     documentation: ["docs/security/threat-model.md", "docs/governance/license-and-dependency-approval.md", "specs/oscal"]
-    status: DRAFT_PENDING_PHASE_0_APPROVAL
+    status: READY_FOR_PHASE_0_APPROVAL
     release: "phase-0-contract"
   - requirement_id: "SEC-005"
     title: "OSCAL artifacts"
@@ -813,7 +909,7 @@ requirements:
     issue_ids: ["STEAD-P0-014", "STEAD-P1-012"]
     test_ids: ["T-TEST-001-ACCEPTANCE"]
     documentation: ["docs/testing/golden-vertical-slice.md", "docs/governance/release-gates.md"]
-    status: DRAFT_PENDING_PHASE_0_APPROVAL
+    status: READY_FOR_PHASE_0_APPROVAL
     release: "phase-0-contract"
   - requirement_id: "TEST-002"
     title: "Test layers"
@@ -872,44 +968,52 @@ requirements:
     status: BLOCKED_PENDING_PHASE_0_APPROVAL
     release: "phase-1"
   - requirement_id: "TEST-009"
-    title: "Golden end-to-end scenario"
+    title: "Golden general-work scenario"
     implementation_modules: ["tests", "specs/traceability"]
     issue_ids: ["STEAD-P0-014", "STEAD-P1-012"]
     test_ids: ["T-TEST-009-ACCEPTANCE"]
     documentation: ["docs/testing/golden-vertical-slice.md", "docs/governance/release-gates.md"]
     status: BLOCKED_PENDING_PHASE_0_APPROVAL
     release: "phase-1"
+  - requirement_id: "TEST-010"
+    title: "Golden software-capability scenario"
+    implementation_modules: ["tests", "specs/traceability"]
+    issue_ids: ["STEAD-P0-014", "STEAD-P1-012", "STEAD-P1-013", "STEAD-P1-014", "STEAD-P2-011", "STEAD-P3-008"]
+    test_ids: ["T-TEST-010-ACCEPTANCE"]
+    documentation: ["docs/testing/golden-vertical-slice.md", "docs/governance/release-gates.md"]
+    status: BLOCKED_PENDING_PHASE_0_APPROVAL
+    release: "phase-1"
   - requirement_id: "AGENT-001"
     title: "Generalize identity to principals"
     implementation_modules: ["packages/domain-schemas", "modules/identity", "modules/authorization", "modules/work", "modules/audit", "packages/event-schemas"]
-    issue_ids: ["STEAD-P0-007", "STEAD-P0-014", "STEAD-P0-015", "STEAD-P1-002", "STEAD-P1-006", "STEAD-P1-007"]
+    issue_ids: ["STEAD-P0-007", "STEAD-P0-014", "STEAD-P0-015", "STEAD-P1-002", "STEAD-P1-006", "STEAD-P1-007", "STEAD-P2-006"]
     test_ids: ["T-AGENT-001-ACCEPTANCE"]
     documentation: ["docs/architecture/agent-ready-compatibility.md", "docs/architecture/authorization-contract.md"]
-    status: DRAFT_PENDING_PHASE_0_APPROVAL
+    status: READY_FOR_PHASE_0_APPROVAL
     release: "phase-0-contract"
   - requirement_id: "AGENT-002"
     title: "Work-item assignment"
     implementation_modules: ["packages/domain-schemas", "modules/work", "modules/scm", "providers/gitea"]
-    issue_ids: ["STEAD-P0-003", "STEAD-P0-004", "STEAD-P0-014", "STEAD-P0-015", "STEAD-P1-002", "STEAD-P1-003"]
+    issue_ids: ["STEAD-P0-003", "STEAD-P0-004", "STEAD-P0-014", "STEAD-P0-015", "STEAD-P1-002", "STEAD-P1-003", "STEAD-P2-006"]
     test_ids: ["T-AGENT-002-ACCEPTANCE"]
     documentation: ["docs/architecture/agent-ready-compatibility.md", "docs/architecture/canonical-domain-model.md"]
-    status: DRAFT_PENDING_PHASE_0_APPROVAL
+    status: READY_FOR_PHASE_0_APPROVAL
     release: "phase-0-contract"
   - requirement_id: "AGENT-003"
     title: "Authorization"
     implementation_modules: ["modules/authorization", "modules/classification", "policies/openfga", "policies/opa", "packages/domain-schemas"]
-    issue_ids: ["STEAD-P0-007", "STEAD-P0-014", "STEAD-P0-015", "STEAD-P1-006", "STEAD-P2-004"]
+    issue_ids: ["STEAD-P0-007", "STEAD-P0-014", "STEAD-P0-015", "STEAD-P1-006", "STEAD-P2-004", "STEAD-P2-006"]
     test_ids: ["T-AGENT-003-ACCEPTANCE"]
     documentation: ["docs/architecture/agent-ready-compatibility.md", "docs/architecture/authorization-contract.md"]
-    status: DRAFT_PENDING_PHASE_0_APPROVAL
+    status: READY_FOR_PHASE_0_APPROVAL
     release: "phase-0-contract"
   - requirement_id: "AGENT-004"
     title: "Audit and events"
     implementation_modules: ["modules/audit", "apps/worker", "packages/event-schemas", "specs/asyncapi"]
-    issue_ids: ["STEAD-P0-008", "STEAD-P0-014", "STEAD-P0-015", "STEAD-P1-007"]
+    issue_ids: ["STEAD-P0-008", "STEAD-P0-014", "STEAD-P0-015", "STEAD-P1-007", "STEAD-P2-006"]
     test_ids: ["T-AGENT-004-ACCEPTANCE"]
     documentation: ["docs/architecture/agent-ready-compatibility.md", "docs/architecture/event-contract.md", "docs/architecture/audit-model.md"]
-    status: DRAFT_PENDING_PHASE_0_APPROVAL
+    status: READY_FOR_PHASE_0_APPROVAL
     release: "phase-0-contract"
   - requirement_id: "AGENT-005"
     title: "Agent integration boundary"
@@ -917,15 +1021,15 @@ requirements:
     issue_ids: ["STEAD-P0-009", "STEAD-P0-014", "STEAD-P0-015", "STEAD-P2-001", "STEAD-P2-006", "STEAD-P3-004"]
     test_ids: ["T-AGENT-005-ACCEPTANCE"]
     documentation: ["docs/architecture/agent-ready-compatibility.md", "docs/architecture/agent-access.md"]
-    status: DRAFT_PENDING_PHASE_0_APPROVAL
+    status: READY_FOR_PHASE_0_APPROVAL
     release: "phase-0-contract"
   - requirement_id: "AGENT-006"
     title: "Classification"
     implementation_modules: ["modules/authorization", "modules/classification", "policies/openfga", "policies/opa", "packages/domain-schemas"]
-    issue_ids: ["STEAD-P0-007", "STEAD-P0-014", "STEAD-P0-015", "STEAD-P1-006", "STEAD-P2-004"]
+    issue_ids: ["STEAD-P0-007", "STEAD-P0-014", "STEAD-P0-015", "STEAD-P1-006", "STEAD-P2-004", "STEAD-P2-006"]
     test_ids: ["T-AGENT-006-ACCEPTANCE"]
     documentation: ["docs/architecture/agent-ready-compatibility.md", "docs/architecture/security-label-lattice.md"]
-    status: DRAFT_PENDING_PHASE_0_APPROVAL
+    status: READY_FOR_PHASE_0_APPROVAL
     release: "phase-0-contract"
   - requirement_id: "AGENT-007"
     title: "Explicit Phase 0 non-goal"
@@ -933,5 +1037,5 @@ requirements:
     issue_ids: ["STEAD-P0-001", "STEAD-P0-014", "STEAD-P0-015"]
     test_ids: ["T-AGENT-007-SCOPE-GUARD"]
     documentation: ["docs/architecture/agent-ready-compatibility.md", "docs/architecture/constitution.md"]
-    status: DRAFT_PENDING_PHASE_0_APPROVAL
+    status: READY_FOR_PHASE_0_APPROVAL
     release: "phase-0-contract"

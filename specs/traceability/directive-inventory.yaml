@@ -1,125 +1,136 @@
-schema_version: "1.0"
+---
+schema_version: '1.0'
 directive:
-  path: unified_open_work_platform_master_build_directive.md
-  version: "0.2"
-  status: normative_build_specification
-  sha256: a9604924e35cb45699a3a2397404573c2fb174554c5d6ad9b47e12a163976cf8
-  named_requirement_count: 115
-  inventory_generated_on: "2026-08-28"
-  inventory_rule: "Unique IDs from Markdown headings matching ^##? [A-Z]+-[0-9]{3}."
+  path: docs/architecture/MASTER_BUILD_DIRECTIVE.md
+  version: '0.2'
+  sha256: 6540b3d873937ee91c19a862eee14a82e7a2778e56c5323c5163d3a703a6c8ba
+  named_requirement_count: 128
 requirement_ids:
-  - ACT-001
-  - AGENT-001
-  - AGENT-002
-  - AGENT-003
-  - AGENT-004
-  - AGENT-005
-  - AGENT-006
-  - AGENT-007
-  - ARCH-001
-  - ARCH-002
-  - ARCH-003
-  - ARCH-004
-  - ARCH-005
-  - ART-001
-  - AUD-001
-  - AUD-002
-  - AUTH-001
-  - AUTH-002
-  - AUTH-003
-  - AUTH-004
-  - AUTH-005
-  - CICD-001
-  - CICD-002
-  - CICD-003
-  - CICD-004
-  - CICD-005
-  - CLS-001
-  - CLS-002
-  - CLS-003
-  - CLS-004
-  - CLS-005
-  - CLS-006
-  - CLS-007
-  - CLS-008
-  - DEP-001
-  - DEP-002
-  - DEP-003
-  - DEP-004
-  - DEP-005
-  - DOC-001
-  - DOC-002
-  - DOC-003
-  - DOC-004
-  - DOC-005
-  - DOM-001
-  - DOM-002
-  - DOM-003
-  - DOM-004
-  - DOM-005
-  - DOM-006
-  - DOM-007
-  - EVT-001
-  - EVT-002
-  - EVT-003
-  - EVT-004
-  - GRAPH-001
-  - GRAPH-002
-  - MIG-001
-  - MIG-002
-  - MIG-003
-  - MIG-004
-  - MIG-005
-  - NOTIF-001
-  - NOTIF-002
-  - OPS-001
-  - OPS-002
-  - OPS-003
-  - OPS-004
-  - OPS-005
-  - PRIN-001
-  - PRIN-002
-  - PRIN-003
-  - PRIN-004
-  - PRIN-005
-  - PRIN-006
-  - PRIN-007
-  - PRIN-008
-  - PRIN-009
-  - PRIN-010
-  - PRIN-011
-  - PRIN-012
-  - SCM-001
-  - SCM-002
-  - SCM-003
-  - SCM-004
-  - SCM-005
-  - SCM-006
-  - SEC-001
-  - SEC-002
-  - SEC-003
-  - SEC-004
-  - SEC-005
-  - SEC-006
-  - SRCH-001
-  - SRCH-002
-  - SRCH-003
-  - STD-001
-  - STD-002
-  - STOR-001
-  - STOR-002
-  - STOR-003
-  - TEST-001
-  - TEST-002
-  - TEST-003
-  - TEST-004
-  - TEST-005
-  - TEST-006
-  - TEST-007
-  - TEST-008
-  - TEST-009
-  - UX-001
-  - UX-002
-  - UX-003
-  - UX-004
-  - UX-005
+- ACT-001
+- AGENT-001
+- AGENT-002
+- AGENT-003
+- AGENT-004
+- AGENT-005
+- AGENT-006
+- AGENT-007
+- ARCH-001
+- ARCH-002
+- ARCH-003
+- ARCH-004
+- ARCH-005
+- ART-001
+- AUD-001
+- AUD-002
+- AUTH-001
+- AUTH-002
+- AUTH-003
+- AUTH-004
+- AUTH-005
+- AUTH-006
+- CICD-001
+- CICD-002
+- CICD-003
+- CICD-004
+- CICD-005
+- CLS-001
+- CLS-002
+- CLS-003
+- CLS-004
+- CLS-005
+- CLS-006
+- CLS-007
+- CLS-008
+- DEP-001
+- DEP-002
+- DEP-003
+- DEP-004
+- DEP-005
+- DOC-001
+- DOC-002
+- DOC-003
+- DOC-004
+- DOC-005
+- DOM-001
+- DOM-002
+- DOM-003
+- DOM-004
+- DOM-005
+- DOM-006
+- DOM-007
+- DOM-008
+- DOM-009
+- DOM-010
+- DOM-011
+- EVT-001
+- EVT-002
+- EVT-003
+- EVT-004
+- GRAPH-001
+- GRAPH-002
+- MIG-001
+- MIG-002
+- MIG-003
+- MIG-004
+- MIG-005
+- NOTIF-001
+- NOTIF-002
+- OPS-001
+- OPS-002
+- OPS-003
+- OPS-004
+- OPS-005
+- PRIN-001
+- PRIN-002
+- PRIN-003
+- PRIN-004
+- PRIN-005
+- PRIN-006
+- PRIN-007
+- PRIN-008
+- PRIN-009
+- PRIN-010
+- PRIN-011
+- PRIN-012
+- PRIN-013
+- PRIN-014
+- PRIN-015
+- SCM-001
+- SCM-002
+- SCM-003
+- SCM-004
+- SCM-005
+- SCM-006
+- SEC-001
+- SEC-002
+- SEC-003
+- SEC-004
+- SEC-005
+- SEC-006
+- SRCH-001
+- SRCH-002
+- SRCH-003
+- STD-001
+- STD-002
+- STOR-001
+- STOR-002
+- STOR-003
+- TEST-001
+- TEST-002
+- TEST-003
+- TEST-004
+- TEST-005
+- TEST-006
+- TEST-007
+- TEST-008
+- TEST-009
+- TEST-010
+- UX-001
+- UX-002
+- UX-003
+- UX-004
+- UX-005
+- UX-006
+- UX-007
+- UX-008
+- UX-009

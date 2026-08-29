@@ -1,0 +1,125 @@
+model
+  schema 1.1
+
+type user
+type agent
+type service_account
+
+type directory_group
+  relations
+    define member: [user, agent, service_account]
+
+type organization
+  relations
+    define member: [user, agent, service_account, directory_group#member]
+    define viewer: [user, agent, service_account, directory_group#member]
+    define editor: [user, agent, service_account, directory_group#member]
+    define security_officer: [user]
+    define classification_manager: [user]
+
+type team
+  relations
+    define organization: [organization]
+    define parent: [team]
+    define member: [user, agent, service_account, directory_group#member]
+    define viewer: [user, agent, service_account, directory_group#member]
+    define editor: [user, agent, service_account, directory_group#member]
+    # Organizational hierarchy is context only. Deliberately no permission or
+    # membership relation is computed from parent.
+
+type delegation
+  relations
+    define delegator: [user, service_account]
+    define delegate_agent: [agent]
+    define delegate_service_account: [service_account]
+    define task: [work_item]
+    # Enabled tuples are separate revocation fences. Removing an enabled tuple
+    # revokes the delegation without changing the delegator or delegate.
+    define enabled_agent: [agent]
+    define enabled_service_account: [service_account]
+    define active_agent: delegate_agent and enabled_agent
+    define active_service_account: delegate_service_account and enabled_service_account
+    # For a Work Item delegation, task must match the resource's corresponding
+    # view/edit/execute_delegation tuple; the tuple-write transaction enforces
+    # that bidirectional invariant.
+
+type project
+  relations
+    define organization: [organization]
+    define owning_team: [team]
+    define contributing_team: [team]
+    define view_delegation: [delegation]
+    define edit_delegation: [delegation]
+    define viewer: [user, agent, service_account, directory_group#member] or active_agent from view_delegation or active_service_account from view_delegation
+    define editor: [user, agent, service_account, directory_group#member] or active_agent from edit_delegation or active_service_account from edit_delegation
+    define manager: [user, service_account]
+    # Owning and contributing Teams express accountability, not access.
+
+type work_item
+  relations
+    define project: [project]
+    define assignee: [user, agent]
+    define responsible_team: [team]
+    define view_delegation: [delegation]
+    define edit_delegation: [delegation]
+    define execute_delegation: [delegation]
+    define agent_authority: [agent]
+    define service_account_authority: [service_account]
+    define delegated_viewer_agent: active_agent from view_delegation
+    define delegated_viewer_service_account: active_service_account from view_delegation
+    define delegated_editor_agent: active_agent from edit_delegation
+    define delegated_editor_service_account: active_service_account from edit_delegation
+    define delegated_executor_agent: active_agent from execute_delegation
+    define delegated_executor_service_account: active_service_account from execute_delegation
+    define viewer: viewer from project or delegated_viewer_agent or delegated_viewer_service_account
+    define editor: editor from project or delegated_editor_agent or delegated_editor_service_account
+    # Execution requires both independently assigned principal authority and an
+    # active delegation linked to this exact Work Item. Assignment alone grants
+    # neither view, edit, nor execution.
+    define agent_executor: agent_authority and delegated_executor_agent
+    define service_account_executor: service_account_authority and delegated_executor_service_account
+
+type document
+  relations
+    define parent_organization: [organization]
+    define parent_team: [team]
+    define parent_project: [project]
+    define viewer: viewer from parent_organization or viewer from parent_team or viewer from parent_project
+    define editor: editor from parent_organization or editor from parent_team or editor from parent_project
+    define reviewer: [user, agent, service_account]
+    # The domain contract enforces exactly one parent container.
+
+type repository
+  relations
+    define parent_organization: [organization]
+    define parent_team: [team]
+    define parent_project: [project]
+    define read_delegation: [delegation]
+    define write_delegation: [delegation]
+    define maintain_delegation: [delegation]
+    define reader: [user, agent, service_account, directory_group#member] or active_agent from read_delegation or active_service_account from read_delegation
+    define writer: [user, agent, service_account, directory_group#member] or active_agent from write_delegation or active_service_account from write_delegation
+    define maintainer: [user, agent, service_account, directory_group#member] or active_agent from maintain_delegation or active_service_account from maintain_delegation
+    # Container relations identify scope but do not automatically grant clone,
+    # write, or maintain rights. Repository grants remain explicit.
+
+type release
+  relations
+    define project: [project]
+    define viewer: viewer from project
+    define approver: [user, agent, service_account]
+
+type agent_run
+  relations
+    define agent: [agent]
+    define work_item: [work_item]
+    define requested_by: [user, agent, service_account]
+    define delegation: [delegation]
+    define direct_viewer: [user, agent, service_account]
+    define viewer: direct_viewer or viewer from work_item
+    define controller: [user, service_account]
+    define active_delegated_agent: active_agent from delegation
+    define work_authorized_agent: agent_executor from work_item
+    # The acting Agent, the active delegation, and the Work Item's independently
+    # authorized executor must all resolve to the same principal.
+    define executor: agent and active_delegated_agent and work_authorized_agent

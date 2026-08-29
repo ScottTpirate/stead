@@ -1,0 +1,18 @@
+profile_id: commercial
+version: "1.0"
+sensitivity_order: [public, internal, confidential, restricted]
+handling_regimes: [privacy, legal_hold, export_control]
+allowed_categories:
+  - {id: privacy, subcategories: [personal_data, health_data, employee_data]}
+  - {id: legal, subcategories: [privileged, legal_hold]}
+  - {id: financial, subcategories: [material_nonpublic_information, payment_data]}
+allowed_compartments: [need_to_know, deal_team, investigation]
+dissemination_controls: [no_external_share, named_recipients_only]
+releasability_groups: [employees, approved_contractors, named_partners]
+export_controls:
+  - {id: EAR, rule: "Recipient, destination, technology, and license authorization must be validated before export."}
+  - {id: ITAR, rule: "US-person and authorized-destination checks are mandatory before access or export."}
+join: least_upper_bound_plus_union_of_handling_restrictions
+lowering: deny_by_default_authorized_reasoned_audited
+two_person_lowering: false
+bundle_signing: {required: true, format: sigstore-bundle, materialization_gate: RG-08-SECURITY}

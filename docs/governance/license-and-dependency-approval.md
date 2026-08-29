@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | Draft Phase 0 governance contract; approval required before adding product dependencies |
+| Status | Phase 0 approval candidate; approval required before adding product dependencies |
 | Policy owner | Workstream 13 — QA/security/release |
 | Technical reviewers | Workstream 1 — Architecture/standards; owning implementation workstream; Workstream 9 for actions/build supply chain; Workstream 12 for distributed images/charts |
 | Exception authority | Legal reviewer + ADR approval + project-owner approval |

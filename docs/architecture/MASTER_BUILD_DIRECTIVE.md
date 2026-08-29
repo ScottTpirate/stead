@@ -1,11 +1,12 @@
 # Master Build Directive: Unified Open Work Platform
 
-**Version:** 0.2<br>
-**Status:** Normative build specification<br>
-**Audience:** Project-manager agent, architecture agent, implementation subagents, QA/security agents<br>
-**Project name:** `Stead`<br>
-**Canonical component prefix:** `platform` (existing `platform-*` contract names remain until changed through an approved ADR)<br>
-**Revision 0.2:** Establishes the Stead project name and incorporates the Phase 0 agent-ready architecture addendum in section 24.
+**Version:** 0.2
+**Status:** Reconciled normative build specification
+**Audience:** Project-manager agent, architecture agent, implementation subagents, QA/security agents
+**Project name:** `Stead`
+**Canonical component prefix:** `platform` for existing component, API, event, and CLI contract names
+
+**Revision 0.2 reconciliation summary:** broadens the product from a developer-tool suite into an organization-wide open work and knowledge platform; makes software-delivery capabilities additive; defines hierarchical Teams without implicit permission inheritance; introduces organization/team/project knowledge containers; incorporates and preserves the approved `AGENT-001` through `AGENT-007` contracts; and replaces the single software-heavy golden path with general-work and software-extension paths. This file is the sole authoritative directive after reconciliation.
 
 ---
 
@@ -41,19 +42,23 @@ Subagents MUST NOT reinterpret ambiguous requirements on their own. They must ei
 
 # 1. Product mission
 
-Build a fully open-source, self-hostable, opinionated platform that replaces the normal combination of:
+Build a fully open-source, self-hostable, opinionated **open work and knowledge platform** for the whole organization.
 
-- GitHub or equivalent source-code hosting
-- Jira or equivalent work/project tracking
-- Confluence or equivalent organizational documentation
+The universal product replaces the normal Jira-and-Confluence combination for technical and nontechnical teams. For software teams, the same platform additionally replaces GitHub or equivalent source-control and software-delivery tooling.
 
-The product must feel like **one coherent application**, not three applications connected by links.
+The product must feel like **one coherent application**, not multiple applications connected by links or hidden behind a shared login.
 
 The platform will use mature open-source engines wherever they are strong, then provide the missing integration, ontology, security, search, navigation, migration, and user experience as original platform capabilities.
 
+The universal core is **Work + Knowledge**. Source control, pull requests, builds, packages, releases, and deployments are additive project capabilities rather than assumptions imposed on every user.
+
+The platform MUST serve organization-wide teams including HR, finance, legal, operations, research, program management, and executive/administrative organizations. Software development is an additive capability, not an assumption of every Project.
+
+The universal product concepts are Organization, Team, Project, Work, Work Item, Document, Person, Agent, Status, Priority, Owner, Relation, Activity, Comment, and View. In this vocabulary, Work is the product area and collection over canonical Work Items; Person is the human-facing presentation of a User principal; and a View is an authorized presentation of canonical resources rather than a separate ontology entity. Software concepts appear only where their capability is active and applicable.
+
 The core value proposition is:
 
-> Code, work, documentation, builds, releases, artifacts, people, and organizational knowledge belong to one connected work graph, governed by one identity and authorization model, exposed through one modern interface, and stored in portable open formats on infrastructure controlled by the organization.
+> Work, documentation, organizational knowledge, people, teams, agents, and—where applicable—code and delivery resources belong to one connected work graph, governed by one identity and authorization model, exposed through one modern interface, and stored in portable open formats on infrastructure controlled by the organization.
 
 ---
 
@@ -83,7 +88,9 @@ Gitea integration MUST use documented APIs, webhooks, Git protocols, supported a
 
 Commonplace MUST be integrated through upstream contributions, stable interfaces, or a thin compatibility layer. A permanent divergent Commonplace fork is prohibited. A temporary patch queue is allowed only while upstream contributions are pending and MUST be isolated, documented, tested, and kept minimal.
 
-Devlane is the only planned product fork. The Devlane-derived frontend MUST be converted into the platform’s primary user interface and MUST use the platform API rather than the Devlane backend as the system of record.
+Devlane is the permanent frontend fork and serves as the visual foundation, interaction-pattern source, and component source. The Devlane-derived frontend MUST be converted into the platform’s primary user interface and MUST use the platform API rather than the Devlane backend as the system of record.
+
+Devlane's ontology and routing structure are not canonical. Modules, Epics, Pages, Board, Intake, Archives, Drafts, and similar source-application concepts MUST NOT become foundational product concepts merely because the fork contains them. List, Board, Timeline, Calendar, and Triage are Views over canonical Work unless a later approved ADR establishes otherwise.
 
 ## PRIN-003 — Opinionated product semantics
 
@@ -186,33 +193,67 @@ The platform MUST NOT move information between unclassified and classified netwo
 
 Cross-domain transfer requires an externally approved cross-domain solution and is outside core product scope.
 
+## PRIN-013 — Universal core, additive capabilities
+
+Every Project MUST provide the universal experience of:
+
+- Overview;
+- Work;
+- Docs.
+
+Software-delivery capabilities MAY be activated through system-defined capability bundles. Users MUST NOT see empty or irrelevant Code, Pull Request, Build, Package, Release, or Deployment areas when those capabilities are not active or authorized.
+
+Gitea remains the required initial backing engine for tracker issues and Git-backed documents even when a Project has no source-code repository. The existence of Gitea underneath the platform MUST NOT force developer terminology or developer navigation onto nontechnical users.
+
+## PRIN-014 — Progressive disclosure and one mental model
+
+The default interface MUST expose the smallest useful set of concepts and actions. Advanced power MUST be discoverable through command search, contextual actions, keyboard shortcuts, and progressive disclosure rather than permanently visible controls.
+
+The product MUST NOT become simpler for one team by becoming a differently structured product for another team. Capability visibility may vary according to project configuration and authorization, but canonical terminology, object behavior, navigation order, and interaction rules remain system-owned.
+
+## PRIN-015 — Organizational hierarchy is not authorization inheritance
+
+Teams MAY be hierarchical for navigation, accountability, reporting, ownership, and policy targeting.
+
+A Team's parent/child position MUST NOT by itself grant access to child or parent Team resources. Permission grants require explicit OpenFGA relationships or approved policy. Restrictive governance defaults and explicit denies MAY cascade downward where specified by policy, but hierarchy MUST NOT create an implicit access grant.
+
 ---
 
 # 3. Scope and explicit non-goals
 
 ## 3.1 Required product scope
 
+### Universal organization-wide scope
+
 The production target includes:
 
-- Git hosting and repository management
-- pull requests and code review
-- branch protection and repository governance
-- issue/work-item management
-- projects, cycles, milestones, initiatives, and roadmaps
-- Git-backed organizational documentation
-- document review and history
-- CI/CD orchestration through Gitea Actions
-- package, artifact, and release visibility
-- unified global search
-- unified inbox and notification routing
-- unified activity and audit
-- identity provisioning and single sign-on
-- relationship-based and attribute/classification-based authorization
-- classification-aware handling for government-oriented deployments
-- migration from GitHub, Jira, and Confluence
-- local, Kubernetes, cloud, and air-gapped installation
-- backups, restores, upgrades, diagnostics, and observability
-- open APIs, events, export formats, and provider contracts
+- organizations and hierarchical Teams;
+- Projects, cycles, initiatives, and roadmaps;
+- issue/work-item management for technical and nontechnical teams;
+- organization-, Team-, and Project-scoped Git-backed documentation;
+- document review, approval, provenance, and history;
+- live relationships and views connecting Docs and Work;
+- unified global search and knowledge browsing;
+- unified inbox and notification routing;
+- unified activity and audit;
+- identity provisioning and single sign-on;
+- relationship-based and attribute/classification-based authorization;
+- classification-aware handling for government-oriented deployments;
+- migration from Jira and Confluence;
+- local, Kubernetes, cloud, and air-gapped installation;
+- backups, restores, upgrades, diagnostics, and observability;
+- open APIs, events, export formats, and provider contracts.
+
+### Additive software-delivery scope
+
+When the relevant system-defined capabilities are active, the same product includes:
+
+- Git hosting and repository management;
+- pull requests and code review;
+- branch protection and repository governance;
+- CI/CD orchestration through Gitea Actions;
+- package, artifact, release, and deployment visibility;
+- migration from GitHub or another supported SCM provider.
 
 ## 3.2 Non-goals
 
@@ -271,6 +312,7 @@ The initial repository MUST use this logical layout. Names may be adjusted only 
   /search
   /notification
   /audit
+  /agent                  # registry/run contracts; execution added only in its approved phase
   /migration
 
 /providers
@@ -284,6 +326,7 @@ The initial repository MUST use this logical layout. Names may be adjusted only 
   /search-opensearch
   /identity-oidc
   /identity-scim
+  /agent-a2a              # external agent-runtime interoperability
   /notifications-email
   /notifications-webhook
 
@@ -306,6 +349,8 @@ The initial repository MUST use this logical layout. Names may be adjusted only 
   /work-graph-profile
   /okf-profile
   /oscal
+  /mcp
+  /a2a
 
 /deploy
   /compose
@@ -408,6 +453,8 @@ The implementation MUST follow this matrix.
 | Knowledge | Open Knowledge Format 0.2-compatible Markdown/frontmatter | Git-backed docs |
 | Provenance | W3C PROV concepts | Derivation, attribution, generation, source lineage |
 | Human activity | ActivityStreams 2.0 concepts | Unified activity feed semantics |
+| Agent tools and context | Model Context Protocol (MCP), pinned supported profile | Permission-aware agent access to platform tools and data |
+| Agent interoperability | Agent2Agent Protocol (A2A), pinned supported profile | External agent registration, dispatch, task progress, and artifacts |
 | Authentication | OpenID Connect | Human SSO |
 | Provisioning | SCIM 2.0, RFC 7643/7644 | Users and groups |
 | Authorization model | OpenFGA plus NIST SP 800-162 ABAC principles | Relationships and attributes |
@@ -458,6 +505,11 @@ Every canonical resource MUST include:
   "schema_version": "1.0",
   "version": 1,
   "organization_id": "uuidv7",
+  "container": {
+    "kind": "organization|team|project",
+    "id": "uuidv7",
+    "uri": "canonical-container-uri"
+  },
   "project_id": "uuidv7-or-null",
   "title": "human title",
   "created_at": "RFC3339 timestamp",
@@ -473,6 +525,8 @@ Every canonical resource MUST include:
 
 Resource-specific fields are added through versioned schemas.
 
+`container` identifies the resource's primary organization, Team, or Project knowledge/work boundary. `project_id` is present only for Project-scoped resources and MUST agree with the Project container or canonical Project relationship.
+
 ## DOM-002 — Canonical entities
 
 The core ontology is fixed to:
@@ -480,6 +534,9 @@ The core ontology is fixed to:
 - Instance
 - Organization
 - User
+- Directory Group
+- Agent
+- Agent Run
 - Service Principal
 - Team
 - Initiative
@@ -510,29 +567,38 @@ No other first-class entity may be added without an ADR and ontology review.
 ```text
 Instance
 └── Organization
+    ├── Directory Groups
+    ├── Organization Knowledge
     ├── Teams
+    │   ├── Child Teams
+    │   ├── Team Knowledge
+    │   └── Owned/Contributing Projects
     ├── Initiatives
     └── Projects
         ├── Work Items
-        ├── Documents
-        ├── Repositories
+        ├── Project Documents
+        ├── Repositories, when enabled
         ├── Cycles/Milestones
-        ├── Builds
-        ├── Releases
-        └── Artifacts
+        ├── Builds, when enabled
+        ├── Releases, when enabled
+        └── Artifacts, when enabled
 ```
 
-A Project may have zero, one, or many code repositories and zero, one, or many documentation repositories.
+A Project may have zero, one, or many code repositories and one or many documentation repositories/security containers.
 
 A Project is never equivalent to a repository.
 
+A Document MUST belong to exactly one Organization, Team, or Project container. A Work Item MUST remain Project-scoped.
+
 ## DOM-004 — Work-item model
 
-Allowed work-item types are:
+Allowed canonical work-item types are:
 
-- `feature`
-- `task`
-- `bug`
+- `deliverable` — a result or larger unit of value;
+- `task` — an actionable unit of work;
+- `problem` — something incorrect, degraded, blocked, or requiring correction.
+
+The `software` preset MAY display `deliverable` as **Feature** and `problem` as **Bug**. Other presets SHOULD use the universal labels. Display labels MUST NOT change canonical semantics or API values.
 
 Allowed statuses are:
 
@@ -568,13 +634,15 @@ Provider/import-specific values MAY be retained in namespaced `source_metadata`,
 
 ## DOM-005 — Document model
 
-Allowed document types are:
+Allowed canonical document types are:
 
-- `page`
-- `specification`
-- `architecture-decision`
-- `runbook`
-- `policy`
+- `page`;
+- `specification`;
+- `decision`;
+- `procedure`;
+- `policy`.
+
+The `software` preset MAY display `decision` as **Architecture Decision** and `procedure` as **Runbook**. Display labels MUST NOT change canonical semantics or serialized values.
 
 Allowed document states are:
 
@@ -599,8 +667,11 @@ Documents MUST:
 The initial typed relationships are:
 
 ```text
+Team parent_of Team
 Team owns Project
+Team contributes_to Project
 Team maintains Repository
+Directory Group supplies_membership_to Team
 Project contains Work Item
 Project contains Document
 Project links Repository
@@ -618,6 +689,9 @@ Release contains Artifact
 Deployment deploys Release
 Resource derived_from Resource
 Resource attributed_to Principal
+Agent assigned_to Work Item
+Agent Run executes Work Item
+Agent Run produces Resource
 ```
 
 Relationship names and direction are canonical and versioned. UI display text may vary, but semantics may not.
@@ -634,6 +708,101 @@ Effective security labels MUST be computed using a defined join operation over:
 - applicable handling rules.
 
 A derived resource MUST NOT silently receive a less restrictive effective label than any source that contributed protected content.
+
+## DOM-008 — Project capability model
+
+Project capabilities are system-defined and versioned. Administrators MUST NOT create arbitrary capability types or arbitrary primary tabs.
+
+Required universal capability set:
+
+- `work`;
+- `docs`.
+
+Initial optional capability set:
+
+- `scm`;
+- `code_review`;
+- `ci`;
+- `packages`;
+- `releases`;
+- `deployments`.
+
+Capability dependencies are fixed:
+
+- `code_review` requires `scm`;
+- `ci` requires `scm`;
+- `packages`, `releases`, and `deployments` may require `scm` or another approved artifact provider according to their provider contract.
+
+The initial Project creation presets are:
+
+- `general`: Work + Docs;
+- `software`: Work + Docs + SCM + Code Review + CI + Packages + Releases;
+- `controlled_knowledge`: Work + Docs with controlled-document review defaults.
+
+Presets activate capabilities and seed approved views/documents. They MUST NOT change canonical Work Item types, statuses, relationship semantics, authorization behavior, or navigation order.
+
+Capability activation and deactivation MUST be authorized, audited, reversible where technically possible, and MUST preserve existing data. The UI MUST derive visible areas from active capabilities plus authorization.
+
+## DOM-009 — Team hierarchy and accountability
+
+A Team:
+
+- MUST belong to exactly one Organization;
+- MAY have zero or one parent Team in the same Organization;
+- MUST form a cycle-free hierarchy;
+- MUST NOT exceed twelve hierarchy levels;
+- MAY contain users, agents, and service accounts through explicit membership relationships;
+- MAY be bound to one or more external Directory Groups for synchronized membership;
+- MAY own many Projects and contribute to many Projects;
+- MUST retain its stable canonical ID and URI when renamed or reparented.
+
+Every Project MUST have exactly one owning Team and MAY have zero or more contributing Teams. Ownership establishes accountability and default policy targeting, not implicit access for every ancestor Team.
+
+Reparenting, directory binding, ownership changes, and membership-source changes MUST be audited.
+
+## DOM-010 — Principal and assignment model
+
+A canonical `PrincipalRef` is a tagged union of:
+
+- `user`;
+- `agent`;
+- `service_account`;
+- `directory_group`.
+
+The `service_account` discriminator references the canonical Service Principal entity. A Directory Group is a membership and authorization subject but is not an acting principal. An acting principal MUST be a `user`, `agent`, or `service_account`.
+
+Code, schemas, events, audit records, comments, assignments, review requests, and ownership metadata MUST NOT assume the acting principal is human.
+
+A Work Item MAY be assigned to a User or Agent principal. A Project or Work Item MAY separately identify a responsible Team. Provider-specific limitations, including Gitea user-only assignees, MUST remain inside the provider adapter and MUST NOT redefine the canonical model.
+
+Agent execution remains external to the core platform. The platform owns Agent identity, registration, authorization, assignment, Agent Run state, audit, and interoperability contracts; it does not own model reasoning, prompts, or agent-framework internals.
+
+## DOM-011 — Project model and lifecycle
+
+A Project MUST include:
+
+- exactly one owning Team;
+- zero or more contributing Teams;
+- one system-defined preset;
+- a set of active system-defined capabilities;
+- a stable human key;
+- a title and concise purpose;
+- one lifecycle state;
+- optional start and target dates;
+- an effective security label/container policy;
+- archival metadata separate from lifecycle state.
+
+Allowed Project lifecycle states are:
+
+- `planned`;
+- `active`;
+- `paused`;
+- `completed`;
+- `canceled`.
+
+Archival is a reversible visibility/retention operation represented by `archived_at` and `archived_by`, not an additional workflow state. Completed or canceled Projects remain searchable and linkable unless retention policy requires otherwise.
+
+A Project preset MAY seed a purpose-appropriate overview, views, and documents, but MUST NOT create a new ontology or workflow.
 
 ---
 
@@ -754,7 +923,9 @@ Policy is declared once at Organization, Team, or Project scope and reconciled t
 
 Documents MUST be stored in dedicated Gitea Git repositories by default.
 
-A project’s default docs repository SHOULD be created automatically. Additional docs repositories MAY be linked when permission or lifecycle boundaries require them.
+Each Organization and Team SHOULD have a default knowledge repository when its first document is created. A Project’s default docs repository SHOULD be created automatically with the Project. Additional docs repositories MAY be linked when permission, classification, retention, or lifecycle boundaries require them.
+
+The unified Knowledge experience MUST browse authorized Organization, Team, and Project documents without exposing repository boundaries as the primary information architecture.
 
 Documents MAY live beside code when a project explicitly chooses repository-local documentation, but the platform UI MUST present both models consistently.
 
@@ -803,7 +974,7 @@ If documents need different access, classification, compartment, releasability, 
 
 ## DOC-005 — Document review and controlled content
 
-Documents marked as `policy`, `architecture-decision`, or otherwise configured as controlled content MUST support:
+Documents marked as `policy`, `decision`, or otherwise configured as controlled content MUST support:
 
 - designated reviewers;
 - approval records;
@@ -821,31 +992,34 @@ Documents marked as `policy`, `architecture-decision`, or otherwise configured a
 
 The Devlane-derived frontend MUST be the sole primary application shell.
 
-Required primary navigation:
+Required universal primary navigation, in this order:
 
-- Home
-- Inbox
-- Projects
-- Work
-- Docs
-- Code
-- Builds
-- Search
-- Administration, when authorized
+- Home;
+- Inbox;
+- My Work;
+- Projects;
+- Knowledge;
+- Teams.
 
-A Project page MUST provide integrated tabs or views for:
+Search MUST be persistently accessible through the global command/search control and keyboard shortcut rather than requiring a dedicated navigation destination.
 
-- Overview
-- Work
-- Docs
-- Code
-- Pull Requests
-- Builds
-- Releases
-- Activity
-- Settings
+Administration MUST live in an authorized organization/account surface rather than permanent primary navigation for ordinary users.
 
-Navigating between these views MUST NOT feel like changing applications.
+An optional global Code destination MAY appear only when the current principal has access to at least one SCM resource. It MUST be system-derived, not manually rearranged by administrators.
+
+A Project page MUST provide no more than these primary areas:
+
+- Overview;
+- Work;
+- Docs;
+- Code, when `scm` is active and authorized;
+- Delivery, when one or more of `ci`, `packages`, `releases`, or `deployments` is active and authorized.
+
+Pull Requests and repository details are subviews of Code. Builds, packages, releases, artifacts, and deployments are subviews of Delivery. Activity is integrated into Overview and resource timelines. Settings are contextual and MUST NOT occupy a normal primary Project tab.
+
+A Team page MUST provide a simple view of its people, hierarchy, Projects, aggregate Work, and Team Knowledge without inventing separate Team-specific versions of those objects.
+
+Navigating among these views MUST NOT feel like changing applications.
 
 ## UX-002 — Shared interaction vocabulary
 
@@ -903,6 +1077,58 @@ Organizations MAY configure branding, display names, integrations, and infrastru
 
 They MUST NOT be able to rearrange core navigation, replace the canonical workflow with arbitrary states, or add arbitrary mandatory fields that make different teams experience different products.
 
+## UX-006 — Capability-driven progressive disclosure
+
+The UI MUST render only capabilities that are active and authorized. It MUST NOT show disabled developer tabs, empty module placeholders, or configuration switches that ordinary users cannot act on.
+
+The same canonical route and component families MUST support both a general Project and a software Project. Capability variation MUST NOT create separate frontend applications or divergent design systems.
+
+Project creation MUST begin with the three system-defined presets from DOM-008 and a short description of the experience each enables. Advanced provider configuration occurs after creation and only for authorized users.
+
+## UX-007 — Universal object surfaces and context preservation
+
+Every major canonical resource MUST support a consistent object surface with:
+
+- canonical title and type;
+- owner/responsible Team or principal;
+- status where applicable;
+- effective security label;
+- typed relationships;
+- comments/activity/history where applicable;
+- watch/subscription state;
+- stable deep link.
+
+Work Items, Documents, Pull Requests, Builds, Releases, People, Teams, and Agents SHOULD be openable in a shared context-preserving peek/sheet as well as a full page. Opening a related object MUST NOT unnecessarily destroy the user's current navigation or filter context.
+
+Nested modal stacks are prohibited. The interface MUST NOT present more than one blocking modal layer at a time.
+
+## UX-008 — Work and Knowledge are visibly connected
+
+Documents MUST support authorized live Work views rather than copied task tables. A live Work view is a rendered query over canonical Work Items and MUST preserve authorization, filtering, classification, and deep links.
+
+The editor SHOULD support converting selected document text into a Work Item, creating a Document from a Work Item, and inserting typed references to Work Items, Documents, Teams, People, Agents, Repositories, Pull Requests, Builds, and Releases.
+
+Every Work Item and Document SHOULD show a compact contextual relationship strip for its most important connected resources. The product MUST favor these typed connections over manually maintained duplicate links.
+
+## UX-009 — Simplicity and visual design constitution
+
+The frontend workstream MUST publish and test a design constitution with these rules:
+
+1. one primary action per screen or state;
+2. progressive disclosure before permanent controls;
+3. recognition over recall through stable terminology, icons, and placement;
+4. direct manipulation and inline editing where safe;
+5. visible save, sync, agent, build, and authorization state;
+6. reversible actions, history, and safe undo where feasible;
+7. no vanity dashboard elements that do not support a decision or action;
+8. no administrator-controlled navigation rearrangement;
+9. no duplicate settings for the same behavior;
+10. no empty capability areas;
+11. keyboard and screen-reader parity with pointer interaction;
+12. classification and handling markings integrated as calm, unmistakable product chrome rather than optional decoration.
+
+The design MAY be inspired by Linear, Devlane, Commonplace, and high-quality native applications, but MUST NOT copy another product's information architecture when it conflicts with the platform ontology.
+
 ---
 
 # 10. Identity, authorization, and classification requirements
@@ -957,7 +1183,11 @@ OpenFGA MUST model:
 - release approver;
 - security officer/classification manager;
 - delegated service-principal access;
-- inherited relationships from Team and Project.
+- explicit inherited relationships from Team and Project where defined by the authorization model;
+- Agent assignment and task-scoped delegation;
+- Directory Group to Team membership bindings.
+
+The Team parent/child relationship MUST NOT automatically imply viewer, editor, owner, or administrator access. Any authorized inheritance must be explicit in the OpenFGA model and covered by model tests.
 
 All OpenFGA models MUST have model tests and migration tests before deployment.
 
@@ -1000,6 +1230,23 @@ Each trusted attribute MUST include:
 - last synchronization result.
 
 Expired or unverifiable attributes MUST fail closed.
+
+## AUTH-006 — Agent, service, and group principals
+
+Authentication and authorization contracts MUST distinguish:
+
+- acting principal;
+- principal type;
+- initiating/delegating principal when different;
+- task/delegation context;
+- runtime or workload identity;
+- session and security-domain context.
+
+Agent authorization MUST evaluate the intersection of delegating-principal authority, Agent-specific authority, task-scoped authority, runtime security authorization, session/environment restrictions, and resource classification/handling rules.
+
+An Agent MUST NOT automatically inherit every permission of the human who requested the work. Agent access MUST be independently revocable and time/scoped constrained.
+
+Directory Groups are identity/provisioning objects. Teams are product/organizational objects. External groups MAY supply Team membership, but the platform MUST NOT expose every directory or security group as a Team by default.
 
 ## CLS-001 — Generic security-label model
 
@@ -1090,6 +1337,9 @@ Authorization/classification MUST apply to:
 - search results;
 - search counts and facets;
 - autocomplete;
+- Team rollups;
+- Project rollups;
+- navigation, including capability-derived destinations, counts, and badges;
 - activity feeds;
 - graphs and relationship counts;
 - notifications;
@@ -1343,15 +1593,19 @@ The graph MUST support:
 - migration reconciliation;
 - AI/MCP access under the same authorization rules.
 
-## GRAPH-002 — MCP and agent access
+## GRAPH-002 — MCP, A2A, and agent access
 
 The platform SHOULD expose an MCP server for permission-aware search, read, and controlled write operations.
 
 The MCP server MUST call the same platform API and authorization service as human clients.
 
-Agents MUST NOT receive direct unrestricted repository, database, OpenSearch, NATS, or object-store access.
+The platform SHOULD use A2A for registration and communication with replaceable external agent runtimes. The platform MUST NOT require one model provider, agent SDK, orchestration framework, or hosted AI service.
 
-All agent writes must be attributable and auditable.
+The Agent Registry SHOULD ingest or map A2A Agent Card semantics. Assigning a Work Item to an Agent MUST create a separately auditable Agent Run rather than overloading Work Item status with runtime state.
+
+Agents MUST NOT receive direct unrestricted repository, database, OpenSearch, NATS, or object-store access. Direct Git protocol access is permitted only through narrowly scoped, short-lived credentials and provider enforcement.
+
+All agent actions and writes MUST record the acting Agent, initiating/delegating principal where applicable, task context, correlation/causation IDs, and effective security context.
 
 ---
 
@@ -1973,26 +2227,38 @@ A release candidate fails if:
 - required audit events are missing;
 - a known unauthorized disclosure path remains.
 
-## TEST-009 — Golden end-to-end scenario
+## TEST-009 — Golden general-work scenario
 
-Every release MUST pass this scenario:
+Every release MUST pass this organization-wide scenario without creating or linking a source-code repository:
 
 1. Install with one supported command/profile.
 2. Authenticate through the configured identity system.
-3. Create an Organization, Team, and Project.
-4. Confirm automatic tracker repository, fixed board, managed labels, and docs repository creation.
-5. Create a Work Item in the unified UI.
-6. Create/edit a Document that references the Work Item.
-7. Create/link a code repository.
-8. Create a branch/commit/PR that references the Work Item and Document.
-9. Request review and receive a unified inbox notification.
-10. Merge the PR and confirm activity/work graph/search updates.
-11. Run a Gitea Action and link build, SBOM, artifact, and release.
-12. Search once and retrieve authorized Work, Docs, Code, PR, Build, and Release results.
-13. Verify an unauthorized or insufficiently cleared user receives no metadata leakage.
-14. Back up and restore the installation.
-15. Upgrade Gitea/platform within the supported matrix.
-16. Repeat the key read/write/search/authorization checks.
+3. Create an Organization, parent Team, child Team, and general Project owned by the child Team.
+4. Confirm Team hierarchy does not grant unintended parent/child access.
+5. Confirm automatic tracker repository, fixed board, managed labels, and Project docs repository creation.
+6. Create Organization- or Team-scoped Knowledge and a Project Document.
+7. Create a Work Item in the unified UI and connect it to the Project Document.
+8. Embed a live Work view in the Document and confirm it reflects an authorized Work Item update without copied data.
+9. Receive one unified inbox notification and see one unified activity timeline.
+10. Search once and retrieve authorized Team, Project, Work, and Knowledge results.
+11. Confirm Code and Delivery are absent from the Project UI.
+12. Verify an unauthorized or insufficiently cleared user receives no metadata, count, suggestion, notification, or relationship leakage.
+13. Back up and restore the installation.
+14. Upgrade Gitea/platform within the supported matrix.
+15. Repeat the key read/write/search/authorization checks.
+
+## TEST-010 — Golden software-capability scenario
+
+Every release that includes software capabilities MUST additionally pass:
+
+1. Create a software Project or activate the approved software capability bundle.
+2. Create/link a code repository and confirm Code and Delivery appear without changing the universal shell.
+3. Create a branch/commit/Pull Request that references a Work Item and Document.
+4. Request review and receive a unified inbox notification.
+5. Merge the Pull Request and confirm activity, graph, and search updates.
+6. Run a Gitea Action and link Build, SBOM, Artifact, Package, and Release resources.
+7. Search once and retrieve authorized Work, Docs, Code, Pull Request, Build, Artifact, and Release results.
+8. Deactivate or restrict an optional capability and verify data is preserved and navigation is updated without authorization leakage.
 
 ---
 
@@ -2004,7 +2270,8 @@ No feature implementation begins until these are approved:
 
 - product principles;
 - OWGP v0.1;
-- canonical entity schemas;
+- canonical entity schemas, including PrincipalRef, Directory Group, Agent, Agent Run, Team hierarchy, and generic resource containers;
+- Project capability schema and preset contract;
 - security-label schema and lattice;
 - OpenFGA model v0.1;
 - OPA policy input/output contract;
@@ -2015,7 +2282,8 @@ No feature implementation begins until these are approved:
 - threat-model baseline;
 - license policy;
 - repository layout;
-- golden scenario test plan.
+- information-architecture map and UX design constitution;
+- general-work and software-capability golden scenario test plans.
 
 ## Phase 1 — Executable vertical slice
 
@@ -2027,23 +2295,32 @@ Deliver:
 - OIDC/local bootstrap;
 - OpenFGA + OPA decision path;
 - stock Gitea adapter;
-- Organization/Team/Project;
-- automatic tracker/docs repo creation;
+- Organization, Directory Group binding, hierarchical Team, and Project;
+- automatic tracker and Organization/Team/Project docs repository creation as required;
+- the `general` and `software` Project presets;
 - fixed Work Item workflow;
-- one OKF document flow;
+- one OKF document flow with typed Work relationship and live Work view;
+- capability-driven navigation with no empty developer areas;
+- generated Platform API client and server-state/query layer;
+- initial shared design system, command palette, universal object surface, and classification chrome;
 - NATS/outbox;
 - basic activity/inbox;
 - PostgreSQL search;
 - audit;
-- golden scenario through Work + Docs + Code + PR.
+- the complete TEST-009 general-work scenario;
+- the minimal TEST-010 software-capability path through Code + Pull Request + Build.
 
-This phase validates architecture. It is not production complete.
+Phase 1 MUST NOT implement agent runtime execution, orchestration, prompting, model hosting, agent memory, or A2A dispatch. Agent/Agent Run schemas, assignee rendering, authorization seams, and audit/event contracts MUST remain valid.
+
+This phase validates architecture and product coherence. It is not production complete.
 
 ## Phase 2 — Pilot/Beta
 
 Deliver:
 
-- mature Devlane-derived unified UX;
+- mature Devlane-derived unified UX and completed design-system extraction;
+- global Knowledge and Team experiences;
+- context-preserving object peek/sheets and cross-resource relationship surfaces;
 - Commonplace upstream integration or approved fallback;
 - real document review;
 - classification profiles and banners;
@@ -2051,6 +2328,7 @@ Deliver:
 - CI Actions visibility and secure runners;
 - BlobStore providers;
 - email/webhook adapters;
+- Agent Registry, MCP tool catalog, A2A dispatcher, task-scoped credentials, assignment, and Agent Run UI;
 - GitHub/Jira/Confluence migration preview and initial import;
 - Kubernetes/Helm profile;
 - backup/restore;
@@ -2092,7 +2370,7 @@ The project-manager agent MUST create separate workstreams with explicit interfa
    - Gitea provider upstream work, OKF, editor, collaboration, review workflow.
 
 5. **Unified frontend/design system**
-   - Devlane fork, shell, project views, shared components, accessibility.
+   - Devlane fork, design constitution, capability-driven shell, universal object surfaces, global Knowledge, Team hierarchy views, shared editor/components, accessibility, visual regression.
 
 6. **Identity/authorization/classification**
    - OIDC/SCIM, OpenFGA, OPA, security labels, government profile, bypass testing.
@@ -2100,8 +2378,8 @@ The project-manager agent MUST create separate workstreams with explicit interfa
 7. **Events/activity/inbox/audit**
    - NATS, CloudEvents, AsyncAPI, notifications, audit, replay.
 
-8. **Search/work graph/AI access**
-   - PostgreSQL/OpenSearch providers, graph projection, MCP, authorization filtering.
+8. **Search/work graph/agent access**
+   - PostgreSQL/OpenSearch providers, graph projection, MCP, A2A contracts, Agent Registry/Run integration, authorization filtering.
 
 9. **CI/runners/artifacts/secrets**
    - Gitea Actions, runner isolation, internal actions, SBOM/provenance/signing.
@@ -2145,7 +2423,7 @@ These decisions are locked and require an ADR plus project-owner approval to cha
 8. OpenFGA for relationship authorization.
 9. OPA for classification/ABAC/context policy.
 10. Git + Markdown + OKF for documentation.
-11. Fixed canonical workflow and ontology.
+11. Fixed canonical workflow and ontology, including universal `deliverable`, `task`, and `problem` Work Item semantics.
 12. Dedicated Gitea tracker repository per Platform Project.
 13. Repository/container-level classification boundary.
 14. OpenAPI, JSON Schema, CloudEvents, AsyncAPI, OTel, OCI, SPDX, SLSA, OSCAL standards stack.
@@ -2155,6 +2433,16 @@ These decisions are locked and require an ADR plus project-owner approval to cha
 18. Essential security remains in the open-source distribution.
 19. Apache-2.0 for newly authored core code unless specifically approved otherwise.
 20. No unapproved source-available or copyleft runtime dependency.
+21. Work + Docs are universal; software-delivery capabilities are additive and capability-driven.
+22. Universal global navigation is Home, Inbox, My Work, Projects, Knowledge, and Teams; Search is omnipresent rather than a destination.
+23. Project primary areas are limited to Overview, Work, Docs, optional Code, and optional Delivery.
+24. Team hierarchy is single-parent, cycle-free, maximum twelve levels, and does not implicitly grant authorization.
+25. Every Project has exactly one owning Team and may have contributing Teams.
+26. Documents may be Organization-, Team-, or Project-scoped; Work Items remain Project-scoped.
+27. User, Agent, Service Principal (`service_account`), and Directory Group are distinct principal/reference types; acting principals are users, agents, or service accounts, and agent runtimes remain external and replaceable.
+28. MCP is the agent-to-platform tool/data boundary; A2A is the preferred external agent-runtime interoperability boundary.
+29. Project lifecycle states are planned, active, paused, completed, and canceled; archive is separate and reversible.
+30. Canonical document types use universal semantics; software-specific names are display labels only.
 
 ---
 
@@ -2174,6 +2462,8 @@ A feature is done only when all applicable items are true:
 - installation/upgrade behavior is addressed;
 - backup/restore implications are addressed;
 - accessibility is addressed;
+- general and software capability presentations are tested where applicable;
+- no irrelevant capability or unauthorized metadata is exposed;
 - documentation is complete;
 - licenses and SBOM are clean;
 - independent QA/security review passes;
@@ -2188,61 +2478,66 @@ Do not decompose this project as “build a Jira clone,” “build a Confluence
 
 Decompose it as one platform with a canonical work graph and shared cross-cutting systems.
 
-The first technical milestone must be a thin, complete vertical slice proving:
+The first technical milestone must prove a thin universal slice and its additive software extension without changing the shell or canonical model.
+
+Universal general-work slice:
 
 ```text
 one identity
 + one authorization decision
-+ one Project
++ one parent/child Team hierarchy with no implicit authorization
++ one general Project owned by one Team
 + one Gitea-backed Work Item
-+ one Git/OKF Document
-+ one code repository and Pull Request
++ one Organization/Team-scoped Git/OKF Document
++ one Project-scoped Git/OKF Document with a live Work view
 + one event stream
 + one inbox
-+ one search result
++ authorized Team/Project/Work/Knowledge search results
 + one audit trail
 + one simple installation
++ no Code or Delivery surface
 ```
 
-Only after that slice passes the golden scenario should agents expand feature depth in parallel.
+Additive software-capability extension:
+
+```text
+the same identity, authorization, shell, Project, Work, Docs, events, inbox, search, and audit contracts
++ one code repository and Pull Request
++ one Build, Artifact, Package, and Release path
++ capability-driven Code and Delivery surfaces
+```
+
+Only after TEST-009 and the applicable TEST-010 path pass should agents expand feature depth in parallel.
 
 ---
 
-# 24. Phase 0 addendum — agent-ready architecture
+# 24. Approved agent-ready architecture requirements
 
-This addendum does not add agent execution to Phase 0. It establishes compatibility requirements so agent functionality can be implemented later without breaking existing platform contracts.
+These requirements preserve compatibility with future agent functionality. They require Phase 0 schemas, authorization/audit seams, interface boundaries, and test contracts, but do not add agent execution to Phase 0.
 
 ## AGENT-001 — Generalize identity to principals
 
 All new domain, authorization, audit, event, and assignment contracts MUST distinguish between human identity and acting principal.
 
-The canonical principal model MUST permit at minimum:
+The canonical acting-principal model MUST permit at minimum:
 
-- `user`
-- `agent`
-- `service_account`
+- `user`;
+- `agent`;
+- `service_account`.
 
-Code MUST NOT assume that an actor, assignee, creator, reviewer, subscriber, or request principal is necessarily a human user.
+`PrincipalRef` MAY additionally identify a non-acting `directory_group` for membership and authorization relationships. Code MUST NOT assume that an actor, assignee, creator, reviewer, subscriber, or request principal is necessarily a human user.
 
 ## AGENT-002 — Work-item assignment
 
 Work-item assignment contracts MUST support an `agent` principal as an assignee.
 
-Agent execution behavior is out of scope for Phase 0.
-
-Existing Gitea-backed issue assignment may continue to use Gitea-native users where required, but the Platform API and canonical model MUST NOT expose that provider limitation as the canonical assignment model.
+Agent execution behavior is out of scope for Phase 0. Existing Gitea-backed issue assignment may continue to use Gitea-native users where required, but the Platform API and canonical model MUST NOT expose that provider limitation as the canonical assignment model.
 
 ## AGENT-003 — Authorization
 
 The initial OpenFGA model MUST reserve `agent` as a first-class principal type.
 
-The authorization architecture MUST support future:
-
-- agent-specific permissions;
-- explicit delegation from users to agents;
-- task-scoped authorization;
-- revocation independent of the delegating user;
-- agent assignment to specific resources.
+The authorization architecture MUST support future agent-specific permissions, explicit delegation from users to agents, task-scoped authorization, revocation independent of the delegating user, and agent assignment to specific resources.
 
 OPA policy inputs MUST identify principal type and MUST permit future evaluation of agent runtime, security-domain, classification-ceiling, compartment, model-provider, tool-scope, and execution-environment attributes.
 
@@ -2258,38 +2553,21 @@ All audit and CloudEvents contracts MUST identify:
 - delegation/task context when present;
 - correlation and causation identifiers.
 
-The schema MUST allow a future agent action to record both:
-
-```text
-requested_by = user:alice
-```
-
-and:
-
-```text
-actor = agent:backend-agent
-```
-
-without a schema change.
+The schema MUST allow a future action to record `requested_by = user:alice` and `actor = agent:backend-agent` without a schema change.
 
 ## AGENT-005 — Agent integration boundary
 
-Future agents MUST interact with canonical Platform resources through Platform APIs and a platform-wide MCP interface rather than relying directly on provider-specific business APIs.
+Agents MUST interact with canonical Platform resources through Platform APIs and the platform-wide MCP interface rather than relying directly on provider-specific business APIs.
 
-Direct Git protocol operations against the configured SCM provider are permitted using scoped credentials.
+Direct Git protocol operations against the configured SCM provider are permitted using narrowly scoped, short-lived, independently revocable credentials.
 
 The architecture MUST remain compatible with external agent runtimes. The Platform MUST NOT require any particular AI model, agent SDK, orchestration framework, or model provider.
 
-Future interoperability SHOULD use:
-
-- Model Context Protocol (MCP) for agent-to-platform tools and data;
-- Agent2Agent Protocol (A2A) for platform-to-agent and agent-to-agent interoperability.
-
-The future Agent Registry SHOULD use A2A Agent Card semantics where applicable.
+Interoperability SHOULD use MCP for agent-to-platform tools and data and A2A for platform-to-agent and agent-to-agent interoperability. The Agent Registry SHOULD use A2A Agent Card semantics where applicable.
 
 ## AGENT-006 — Classification
 
-Future agent authorization MUST be capable of evaluating the intersection of:
+Agent authorization MUST be capable of evaluating the intersection of:
 
 1. delegating principal authority;
 2. agent-specific authority;
@@ -2298,10 +2576,10 @@ Future agent authorization MUST be capable of evaluating the intersection of:
 5. session/environment restrictions; and
 6. resource security classification and handling requirements.
 
-Phase 0 need only preserve the data and authorization seams necessary to support this future behavior.
+Phase 0 need only preserve the data, model, policy, and test seams necessary to support this future behavior.
 
 ## AGENT-007 — Explicit Phase 0 non-goal
 
-The project MUST NOT build agent orchestration, prompting, model hosting, agent memory, AgentRun execution, A2A dispatch, or the full MCP tool catalog during Phase 0 unless already required by another approved requirement.
+The project MUST NOT build agent orchestration, prompting, model hosting, agent memory, Agent Run execution, A2A dispatch, or the executable full MCP tool catalog during Phase 0 unless another approved requirement explicitly requires the specific capability.
 
-The purpose of this addendum is architectural compatibility, not Phase 0 scope expansion.
+Phase 0 MUST define the Agent, Agent Run, PrincipalRef, assignment, authorization, audit/event, MCP/A2A boundary, and external-runtime compatibility contracts required elsewhere in this directive. Those contract artifacts do not authorize execution.

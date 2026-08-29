@@ -1,0 +1,10 @@
+domain_id: us-government-controlled
+version: "1.0"
+classification_ceiling: SECRET
+allowed_label_profiles: [us_government]
+allowed_integrations: [gitea, approved_federal_oidc, approved_scim, approved_siem]
+allowed_notification_channels: [in_app, approved_siem]
+storage: {providers: [approved_s3_compatible], encryption_profile: federal-managed, residency: [US]}
+backup: {enabled: true, domains: [us-government-backup], encryption_profile: federal-backup-managed}
+runner: {pools: [government-domain-ephemeral], ephemeral: true, allowed_images: [signed_federal_approved]}
+network: {zones: [government_user, government_service, government_runner], egress_policy: deny_all}

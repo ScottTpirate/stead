@@ -1,0 +1,267 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stead.example/specs/owgp/0.1/schema.json",
+  "title": "Stead Open Work Graph Profile 0.1",
+  "$defs": {
+    "UuidV7": {"type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"},
+    "ResourceRef": {
+      "type": "object",
+      "required": ["kind", "id", "uri"],
+      "properties": {
+        "kind": {"enum": ["instance", "organization", "user", "directory_group", "agent", "agent_run", "service_principal", "team", "initiative", "project", "cycle", "work_item", "document", "repository", "branch", "commit", "pull_request", "build", "deployment", "release", "package", "artifact", "attachment", "comment", "activity", "notification", "audit_record", "security_label"]},
+        "id": {"$ref": "#/$defs/UuidV7"},
+        "uri": {"type": "string", "format": "uri"}
+      },
+      "additionalProperties": false
+    },
+    "PrincipalRef": {
+      "type": "object",
+      "required": ["type", "id"],
+      "properties": {
+        "type": {"enum": ["user", "agent", "service_account", "directory_group"]},
+        "id": {"$ref": "#/$defs/UuidV7"}
+      },
+      "additionalProperties": false
+    },
+    "ActingPrincipalRef": {
+      "allOf": [
+        {"$ref": "#/$defs/PrincipalRef"},
+        {"properties": {"type": {"enum": ["user", "agent", "service_account"]}}}
+      ]
+    },
+    "WorkAssigneeRef": {
+      "allOf": [
+        {"$ref": "#/$defs/PrincipalRef"},
+        {"properties": {"type": {"enum": ["user", "agent"]}}}
+      ]
+    },
+    "ContainerRef": {
+      "allOf": [
+        {"$ref": "#/$defs/ResourceRef"},
+        {"properties": {"kind": {"enum": ["organization", "team", "project"]}}}
+      ]
+    },
+    "SecurityLabelFields": {
+      "type": "object",
+      "required": ["profile_id", "sensitivity_level", "version"],
+      "properties": {
+        "profile_id": {"type": "string"},
+        "sensitivity_level": {"type": "string"},
+        "handling_regimes": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "categories": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "compartments": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "dissemination_controls": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "releasable_to": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "originator": {"type": "string"},
+        "export_controls": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "derivation_sources": {"type": "array", "items": {"$ref": "#/$defs/ResourceRef"}},
+        "classification_authority": {"type": "string"},
+        "declassification_or_review_instructions": {"type": "string"},
+        "version": {"type": "integer", "minimum": 1}
+      }
+    },
+    "SecurityLabelValue": {
+      "allOf": [{"$ref": "#/$defs/SecurityLabelFields"}],
+      "unevaluatedProperties": false
+    },
+    "Provenance": {
+      "type": "object",
+      "required": ["created_at", "created_by"],
+      "properties": {
+        "created_at": {"type": "string", "format": "date-time"},
+        "created_by": {"$ref": "#/$defs/ActingPrincipalRef"},
+        "derived_from": {"type": "array", "items": {"$ref": "#/$defs/ResourceRef"}},
+        "source_metadata": {"type": "object", "propertyNames": {"pattern": "^[a-z0-9.-]+/"}}
+      },
+      "additionalProperties": false
+    },
+    "Relationship": {
+      "type": "object",
+      "required": ["type", "from", "to"],
+      "properties": {
+        "type": {"enum": ["parent_of", "owns", "contributes_to", "maintains", "supplies_membership_to", "contains", "links", "specifies", "supersedes", "references", "implemented_by", "blocks", "blocked_by", "duplicates", "duplicated_by", "relates_to", "changes", "addresses", "generated", "produces", "deploys", "derived_from", "attributed_to", "assigned_to", "executes"]},
+        "from": {"$ref": "#/$defs/ResourceRef"},
+        "to": {"$ref": "#/$defs/ResourceRef"}
+      },
+      "additionalProperties": false
+    },
+    "ResourceEnvelope": {
+      "type": "object",
+      "required": ["kind", "id", "uri", "schema_version", "version", "organization_id", "container", "title", "created_at", "created_by", "updated_at", "updated_by", "security_label_id", "effective_security_label", "provenance", "external_references", "relationships"],
+      "properties": {
+        "kind": {"$ref": "#/$defs/ResourceRef/properties/kind"},
+        "id": {"$ref": "#/$defs/UuidV7"},
+        "uri": {"type": "string", "format": "uri"},
+        "schema_version": {"const": "1.0"},
+        "organization_id": {"$ref": "#/$defs/UuidV7"},
+        "container": {"$ref": "#/$defs/ContainerRef"},
+        "project_id": {"$ref": "#/$defs/UuidV7"},
+        "title": {"type": "string", "minLength": 1},
+        "created_at": {"type": "string", "format": "date-time"},
+        "created_by": {"$ref": "#/$defs/ActingPrincipalRef"},
+        "updated_at": {"type": "string", "format": "date-time"},
+        "updated_by": {"$ref": "#/$defs/ActingPrincipalRef"},
+        "security_label_id": {"$ref": "#/$defs/UuidV7"},
+        "version": {"type": "integer", "minimum": 1},
+        "effective_security_label": {"$ref": "#/$defs/SecurityLabelValue"},
+        "provenance": {"$ref": "#/$defs/Provenance"},
+        "relationships": {"type": "array", "items": {"$ref": "#/$defs/Relationship"}},
+        "external_references": {"type": "array", "items": {"type": "object", "required": ["provider", "external_id"], "properties": {"provider": {"type": "string"}, "external_id": {"type": "string"}}, "additionalProperties": false}}
+      }
+    },
+    "SecurityLabel": {
+      "allOf": [
+        {"$ref": "#/$defs/ResourceEnvelope"},
+        {"$ref": "#/$defs/SecurityLabelFields"},
+        {"properties": {"kind": {"const": "security_label"}}}
+      ],
+      "unevaluatedProperties": false
+    },
+    "Instance": {
+      "allOf": [{"$ref": "#/$defs/ResourceEnvelope"}, {"type": "object", "required": ["name"], "properties": {"kind": {"const": "instance"}, "name": {"type": "string", "minLength": 1}}}],
+      "unevaluatedProperties": false
+    },
+    "Organization": {
+      "allOf": [{"$ref": "#/$defs/ResourceEnvelope"}, {"type": "object", "required": ["key", "name"], "properties": {"kind": {"const": "organization"}, "key": {"type": "string"}, "name": {"type": "string"}}}],
+      "unevaluatedProperties": false
+    },
+    "User": {
+      "allOf": [{"$ref": "#/$defs/ResourceEnvelope"}, {"type": "object", "required": ["display_name", "status"], "properties": {"kind": {"const": "user"}, "display_name": {"type": "string"}, "status": {"enum": ["active", "suspended", "deprovisioned"]}, "external_identity_refs": {"type": "array", "items": {"type": "string"}, "uniqueItems": true}}}],
+      "unevaluatedProperties": false
+    },
+    "DirectoryGroup": {
+      "allOf": [{"$ref": "#/$defs/ResourceEnvelope"}, {"type": "object", "required": ["display_name", "source"], "properties": {"kind": {"const": "directory_group"}, "display_name": {"type": "string"}, "source": {"type": "string"}, "external_group_id": {"type": "string"}}}],
+      "unevaluatedProperties": false
+    },
+    "ServicePrincipal": {
+      "allOf": [{"$ref": "#/$defs/ResourceEnvelope"}, {"type": "object", "required": ["display_name", "status", "credential_revision"], "properties": {"kind": {"const": "service_principal"}, "display_name": {"type": "string"}, "status": {"enum": ["active", "disabled", "revoked"]}, "credential_revision": {"type": "string"}}}],
+      "unevaluatedProperties": false
+    },
+    "Team": {
+      "allOf": [{"$ref": "#/$defs/ResourceEnvelope"}, {"type": "object", "required": ["key", "name", "hierarchy_depth"], "properties": {"kind": {"const": "team"}, "key": {"type": "string"}, "name": {"type": "string"}, "parent_team_id": {"$ref": "#/$defs/UuidV7"}, "hierarchy_depth": {"type": "integer", "minimum": 0, "maximum": 11}}}],
+      "unevaluatedProperties": false
+    },
+    "ProjectCapabilitySet": {
+      "type": "object",
+      "required": ["preset", "active"],
+      "properties": {
+        "preset": {"enum": ["general", "software", "controlled_knowledge"]},
+        "active": {"type": "array", "items": {"enum": ["work", "docs", "scm", "code_review", "ci", "packages", "releases", "deployments"]}, "contains": {"const": "work"}, "uniqueItems": true}
+      },
+      "allOf": [
+        {"properties": {"active": {"contains": {"const": "docs"}}}},
+        {
+          "if": {"properties": {"active": {"contains": {"const": "code_review"}}}},
+          "then": {"properties": {"active": {"contains": {"const": "scm"}}}}
+        },
+        {
+          "if": {"properties": {"active": {"contains": {"const": "ci"}}}},
+          "then": {"properties": {"active": {"contains": {"const": "scm"}}}}
+        }
+      ],
+      "additionalProperties": false
+    },
+    "Project": {
+      "allOf": [{"$ref": "#/$defs/ResourceEnvelope"}, {"type": "object", "required": ["key", "title", "purpose", "owning_team_id", "contributing_team_ids", "capabilities", "lifecycle_state", "start_date", "target_date"], "properties": {"kind": {"const": "project"}, "key": {"type": "string", "pattern": "^[A-Z][A-Z0-9]{1,9}$"}, "title": {"type": "string"}, "purpose": {"type": "string"}, "owning_team_id": {"$ref": "#/$defs/UuidV7"}, "contributing_team_ids": {"type": "array", "items": {"$ref": "#/$defs/UuidV7"}, "uniqueItems": true}, "capabilities": {"$ref": "#/$defs/ProjectCapabilitySet"}, "lifecycle_state": {"enum": ["planned", "active", "paused", "completed", "canceled"]}, "start_date": {"type": ["string", "null"], "format": "date"}, "target_date": {"type": ["string", "null"], "format": "date"}, "archived_at": {"type": "string", "format": "date-time"}, "archived_by": {"$ref": "#/$defs/ActingPrincipalRef"}}}],
+      "unevaluatedProperties": false
+    },
+    "Initiative": {
+      "allOf": [{"$ref": "#/$defs/ResourceEnvelope"}, {"type": "object", "required": ["state", "project_ids"], "properties": {"kind": {"const": "initiative"}, "state": {"enum": ["planned", "active", "completed", "canceled"]}, "project_ids": {"type": "array", "items": {"$ref": "#/$defs/UuidV7"}, "uniqueItems": true}}}],
+      "unevaluatedProperties": false
+    },
+    "Cycle": {
+      "allOf": [{"$ref": "#/$defs/ResourceEnvelope"}, {"type": "object", "required": ["project_id", "starts_at", "ends_at"], "properties": {"kind": {"const": "cycle"}, "project_id": {"$ref": "#/$defs/UuidV7"}, "starts_at": {"type": "string", "format": "date-time"}, "ends_at": {"type": "string", "format": "date-time"}}}],
+      "unevaluatedProperties": false
+    },
+    "WorkItem": {
+      "allOf": [{"$ref": "#/$defs/ResourceEnvelope"}, {"type": "object", "required": ["project_id", "key", "title", "body", "work_type", "status", "priority", "assignees"], "properties": {"kind": {"const": "work_item"}, "project_id": {"$ref": "#/$defs/UuidV7"}, "key": {"type": "string", "pattern": "^[A-Z][A-Z0-9]{1,9}-[1-9][0-9]*$"}, "title": {"type": "string"}, "body": {"type": "string"}, "work_type": {"enum": ["deliverable", "task", "problem"]}, "status": {"enum": ["backlog", "todo", "in_progress", "blocked", "done", "canceled"]}, "priority": {"enum": ["none", "low", "medium", "high", "urgent"]}, "estimate": {"enum": [1, 2, 3, 5, 8]}, "parent_id": {"$ref": "#/$defs/UuidV7"}, "nesting_depth": {"type": "integer", "minimum": 0, "maximum": 2}, "assignees": {"type": "array", "items": {"$ref": "#/$defs/WorkAssigneeRef"}}, "responsible_team_id": {"$ref": "#/$defs/UuidV7"}}}],
+      "unevaluatedProperties": false
+    },
+    "Document": {
+      "allOf": [{"$ref": "#/$defs/ResourceEnvelope"}, {"type": "object", "required": ["container", "title", "document_type", "state", "okf_id", "git_revision", "body"], "properties": {"kind": {"const": "document"}, "container": {"$ref": "#/$defs/ContainerRef"}, "title": {"type": "string"}, "body": {"type": "string"}, "document_type": {"enum": ["page", "specification", "decision", "procedure", "policy"]}, "state": {"enum": ["draft", "in_review", "approved", "superseded", "archived"]}, "okf_id": {"type": "string"}, "git_revision": {"type": "string", "pattern": "^[0-9a-f]{40,64}$"}, "path": {"type": "string"}, "reviewers": {"type": "array", "items": {"$ref": "#/$defs/ActingPrincipalRef"}}, "approved_at": {"type": "string", "format": "date-time"}, "approved_by": {"$ref": "#/$defs/ActingPrincipalRef"}, "supersedes_document_id": {"$ref": "#/$defs/UuidV7"}}}],
+      "unevaluatedProperties": false
+    },
+    "Repository": {
+      "allOf": [{"$ref": "#/$defs/ResourceEnvelope"}, {"type": "object", "required": ["container", "purpose", "default_branch"], "properties": {"kind": {"const": "repository"}, "container": {"$ref": "#/$defs/ContainerRef"}, "purpose": {"enum": ["tracker", "code", "docs"]}, "default_branch": {"type": "string"}}}],
+      "unevaluatedProperties": false
+    },
+    "Branch": {
+      "allOf": [{"$ref": "#/$defs/ResourceEnvelope"}, {"type": "object", "required": ["repository_id", "name", "head_commit_id", "protected"], "properties": {"kind": {"const": "branch"}, "repository_id": {"$ref": "#/$defs/UuidV7"}, "name": {"type": "string"}, "head_commit_id": {"$ref": "#/$defs/UuidV7"}, "protected": {"type": "boolean"}}}],
+      "unevaluatedProperties": false
+    },
+    "Commit": {
+      "allOf": [{"$ref": "#/$defs/ResourceEnvelope"}, {"type": "object", "required": ["repository_id", "sha", "message", "authored_by", "authored_at"], "properties": {"kind": {"const": "commit"}, "repository_id": {"$ref": "#/$defs/UuidV7"}, "sha": {"type": "string", "pattern": "^[0-9a-f]{40,64}$"}, "message": {"type": "string"}, "authored_by": {"$ref": "#/$defs/ActingPrincipalRef"}, "authored_at": {"type": "string", "format": "date-time"}, "parent_shas": {"type": "array", "items": {"type": "string", "pattern": "^[0-9a-f]{40,64}$"}}}}],
+      "unevaluatedProperties": false
+    },
+    "PullRequest": {
+      "allOf": [{"$ref": "#/$defs/ResourceEnvelope"}, {"type": "object", "required": ["repository_id", "source_branch", "target_branch", "state", "author"], "properties": {"kind": {"const": "pull_request"}, "repository_id": {"$ref": "#/$defs/UuidV7"}, "source_branch": {"type": "string"}, "target_branch": {"type": "string"}, "state": {"enum": ["open", "merged", "closed", "draft"]}, "author": {"$ref": "#/$defs/ActingPrincipalRef"}, "reviewers": {"type": "array", "items": {"$ref": "#/$defs/ActingPrincipalRef"}}}}],
+      "unevaluatedProperties": false
+    },
+    "Build": {
+      "allOf": [{"$ref": "#/$defs/ResourceEnvelope"}, {"type": "object", "required": ["project_id", "state", "source_revision"], "properties": {"kind": {"const": "build"}, "project_id": {"$ref": "#/$defs/UuidV7"}, "repository_id": {"$ref": "#/$defs/UuidV7"}, "state": {"enum": ["queued", "running", "succeeded", "failed", "canceled"]}, "source_revision": {"type": "string"}}}],
+      "unevaluatedProperties": false
+    },
+    "Deployment": {
+      "allOf": [{"$ref": "#/$defs/ResourceEnvelope"}, {"type": "object", "required": ["project_id", "environment", "state", "artifact_ids"], "properties": {"kind": {"const": "deployment"}, "project_id": {"$ref": "#/$defs/UuidV7"}, "environment": {"type": "string"}, "state": {"enum": ["pending", "running", "succeeded", "failed", "rolled_back"]}, "artifact_ids": {"type": "array", "items": {"$ref": "#/$defs/UuidV7"}}}}],
+      "unevaluatedProperties": false
+    },
+    "Release": {
+      "allOf": [{"$ref": "#/$defs/ResourceEnvelope"}, {"type": "object", "required": ["project_id", "version_label", "state", "artifact_ids"], "properties": {"kind": {"const": "release"}, "project_id": {"$ref": "#/$defs/UuidV7"}, "version_label": {"type": "string"}, "state": {"enum": ["draft", "approved", "published", "withdrawn"]}, "artifact_ids": {"type": "array", "items": {"$ref": "#/$defs/UuidV7"}}, "approved_by": {"type": "array", "items": {"$ref": "#/$defs/ActingPrincipalRef"}}}}],
+      "unevaluatedProperties": false
+    },
+    "Package": {
+      "allOf": [{"$ref": "#/$defs/ResourceEnvelope"}, {"type": "object", "required": ["project_id", "package_type", "name", "version_label"], "properties": {"kind": {"const": "package"}, "project_id": {"$ref": "#/$defs/UuidV7"}, "package_type": {"type": "string"}, "name": {"type": "string"}, "version_label": {"type": "string"}}}],
+      "unevaluatedProperties": false
+    },
+    "Artifact": {
+      "allOf": [{"$ref": "#/$defs/ResourceEnvelope"}, {"type": "object", "required": ["media_type", "digest", "size_bytes"], "properties": {"kind": {"const": "artifact"}, "media_type": {"type": "string"}, "digest": {"type": "string"}, "size_bytes": {"type": "integer", "minimum": 0}, "storage_ref": {"type": "string"}}}],
+      "unevaluatedProperties": false
+    },
+    "Attachment": {
+      "allOf": [{"$ref": "#/$defs/ResourceEnvelope"}, {"type": "object", "required": ["subject", "filename", "media_type", "digest", "size_bytes"], "properties": {"kind": {"const": "attachment"}, "subject": {"$ref": "#/$defs/ResourceRef"}, "filename": {"type": "string"}, "media_type": {"type": "string"}, "digest": {"type": "string"}, "size_bytes": {"type": "integer", "minimum": 0}, "storage_ref": {"type": "string"}}}],
+      "unevaluatedProperties": false
+    },
+    "Agent": {
+      "allOf": [{"$ref": "#/$defs/ResourceEnvelope"}, {"type": "object", "required": ["display_name", "status", "external_runtime_ref"], "properties": {"kind": {"const": "agent"}, "display_name": {"type": "string"}, "status": {"enum": ["registered", "disabled", "revoked"]}, "external_runtime_ref": {"type": "string"}, "a2a_card_uri": {"type": "string", "format": "uri"}, "authority_revision": {"type": "string"}}}],
+      "unevaluatedProperties": false
+    },
+    "AgentRun": {
+      "allOf": [{"$ref": "#/$defs/ResourceEnvelope"}, {"type": "object", "required": ["agent_id", "work_item_id", "requested_by", "state", "task_context_id", "correlation_id", "causation_id"], "properties": {"kind": {"const": "agent_run"}, "agent_id": {"$ref": "#/$defs/UuidV7"}, "work_item_id": {"$ref": "#/$defs/UuidV7"}, "requested_by": {"$ref": "#/$defs/ActingPrincipalRef"}, "delegation_id": {"type": "string"}, "task_context_id": {"type": "string"}, "state": {"enum": ["requested", "accepted", "running", "succeeded", "failed", "canceled", "revoked"]}, "external_runtime_ref": {"type": "string"}, "correlation_id": {"type": "string"}, "causation_id": {"type": "string"}}}],
+      "unevaluatedProperties": false
+    },
+    "Comment": {
+      "allOf": [{"$ref": "#/$defs/ResourceEnvelope"}, {"type": "object", "required": ["subject", "author", "body_format", "body"], "properties": {"kind": {"const": "comment"}, "subject": {"$ref": "#/$defs/ResourceRef"}, "author": {"$ref": "#/$defs/ActingPrincipalRef"}, "body_format": {"const": "markdown"}, "body": {"type": "string"}}}],
+      "unevaluatedProperties": false
+    },
+    "ActorContext": {
+      "type": "object",
+      "required": ["actor", "correlation_id", "causation_id"],
+      "properties": {"actor": {"$ref": "#/$defs/ActingPrincipalRef"}, "requested_by": {"$ref": "#/$defs/ActingPrincipalRef"}, "delegation_id": {"type": "string"}, "task_context_id": {"type": "string"}, "correlation_id": {"type": "string"}, "causation_id": {"type": "string"}},
+      "additionalProperties": false
+    },
+    "Activity": {
+      "allOf": [{"$ref": "#/$defs/ResourceEnvelope"}, {"type": "object", "required": ["subject", "verb", "actor_context", "occurred_at"], "properties": {"kind": {"const": "activity"}, "subject": {"$ref": "#/$defs/ResourceRef"}, "verb": {"type": "string"}, "actor_context": {"$ref": "#/$defs/ActorContext"}, "occurred_at": {"type": "string", "format": "date-time"}}}],
+      "unevaluatedProperties": false
+    },
+    "Notification": {
+      "allOf": [{"$ref": "#/$defs/ResourceEnvelope"}, {"type": "object", "required": ["recipient", "subject", "source_event_id", "actor_context", "thread_key", "reason", "state"], "properties": {"kind": {"const": "notification"}, "recipient": {"$ref": "#/$defs/PrincipalRef"}, "subject": {"$ref": "#/$defs/ResourceRef"}, "source_event_id": {"type": "string"}, "actor_context": {"$ref": "#/$defs/ActorContext"}, "thread_key": {"type": "string"}, "reason": {"type": "string"}, "state": {"enum": ["unread", "read", "archived"]}, "redaction": {"enum": ["none", "metadata_only", "suppressed"]}}}],
+      "unevaluatedProperties": false
+    },
+    "AuditRecord": {
+      "allOf": [{"$ref": "#/$defs/ResourceEnvelope"}, {"type": "object", "required": ["action", "subject", "actor_context", "decision", "authorization_context", "request_id", "origin", "outcome", "occurred_at"], "properties": {"kind": {"const": "audit_record"}, "action": {"type": "string"}, "subject": {"$ref": "#/$defs/ResourceRef"}, "actor_context": {"$ref": "#/$defs/ActorContext"}, "decision": {"enum": ["allow", "deny", "not_applicable"]}, "authorization_context": {"type": "object", "required": ["relationship", "action"], "properties": {"relationship": {"type": "string"}, "action": {"type": "string"}, "reason_codes": {"type": "array", "items": {"type": "string"}}}, "additionalProperties": false}, "authorization_model_id": {"type": "string"}, "policy_bundle_id": {"type": "string"}, "request_id": {"type": "string"}, "source_ip": {"type": "string"}, "network_zone": {"type": "string"}, "device_id": {"type": "string"}, "origin": {"type": "object", "required": ["service"], "properties": {"service": {"type": "string"}, "provider": {"type": "string"}}, "additionalProperties": false}, "outcome": {"enum": ["success", "failure", "denied"]}, "occurred_at": {"type": "string", "format": "date-time"}, "before_hash": {"type": "string"}, "after_hash": {"type": "string"}}}],
+      "unevaluatedProperties": false
+    }
+  },
+  "oneOf": [
+    {"$ref": "#/$defs/Instance"}, {"$ref": "#/$defs/Organization"}, {"$ref": "#/$defs/User"},
+    {"$ref": "#/$defs/DirectoryGroup"}, {"$ref": "#/$defs/Agent"}, {"$ref": "#/$defs/AgentRun"},
+    {"$ref": "#/$defs/ServicePrincipal"}, {"$ref": "#/$defs/Team"}, {"$ref": "#/$defs/Initiative"},
+    {"$ref": "#/$defs/Project"}, {"$ref": "#/$defs/Cycle"}, {"$ref": "#/$defs/WorkItem"},
+    {"$ref": "#/$defs/Document"}, {"$ref": "#/$defs/Repository"}, {"$ref": "#/$defs/Branch"},
+    {"$ref": "#/$defs/Commit"}, {"$ref": "#/$defs/PullRequest"}, {"$ref": "#/$defs/Build"},
+    {"$ref": "#/$defs/Deployment"}, {"$ref": "#/$defs/Release"}, {"$ref": "#/$defs/Package"},
+    {"$ref": "#/$defs/Artifact"}, {"$ref": "#/$defs/Attachment"}, {"$ref": "#/$defs/Comment"},
+    {"$ref": "#/$defs/Activity"}, {"$ref": "#/$defs/Notification"}, {"$ref": "#/$defs/AuditRecord"},
+    {"$ref": "#/$defs/SecurityLabel"}
+  ]
+}

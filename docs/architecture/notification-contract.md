@@ -1,0 +1,3 @@
+# Notification contract
+
+Inbox notifications are canonical, reasoned, threaded, classification-aware projections. Each record carries its source event ID, actor context, stable thread key, canonical recipient/subject/reason/state, and redaction state. Reads and external deliveries reauthorize the subject; a denied resource contributes no entry, unread count, reason, thread membership, or channel payload. Email/webhook channels require explicit domain/label policy and redact or suppress protected content. Delivery attempts, redaction decisions, and failures are audited without bodies or secrets.

@@ -2,12 +2,12 @@
 
 | Field | Value |
 |---|---|
-| Status | Draft Phase 0 contract; approval required before feature implementation |
+| Status | Reconciled Phase 0 approval candidate; executable controls remain later-phase work |
 | Primary owner | Workstream 13 — QA/security/release |
 | Required reviewers | Workstream 1 — Architecture/standards; Workstream 6 — Identity/authorization/classification; affected provider/module owner |
 | Final approval | Independent security approver and project owner |
 | Review triggers | New trust boundary, provider, public contract, credential type, security-label profile, deployment profile, migration source, release process, or material threat; any security incident |
-| Normative requirements | PRIN-002, PRIN-004, PRIN-005, PRIN-007, PRIN-011, PRIN-012; ARCH-003–005; DOM-007; AUTH-001–005; CLS-001–008; EVT-001–004; AUD-001–002; SRCH-003; GRAPH-001–002; STOR-002–003; CICD-002–005; MIG-001–005; DEP-004–005; OPS-001–004; SEC-002–006; TEST-002–009; AGENT-001–007 |
+| Normative requirements | PRIN-002, PRIN-004, PRIN-005, PRIN-007, PRIN-011–015; ARCH-003–005; DOM-007–011; UX-006–009; AUTH-001–006; CLS-001–008; EVT-001–004; AUD-001–002; SRCH-003; GRAPH-001–002; STOR-002–003; CICD-002–005; MIG-001–005; DEP-004–005; OPS-001–004; SEC-002–006; TEST-002–010; AGENT-001–007 |
 
 This document is the initial threat-model contract required by Phase 0. It does not assert that a control is implemented. Every finding ID below must be represented by a tracked issue and linked from the machine-readable [`security-findings.yaml`](../../specs/traceability/security-findings.yaml) register before its status can change. That register is linked from the requirements-to-tests matrix. A finding is closed only by evidence from the named tests and an independent security review.
 
@@ -29,6 +29,9 @@ The following constraints are inherited unchanged from the master build directiv
 12. An agent obtains no broad copy of a user’s permissions. A future allow is bounded by the intersection of delegating-principal authority, agent-specific authority, explicit task scope, runtime security-domain authorization, session/execution-environment restrictions, and resource classification/handling policy; agent/task revocation is independent of user revocation.
 13. A future agent uses canonical Platform APIs and the platform-wide MCP boundary. Only direct Git protocol operations may reach the SCM provider, using separately scoped credentials. External runtimes, models, SDKs, providers and tools are untrusted integration boundaries, not required platform components.
 14. Audit and CloudEvents preserve both `requested_by` and `actor`, principal type, delegation/task context, correlation and causation without a future schema break.
+15. Team hierarchy and Project ownership/contribution express organization/accountability only; they create no authorization relation.
+16. Missing, inactive, or unauthorized Project capabilities and their counts/navigation/routes are protected metadata and remain absent.
+17. Organization-, Team-, and Project-scoped knowledge uses explicit container authorization and separate Git security boundaries where needed.
 
 ## Scope and assumptions
 
@@ -197,6 +200,11 @@ Severity expresses the worst credible impact before implementation controls. `OP
 | TM-F026 | E, I, T | External agent runtime, model provider, SDK, tool server or execution environment is trusted implicitly, lies about domain/ceiling/compartments/tool scope, or exfiltrates protected data | Treat runtime context as trusted-source policy inputs with provenance; provider/tool allowlists; canonical API/MCP boundary; least response data; no required model/provider; deny unverifiable context | WS-06 with WS-08/13 | Critical | OPEN-P0 |
 | TM-F027 | R, S | Event/audit schemas conflate initiating user with acting agent, preventing attribution or hiding delegation misuse | Schema fields for actor, principal type, requested-by/initiator, delegation/task, correlation and causation; immutable tests using different requester/actor | WS-07 Events/activity/inbox/audit with WS-01/06/13 | High | OPEN-P0 |
 | TM-F028 | E, I | An agent bypasses canonical policy through provider business APIs or receives overbroad direct Git credentials | Prohibit provider-specific business API access; Platform API/MCP only; allow direct Git protocol solely with resource/domain/task-scoped credential; revocation and non-enumeration tests | WS-08 with WS-03/06/13 | Critical | OPEN-P0 |
+| TM-F029 | E, I | Team parentage or Project owning/contributing Team is mistakenly treated as authorization inheritance | Keep hierarchy/accountability relations separate in schema and OpenFGA; no computed parent viewer/member; explicit tuple required; hierarchy model/E2E tests | WS-06 with WS-01/02/13 | Critical | OPEN-P0 |
+| TM-F030 | I | Disabled or unauthorized capabilities leak through tabs, routes, commands, counts, suggestions, notifications, or relationship summaries | Server-derived capability+authorization response; absent metadata rather than disabled shell; route and aggregate non-disclosure tests | WS-05/08 with WS-06/13 | High | OPEN-P0 |
+| TM-F031 | E, I | Organization/Team knowledge container is mis-bound to a Project or shared Git repository, granting unintended clone/search/export access | Exactly-one canonical container; repository is security boundary; separate repos for different policy; import/search/export container tests | WS-04 with WS-01/06/13 | Critical | OPEN-P0 |
+| TM-F032 | T, E, I | Devlane routes or software-specific ontology become canonical API/security assumptions, bypassing capability and general-work controls | Platform OpenAPI/OWGP only; static route/provider boundary tests; general-project golden test; ontology terms rejected | WS-01/05 with WS-06/13 | High | OPEN-P0 |
+| TM-F033 | E, I | Agent/AgentRun Phase 0 schemas are used to smuggle an executor, dispatch, prompt/model integration, or tool catalog into the trusted platform | Contract-only directories and dependency guard; repository inventory; no executable endpoints/services/dependencies; future approved issue and threat review required | WS-01/08/13 | High | OPEN-P0 |
 
 ### Finding-to-issue tracking
 
@@ -232,6 +240,11 @@ Every finding is a tracked child requirement of `STEAD-P0-014` (threat/test/rele
 | `TM-F026` | `STEAD-P0-007`, `STEAD-P0-009`, `STEAD-P0-013`–`015` | Compatibility seam only; executable runtime/model/tool integration requires a new approved future issue |
 | `TM-F027` | `STEAD-P0-008`, `STEAD-P0-014`, `STEAD-P0-015` | `STEAD-P1-007`, `STEAD-P1-012`; executable agent behavior requires a new approved future issue |
 | `TM-F028` | `STEAD-P0-004`, `STEAD-P0-007`, `STEAD-P0-009`, `STEAD-P0-014`, `STEAD-P0-015` | `STEAD-P2-001`, `STEAD-P2-006`, `STEAD-P2-011`; executable agent behavior requires a new approved future issue |
+| `TM-F029` | `STEAD-P0-002`, `STEAD-P0-003`, `STEAD-P0-007`, `STEAD-P0-014` | `STEAD-P1-002`, `STEAD-P1-006`, `STEAD-P1-012` |
+| `TM-F030` | `STEAD-P0-006`, `STEAD-P0-007`, `STEAD-P0-009`, `STEAD-P0-014` | `STEAD-P1-005`, `STEAD-P1-008`, `STEAD-P1-012` |
+| `TM-F031` | `STEAD-P0-002`, `STEAD-P0-005`, `STEAD-P0-007`, `STEAD-P0-014` | `STEAD-P1-002`, `STEAD-P1-004`, `STEAD-P1-012` |
+| `TM-F032` | `STEAD-P0-001`, `STEAD-P0-006`, `STEAD-P0-014` | `STEAD-P1-001`, `STEAD-P1-005`, `STEAD-P1-012` |
+| `TM-F033` | `STEAD-P0-001`, `STEAD-P0-009`, `STEAD-P0-014`, `STEAD-P0-015` | Future separately approved agent-execution issue only |
 
 ### Threat-family coverage summary
 
@@ -291,7 +304,7 @@ Before Phase 0 approval, tests may be specifications rather than executable code
 - runner pool, cache, credential and artifact cross-domain negative tests;
 - wrong-domain backup/restore and cross-domain export denials;
 - release artifact substitution, signing and offline verification tests.
-- principal-schema tests proving actor/assignee/creator/reviewer/subscriber/requester accept `user`, `agent` and `service_account` without treating them as interchangeable;
+- principal-schema tests proving acting/requesting contexts accept `user`, `agent`, and `service_account` where applicable, Work assignment accepts exactly `user` or `agent`, and no principal kinds are treated as interchangeable;
 - OpenFGA/OPA future-compatibility vectors for explicit delegation, task/resource scope, independent revocation, no broad human inheritance, and runtime domain/ceiling/compartment/model-provider/tool-scope/execution-environment inputs;
 - event/audit schema vectors with `requested_by = user:alice` and `actor = agent:backend-agent`, principal type, delegation/task, correlation and causation;
 - API/MCP and direct-Git negative contracts showing an agent cannot call provider business APIs, exceed task scope, reuse a revoked delegation, or use a Git credential outside its exact repository/domain/task.

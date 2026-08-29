@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stead.example/policies/security-label-profile/0.1",
+  "type": "object",
+  "required": ["profile_id", "version", "sensitivity_order", "handling_regimes", "allowed_categories", "allowed_compartments", "dissemination_controls", "releasability_groups", "export_controls", "join", "lowering", "two_person_lowering", "bundle_signing"],
+  "properties": {
+    "profile_id": {"type": "string"},
+    "version": {"type": "string"},
+    "sensitivity_order": {"type": "array", "items": {"type": "string"}, "minItems": 1, "uniqueItems": true},
+    "handling_regimes": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "allowed_categories": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "subcategories"],
+        "properties": {
+          "id": {"type": "string"},
+          "subcategories": {"type": "array", "items": {"type": "string"}, "uniqueItems": true}
+        },
+        "additionalProperties": false
+      }
+    },
+    "allowed_compartments": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "dissemination_controls": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "releasability_groups": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "export_controls": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "rule"],
+        "properties": {"id": {"type": "string"}, "rule": {"type": "string", "minLength": 1}},
+        "additionalProperties": false
+      }
+    },
+    "join": {"const": "least_upper_bound_plus_union_of_handling_restrictions"},
+    "lowering": {"const": "deny_by_default_authorized_reasoned_audited"},
+    "two_person_lowering": {"type": "boolean"},
+    "bundle_signing": {
+      "type": "object",
+      "required": ["required", "format", "materialization_gate"],
+      "properties": {
+        "required": {"const": true},
+        "format": {"const": "sigstore-bundle"},
+        "materialization_gate": {"const": "RG-08-SECURITY"}
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

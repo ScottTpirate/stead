@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stead.example/specs/migration/job/0.1",
+  "type": "object",
+  "required": ["job_id", "schema_version", "source", "target_organization_id", "stage", "checkpoint", "inventory", "mapping", "quarantine", "validation", "cutover", "redirects"],
+  "properties": {
+    "job_id": {"$ref": "../work-graph-profile/owgp-v0.1.schema.json#/$defs/UuidV7"},
+    "schema_version": {"const": "0.1"},
+    "source": {"type": "object", "required": ["provider", "instance_ref", "snapshot_or_cursor"], "properties": {"provider": {"type": "string"}, "instance_ref": {"type": "string"}, "snapshot_or_cursor": {"type": "string"}}, "additionalProperties": false},
+    "target_organization_id": {"$ref": "../work-graph-profile/owgp-v0.1.schema.json#/$defs/UuidV7"},
+    "stage": {"enum": ["discover", "analyze", "map", "dry_run", "import", "validate", "delta_sync", "cutover", "finalize"]},
+    "checkpoint": {"type": "object", "required": ["stage", "cursor", "source_revision", "mapping_revision", "updated_at"], "properties": {"stage": {"enum": ["discover", "analyze", "map", "dry_run", "import", "validate", "delta_sync", "cutover", "finalize"]}, "cursor": {"type": "string"}, "source_revision": {"type": "string"}, "mapping_revision": {"type": "string"}, "updated_at": {"type": "string", "format": "date-time"}}, "additionalProperties": false},
+    "inventory": {"type": "array", "items": {"type": "object", "required": ["source_type", "count", "digest"], "properties": {"source_type": {"type": "string"}, "count": {"type": "integer", "minimum": 0}, "digest": {"type": "string"}}, "additionalProperties": false}},
+    "mapping": {"type": "array", "items": {"type": "object", "required": ["source_type", "target_kind", "mapping_revision", "loss_policy"], "properties": {"source_type": {"type": "string"}, "target_kind": {"$ref": "../work-graph-profile/owgp-v0.1.schema.json#/$defs/ResourceRef/properties/kind"}, "mapping_revision": {"type": "string"}, "loss_policy": {"enum": ["exact", "namespaced_source_metadata", "quarantine"]}}, "additionalProperties": false}},
+    "quarantine": {"type": "array", "items": {"type": "object", "required": ["source_id", "reason", "safe_hash"], "properties": {"source_id": {"type": "string"}, "reason": {"type": "string"}, "safe_hash": {"type": "string"}}, "additionalProperties": false}},
+    "validation": {"type": "object", "required": ["expected_counts", "actual_counts", "hashes_match", "labels_not_lowered", "relationships_complete", "provenance_complete", "authorization_non_regression"], "properties": {"expected_counts": {"type": "object"}, "actual_counts": {"type": "object"}, "hashes_match": {"type": "boolean"}, "labels_not_lowered": {"type": "boolean"}, "relationships_complete": {"type": "boolean"}, "provenance_complete": {"type": "boolean"}, "authorization_non_regression": {"type": "boolean"}}, "additionalProperties": false},
+    "cutover": {"type": "object", "required": ["state", "delta_cursor", "approved_by", "completed_at"], "properties": {"state": {"enum": ["not_ready", "ready", "in_progress", "complete", "reconciling"]}, "delta_cursor": {"type": "string"}, "approved_by": {"type": "array", "items": {"$ref": "../work-graph-profile/owgp-v0.1.schema.json#/$defs/ActingPrincipalRef"}}, "completed_at": {"type": ["string", "null"], "format": "date-time"}}, "additionalProperties": false},
+    "redirects": {"type": "array", "items": {"type": "object", "required": ["source_url", "canonical_uri", "status"], "properties": {"source_url": {"type": "string", "format": "uri"}, "canonical_uri": {"type": "string", "format": "uri"}, "status": {"enum": ["planned", "active", "failed"]}}, "additionalProperties": false}}
+  },
+  "additionalProperties": false
+}

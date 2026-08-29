@@ -1,0 +1,20 @@
+profile_id: us_government
+version: "1.0"
+sensitivity_order: [UNCLASSIFIED, CONFIDENTIAL, SECRET, TOP_SECRET]
+handling_regimes: [CUI_BASIC, CUI_SPECIFIED, export_control]
+allowed_categories:
+  - {id: CUI_CRITICAL_INFRASTRUCTURE, subcategories: [chemical_terrorism_vulnerability_information, critical_energy_infrastructure_information]}
+  - {id: CUI_DEFENSE, subcategories: [controlled_technical_information, naval_nuclear_propulsion_information, unclassified_controlled_nuclear_information_defense]}
+  - {id: CUI_EXPORT_CONTROL, subcategories: [export_controlled, export_controlled_research]}
+  - {id: CUI_PRIVACY, subcategories: [general_privacy, health_information, personnel_records]}
+  - {id: CUI_PROCUREMENT, subcategories: [general_procurement_and_acquisition, source_selection]}
+allowed_compartments: [program, mission, contract, special_access_boundary]
+dissemination_controls: [NOFORN, FEDCON, FEDONLY, NOCON, DL_ONLY]
+releasability_groups: [USA, FVEY, named_foreign_governments]
+export_controls:
+  - {id: EAR, rule: "Validate citizenship, destination, end use, license, and technical-data restrictions."}
+  - {id: ITAR, rule: "Validate US-person status, registration, license or exemption, destination, and technical-data restrictions."}
+join: least_upper_bound_plus_union_of_handling_restrictions
+lowering: deny_by_default_authorized_reasoned_audited
+two_person_lowering: true
+bundle_signing: {required: true, format: sigstore-bundle, materialization_gate: RG-08-SECURITY}

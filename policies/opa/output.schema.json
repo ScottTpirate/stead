@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stead.example/policies/opa/output/0.1",
+  "title": "Stead policy decision",
+  "type": "object",
+  "required": ["allow", "decision_id", "policy_bundle_id", "reason_codes", "obligations", "cache"],
+  "properties": {
+    "allow": {"type": "boolean"},
+    "decision_id": {"type": "string"},
+    "policy_bundle_id": {"type": "string"},
+    "reason_codes": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+    "obligations": {"type": "array", "items": {"enum": ["display_marking", "watermark_export", "redact_notification", "audit_access", "require_two_person_approval", "disable_download"]}, "uniqueItems": true},
+    "cache": {"type": "object", "required": ["permitted", "max_age_seconds", "invalidation_keys"], "properties": {"permitted": {"type": "boolean"}, "max_age_seconds": {"type": "integer", "minimum": 0}, "invalidation_keys": {"type": "array", "items": {"type": "string"}}}, "additionalProperties": false}
+  },
+  "additionalProperties": false
+}

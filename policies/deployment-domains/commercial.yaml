@@ -1,0 +1,10 @@
+domain_id: commercial-default
+version: "1.0"
+classification_ceiling: restricted
+allowed_label_profiles: [commercial]
+allowed_integrations: [gitea, oidc, scim, smtp, approved_webhook]
+allowed_notification_channels: [in_app, email, approved_webhook]
+storage: {providers: [filesystem, s3, azure, gcs], encryption_profile: commercial-managed, residency: [configured_regions]}
+backup: {enabled: true, domains: [commercial-backup], encryption_profile: commercial-backup-managed}
+runner: {pools: [commercial-ephemeral], ephemeral: true, allowed_images: [signed_approved]}
+network: {zones: [corporate, approved_remote, runner], egress_policy: allowlisted}

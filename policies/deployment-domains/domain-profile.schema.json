@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stead.example/policies/deployment-domain/0.1",
+  "type": "object",
+  "required": ["domain_id", "version", "classification_ceiling", "allowed_label_profiles", "allowed_integrations", "allowed_notification_channels", "storage", "backup", "runner", "network"],
+  "properties": {
+    "domain_id": {"type": "string"},
+    "version": {"type": "string"},
+    "classification_ceiling": {"type": "string"},
+    "allowed_label_profiles": {"type": "array", "items": {"type": "string"}, "minItems": 1, "uniqueItems": true},
+    "allowed_integrations": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "allowed_notification_channels": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "storage": {"type": "object", "required": ["providers", "encryption_profile", "residency"], "properties": {"providers": {"type": "array", "items": {"type": "string"}}, "encryption_profile": {"type": "string"}, "residency": {"type": "array", "items": {"type": "string"}}}, "additionalProperties": false},
+    "backup": {"type": "object", "required": ["enabled", "domains", "encryption_profile"], "properties": {"enabled": {"type": "boolean"}, "domains": {"type": "array", "items": {"type": "string"}}, "encryption_profile": {"type": "string"}}, "additionalProperties": false},
+    "runner": {"type": "object", "required": ["pools", "ephemeral", "allowed_images"], "properties": {"pools": {"type": "array", "items": {"type": "string"}}, "ephemeral": {"type": "boolean"}, "allowed_images": {"type": "array", "items": {"type": "string"}}}, "additionalProperties": false},
+    "network": {"type": "object", "required": ["zones", "egress_policy"], "properties": {"zones": {"type": "array", "items": {"type": "string"}}, "egress_policy": {"enum": ["deny_all", "allowlisted", "managed"]}}, "additionalProperties": false}
+  },
+  "additionalProperties": false
+}

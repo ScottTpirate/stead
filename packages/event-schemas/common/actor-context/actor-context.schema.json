@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stead.example/schemas/events/actor-context/0.1",
+  "title": "Actor Context",
+  "type": "object",
+  "required": ["actor", "correlation_id", "causation_id"],
+  "properties": {
+    "actor": {"$ref": "../../../../specs/work-graph-profile/owgp-v0.1.schema.json#/$defs/ActingPrincipalRef"},
+    "requested_by": {"$ref": "../../../../specs/work-graph-profile/owgp-v0.1.schema.json#/$defs/ActingPrincipalRef"},
+    "delegation_id": {"type": "string"},
+    "task_context_id": {"type": "string"},
+    "correlation_id": {"type": "string", "minLength": 1},
+    "causation_id": {"type": "string"}
+  },
+  "additionalProperties": false
+}

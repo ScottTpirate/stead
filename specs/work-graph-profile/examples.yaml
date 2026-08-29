@@ -1,0 +1,223 @@
+schema_version: "0.1"
+note: "Bodies and secrets are intentionally absent; repeated IDs make the graph testable. YAML merge keys expand the common resource envelope in each example."
+shared:
+  organization_id: &org 018f0000-0000-7000-8000-000000000001
+  user_id: &alice 018f0000-0000-7000-8000-000000000002
+  agent_id: &agent 018f0000-0000-7000-8000-000000000003
+  team_id: &team 018f0000-0000-7000-8000-000000000004
+  project_id: &project 018f0000-0000-7000-8000-000000000005
+  work_id: &work 018f0000-0000-7000-8000-000000000006
+  label_id: &label_id 018f0000-0000-7000-8000-000000000016
+  organization_container: &organization_container {kind: organization, id: *org, uri: "https://stead.example/o/acme"}
+  project_container: &project_container {kind: project, id: *project, uri: "https://stead.example/o/acme/projects/ONB"}
+  label: &label {profile_id: commercial, sensitivity_level: internal, handling_regimes: [], categories: [], compartments: [], dissemination_controls: [], releasable_to: [], export_controls: [], derivation_sources: [], version: 1}
+  provenance: &provenance {created_at: "2026-08-28T12:00:00Z", created_by: {type: user, id: *alice}, derived_from: [], source_metadata: {}}
+  envelope: &envelope
+    schema_version: "1.0"
+    version: 1
+    organization_id: *org
+    created_at: "2026-08-28T12:00:00Z"
+    created_by: {type: user, id: *alice}
+    updated_at: "2026-08-28T12:00:00Z"
+    updated_by: {type: user, id: *alice}
+    security_label_id: *label_id
+    effective_security_label: *label
+    provenance: *provenance
+    external_references: []
+    relationships: []
+examples:
+  Organization:
+    <<: *envelope
+    kind: organization
+    id: *org
+    uri: "https://stead.example/o/acme"
+    container: *organization_container
+    title: Acme
+    key: ACME
+    name: Acme
+  DirectoryGroup:
+    <<: *envelope
+    kind: directory_group
+    id: 018f0000-0000-7000-8000-000000000007
+    uri: "https://stead.example/o/acme/groups/hr"
+    container: *organization_container
+    title: HR Directory Group
+    display_name: HR Directory Group
+    source: oidc
+    external_group_id: hr-42
+  Team:
+    <<: *envelope
+    kind: team
+    id: *team
+    uri: "https://stead.example/o/acme/teams/people-ops"
+    container: *organization_container
+    title: People Operations
+    key: PEOPLE
+    name: People Operations
+    hierarchy_depth: 1
+    parent_team_id: 018f0000-0000-7000-8000-000000000008
+  Project:
+    <<: *envelope
+    kind: project
+    id: *project
+    uri: "https://stead.example/o/acme/projects/ONB"
+    container: *organization_container
+    title: Employee onboarding
+    key: ONB
+    purpose: Coordinate onboarding work and knowledge
+    owning_team_id: *team
+    contributing_team_ids: []
+    capabilities: {preset: general, active: [work, docs]}
+    lifecycle_state: active
+    start_date: "2026-09-01"
+    target_date: "2026-10-01"
+  WorkItem:
+    <<: *envelope
+    kind: work_item
+    id: *work
+    uri: "https://stead.example/o/acme/projects/ONB/work/ONB-1"
+    container: *project_container
+    project_id: *project
+    title: Prepare first-week schedule
+    body: Coordinate the schedule with the employee and contributing teams.
+    key: ONB-1
+    work_type: deliverable
+    status: in_progress
+    priority: high
+    estimate: 3
+    nesting_depth: 0
+    assignees: [{type: agent, id: *agent}]
+    responsible_team_id: *team
+  Document:
+    <<: *envelope
+    kind: document
+    id: 018f0000-0000-7000-8000-000000000009
+    uri: "https://stead.example/o/acme/teams/people-ops/docs/onboarding"
+    container: {kind: team, id: *team, uri: "https://stead.example/o/acme/teams/people-ops"}
+    title: Onboarding procedure
+    body: "# Onboarding procedure"
+    document_type: procedure
+    state: approved
+    okf_id: doc-onboarding
+    git_revision: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    path: onboarding.md
+  Repository:
+    <<: *envelope
+    kind: repository
+    id: 018f0000-0000-7000-8000-000000000010
+    uri: "https://stead.example/o/acme/projects/ONB/repositories/tracker"
+    container: *project_container
+    project_id: *project
+    title: ONB Work backing
+    purpose: tracker
+    default_branch: main
+  PrincipalRef: {type: agent, id: *agent}
+  Agent:
+    <<: *envelope
+    kind: agent
+    id: *agent
+    uri: "https://stead.example/o/acme/agents/backend-agent"
+    container: *organization_container
+    title: Backend Agent
+    display_name: Backend Agent
+    status: registered
+    external_runtime_ref: "runtime://external/backend-agent"
+    a2a_card_uri: "https://agents.example/backend-agent/card"
+    authority_revision: authz-v1
+  AgentRun:
+    <<: *envelope
+    kind: agent_run
+    id: 018f0000-0000-7000-8000-000000000011
+    uri: "https://stead.example/o/acme/agent-runs/run-1"
+    container: *project_container
+    project_id: *project
+    title: Backend Agent run for ONB-1
+    agent_id: *agent
+    work_item_id: *work
+    requested_by: {type: user, id: *alice}
+    delegation_id: delegation-1
+    task_context_id: task-1
+    state: requested
+    external_runtime_ref: "runtime://external/runs/1"
+    correlation_id: corr-1
+    causation_id: cause-1
+  SecurityLabel:
+    <<: *envelope
+    kind: security_label
+    id: *label_id
+    uri: "https://stead.example/o/acme/security-labels/internal"
+    container: *organization_container
+    title: Commercial internal
+    profile_id: commercial
+    sensitivity_level: internal
+    handling_regimes: []
+    categories: []
+    compartments: []
+    dissemination_controls: []
+    releasable_to: []
+    export_controls: []
+    derivation_sources: []
+  Comment:
+    <<: *envelope
+    kind: comment
+    id: 018f0000-0000-7000-8000-000000000012
+    uri: "https://stead.example/o/acme/comments/12"
+    container: *project_container
+    project_id: *project
+    title: Comment on ONB-1
+    subject: {kind: work_item, id: *work, uri: "https://stead.example/o/acme/projects/ONB/work/ONB-1"}
+    author: {type: user, id: *alice}
+    body_format: markdown
+    body: Schedule draft is ready for review.
+  Activity:
+    <<: *envelope
+    kind: activity
+    id: 018f0000-0000-7000-8000-000000000013
+    uri: "https://stead.example/o/acme/activity/13"
+    container: *project_container
+    project_id: *project
+    title: Agent assigned to ONB-1
+    subject: {kind: work_item, id: *work, uri: "https://stead.example/o/acme/projects/ONB/work/ONB-1"}
+    verb: assigned
+    actor_context: {actor: {type: agent, id: *agent}, requested_by: {type: user, id: *alice}, delegation_id: delegation-1, task_context_id: task-1, correlation_id: corr-1, causation_id: cause-1}
+    occurred_at: "2026-08-28T12:01:00Z"
+  Notification:
+    <<: *envelope
+    kind: notification
+    id: 018f0000-0000-7000-8000-000000000014
+    uri: "https://stead.example/o/acme/notifications/14"
+    container: *project_container
+    project_id: *project
+    title: ONB-1 assignment changed
+    recipient: {type: user, id: *alice}
+    subject: {kind: work_item, id: *work, uri: "https://stead.example/o/acme/projects/ONB/work/ONB-1"}
+    source_event_id: event-14
+    actor_context: {actor: {type: agent, id: *agent}, requested_by: {type: user, id: *alice}, delegation_id: delegation-1, task_context_id: task-1, correlation_id: corr-1, causation_id: cause-1}
+    thread_key: work-item:ONB-1
+    reason: assignment_changed
+    state: unread
+    redaction: none
+  Audit:
+    <<: *envelope
+    kind: audit_record
+    id: 018f0000-0000-7000-8000-000000000015
+    uri: "https://stead.example/o/acme/audit/15"
+    container: *project_container
+    project_id: *project
+    title: Work assignment update
+    action: work.assignment.update
+    subject: {kind: work_item, id: *work, uri: "https://stead.example/o/acme/projects/ONB/work/ONB-1"}
+    actor_context: {actor: {type: agent, id: *agent}, requested_by: {type: user, id: *alice}, delegation_id: delegation-1, task_context_id: task-1, correlation_id: corr-1, causation_id: cause-1}
+    decision: allow
+    authorization_context: {relationship: editor, action: work.assignment.update, reason_codes: [relationship_allow, classification_allow]}
+    authorization_model_id: fga-v1
+    policy_bundle_id: opa-v1
+    request_id: request-1
+    source_ip: 192.0.2.10
+    network_zone: corporate
+    device_id: device-1
+    origin: {service: work-api, provider: gitea-adapter}
+    outcome: success
+    occurred_at: "2026-08-28T12:01:00Z"
+    before_hash: abc
+    after_hash: def

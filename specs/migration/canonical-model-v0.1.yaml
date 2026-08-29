@@ -1,0 +1,15 @@
+schema_version: "0.1"
+stages: [discover, analyze, map, dry_run, import, validate, delta_sync, cutover, finalize]
+checkpoint_fields: [stage, cursor, source_revision, mapping_revision, updated_at]
+inventory_fields: [source_type, count, digest]
+mapping_targets:
+  canonical_kinds: [instance, organization, user, directory_group, agent, agent_run, service_principal, team, initiative, project, cycle, work_item, document, repository, branch, commit, pull_request, build, deployment, release, package, artifact, attachment, comment, activity, notification, audit_record, security_label]
+  unknown_concept_policy: quarantine
+  provider_only_field_policy: namespaced_source_metadata
+quarantine_fields: [source_id, reason, safe_hash]
+validation_requirements: [expected_and_actual_counts, content_hashes, labels_not_lowered, relationships_complete, provenance_complete, authorization_non_regression]
+cutover_requirements: [approved_delta_cursor, final_reconciliation, redirect_activation, audit_record]
+redirect_fields: [source_url, canonical_uri, status]
+rollback:
+  before_cutover: owner_api_reversal_of_connector_owned_writes
+  after_cutover: forward_reconciliation_from_checkpoint

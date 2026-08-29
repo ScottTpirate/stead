@@ -1,7 +1,7 @@
 # Phase 0 Repository Layout and Boundary Constitution
 
-Status: **Draft for Phase 0 approval**<br>
-Normative source: `unified_open_work_platform_master_build_directive.md` version 0.2
+Status: **Ready for Phase 0 approval**<br>
+Normative source: `docs/architecture/MASTER_BUILD_DIRECTIVE.md` version 0.2
 
 This document records the required monorepo shape, exclusive edit ownership, dependency direction, integration roots, and logical data ownership. It is a planning contract, not authorization to scaffold or implement Phase 1 features. Top-level names and boundaries may change only through an approved ADR.
 
@@ -29,6 +29,7 @@ This document records the required monorepo shape, exclusive edit ownership, dep
   /notification           WS-07
   /audit                  WS-07  includes activity and actor/requester/delegation context
   /migration              WS-11
+  /agent                  WS-08  contract-only future Agent Registry/run interoperability; no Phase 0 execution
 
 /providers
   /gitea                  WS-03
@@ -43,6 +44,7 @@ This document records the required monorepo shape, exclusive edit ownership, dep
   /identity-scim          WS-06
   /notifications-email    WS-07
   /notifications-webhook  WS-07
+  /agent-a2a              WS-08  compatibility contract only; no Phase 0 dispatch
 
 /packages
   /domain-schemas         WS-01 integration owner; WS-06 owns identity/security subtrees
@@ -64,6 +66,8 @@ This document records the required monorepo shape, exclusive edit ownership, dep
   /okf-profile            WS-04
   /oscal                  WS-13
   /traceability           WS-13  Phase 0 requirement inventory and matrix
+  /mcp                    WS-08  platform-wide compatibility seam; no Phase 0 tool catalog
+  /a2a                    WS-08  Agent Card/message compatibility seam; no Phase 0 dispatch
 
 /deploy
   /compose                WS-12
@@ -103,7 +107,7 @@ The following subpaths override only their parent integration owner. A path not 
 |---|---|---|
 | `/packages/domain-schemas/common/` | `WS-01` | common resource envelope, relationship, provenance, external reference, errors, exports |
 | `/packages/domain-schemas/resources/` | `WS-01` | canonical entity schemas; domain owners review but do not concurrently edit |
-| `/packages/domain-schemas/identity/` | `WS-06` | Principal (`user`, `agent`, `service_account`), User, Service Principal, trusted attributes |
+| `/packages/domain-schemas/identity/` | `WS-06` | PrincipalRef (`user`, `agent`, `service_account`, `directory_group`), User, Directory Group, Service Principal, Agent, Agent Run, trusted attributes; only user/agent/service_account may act |
 | `/packages/domain-schemas/security/` | `WS-06` | SecurityLabel and deployment-domain schemas |
 | `/packages/domain-schemas/config/` | `WS-12` | installation/effective configuration schema |
 | `/packages/domain-schemas/resources/work-assignment/` | `WS-02` | provider-independent Work Item assignee reference; leaf override under the WS-01 resource-schema integration tree |
@@ -114,6 +118,7 @@ The following subpaths override only their parent integration owner. A path not 
 | `/packages/provider-sdk/notifications/` | `WS-07` | NotificationChannel |
 | `/packages/provider-sdk/audit-export/` | `WS-07` | audit object-store/syslog/SIEM-webhook export |
 | `/packages/provider-sdk/search/` | `WS-08` | SearchProvider |
+| `/modules/agent/`, `/providers/agent-a2a/`, `/specs/mcp/`, `/specs/a2a/` | `WS-08` | contract-only future Agent Registry, MCP, and A2A seams; no execution, tool catalog, or dispatch in Phase 0 |
 | `/packages/provider-sdk/ci/` | `WS-09` | runner-pool/control contracts |
 | `/packages/provider-sdk/secrets/` | `WS-09` | SecretProvider |
 | `/packages/provider-sdk/blobstore/` | `WS-10` | BlobStore |
@@ -253,7 +258,7 @@ Exact physical PostgreSQL schema naming is a Phase 0 implementation choice, but 
 | Logical namespace | Sole migration/write owner | System-of-record qualification |
 |---|---|---|
 | `organization.*` | `WS-02` | authoritative platform organization/team state |
-| `identity.*` | `WS-06` | authoritative platform principal-reference/linkage/sync state; trusted assertions remain sourced from configured authorities; no Phase 0 agent-runtime or Agent Registry tables |
+| `identity.*` | `WS-06` | authoritative platform principal-reference/linkage/sync state; trusted assertions remain sourced from configured authorities; Phase 0 defines Agent/AgentRun schemas but no runtime, dispatch, or execution tables |
 | `authorization.*` | `WS-06` | authoritative platform model/bundle/reconciliation metadata; OpenFGA supported datastore holds model/tuples |
 | `classification.*` | `WS-06` | authoritative label/profile/derivation/approval state |
 | `project.*` | `WS-02` | authoritative Initiative/Project/Cycle platform state |
@@ -302,7 +307,7 @@ The following are merge blockers, not style preferences:
 | `BND-013` | air-gap/government profile makes an unapproved network call | network-disabled install/runtime test and egress capture |
 | `BND-014` | implementation owner changes shared contract/test/gate concurrently or self-approves | contract lock/CODEOWNERS check and approval identity/separation gate |
 | `BND-015` | unapproved license/dependency/action/image enters distributed output | dependency/SBOM/license/action pin/image digest gates |
-| `BND-016` | actor/assignee/reviewer/subscriber/request contracts assume a human user rather than a principal | schema lint and fixtures for `user`, `agent`, and `service_account` across assignment, API, event, and audit contracts |
+| `BND-016` | actor/assignee/reviewer/subscriber/request contracts assume a human user rather than the principal kinds allowed at that field | schema lint and fixtures for acting `user`/`agent`/`service_account` contexts and the narrower `user`/`agent` Work-assignee union across API, event, and audit contracts |
 | `BND-017` | agent broadly inherits delegator authority or omits task/runtime/classification intersection seams | OpenFGA/OPA model tests for explicit delegation, independent revocation, task scope, principal type, and reserved runtime/environment attributes |
 | `BND-018` | future agent uses provider business API or unrestricted access instead of Platform API/MCP | agent-access architecture tests; only scoped direct Git protocol credentials are exempt |
 | `BND-019` | Phase 0 implements agent orchestration, prompting, model hosting, agent memory, AgentRun execution, Agent Registry behavior, A2A dispatch, or full MCP tool catalog | scope/backlog and dependency guard; such work requires later approved issue/phase and any applicable ADR |

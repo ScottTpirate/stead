@@ -1,7 +1,7 @@
 # Stead architecture constitution
 
-**Status:** Draft Phase 0 approval candidate<br>
-**Normative source:** [`unified_open_work_platform_master_build_directive.md`](../../unified_open_work_platform_master_build_directive.md)<br>
+**Status:** Ready for Phase 0 approval<br>
+**Normative source:** [`MASTER_BUILD_DIRECTIVE.md`](./MASTER_BUILD_DIRECTIVE.md)<br>
 **Scope:** Governance and architecture constraints only; this document does not authorize feature implementation.
 
 ## 1. Authority and interpretation
@@ -39,7 +39,8 @@ Feature implementation may begin only after the project owner records approval o
 - the threat-model and classification-bypass baseline;
 - the license and dependency policy;
 - the repository layout and boundary rules;
-- the golden vertical-slice test plan;
+- the separate general-work and software-development golden-slice test plans;
+- the Phase 0 reconciliation report and closeout packet;
 - release gates and independent QA/security approval rules.
 
 Approval of an artifact means approval of a tagged or commit-addressed version. Silence, merge, or the creation of this repository is not approval. A later material change reopens affected approvals and blocks dependent implementation until reviewed.
@@ -58,7 +59,7 @@ The following decisions are locked. Changing any one requires an ADR and explici
 8. OpenFGA owns relationship and need-to-know authorization.
 9. OPA/Rego owns classification, ABAC, handling, context, and explicit-deny policy.
 10. Documentation uses Git, Markdown, and an OKF-compatible profile.
-11. The canonical ontology and workflow are fixed and opinionated.
+11. The canonical ontology and workflow are fixed and opinionated, with universal `deliverable`, `task`, and `problem` Work Item semantics.
 12. Every Platform Project has exactly one dedicated Gitea tracker repository.
 13. A cloneable repository/container is a classification and access-control boundary.
 14. The standards stack includes OpenAPI, JSON Schema, CloudEvents, AsyncAPI, OpenTelemetry, OCI, SPDX, SLSA-compatible provenance, and OSCAL.
@@ -68,6 +69,16 @@ The following decisions are locked. Changing any one requires an ADR and explici
 18. Essential security remains in the open-source distribution.
 19. Newly authored core code uses Apache-2.0 unless a specific MIT exception receives ADR and legal approval.
 20. No unapproved source-available, field-of-use-restricted, proprietary, or copyleft runtime dependency.
+21. Work and Docs are universal; software delivery is additive and capability-driven.
+22. Universal global navigation is Home, Inbox, My Work, Projects, Knowledge, and Teams; Search is omnipresent.
+23. Project primary areas are Overview, Work, Docs, optional Code, and optional Delivery.
+24. Team hierarchy is single-parent, cycle-free, at most twelve levels, and grants no implicit authorization.
+25. Every Project has exactly one owning Team and may have contributing Teams.
+26. Documents may be Organization-, Team-, or Project-scoped; Work Items remain Project-scoped.
+27. User, Agent, Service Principal (`service_account`), and Directory Group are distinct reference types; only users, agents, and service accounts may act.
+28. MCP is the agent-to-platform boundary and A2A is the preferred external-runtime interoperability boundary.
+29. Project lifecycle states are planned, active, paused, completed, and canceled; archive is separate and reversible.
+30. Canonical document types use universal semantics; software-specific names are display labels only.
 
 The project/repository name is **Stead**. Directive-defined component and API names such as `platform-web`, `platform-core`, `platform-worker`, and `platformctl` remain unchanged unless an approved ADR updates their public naming and migration plan.
 
@@ -79,7 +90,7 @@ Routine users receive one shell, navigation model, search, inbox, identity, and 
 
 Every protected operation is deny-by-default and evaluates authentication, trusted attributes/session context, canonical resource and effective label, OpenFGA, OPA, provider/path enforcement, and audit metadata. No administrator role implies a classification or need-to-know bypass. UI hiding is not authorization.
 
-All new contracts distinguish a human identity from the acting principal. The canonical principal type set permits at least `user`, `agent`, and `service_account`; `service_account` denotes the existing Service Principal entity, while `agent` is a reserved principal type rather than a new Phase 0 first-class ontology entity. Actors, assignees, creators, reviewers, subscribers, and request principals are not assumed to be human. Agents inherit no broad human permission set. The authorization seam preserves explicit delegation, task scope, independently revocable agent authority, runtime/environment context, and the intersection of delegator, agent, task, runtime-domain/session, and resource-label constraints.
+All new contracts distinguish a human identity from the acting principal. `PrincipalRef` permits `user`, `agent`, `service_account`, and non-acting `directory_group`; Agent and Agent Run are canonical entities, but runtime execution remains outside Phase 0. Actors, assignees, creators, reviewers, subscribers, and request principals are not assumed to be human. Agents inherit no broad human permission set. The authorization seam preserves explicit delegation, task scope, independently revocable agent authority, runtime/environment context, and the intersection of delegator, agent, task, runtime-domain/session, and resource-label constraints.
 
 ### 4.2 Source-of-truth and module boundaries
 
@@ -94,7 +105,7 @@ All new contracts distinguish a human identity from the acting principal. The ca
 
 ### 4.3 Fixed semantics and portable data
 
-The canonical entities, work-item types/statuses/priorities/estimates, document types/states, hierarchy, and relationship directions in the directive are closed sets. Display labels and tags may vary; semantics may not. New first-class entities, workflow states, arbitrary custom fields, or configurable ontology require ontology review and an approved ADR.
+The canonical entities, universal work-item and document types, statuses, priorities, estimates, hierarchy, capability registry, and relationship directions in the directive are closed sets. Display labels and tags may vary; semantics may not. New first-class entities, workflow states, arbitrary custom fields, capabilities, primary tabs, or configurable ontology require ontology review and an approved ADR. A Project always has Overview, Work, and Docs; Code and Delivery exist only where their fixed capabilities are enabled.
 
 Git repositories, Git/Markdown/OKF documents, portable attachment manifests, versioned JSON exports, CloudEvents, SCIM-compatible identity export, and documented standards mappings preserve exitability. No customer data may exist only in an opaque proprietary format.
 

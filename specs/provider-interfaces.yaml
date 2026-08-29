@@ -1,0 +1,55 @@
+schema_version: "0.1"
+status: phase0_approval_candidate
+normative_source: docs/architecture/MASTER_BUILD_DIRECTIVE.md
+common_contract:
+  canonical_ids: required
+  provider_locators: opaque_adapter_state_only
+  authorization: "OpenFGA allow AND OPA allow AND provider/path allow AND no explicit deny"
+  errors: RFC_9457_non_leaking
+  telemetry: OpenTelemetry_correlation_without_protected_bodies
+  audit: actor_requester_delegation_task_and_policy_versions
+  compatibility: current_previous_two_minor_and_next_candidate_where_upstream_exists
+  migration: capability_inventory_map_dry_run_idempotent_import_reconcile_cutover
+  rollback: provider_state_never_replaces_canonical_state
+  operation_semantics:
+    request: canonical_resource_ids_plus_opaque_adapter_context
+    response: canonical_result_or_RFC_9457_problem
+    idempotency: required_for_every_mutation_and_webhook_effect
+    concurrency: strong_version_or_ETag_precondition_for_mutation
+    retries: bounded_exponential_backoff_only_for_declared_transient_errors
+    errors: stable_platform_codes_with_provider_details_redacted
+    capability_negotiation: versioned_startup_and_health_probe_fail_closed
+    reconciliation: checkpointed_idempotent_drift_detection_and_repair
+    webhooks: authenticated_replay_protected_deduplicated_then_reconciled
+interfaces:
+  - {id: RepositoryProvider, owner: WS-03, applicability: internal_work_or_docs_backing_and_optional_scm, user_facing_when: scm_active, consumers: [project, scm, work, knowledge], operations: [capabilities, provision, get, list, update, archive, reconcile], prohibited: [gitea_database, undocumented_api, canonical_provider_locator]}
+  - {id: GitProvider, owner: WS-03, applicability: internal_docs_backing_and_optional_scm, user_facing_when: scm_active, consumers: [scm, knowledge], operations: [capabilities, fetch, push, compare, reconcile], prohibited: [unscoped_credentials, policy_bypass]}
+  - {id: PullRequestProvider, owner: WS-03, capability: code_review, consumers: [scm, work, knowledge], operations: [capabilities, create, get, list, review, merge, reconcile], prohibited: [provider_type_as_canonical_type]}
+  - {id: IssueProvider, owner: WS-03, capability: work, consumers: [work], operations: [capabilities, create, get, list, update, comment, reconcile], notes: Gitea_is_preferred_backing_not_ontology, prohibited: [human_only_canonical_assignee]}
+  - {id: ProjectBoardProvider, owner: WS-03, capability: work, consumers: [work], operations: [capabilities, project_view, reconcile], prohibited: [board_as_canonical_entity, configurable_workflow]}
+  - {id: MilestoneProvider, owner: WS-03, capability: work, consumers: [work], operations: [capabilities, map_cycle, reconcile], prohibited: [provider_state_as_canonical_state]}
+  - {id: ActionsProvider, owner: WS-03, capability: ci, consumers: [ci], operations: [capabilities, dispatch, status, cancel, reconcile], prohibited: [unapproved_public_action, long_lived_job_credential]}
+  - {id: PackageProvider, owner: WS-03, capability: packages, consumers: [artifact], operations: [capabilities, publish, get, list, revoke, reconcile], prohibited: [unlabeled_namespace]}
+  - {id: ReleaseProvider, owner: WS-03, capability: releases, consumers: [artifact, work], operations: [capabilities, draft, approve, publish, withdraw, reconcile], prohibited: [unprovenanced_release]}
+  - {id: OrganizationProvider, owner: WS-03, applicability: provider_tenant_boundary, user_facing_when: never_as_platform_team, consumers: [scm, work, knowledge], operations: [capabilities, provision, update, reconcile], prohibited: [gitea_organization_as_team_ontology]}
+  - {id: PermissionSyncProvider, owner: WS-03, applicability: provider_enforcement_projection, consumers: [authorization, scm, work, knowledge], operations: [capabilities, plan, apply, verify, reconcile], prohibited: [provider_authority_over_central_policy]}
+  - {id: WebhookProvider, owner: WS-03, applicability: provider_change_ingress, consumers: [worker], operations: [capabilities, register, verify, receive, replay, reconcile], prohibited: [unsigned_webhook, non_idempotent_effect]}
+  - {id: KnowledgeProvider, owner: WS-04, capability: docs, consumers: [knowledge], operations: [capabilities, read, write, review, publish, history, reconcile], implementations: [commonplace, native_adr_fallback], prohibited: [iframe_primary_ui, platform_policy_in_patch, unsafe_executable_content]}
+  - {id: IdentityProvider, owner: WS-06, capability: identity, consumers: [identity], operations: [capabilities, authenticate, resolve, refresh, revoke], implementations: [oidc], prohibited: [production_local_password_store, self_asserted_trusted_attribute]}
+  - {id: ProvisioningProvider, owner: WS-06, capability: identity, consumers: [identity], operations: [capabilities, import, delta_sync, suspend, reconcile], implementations: [scim], prohibited: [directory_group_auto_team_creation]}
+  - {id: TrustedAttributeProvider, owner: WS-06, capability: authorization, consumers: [authorization], operations: [capabilities, resolve, verify, refresh, revoke], prohibited: [missing_authority, missing_expiry, unverified_allow]}
+  - {id: NotificationChannel, owner: WS-07, capability: notifications, consumers: [notification], operations: [capabilities, render_authorized, deliver, status, revoke], implementations: [email, webhook], prohibited: [protected_body_without_channel_policy, unauthorized_existence]}
+  - {id: AuditExportProvider, owner: WS-07, capability: audit, consumers: [audit], operations: [capabilities, export, verify, checkpoint], implementations: [object_store, syslog, siem_webhook], prohibited: [mutable_authoritative_audit, secret_export]}
+  - {id: SearchProvider, owner: WS-08, capability: search, consumers: [search, work_graph], operations: [capabilities, index, remove, query_authorized, aggregate_authorized, rebuild, reconcile], implementations: [postgres, opensearch], prohibited: [system_of_record, post_filter_only, unauthorized_aggregate]}
+  - {id: AgentA2AProvider, owner: WS-08, capability: future_agent_interop, consumers: [future_agent_module], operations: [capabilities, validate_agent_card, negotiate_protocol], implementations: [external_runtime], phase0: contract_only, prohibited: [dispatch, execution, model_coupling, direct_provider_business_api]}
+  - {id: RunnerProvider, owner: WS-09, capability: ci, consumers: [ci], operations: [capabilities, schedule, status, cancel, attest, reconcile], prohibited: [cross_domain_pool, persistent_secret, mutable_image]}
+  - {id: SecretProvider, owner: WS-09, capability: ci, consumers: [ci], operations: [capabilities, issue_ephemeral, revoke, audit_reference], prohibited: [secret_in_event, secret_in_git, secret_in_telemetry]}
+  - {id: BlobStore, owner: WS-10, capability: storage, consumers: [work, knowledge, artifact], operations: [capabilities, put, get_authorized, delete_authorized, verify, reconcile], implementations: [filesystem, s3, azure, gcs], prohibited: [direct_browser_authorization, provider_locator_in_canonical_api, cross_domain_cache]}
+  - {id: MigrationSourceProvider, owner: WS-11, capability: migration, consumers: [migration], operations: [capabilities, discover, analyze, read_batch, checkpoint, delta_sync], implementations: [github, jira, confluence], prohibited: [source_database_access, silent_loss, ontology_extension]}
+capability_rules:
+  universal: [work, docs]
+  optional: [scm, code_review, ci, packages, releases, deployments]
+  dependencies:
+    code_review: [scm]
+    ci: [scm]
+  inactive_behavior: absent_from_navigation_api_affordances_counts_suggestions_and_notifications

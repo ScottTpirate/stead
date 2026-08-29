@@ -1,6 +1,6 @@
 schema_version: "1.0"
-normative_source: unified_open_work_platform_master_build_directive.md
-scope: phase-0-approved-planning-only
+normative_source: docs/architecture/MASTER_BUILD_DIRECTIVE.md
+scope: phase-0-closeout-ready-planning-only
 implementation_policy: "No Phase 1-3 implementation issue may enter an active state before GATE-P0-APPROVED."
 gates:
   - id: GATE-P0-APPROVED
@@ -8,7 +8,17 @@ gates:
     approvers: ["project-owner", "WS-01-architecture", "WS-06-security-contract", "WS-13-independent-qa", "WS-13-independent-security"]
     approval_rules: "The WS-13 QA and security approvals require two distinct reviewer identities, neither of whom authored the artifact under review; every approver signs the same immutable revision."
     dependencies: ["STEAD-P0-001", "STEAD-P0-002", "STEAD-P0-003", "STEAD-P0-004", "STEAD-P0-005", "STEAD-P0-006", "STEAD-P0-007", "STEAD-P0-008", "STEAD-P0-009", "STEAD-P0-010", "STEAD-P0-011", "STEAD-P0-012", "STEAD-P0-013", "STEAD-P0-014", "STEAD-P0-015"]
-    evidence: ["approved architecture constitution", "approved Phase 0 contracts", "115-ID traceability validation", "approved agent-ready compatibility contract and Phase 0 non-goal", "approved threat baseline and bypass inventory", "approved license workflow", "approved golden scenario plan"]
+    evidence: ["approved architecture constitution", "approved Phase 0 contracts", "128-ID traceability validation", "approved open-work reconciliation and agent-ready compatibility contract", "approved threat baseline and bypass inventory", "approved license workflow", "approved TEST-009 and TEST-010 plans", "approved Phase 0 closeout packet"]
+adr_decision_gates:
+  - {adr_id: ADR-CAND-001, decide_before_issue: STEAD-P1-001, dependent_issues: [STEAD-P1-001, STEAD-P1-002, STEAD-P2-009, STEAD-P3-006]}
+  - {adr_id: ADR-CAND-002, decide_before_issue: STEAD-P1-002, dependent_issues: [STEAD-P1-002, STEAD-P1-007, STEAD-P1-011, STEAD-P2-010]}
+  - {adr_id: ADR-CAND-003, decide_before_issue: STEAD-P1-006, dependent_issues: [STEAD-P1-006, STEAD-P1-003, STEAD-P1-007, STEAD-P1-008, STEAD-P1-012, STEAD-P2-006]}
+  - {adr_id: ADR-CAND-004, decide_before_issue: STEAD-P1-006, dependent_issues: [STEAD-P1-006, STEAD-P1-002, STEAD-P2-004]}
+  - {adr_id: ADR-CAND-005, decide_before_issue: STEAD-P1-006, dependent_issues: [STEAD-P1-006, STEAD-P2-004, STEAD-P2-006]}
+  - {adr_id: ADR-CAND-006, decide_before_issue: STEAD-P1-007, dependent_issues: [STEAD-P1-007, STEAD-P1-008, STEAD-P1-012, STEAD-P2-005]}
+  - {adr_id: ADR-CAND-007, decide_before_issue: STEAD-P1-006, dependent_issues: [STEAD-P1-006, STEAD-P1-011, STEAD-P2-004, STEAD-P2-010]}
+  - {adr_id: ADR-CAND-008, decide_before_issue: STEAD-P1-003, dependent_issues: [STEAD-P1-003, STEAD-P1-012, STEAD-P2-001]}
+  - {adr_id: ADR-CAND-021, decide_before_issue: STEAD-P1-006, dependent_issues: [STEAD-P1-006, STEAD-P1-002, STEAD-P1-005, STEAD-P2-003]}
 epics:
   - id: "EPIC-P0-A"
     title: "Constitution and canonical contracts"
@@ -39,15 +49,15 @@ issues:
     title: "Architecture constitution, standards matrix, repository layout, and license guardrails"
     epic_id: "EPIC-P0-A"
     phase: "phase-0"
-    status: DRAFT_PENDING_PHASE_0_APPROVAL
-    requirement_ids: ["PRIN-001", "PRIN-002", "PRIN-003", "PRIN-004", "PRIN-005", "PRIN-006", "PRIN-007", "PRIN-008", "PRIN-009", "PRIN-010", "PRIN-011", "PRIN-012", "ARCH-001", "ARCH-002", "ARCH-003", "ARCH-004", "ARCH-005", "AGENT-007"]
+    status: READY_FOR_PHASE_0_APPROVAL
+    requirement_ids: ["PRIN-001", "PRIN-002", "PRIN-003", "PRIN-004", "PRIN-005", "PRIN-006", "PRIN-007", "PRIN-008", "PRIN-009", "PRIN-010", "PRIN-011", "PRIN-012", "PRIN-013", "PRIN-014", "PRIN-015", "ARCH-001", "ARCH-002", "ARCH-003", "ARCH-004", "ARCH-005", "AGENT-007"]
     owner: "WS-01"
     dependencies: []
     module: ["architecture-and-standards"]
-    owned_directories: ["docs/architecture/constitution.md", "docs/architecture/workstream-ownership.md", "docs/architecture/contract-ownership-matrix.md", "docs/architecture/repository-layout-and-boundaries.md", "docs/architecture/standards", "docs/architecture/ontology", "docs/adr", "specs/openapi", "packages/provider-sdk/core", "tests/contract/architecture", "packages/test-fixtures/architecture"]
+    owned_directories: ["docs/architecture/MASTER_BUILD_DIRECTIVE.md", "docs/architecture/PHASE0_RECONCILIATION_REPORT.md", "docs/architecture/constitution.md", "docs/architecture/workstream-ownership.md", "docs/architecture/contract-ownership-matrix.md", "docs/architecture/repository-layout-and-boundaries.md", "docs/architecture/standards", "docs/architecture/ontology", "docs/adr", "specs/openapi", "packages/provider-sdk/core", "tests/contract/architecture", "packages/test-fixtures/architecture"]
     prohibited_boundaries: ["May not change a locked architecture decision without an approved ADR and project-owner approval.", "May not implement provider-specific or domain runtime behavior inside public schema packages.", "May not add first-class entities or configurable ontology outside the approved OWGP."]
     acceptance_criteria: ["Publish the locked-decision constitution, precedence rules, repository/runtime layout, standards matrix, and dependency-license guardrails as reviewable normative artifacts.", "Every mapped requirement has an unambiguous owner, dependency, contract surface, test ID, documentation target, and release target.", "Review finds no conflict with a locked decision; any genuine alternative is isolated as an ADR candidate.", "The artifact is machine-validated where applicable and receives recorded project-owner plus independent QA/security approval."]
-    automated_tests: ["T-STEAD-P0-001-CONTRACT", "T-PRIN-001-ACCEPTANCE", "T-PRIN-002-ACCEPTANCE", "T-PRIN-003-ACCEPTANCE", "T-PRIN-004-ACCEPTANCE", "T-PRIN-005-ACCEPTANCE", "T-PRIN-006-ACCEPTANCE", "T-PRIN-007-ACCEPTANCE", "T-PRIN-008-ACCEPTANCE", "T-PRIN-009-ACCEPTANCE", "T-PRIN-010-ACCEPTANCE", "T-PRIN-011-ACCEPTANCE", "T-PRIN-012-ACCEPTANCE", "T-ARCH-001-ACCEPTANCE", "T-ARCH-002-ACCEPTANCE", "T-ARCH-003-ACCEPTANCE", "T-ARCH-004-ACCEPTANCE", "T-ARCH-005-ACCEPTANCE", "T-AGENT-007-SCOPE-GUARD"]
+    automated_tests: ["T-STEAD-P0-001-CONTRACT", "T-PRIN-001-ACCEPTANCE", "T-PRIN-002-ACCEPTANCE", "T-PRIN-003-ACCEPTANCE", "T-PRIN-004-ACCEPTANCE", "T-PRIN-005-ACCEPTANCE", "T-PRIN-006-ACCEPTANCE", "T-PRIN-007-ACCEPTANCE", "T-PRIN-008-ACCEPTANCE", "T-PRIN-009-ACCEPTANCE", "T-PRIN-010-ACCEPTANCE", "T-PRIN-011-ACCEPTANCE", "T-PRIN-012-ACCEPTANCE", "T-PRIN-013-ACCEPTANCE", "T-PRIN-014-ACCEPTANCE", "T-PRIN-015-ACCEPTANCE", "T-ARCH-001-ACCEPTANCE", "T-ARCH-002-ACCEPTANCE", "T-ARCH-003-ACCEPTANCE", "T-ARCH-004-ACCEPTANCE", "T-ARCH-005-ACCEPTANCE", "T-AGENT-007-SCOPE-GUARD"]
     authorization_and_classification_behavior: "Contracts must require server-side central authorization, effective-label propagation, deny-by-default behavior, and no existence leakage; architecture artifacts grant no bypass."
     observability_and_audit_requirements: "Define OpenTelemetry context and audit-event obligations at every contract boundary without placing secrets or protected bodies in telemetry."
     migration_and_backward_compatibility_implications: "Version public schemas and mappings; define compatibility, deprecation, conformance, and export/import behavior before implementation."
@@ -57,15 +67,15 @@ issues:
     title: "OWGP v0.1 and canonical resource/schema constitution"
     epic_id: "EPIC-P0-A"
     phase: "phase-0"
-    status: DRAFT_PENDING_PHASE_0_APPROVAL
-    requirement_ids: ["STD-001", "STD-002", "DOM-001", "DOM-002", "DOM-003", "DOM-004", "DOM-005", "DOM-006", "DOM-007"]
+    status: READY_FOR_PHASE_0_APPROVAL
+    requirement_ids: ["STD-001", "STD-002", "DOM-001", "DOM-002", "DOM-003", "DOM-004", "DOM-005", "DOM-006", "DOM-007", "DOM-008", "DOM-009", "DOM-010", "DOM-011"]
     owner: "WS-01"
     dependencies: ["STEAD-P0-001"]
     module: ["architecture-and-standards"]
     owned_directories: ["docs/architecture/standards", "docs/architecture/ontology", "specs/openapi", "specs/work-graph-profile", "packages/domain-schemas/common", "packages/domain-schemas/resources/instance", "packages/domain-schemas/resources/organization", "packages/domain-schemas/resources/team", "packages/domain-schemas/resources/initiative", "packages/domain-schemas/resources/project", "packages/domain-schemas/resources/cycle", "packages/domain-schemas/resources/work-item", "packages/domain-schemas/resources/document", "packages/domain-schemas/resources/repository", "packages/domain-schemas/resources/branch", "packages/domain-schemas/resources/commit", "packages/domain-schemas/resources/pull-request", "packages/domain-schemas/resources/build", "packages/domain-schemas/resources/deployment", "packages/domain-schemas/resources/release", "packages/domain-schemas/resources/package", "packages/domain-schemas/resources/artifact", "packages/domain-schemas/resources/attachment", "packages/domain-schemas/resources/comment", "packages/domain-schemas/resources/activity", "packages/domain-schemas/resources/notification", "packages/domain-schemas/resources/audit-record", "tests/contract/architecture", "packages/test-fixtures/architecture"]
     prohibited_boundaries: ["May not change a locked architecture decision without an approved ADR and project-owner approval.", "May not implement provider-specific or domain runtime behavior inside public schema packages.", "May not add first-class entities or configurable ontology outside the approved OWGP."]
     acceptance_criteria: ["Publish OWGP v0.1, resource envelopes, canonical entities/hierarchy/relationships, JSON Schema validation, cardinalities, compatibility, and export/import conformance.", "Every mapped requirement has an unambiguous owner, dependency, contract surface, test ID, documentation target, and release target.", "Review finds no conflict with a locked decision; any genuine alternative is isolated as an ADR candidate.", "The artifact is machine-validated where applicable and receives recorded project-owner plus independent QA/security approval."]
-    automated_tests: ["T-STEAD-P0-002-CONTRACT", "T-STD-001-ACCEPTANCE", "T-STD-002-ACCEPTANCE", "T-DOM-001-ACCEPTANCE", "T-DOM-002-ACCEPTANCE", "T-DOM-003-ACCEPTANCE", "T-DOM-004-ACCEPTANCE", "T-DOM-005-ACCEPTANCE", "T-DOM-006-ACCEPTANCE", "T-DOM-007-ACCEPTANCE"]
+    automated_tests: ["T-STEAD-P0-002-CONTRACT", "T-STD-001-ACCEPTANCE", "T-STD-002-ACCEPTANCE", "T-DOM-001-ACCEPTANCE", "T-DOM-002-ACCEPTANCE", "T-DOM-003-ACCEPTANCE", "T-DOM-004-ACCEPTANCE", "T-DOM-005-ACCEPTANCE", "T-DOM-006-ACCEPTANCE", "T-DOM-007-ACCEPTANCE", "T-DOM-008-ACCEPTANCE", "T-DOM-009-ACCEPTANCE", "T-DOM-010-ACCEPTANCE", "T-DOM-011-ACCEPTANCE"]
     authorization_and_classification_behavior: "Contracts must require server-side central authorization, effective-label propagation, deny-by-default behavior, and no existence leakage; architecture artifacts grant no bypass."
     observability_and_audit_requirements: "Define OpenTelemetry context and audit-event obligations at every contract boundary without placing secrets or protected bodies in telemetry."
     migration_and_backward_compatibility_implications: "Version public schemas and mappings; define compatibility, deprecation, conformance, and export/import behavior before implementation."
@@ -75,15 +85,15 @@ issues:
     title: "Runtime, database, module ownership, and transactional boundary contract"
     epic_id: "EPIC-P0-A"
     phase: "phase-0"
-    status: DRAFT_PENDING_PHASE_0_APPROVAL
-    requirement_ids: ["ARCH-003", "ARCH-004", "DOM-004", "EVT-002", "AGENT-002"]
+    status: READY_FOR_PHASE_0_APPROVAL
+    requirement_ids: ["PRIN-013", "ARCH-003", "ARCH-004", "DOM-004", "DOM-008", "DOM-009", "DOM-010", "DOM-011", "EVT-002", "AGENT-002"]
     owner: "WS-02"
     dependencies: ["STEAD-P0-001", "STEAD-P0-002"]
     module: ["platform-core-domain"]
     owned_directories: ["apps/core", "modules/organization", "modules/project", "modules/work", "packages/domain-schemas/resources/work-assignment", "tests/integration/core", "packages/test-fixtures/core"]
     prohibited_boundaries: ["May not call provider-specific implementations except through owned interfaces.", "May not write another module's tables or any upstream product database.", "May not publish domain events outside the transactional outbox or bypass central authorization."]
     acceptance_criteria: ["Define platform-core/worker/CLI responsibilities, module table ownership, provider ports, transaction rules, and transactional-outbox boundary.", "Every mapped requirement has an unambiguous owner, dependency, contract surface, test ID, documentation target, and release target.", "Review finds no conflict with a locked decision; any genuine alternative is isolated as an ADR candidate.", "The artifact is machine-validated where applicable and receives recorded project-owner plus independent QA/security approval."]
-    automated_tests: ["T-STEAD-P0-003-CONTRACT", "T-ARCH-003-ACCEPTANCE", "T-ARCH-004-ACCEPTANCE", "T-DOM-004-ACCEPTANCE", "T-EVT-002-ACCEPTANCE", "T-AGENT-002-ACCEPTANCE"]
+    automated_tests: ["T-STEAD-P0-003-CONTRACT", "T-PRIN-013-ACCEPTANCE", "T-ARCH-003-ACCEPTANCE", "T-ARCH-004-ACCEPTANCE", "T-DOM-004-ACCEPTANCE", "T-DOM-008-ACCEPTANCE", "T-DOM-009-ACCEPTANCE", "T-DOM-010-ACCEPTANCE", "T-DOM-011-ACCEPTANCE", "T-EVT-002-ACCEPTANCE", "T-AGENT-002-ACCEPTANCE"]
     authorization_and_classification_behavior: "Every protected mutation and read resolves the canonical resource, checks OpenFGA plus OPA plus applicable provider enforcement, and fails closed."
     observability_and_audit_requirements: "Emit OTel spans/metrics with correlation and causation IDs; write required audit metadata and never log protected bodies or secrets."
     migration_and_backward_compatibility_implications: "Own versioned, module-local migrations and stable UUIDv7 resources; preserve export mappings and backward-compatible API behavior."
@@ -93,7 +103,7 @@ issues:
     title: "Gitea capability interfaces, mapping, reconciliation, and bypass contract"
     epic_id: "EPIC-P0-B"
     phase: "phase-0"
-    status: DRAFT_PENDING_PHASE_0_APPROVAL
+    status: READY_FOR_PHASE_0_APPROVAL
     requirement_ids: ["SCM-001", "SCM-002", "SCM-003", "SCM-004", "SCM-005", "SCM-006", "AGENT-002"]
     owner: "WS-03"
     dependencies: ["STEAD-P0-001", "STEAD-P0-002", "STEAD-P0-003"]
@@ -111,33 +121,33 @@ issues:
     title: "Git/OKF knowledge and Commonplace compatibility contract"
     epic_id: "EPIC-P0-B"
     phase: "phase-0"
-    status: DRAFT_PENDING_PHASE_0_APPROVAL
-    requirement_ids: ["DOM-005", "DOC-001", "DOC-002", "DOC-003", "DOC-004", "DOC-005"]
+    status: READY_FOR_PHASE_0_APPROVAL
+    requirement_ids: ["DOM-005", "DOC-001", "DOC-002", "DOC-003", "DOC-004", "DOC-005", "UX-008"]
     owner: "WS-04"
     dependencies: ["STEAD-P0-001", "STEAD-P0-002", "STEAD-P0-004"]
     module: ["knowledge-commonplace"]
     owned_directories: ["modules/knowledge", "providers/commonplace", "packages/provider-sdk/knowledge", "specs/okf-profile", "tests/contract/commonplace", "packages/test-fixtures/knowledge"]
     prohibited_boundaries: ["Must not create a permanent divergent Commonplace fork, put platform ontology or authorization into a patch queue, use an iframe as primary docs UI, or permit unsafe executable content.", "Must not claim page-level secrecy inside a cloneable repository."]
     acceptance_criteria: ["Specify deterministic Markdown/OKF storage, stable IDs, review branches, repository security boundary, safe rendering, Commonplace upstream interface, minimal patch rules, and ADR-gated native fallback.", "Every mapped requirement has an unambiguous owner, dependency, contract surface, test ID, documentation target, and release target.", "Review finds no conflict with a locked decision; any genuine alternative is isolated as an ADR candidate.", "The artifact is machine-validated where applicable and receives recorded project-owner plus independent QA/security approval."]
-    automated_tests: ["T-STEAD-P0-005-CONTRACT", "T-DOM-005-ACCEPTANCE", "T-DOC-001-ACCEPTANCE", "T-DOC-002-ACCEPTANCE", "T-DOC-003-ACCEPTANCE", "T-DOC-004-ACCEPTANCE", "T-DOC-005-ACCEPTANCE"]
+    automated_tests: ["T-STEAD-P0-005-CONTRACT", "T-DOM-005-ACCEPTANCE", "T-DOC-001-ACCEPTANCE", "T-DOC-002-ACCEPTANCE", "T-DOC-003-ACCEPTANCE", "T-DOC-004-ACCEPTANCE", "T-DOC-005-ACCEPTANCE", "T-UX-008-ACCEPTANCE"]
     authorization_and_classification_behavior: "Repository/container permission is the minimum document access boundary; every view/edit/export/review checks central policy and preserves effective markings."
     observability_and_audit_requirements: "Trace Git/editor/review operations and audit controlled-content approvals, revision hashes, conflicts, exports, and label changes without recording bodies."
     migration_and_backward_compatibility_implications: "Maintain deterministic Markdown plus OKF frontmatter, stable document IDs across moves, readable Git history, portable attachment manifests, and compatibility tests."
     upgrade_and_rollback_behavior: "Test upstream Commonplace compatibility and automatic patch rebases; preserve native-UI fallback and rollback to last compatible version."
     documentation_obligations: ["Document OKF profile use, Git storage, editing/review flows, conflict recovery, controlled content, security boundaries, and upstream/fallback status."]
   - id: "STEAD-P0-006"
-    title: "Unified shell, interaction vocabulary, markings, accessibility, and performance contract"
+    title: "Capability-driven unified shell, interaction vocabulary, accessibility, and performance contract"
     epic_id: "EPIC-P0-B"
     phase: "phase-0"
-    status: DRAFT_PENDING_PHASE_0_APPROVAL
-    requirement_ids: ["PRIN-001", "UX-001", "UX-002", "UX-003", "UX-004", "UX-005"]
+    status: READY_FOR_PHASE_0_APPROVAL
+    requirement_ids: ["PRIN-001", "PRIN-013", "PRIN-014", "DOM-008", "DOM-011", "UX-001", "UX-002", "UX-003", "UX-004", "UX-005", "UX-006", "UX-007", "UX-008", "UX-009"]
     owner: "WS-05"
     dependencies: ["STEAD-P0-001", "STEAD-P0-002", "STEAD-P0-005"]
     module: ["unified-frontend-design-system"]
     owned_directories: ["apps/web", "packages/design-system", "packages/api-client", "packages/test-fixtures/frontend"]
     prohibited_boundaries: ["Browser code may call only the versioned platform API; it may not call Gitea, Commonplace, OpenFGA, OPA, NATS, or storage directly.", "UI hiding may not be treated as authorization.", "Core navigation and workflow semantics may not become tenant-configurable."]
-    acceptance_criteria: ["Specify the single shell/navigation/project views, shared interactions, stable links, effective-label display, WCAG 2.2 AA behavior, and progressive authorized loading.", "Every mapped requirement has an unambiguous owner, dependency, contract surface, test ID, documentation target, and release target.", "Review finds no conflict with a locked decision; any genuine alternative is isolated as an ADR candidate.", "The artifact is machine-validated where applicable and receives recorded project-owner plus independent QA/security approval."]
-    automated_tests: ["T-STEAD-P0-006-CONTRACT", "T-PRIN-001-ACCEPTANCE", "T-UX-001-ACCEPTANCE", "T-UX-002-ACCEPTANCE", "T-UX-003-ACCEPTANCE", "T-UX-004-ACCEPTANCE", "T-UX-005-ACCEPTANCE"]
+    acceptance_criteria: ["Specify the universal Home/Inbox/My Work/Projects/Knowledge/Teams shell and Project Overview/Work/Docs surfaces, with Code and Delivery visible only for enabled software capabilities.", "Define shared object interactions, stable links, effective-label display, capability presets, hierarchy-aware context, WCAG 2.2 AA behavior, and progressive authorized loading.", "Prove that Devlane supplies visual and interaction patterns only: no frontend contract requires its routes or Modules/Epics/Pages/Board/Intake/Archive/Draft ontology.", "Every mapped requirement has an unambiguous owner, dependency, contract surface, test ID, documentation target, and release target.", "Review finds no conflict with a locked decision; any genuine alternative is isolated as an ADR candidate.", "The artifact is machine-validated where applicable and receives recorded project-owner plus independent QA/security approval."]
+    automated_tests: ["T-STEAD-P0-006-CONTRACT", "T-PRIN-001-ACCEPTANCE", "T-PRIN-013-ACCEPTANCE", "T-PRIN-014-ACCEPTANCE", "T-DOM-008-ACCEPTANCE", "T-DOM-011-ACCEPTANCE", "T-UX-001-ACCEPTANCE", "T-UX-002-ACCEPTANCE", "T-UX-003-ACCEPTANCE", "T-UX-004-ACCEPTANCE", "T-UX-005-ACCEPTANCE", "T-UX-006-ACCEPTANCE", "T-UX-007-ACCEPTANCE", "T-UX-008-ACCEPTANCE", "T-UX-009-ACCEPTANCE"]
     authorization_and_classification_behavior: "Display effective labels on protected content and policy warnings where required; rely on authoritative server decisions and reveal no denied-resource metadata."
     observability_and_audit_requirements: "Instrument frontend performance and error correlation without capturing protected content; ensure user actions carry correlation context for server audit."
     migration_and_backward_compatibility_implications: "Use canonical deep links and provider-independent IDs so provider migrations and redirects do not break navigation."
@@ -147,15 +157,15 @@ issues:
     title: "Identity, authorization, security-label lattice, and direct-path enforcement contract"
     epic_id: "EPIC-P0-B"
     phase: "phase-0"
-    status: DRAFT_PENDING_PHASE_0_APPROVAL
-    requirement_ids: ["PRIN-007", "PRIN-011", "PRIN-012", "DOM-007", "AUTH-001", "AUTH-002", "AUTH-003", "AUTH-004", "AUTH-005", "CLS-001", "CLS-002", "CLS-003", "CLS-004", "CLS-005", "CLS-006", "CLS-007", "CLS-008", "AGENT-001", "AGENT-003", "AGENT-006"]
+    status: READY_FOR_PHASE_0_APPROVAL
+    requirement_ids: ["PRIN-007", "PRIN-011", "PRIN-012", "PRIN-015", "DOM-007", "DOM-009", "DOM-010", "AUTH-001", "AUTH-002", "AUTH-003", "AUTH-004", "AUTH-005", "AUTH-006", "CLS-001", "CLS-002", "CLS-003", "CLS-004", "CLS-005", "CLS-006", "CLS-007", "CLS-008", "AGENT-001", "AGENT-003", "AGENT-006"]
     owner: "WS-06"
     dependencies: ["STEAD-P0-001", "STEAD-P0-002", "STEAD-P0-003", "STEAD-P0-004"]
     module: ["identity-authorization-classification"]
     owned_directories: ["modules/identity", "modules/authorization", "modules/classification", "policies/openfga", "policies/opa", "policies/security-label-profiles", "providers/identity-oidc", "providers/identity-scim", "packages/domain-schemas/identity", "packages/domain-schemas/security", "packages/provider-sdk/identity", "tests/contract/identity-authorization", "packages/test-fixtures/security"]
     prohibited_boundaries: ["No module-specific alternative authorization, self-asserted trusted attributes, administrator content bypass, or built-in cross-domain/write-down path.", "Per-item labels may not grant access beyond an enforceable container.", "Unsigned or unversioned policy bundles are prohibited."]
-    acceptance_criteria: ["Publish OIDC/SCIM and trusted-attribute contracts, OpenFGA v0.1, OPA input/output, signed label profiles/lattice/join/downgrade rules, security-domain configuration, and bypass inventory.", "Every mapped requirement has an unambiguous owner, dependency, contract surface, test ID, documentation target, and release target.", "Review finds no conflict with a locked decision; any genuine alternative is isolated as an ADR candidate.", "The artifact is machine-validated where applicable and receives recorded project-owner plus independent QA/security approval."]
-    automated_tests: ["T-STEAD-P0-007-CONTRACT", "T-PRIN-007-ACCEPTANCE", "T-PRIN-011-ACCEPTANCE", "T-PRIN-012-ACCEPTANCE", "T-DOM-007-ACCEPTANCE", "T-AUTH-001-ACCEPTANCE", "T-AUTH-002-ACCEPTANCE", "T-AUTH-003-ACCEPTANCE", "T-AUTH-004-ACCEPTANCE", "T-AUTH-005-ACCEPTANCE", "T-CLS-001-ACCEPTANCE", "T-CLS-002-ACCEPTANCE", "T-CLS-003-ACCEPTANCE", "T-CLS-004-ACCEPTANCE", "T-CLS-005-ACCEPTANCE", "T-CLS-006-ACCEPTANCE", "T-CLS-007-ACCEPTANCE", "T-CLS-008-ACCEPTANCE", "T-AGENT-001-ACCEPTANCE", "T-AGENT-003-ACCEPTANCE", "T-AGENT-006-ACCEPTANCE"]
+    acceptance_criteria: ["Publish OIDC/SCIM and trusted-attribute contracts, OpenFGA v0.1, OPA input/output, signed label profiles/lattice/join/downgrade rules, and security-domain configuration; supply policy-control and direct-path inputs for the WS-13-owned bypass inventory without editing that QA contract.", "Model hierarchical Teams separately from authorization so parent or child placement grants no implicit relation; represent user, agent, service_account, and directory-group references without treating groups as acting principals.", "Reserve agent-specific, delegated, task-scoped, runtime-domain, environment, and classification-aware authorization seams without granting any agent authority.", "Every mapped requirement has an unambiguous owner, dependency, contract surface, test ID, documentation target, and release target.", "Review finds no conflict with a locked decision; any genuine alternative is isolated as an ADR candidate.", "The artifact is machine-validated where applicable and receives recorded project-owner plus independent QA/security approval."]
+    automated_tests: ["T-STEAD-P0-007-CONTRACT", "T-PRIN-007-ACCEPTANCE", "T-PRIN-011-ACCEPTANCE", "T-PRIN-012-ACCEPTANCE", "T-PRIN-015-ACCEPTANCE", "T-DOM-007-ACCEPTANCE", "T-DOM-009-ACCEPTANCE", "T-DOM-010-ACCEPTANCE", "T-AUTH-001-ACCEPTANCE", "T-AUTH-002-ACCEPTANCE", "T-AUTH-003-ACCEPTANCE", "T-AUTH-004-ACCEPTANCE", "T-AUTH-005-ACCEPTANCE", "T-AUTH-006-ACCEPTANCE", "T-CLS-001-ACCEPTANCE", "T-CLS-002-ACCEPTANCE", "T-CLS-003-ACCEPTANCE", "T-CLS-004-ACCEPTANCE", "T-CLS-005-ACCEPTANCE", "T-CLS-006-ACCEPTANCE", "T-CLS-007-ACCEPTANCE", "T-CLS-008-ACCEPTANCE", "T-AGENT-001-ACCEPTANCE", "T-AGENT-003-ACCEPTANCE", "T-AGENT-006-ACCEPTANCE"]
     authorization_and_classification_behavior: "Combine authentication, trusted attributes, OpenFGA relationships, OPA classification/context/deny policy, and provider enforcement; all required checks must allow and expired/unverifiable attributes fail closed."
     observability_and_audit_requirements: "Audit decision metadata, model/policy versions, trusted-attribute provenance, label changes, downgrade approvals, and bypass denials without unnecessary sensitive content."
     migration_and_backward_compatibility_implications: "Version and migrate OpenFGA models, Rego bundles, trusted attributes, labels, and lattice joins; reindex/invalidate all derived projections after policy-affecting changes."
@@ -165,7 +175,7 @@ issues:
     title: "CloudEvents, AsyncAPI, activity, inbox, notification, and audit contracts"
     epic_id: "EPIC-P0-B"
     phase: "phase-0"
-    status: DRAFT_PENDING_PHASE_0_APPROVAL
+    status: READY_FOR_PHASE_0_APPROVAL
     requirement_ids: ["EVT-001", "EVT-003", "EVT-004", "ACT-001", "NOTIF-001", "NOTIF-002", "AUD-001", "AUD-002", "AGENT-004"]
     owner: "WS-07"
     dependencies: ["STEAD-P0-002", "STEAD-P0-003", "STEAD-P0-007"]
@@ -180,18 +190,18 @@ issues:
     upgrade_and_rollback_behavior: "Use compatible event evolution, dual-read/dual-publish only when specified, drain/replay checks, and rollback without losing acknowledged mutations."
     documentation_obligations: ["Document event naming, subjects, payload schemas, delivery/replay/DLQ behavior, activity semantics, notification routing, and audit exports."]
   - id: "STEAD-P0-009"
-    title: "Search, work graph, and permission-aware MCP contracts"
+    title: "Search, work graph, and permission-aware MCP/A2A compatibility contracts"
     epic_id: "EPIC-P0-B"
     phase: "phase-0"
-    status: DRAFT_PENDING_PHASE_0_APPROVAL
-    requirement_ids: ["SRCH-001", "SRCH-002", "SRCH-003", "GRAPH-001", "GRAPH-002", "AGENT-005"]
+    status: READY_FOR_PHASE_0_APPROVAL
+    requirement_ids: ["DOM-010", "UX-008", "AUTH-006", "SRCH-001", "SRCH-002", "SRCH-003", "GRAPH-001", "GRAPH-002", "AGENT-005"]
     owner: "WS-08"
     dependencies: ["STEAD-P0-002", "STEAD-P0-007", "STEAD-P0-008"]
     module: ["search-work-graph-agent-access"]
-    owned_directories: ["modules/search", "providers/search-postgres", "providers/search-opensearch", "packages/provider-sdk/search", "docs/architecture/search-graph/mcp-a2a-compatibility.md", "tests/contract/search", "tests/integration/search", "packages/test-fixtures/search"]
+    owned_directories: ["modules/search", "modules/agent", "providers/search-postgres", "providers/search-opensearch", "providers/agent-a2a", "packages/provider-sdk/search", "specs/mcp", "specs/a2a", "docs/architecture/search-graph/mcp-a2a-compatibility.md", "tests/contract/search", "tests/integration/search", "packages/test-fixtures/search"]
     prohibited_boundaries: ["Search and graph projections may not become systems of record.", "Post-filtering may not leak counts, facets, snippets, suggestions, titles, IDs, or edges.", "Agents may not receive direct repository/database/search/NATS/object-store access."]
-    acceptance_criteria: ["Specify provider-neutral search/graph projections, pre-retrieval partitioning, authoritative result filtering, non-disclosure, rebuild, provenance traversal, and API-mediated MCP access.", "Every mapped requirement has an unambiguous owner, dependency, contract surface, test ID, documentation target, and release target.", "Review finds no conflict with a locked decision; any genuine alternative is isolated as an ADR candidate.", "The artifact is machine-validated where applicable and receives recorded project-owner plus independent QA/security approval."]
-    automated_tests: ["T-STEAD-P0-009-CONTRACT", "T-SRCH-001-ACCEPTANCE", "T-SRCH-002-ACCEPTANCE", "T-SRCH-003-ACCEPTANCE", "T-GRAPH-001-ACCEPTANCE", "T-GRAPH-002-ACCEPTANCE", "T-AGENT-005-ACCEPTANCE"]
+    acceptance_criteria: ["Specify a multi-resource search envelope, provider-neutral search/graph projections, pre-retrieval partitioning, authoritative result filtering, non-disclosure, rebuild, and provenance traversal across Work, Docs, Teams, People, Agents, and enabled software resources.", "Publish contract-only MCP and A2A compatibility seams through Platform APIs, including agent/task context, while excluding tool catalog implementation, dispatch, registry runtime, and AgentRun execution.", "Every mapped requirement has an unambiguous owner, dependency, contract surface, test ID, documentation target, and release target.", "Review finds no conflict with a locked decision; any genuine alternative is isolated as an ADR candidate.", "The artifact is machine-validated where applicable and receives recorded project-owner plus independent QA/security approval."]
+    automated_tests: ["T-STEAD-P0-009-CONTRACT", "T-DOM-010-ACCEPTANCE", "T-UX-008-ACCEPTANCE", "T-AUTH-006-ACCEPTANCE", "T-SRCH-001-ACCEPTANCE", "T-SRCH-002-ACCEPTANCE", "T-SRCH-003-ACCEPTANCE", "T-GRAPH-001-ACCEPTANCE", "T-GRAPH-002-ACCEPTANCE", "T-AGENT-005-ACCEPTANCE"]
     authorization_and_classification_behavior: "Apply domain/container partition filtering before retrieval and authoritative OpenFGA/OPA checks before returning any result or graph data; MCP uses the same API and decisions."
     observability_and_audit_requirements: "Measure indexing/replay lag and query latency with label/domain dimensions that cannot reveal protected cardinality; audit agent writes and sensitive query decisions."
     migration_and_backward_compatibility_implications: "Indexes and graph edges must rebuild from authoritative resources/events; canonical IDs and links survive provider changes."
@@ -201,7 +211,7 @@ issues:
     title: "BlobStore, attachment, cache, and storage partition contract"
     epic_id: "EPIC-P0-B"
     phase: "phase-0"
-    status: DRAFT_PENDING_PHASE_0_APPROVAL
+    status: READY_FOR_PHASE_0_APPROVAL
     requirement_ids: ["STOR-001", "STOR-002", "STOR-003"]
     owner: "WS-10"
     dependencies: ["STEAD-P0-002", "STEAD-P0-007"]
@@ -219,7 +229,7 @@ issues:
     title: "CI, runner, artifact, action-catalog, and secret-provider contracts"
     epic_id: "EPIC-P0-B"
     phase: "phase-0"
-    status: DRAFT_PENDING_PHASE_0_APPROVAL
+    status: READY_FOR_PHASE_0_APPROVAL
     requirement_ids: ["ART-001", "CICD-001", "CICD-002", "CICD-003", "CICD-004", "CICD-005"]
     owner: "WS-09"
     dependencies: ["STEAD-P0-004", "STEAD-P0-007", "STEAD-P0-008", "STEAD-P0-011"]
@@ -237,7 +247,7 @@ issues:
     title: "Migration state machine, canonical mappings, preservation, and redirect contract"
     epic_id: "EPIC-P0-B"
     phase: "phase-0"
-    status: DRAFT_PENDING_PHASE_0_APPROVAL
+    status: READY_FOR_PHASE_0_APPROVAL
     requirement_ids: ["MIG-001", "MIG-002", "MIG-003", "MIG-004", "MIG-005"]
     owner: "WS-11"
     dependencies: ["STEAD-P0-002", "STEAD-P0-004", "STEAD-P0-005", "STEAD-P0-007", "STEAD-P0-011"]
@@ -255,7 +265,7 @@ issues:
     title: "Deployment profiles, platformctl, operations, upgrade, backup, and restore contracts"
     epic_id: "EPIC-P0-C"
     phase: "phase-0"
-    status: DRAFT_PENDING_PHASE_0_APPROVAL
+    status: READY_FOR_PHASE_0_APPROVAL
     requirement_ids: ["PRIN-008", "PRIN-009", "DEP-001", "DEP-002", "DEP-003", "DEP-004", "DEP-005", "OPS-001", "OPS-002", "OPS-003", "OPS-004", "OPS-005"]
     owner: "WS-12"
     dependencies: ["STEAD-P0-003", "STEAD-P0-004", "STEAD-P0-007", "STEAD-P0-008", "STEAD-P0-010", "STEAD-P0-011"]
@@ -273,15 +283,15 @@ issues:
     title: "Freeze agent-ready compatibility seams and the Phase 0 non-goal"
     epic_id: "EPIC-P0-B"
     phase: "phase-0"
-    status: DRAFT_PENDING_PHASE_0_APPROVAL
-    requirement_ids: ["AGENT-001", "AGENT-002", "AGENT-003", "AGENT-004", "AGENT-005", "AGENT-006", "AGENT-007"]
+    status: READY_FOR_PHASE_0_APPROVAL
+    requirement_ids: ["DOM-010", "AUTH-006", "AGENT-001", "AGENT-002", "AGENT-003", "AGENT-004", "AGENT-005", "AGENT-006", "AGENT-007"]
     owner: "WS-01"
     dependencies: ["STEAD-P0-002", "STEAD-P0-003", "STEAD-P0-004", "STEAD-P0-007", "STEAD-P0-008", "STEAD-P0-009"]
     module: ["architecture-and-standards"]
     owned_directories: ["docs/architecture/agent-ready-compatibility.md"]
-    prohibited_boundaries: ["This integration issue may not directly edit Principal, assignment, OpenFGA, OPA, event/audit, or MCP contracts owned by WS-02/06/07/08; each sole editor lands its contract through its owning P0 issue and this issue integrates the evidence.", "Phase 0 must not build agent orchestration, prompting, model hosting, agent memory, AgentRun execution, A2A dispatch, or a full MCP tool catalog.", "The platform must not require a particular AI model, agent SDK, orchestration framework, or model provider.", "Agents may not inherit broad human permissions or directly access provider business APIs, databases, NATS, search, or object stores; only scoped direct Git credentials are permitted.", "This compatibility contract may not add a first-class canonical entity beyond DOM-002 without an approved ADR and ontology review."]
-    acceptance_criteria: ["Canonical contracts distinguish principal from human identity and permit user, agent, and service_account principals in actor, assignee, creator, reviewer, subscriber, and request positions.", "Work-item assignment accepts an agent principal while preserving Gitea-native user mapping as a provider limitation rather than canonical semantics.", "OpenFGA reserves agent as a principal type and OPA inputs preserve future delegation, task, runtime, domain, classification ceiling, compartment, model-provider, tool-scope, and environment seams without granting permissions.", "Audit and CloudEvents can record distinct actor and requested_by or initiating principal plus type, delegation/task, correlation, and causation without a later schema change.", "The boundary requires canonical Platform APIs and platform-wide MCP for business access, permits scoped direct Git credentials, remains runtime/provider neutral, and records MCP/A2A/Agent Card future interoperability without implementing it in Phase 0.", "Classification contracts can later evaluate the intersection of delegator, agent, task, runtime domain, session/environment, and resource label constraints.", "A scope review and repository inventory prove that no prohibited Phase 0 agent-runtime feature was introduced; all seven AGENT requirements have owners and tests.", "WS-01 integrates compatibility evidence only; WS-02, WS-06, WS-07, and WS-08 remain sole editors of their component contracts and fixtures, while WS-13 owns the independent golden/scope assertions and approval evidence."]
-    automated_tests: ["T-STEAD-P0-015-CONTRACT", "T-AGENT-001-ACCEPTANCE", "T-AGENT-002-ACCEPTANCE", "T-AGENT-003-ACCEPTANCE", "T-AGENT-004-ACCEPTANCE", "T-AGENT-005-ACCEPTANCE", "T-AGENT-006-ACCEPTANCE", "T-AGENT-007-SCOPE-GUARD"]
+    prohibited_boundaries: ["This integration issue may not directly edit Principal, assignment, OpenFGA, OPA, event/audit, or MCP contracts owned by WS-02/06/07/08; each sole editor lands its contract through its owning P0 issue and this issue integrates the evidence.", "Phase 0 must not build agent orchestration, prompting, model hosting, agent memory, AgentRun execution, A2A dispatch, or a full MCP tool catalog.", "The platform must not require a particular AI model, agent SDK, orchestration framework, or model provider.", "Agents may not inherit broad human permissions or directly access provider business APIs, databases, NATS, search, or object stores; only scoped direct Git credentials are permitted.", "Agent and AgentRun schemas required by DOM-002 and DOM-010 are contract-only and may not introduce executable runtime behavior."]
+    acceptance_criteria: ["Canonical contracts distinguish principal from human identity and permit user, agent, and service_account acting/requesting principals where applicable; the Work-assignee union is specifically user or agent.", "Work-item assignment accepts an agent principal while preserving Gitea-native user mapping as a provider limitation rather than canonical semantics.", "OpenFGA reserves agent as a principal type and OPA inputs preserve future delegation, task, runtime, domain, classification ceiling, compartment, model-provider, tool-scope, and environment seams without granting permissions.", "Audit and CloudEvents can record distinct actor and requested_by or initiating principal plus type, delegation/task, correlation, and causation without a later schema change.", "The boundary requires canonical Platform APIs and platform-wide MCP for business access, permits scoped direct Git credentials, remains runtime/provider neutral, and records MCP/A2A/Agent Card future interoperability without implementing it in Phase 0.", "Classification contracts can later evaluate the intersection of delegator, agent, task, runtime domain, session/environment, and resource label constraints.", "A scope review and repository inventory prove that no prohibited Phase 0 agent-runtime feature was introduced; all seven AGENT requirements have owners and tests.", "WS-01 integrates compatibility evidence only; WS-02, WS-06, WS-07, and WS-08 remain sole editors of their component contracts and fixtures, while WS-13 owns the independent golden/scope assertions and approval evidence."]
+    automated_tests: ["T-STEAD-P0-015-CONTRACT", "T-DOM-010-ACCEPTANCE", "T-AUTH-006-ACCEPTANCE", "T-AGENT-001-ACCEPTANCE", "T-AGENT-002-ACCEPTANCE", "T-AGENT-003-ACCEPTANCE", "T-AGENT-004-ACCEPTANCE", "T-AGENT-005-ACCEPTANCE", "T-AGENT-006-ACCEPTANCE", "T-AGENT-007-SCOPE-GUARD"]
     authorization_and_classification_behavior: "The contracts reserve a non-human principal type but grant no authority; future access must be the intersection of delegating, agent-specific, task-scoped, runtime-domain, environment/session, and resource classification decisions, with explicit independent revocation and no human-permission inheritance."
     observability_and_audit_requirements: "Event and audit schemas must record actor, actor principal type, initiating/requesting principal when different, delegation/task context when present, and correlation/causation IDs while excluding prompts, memory, protected bodies, credentials, and secrets."
     migration_and_backward_compatibility_implications: "Principal unions, assignment references, authorization inputs, events, audit records, and API/MCP seams must be additive and capable of representing future agents without a breaking schema migration; provider-native user constraints remain adapter metadata."
@@ -292,15 +302,15 @@ issues:
     title: "Traceability, threat baseline, golden plan, quality strategy, and release gates"
     epic_id: "EPIC-P0-C"
     phase: "phase-0"
-    status: DRAFT_PENDING_PHASE_0_APPROVAL
-    requirement_ids: ["PRIN-010", "SEC-001", "SEC-002", "SEC-003", "SEC-004", "SEC-005", "SEC-006", "TEST-001", "TEST-002", "TEST-003", "TEST-004", "TEST-005", "TEST-006", "TEST-007", "TEST-008", "TEST-009", "AGENT-001", "AGENT-002", "AGENT-003", "AGENT-004", "AGENT-005", "AGENT-006", "AGENT-007"]
+    status: READY_FOR_PHASE_0_APPROVAL
+    requirement_ids: ["PRIN-010", "SEC-001", "SEC-002", "SEC-003", "SEC-004", "SEC-005", "SEC-006", "TEST-001", "TEST-002", "TEST-003", "TEST-004", "TEST-005", "TEST-006", "TEST-007", "TEST-008", "TEST-009", "TEST-010", "AGENT-001", "AGENT-002", "AGENT-003", "AGENT-004", "AGENT-005", "AGENT-006", "AGENT-007"]
     owner: "WS-13"
     dependencies: ["STEAD-P0-001", "STEAD-P0-002", "STEAD-P0-003", "STEAD-P0-004", "STEAD-P0-005", "STEAD-P0-006", "STEAD-P0-007", "STEAD-P0-008", "STEAD-P0-009", "STEAD-P0-010", "STEAD-P0-011", "STEAD-P0-012", "STEAD-P0-013", "STEAD-P0-015"]
     module: ["qa-security-release"]
     owned_directories: ["specs/traceability", "specs/oscal", "docs/testing", "docs/security", "docs/governance", "tests/contract/harness", "tests/e2e", "tests/security", "tests/classification", "tests/performance/harness", "packages/test-fixtures/harness"]
     prohibited_boundaries: ["May not approve its own implementation work, waive gates without documented authority/time bounds, edit production modules as a hidden fix, or pass a release with a known disclosure path, missing artifact, failed required test, or disallowed/unknown license."]
-    acceptance_criteria: ["Verify 115-ID traceability; publish the module/integration threat baseline, classification bypass inventory, all test layers/coverage floors, golden scenario plan including AGENT-001 through AGENT-007 seam assertions, release gates, and independent approval rules.", "Every mapped requirement has an unambiguous owner, dependency, contract surface, test ID, documentation target, and release target.", "Review finds no conflict with a locked decision; any genuine alternative is isolated as an ADR candidate.", "The artifact is machine-validated where applicable and receives recorded project-owner plus distinct independent QA and security approvals."]
-    automated_tests: ["T-STEAD-P0-014-CONTRACT", "T-PRIN-010-ACCEPTANCE", "T-SEC-001-ACCEPTANCE", "T-SEC-002-ACCEPTANCE", "T-SEC-003-ACCEPTANCE", "T-SEC-004-ACCEPTANCE", "T-SEC-005-ACCEPTANCE", "T-SEC-006-ACCEPTANCE", "T-TEST-001-ACCEPTANCE", "T-TEST-002-ACCEPTANCE", "T-TEST-003-ACCEPTANCE", "T-TEST-004-ACCEPTANCE", "T-TEST-005-ACCEPTANCE", "T-TEST-006-ACCEPTANCE", "T-TEST-007-ACCEPTANCE", "T-TEST-008-ACCEPTANCE", "T-TEST-009-ACCEPTANCE", "T-AGENT-001-ACCEPTANCE", "T-AGENT-002-ACCEPTANCE", "T-AGENT-003-ACCEPTANCE", "T-AGENT-004-ACCEPTANCE", "T-AGENT-005-ACCEPTANCE", "T-AGENT-006-ACCEPTANCE", "T-AGENT-007-SCOPE-GUARD"]
+    acceptance_criteria: ["Verify 128-ID traceability; publish the module/integration threat baseline, classification bypass inventory, all test layers/coverage floors, separate general-work and software-development golden scenario plans, AGENT-001 through AGENT-007 seam assertions, release gates, and independent approval rules.", "Publish the Phase 0 Closeout Packet with reconciliation, contract, UX, security, license, validation, Phase 1 dependency, and owner-review evidence; do not open Phase 1 execution.", "Every mapped requirement has an unambiguous owner, dependency, contract surface, test ID, documentation target, and release target.", "Review finds no conflict with a locked decision; any genuine alternative is isolated as an ADR candidate.", "The artifact is machine-validated where applicable and receives recorded project-owner plus distinct independent QA and security approvals."]
+    automated_tests: ["T-STEAD-P0-014-CONTRACT", "T-PRIN-010-ACCEPTANCE", "T-SEC-001-ACCEPTANCE", "T-SEC-002-ACCEPTANCE", "T-SEC-003-ACCEPTANCE", "T-SEC-004-ACCEPTANCE", "T-SEC-005-ACCEPTANCE", "T-SEC-006-ACCEPTANCE", "T-TEST-001-ACCEPTANCE", "T-TEST-002-ACCEPTANCE", "T-TEST-003-ACCEPTANCE", "T-TEST-004-ACCEPTANCE", "T-TEST-005-ACCEPTANCE", "T-TEST-006-ACCEPTANCE", "T-TEST-007-ACCEPTANCE", "T-TEST-008-ACCEPTANCE", "T-TEST-009-ACCEPTANCE", "T-TEST-010-ACCEPTANCE", "T-AGENT-001-ACCEPTANCE", "T-AGENT-002-ACCEPTANCE", "T-AGENT-003-ACCEPTANCE", "T-AGENT-004-ACCEPTANCE", "T-AGENT-005-ACCEPTANCE", "T-AGENT-006-ACCEPTANCE", "T-AGENT-007-SCOPE-GUARD"]
     authorization_and_classification_behavior: "Independently test deny-by-default policy, decision coverage, all classification matrix cases, and direct-provider/non-UI bypasses including absence of existence leakage."
     observability_and_audit_requirements: "Verify required telemetry/audit evidence, sensitive-data redaction, correlation, replay, tamper evidence where required, and gate decision records."
     migration_and_backward_compatibility_implications: "Test migration conformance, schema/event/API compatibility, upgrades from supported versions, backup/restore fidelity, and rollback/recovery."
@@ -317,7 +327,7 @@ issues:
     module: ["architecture-and-standards"]
     owned_directories: ["docs/architecture/standards", "docs/architecture/ontology", "docs/adr", "specs/openapi", "specs/work-graph-profile", "packages/domain-schemas/common", "packages/domain-schemas/resources"]
     prohibited_boundaries: ["May not change a locked architecture decision without an approved ADR and project-owner approval.", "May not implement provider-specific or domain runtime behavior inside public schema packages.", "May not add first-class entities or configurable ontology outside the approved OWGP."]
-    acceptance_criteria: ["Create the locked monorepo layout with Go and React/TypeScript tooling, schema/API linting, Apache-2.0/MIT notice handling, license allowlist checks, and no unapproved dependency.", "All mapped requirement acceptance tests pass at the required layer and coverage floor.", "Authorization, classification, direct-path, observability, audit, compatibility, migration, upgrade, rollback, and documentation obligations are complete.", "Independent WS-13 review finds no unresolved critical/high defect, disallowed license, missing release evidence, or unauthorized disclosure path."]
+    acceptance_criteria: ["Create the locked monorepo layout with Go and React/TypeScript tooling, schema/API linting, Apache-2.0/MIT notice handling, license allowlist checks, and no unapproved dependency.", "Pin and record the exact Devlane source commit before frontend feature work begins, preserve its MIT attribution, and make source provenance reproducible in dependency/release evidence.", "All mapped requirement acceptance tests pass at the required layer and coverage floor.", "Authorization, classification, direct-path, observability, audit, compatibility, migration, upgrade, rollback, and documentation obligations are complete.", "Independent WS-13 review finds no unresolved critical/high defect, disallowed license, missing release evidence, or unauthorized disclosure path."]
     automated_tests: ["T-STEAD-P1-001-CONTRACT", "T-PRIN-002-ACCEPTANCE", "T-PRIN-005-ACCEPTANCE", "T-PRIN-006-ACCEPTANCE", "T-ARCH-001-ACCEPTANCE", "T-ARCH-002-ACCEPTANCE", "T-ARCH-005-ACCEPTANCE", "T-STD-001-ACCEPTANCE", "T-SEC-001-ACCEPTANCE", "T-SEC-006-ACCEPTANCE"]
     authorization_and_classification_behavior: "Contracts must require server-side central authorization, effective-label propagation, deny-by-default behavior, and no existence leakage; architecture artifacts grant no bypass."
     observability_and_audit_requirements: "Define OpenTelemetry context and audit-event obligations at every contract boundary without placing secrets or protected bodies in telemetry."
@@ -329,14 +339,14 @@ issues:
     epic_id: "EPIC-P1"
     phase: "phase-1"
     status: BLOCKED_PENDING_PHASE_0_APPROVAL
-    requirement_ids: ["PRIN-003", "PRIN-004", "PRIN-005", "PRIN-006", "ARCH-003", "ARCH-004", "ARCH-005", "STD-002", "DOM-001", "DOM-002", "DOM-003", "DOM-004", "DOM-005", "DOM-006", "DOM-007", "EVT-002", "AGENT-001", "AGENT-002"]
+    requirement_ids: ["PRIN-003", "PRIN-004", "PRIN-005", "PRIN-006", "PRIN-013", "ARCH-003", "ARCH-004", "ARCH-005", "STD-002", "DOM-001", "DOM-002", "DOM-003", "DOM-004", "DOM-006", "DOM-007", "DOM-008", "DOM-009", "DOM-010", "DOM-011", "EVT-002", "AGENT-001", "AGENT-002"]
     owner: "WS-02"
-    dependencies: ["GATE-P0-APPROVED", "STEAD-P1-001", "STEAD-P0-003", "STEAD-P0-007"]
+    dependencies: ["GATE-P0-APPROVED", "STEAD-P1-001", "STEAD-P1-006", "STEAD-P0-003", "STEAD-P0-007"]
     module: ["platform-core-domain"]
     owned_directories: ["apps/core", "modules/organization", "modules/project", "modules/work"]
     prohibited_boundaries: ["May not call provider-specific implementations except through owned interfaces.", "May not write another module's tables or any upstream product database.", "May not publish domain events outside the transactional outbox or bypass central authorization."]
-    acceptance_criteria: ["Implement Organization, Team, Project, fixed Work Item, canonical Document metadata/relationships, module-owned PostgreSQL migrations, optimistic concurrency, and atomic outbox writes.", "All mapped requirement acceptance tests pass at the required layer and coverage floor.", "Authorization, classification, direct-path, observability, audit, compatibility, migration, upgrade, rollback, and documentation obligations are complete.", "Independent WS-13 review finds no unresolved critical/high defect, disallowed license, missing release evidence, or unauthorized disclosure path."]
-    automated_tests: ["T-STEAD-P1-002-CONTRACT", "T-PRIN-003-ACCEPTANCE", "T-PRIN-004-ACCEPTANCE", "T-PRIN-005-ACCEPTANCE", "T-PRIN-006-ACCEPTANCE", "T-ARCH-003-ACCEPTANCE", "T-ARCH-004-ACCEPTANCE", "T-ARCH-005-ACCEPTANCE", "T-STD-002-ACCEPTANCE", "T-DOM-001-ACCEPTANCE", "T-DOM-002-ACCEPTANCE", "T-DOM-003-ACCEPTANCE", "T-DOM-004-ACCEPTANCE", "T-DOM-005-ACCEPTANCE", "T-DOM-006-ACCEPTANCE", "T-DOM-007-ACCEPTANCE", "T-EVT-002-ACCEPTANCE", "T-AGENT-001-ACCEPTANCE", "T-AGENT-002-ACCEPTANCE"]
+    acceptance_criteria: ["Implement module-owned Organization, hierarchical Team, capability-driven Project, and fixed general Work Item state, including User/Agent assignee links expressed through the WS-06-owned PrincipalRef contract, PostgreSQL migrations, optimistic concurrency, and atomic outbox writes; consume WS-06 identity/authorization and WS-04 knowledge ports without storing identity, Agent/AgentRun, or Document state.", "All mapped requirement acceptance tests pass at the required layer and coverage floor.", "Authorization, classification, direct-path, observability, audit, compatibility, migration, upgrade, rollback, and documentation obligations are complete.", "Independent WS-13 review finds no unresolved critical/high defect, disallowed license, missing release evidence, or unauthorized disclosure path."]
+    automated_tests: ["T-STEAD-P1-002-CONTRACT", "T-PRIN-003-ACCEPTANCE", "T-PRIN-004-ACCEPTANCE", "T-PRIN-005-ACCEPTANCE", "T-PRIN-006-ACCEPTANCE", "T-PRIN-013-ACCEPTANCE", "T-ARCH-003-ACCEPTANCE", "T-ARCH-004-ACCEPTANCE", "T-ARCH-005-ACCEPTANCE", "T-STD-002-ACCEPTANCE", "T-DOM-001-ACCEPTANCE", "T-DOM-002-ACCEPTANCE", "T-DOM-003-ACCEPTANCE", "T-DOM-004-ACCEPTANCE", "T-DOM-006-ACCEPTANCE", "T-DOM-007-ACCEPTANCE", "T-DOM-008-ACCEPTANCE", "T-DOM-009-ACCEPTANCE", "T-DOM-010-ACCEPTANCE", "T-DOM-011-ACCEPTANCE", "T-EVT-002-ACCEPTANCE", "T-AGENT-001-ACCEPTANCE", "T-AGENT-002-ACCEPTANCE"]
     authorization_and_classification_behavior: "Every protected mutation and read resolves the canonical resource, checks OpenFGA plus OPA plus applicable provider enforcement, and fails closed."
     observability_and_audit_requirements: "Emit OTel spans/metrics with correlation and causation IDs; write required audit metadata and never log protected bodies or secrets."
     migration_and_backward_compatibility_implications: "Own versioned, module-local migrations and stable UUIDv7 resources; preserve export mappings and backward-compatible API behavior."
@@ -347,21 +357,21 @@ issues:
     epic_id: "EPIC-P1"
     phase: "phase-1"
     status: BLOCKED_PENDING_PHASE_0_APPROVAL
-    requirement_ids: ["PRIN-007", "PRIN-011", "PRIN-012", "DOM-007", "DOC-004", "AUTH-001", "AUTH-002", "AUTH-003", "AUTH-004", "AUTH-005", "CLS-001", "CLS-003", "CLS-004", "CLS-006", "CLS-008", "AGENT-001", "AGENT-003", "AGENT-006"]
+    requirement_ids: ["PRIN-007", "PRIN-011", "PRIN-012", "PRIN-015", "DOM-007", "DOM-009", "DOM-010", "DOC-004", "AUTH-001", "AUTH-002", "AUTH-003", "AUTH-004", "AUTH-005", "AUTH-006", "CLS-001", "CLS-003", "CLS-004", "CLS-006", "CLS-008", "AGENT-001", "AGENT-003", "AGENT-006"]
     owner: "WS-06"
     dependencies: ["GATE-P0-APPROVED", "STEAD-P1-001", "STEAD-P0-007"]
     module: ["identity-authorization-classification"]
     owned_directories: ["modules/identity", "modules/authorization", "modules/classification", "policies/openfga", "policies/opa", "policies/security-label-profiles", "providers/identity-oidc", "providers/identity-scim"]
     prohibited_boundaries: ["No module-specific alternative authorization, self-asserted trusted attributes, administrator content bypass, or built-in cross-domain/write-down path.", "Per-item labels may not grant access beyond an enforceable container.", "Unsigned or unversioned policy bundles are prohibited."]
     acceptance_criteria: ["Implement local bootstrap only for local mode, OIDC production authentication, central OpenFGA/OPA decisions, effective labels, security-domain ceiling, audit metadata, and fail-closed direct-path design.", "All mapped requirement acceptance tests pass at the required layer and coverage floor.", "Authorization, classification, direct-path, observability, audit, compatibility, migration, upgrade, rollback, and documentation obligations are complete.", "Independent WS-13 review finds no unresolved critical/high defect, disallowed license, missing release evidence, or unauthorized disclosure path."]
-    automated_tests: ["T-STEAD-P1-006-CONTRACT", "T-PRIN-007-ACCEPTANCE", "T-PRIN-011-ACCEPTANCE", "T-PRIN-012-ACCEPTANCE", "T-DOM-007-ACCEPTANCE", "T-DOC-004-ACCEPTANCE", "T-AUTH-001-ACCEPTANCE", "T-AUTH-002-ACCEPTANCE", "T-AUTH-003-ACCEPTANCE", "T-AUTH-004-ACCEPTANCE", "T-AUTH-005-ACCEPTANCE", "T-CLS-001-ACCEPTANCE", "T-CLS-003-ACCEPTANCE", "T-CLS-004-ACCEPTANCE", "T-CLS-006-ACCEPTANCE", "T-CLS-008-ACCEPTANCE", "T-AGENT-001-ACCEPTANCE", "T-AGENT-003-ACCEPTANCE", "T-AGENT-006-ACCEPTANCE"]
+    automated_tests: ["T-STEAD-P1-006-CONTRACT", "T-PRIN-007-ACCEPTANCE", "T-PRIN-011-ACCEPTANCE", "T-PRIN-012-ACCEPTANCE", "T-PRIN-015-ACCEPTANCE", "T-DOM-007-ACCEPTANCE", "T-DOM-009-ACCEPTANCE", "T-DOM-010-ACCEPTANCE", "T-DOC-004-ACCEPTANCE", "T-AUTH-001-ACCEPTANCE", "T-AUTH-002-ACCEPTANCE", "T-AUTH-003-ACCEPTANCE", "T-AUTH-004-ACCEPTANCE", "T-AUTH-005-ACCEPTANCE", "T-AUTH-006-ACCEPTANCE", "T-CLS-001-ACCEPTANCE", "T-CLS-003-ACCEPTANCE", "T-CLS-004-ACCEPTANCE", "T-CLS-006-ACCEPTANCE", "T-CLS-008-ACCEPTANCE", "T-AGENT-001-ACCEPTANCE", "T-AGENT-003-ACCEPTANCE", "T-AGENT-006-ACCEPTANCE"]
     authorization_and_classification_behavior: "Combine authentication, trusted attributes, OpenFGA relationships, OPA classification/context/deny policy, and provider enforcement; all required checks must allow and expired/unverifiable attributes fail closed."
     observability_and_audit_requirements: "Audit decision metadata, model/policy versions, trusted-attribute provenance, label changes, downgrade approvals, and bypass denials without unnecessary sensitive content."
     migration_and_backward_compatibility_implications: "Version and migrate OpenFGA models, Rego bundles, trusted attributes, labels, and lattice joins; reindex/invalidate all derived projections after policy-affecting changes."
     upgrade_and_rollback_behavior: "Require signed-bundle verification, model/policy migration tests, staged rollout, cache invalidation, and rollback to a compatible signed bundle/model."
     documentation_obligations: ["Document authentication/provisioning, decision flow, trusted authorities, label profiles/lattice, security domains, downgrade workflow, and bypass controls."]
   - id: "STEAD-P1-003"
-    title: "Implement stock Gitea adapter, tracker repository, fixed workflow, code, and PR slice"
+    title: "Implement stock Gitea adapter, hidden tracker, and provider-neutral Work backing"
     epic_id: "EPIC-P1"
     phase: "phase-1"
     status: BLOCKED_PENDING_PHASE_0_APPROVAL
@@ -371,7 +381,7 @@ issues:
     module: ["gitea-provider-integration"]
     owned_directories: ["modules/scm", "providers/gitea", "tests/contract/gitea"]
     prohibited_boundaries: ["Must not fork Gitea, access Gitea tables/internal Go packages, or depend on undocumented files/endpoints.", "Must not expose raw-provider navigation as the routine UI.", "Must not weaken central policy to fit provider limitations."]
-    acceptance_criteria: ["Implement documented-API/webhook/Git integration, automatic tracker repository/board/labels, canonical issue mapping and reconciliation, linked code repository/branch/commit/PR, and permission sync.", "All mapped requirement acceptance tests pass at the required layer and coverage floor.", "Authorization, classification, direct-path, observability, audit, compatibility, migration, upgrade, rollback, and documentation obligations are complete.", "Independent WS-13 review finds no unresolved critical/high defect, disallowed license, missing release evidence, or unauthorized disclosure path."]
+    acceptance_criteria: ["Implement documented-API/webhook/Git integration, automatic hidden tracker repository/board/labels, canonical issue mapping/reconciliation, docs-Git support, and permission sync without creating a code repository for a general Project.", "Implement and contract-test optional code/review provider ports, but defer the executable code/PR Project extension to STEAD-P1-013 after the general path.", "All mapped requirement acceptance tests pass at the required layer and coverage floor.", "Authorization, classification, direct-path, observability, audit, compatibility, migration, upgrade, rollback, and documentation obligations are complete.", "Independent WS-13 review finds no unresolved critical/high defect, disallowed license, missing release evidence, or unauthorized disclosure path."]
     automated_tests: ["T-STEAD-P1-003-CONTRACT", "T-PRIN-002-ACCEPTANCE", "T-ARCH-004-ACCEPTANCE", "T-DOM-004-ACCEPTANCE", "T-SCM-001-ACCEPTANCE", "T-SCM-002-ACCEPTANCE", "T-SCM-003-ACCEPTANCE", "T-SCM-004-ACCEPTANCE", "T-SCM-005-ACCEPTANCE", "T-CLS-007-ACCEPTANCE", "T-TEST-006-ACCEPTANCE", "T-AGENT-002-ACCEPTANCE"]
     authorization_and_classification_behavior: "Reconcile repository/provider permissions from the central model; cover SSH, HTTPS, LFS, token, package, webhook, and raw-admin bypass paths."
     observability_and_audit_requirements: "Trace provider calls and reconciliation; audit direct-provider changes, resets, permission sync, webhook validation, and denied bypass attempts without secret leakage."
@@ -401,14 +411,14 @@ issues:
     epic_id: "EPIC-P1"
     phase: "phase-1"
     status: BLOCKED_PENDING_PHASE_0_APPROVAL
-    requirement_ids: ["PRIN-004", "DOM-005", "DOC-001", "DOC-003", "DOC-004"]
+    requirement_ids: ["PRIN-004", "DOM-005", "DOC-001", "DOC-003", "DOC-004", "UX-008"]
     owner: "WS-04"
     dependencies: ["GATE-P0-APPROVED", "STEAD-P1-002", "STEAD-P1-003", "STEAD-P1-006", "STEAD-P1-010", "STEAD-P0-005"]
     module: ["knowledge-commonplace"]
     owned_directories: ["modules/knowledge", "providers/commonplace", "tests/contract/commonplace"]
     prohibited_boundaries: ["Must not create a permanent divergent Commonplace fork, put platform ontology or authorization into a patch queue, use an iframe as primary docs UI, or permit unsafe executable content.", "Must not claim page-level secrecy inside a cloneable repository."]
     acceptance_criteria: ["Implement automatic docs repository creation and one safe deterministic Markdown/OKF document create/edit/reference flow with stable ID, Git history, optimistic conflict behavior, and portable attachments.", "All mapped requirement acceptance tests pass at the required layer and coverage floor.", "Authorization, classification, direct-path, observability, audit, compatibility, migration, upgrade, rollback, and documentation obligations are complete.", "Independent WS-13 review finds no unresolved critical/high defect, disallowed license, missing release evidence, or unauthorized disclosure path."]
-    automated_tests: ["T-STEAD-P1-004-CONTRACT", "T-PRIN-004-ACCEPTANCE", "T-DOM-005-ACCEPTANCE", "T-DOC-001-ACCEPTANCE", "T-DOC-003-ACCEPTANCE", "T-DOC-004-ACCEPTANCE"]
+    automated_tests: ["T-STEAD-P1-004-CONTRACT", "T-PRIN-004-ACCEPTANCE", "T-DOM-005-ACCEPTANCE", "T-DOC-001-ACCEPTANCE", "T-DOC-003-ACCEPTANCE", "T-DOC-004-ACCEPTANCE", "T-UX-008-ACCEPTANCE"]
     authorization_and_classification_behavior: "Repository/container permission is the minimum document access boundary; every view/edit/export/review checks central policy and preserves effective markings."
     observability_and_audit_requirements: "Trace Git/editor/review operations and audit controlled-content approvals, revision hashes, conflicts, exports, and label changes without recording bodies."
     migration_and_backward_compatibility_implications: "Maintain deterministic Markdown plus OKF frontmatter, stable document IDs across moves, readable Git history, portable attachment manifests, and compatibility tests."
@@ -437,14 +447,14 @@ issues:
     epic_id: "EPIC-P1"
     phase: "phase-1"
     status: BLOCKED_PENDING_PHASE_0_APPROVAL
-    requirement_ids: ["DOM-006", "SRCH-001", "SRCH-002", "SRCH-003", "GRAPH-001"]
+    requirement_ids: ["DOM-006", "UX-008", "SRCH-001", "SRCH-002", "SRCH-003", "GRAPH-001"]
     owner: "WS-08"
     dependencies: ["GATE-P0-APPROVED", "STEAD-P1-002", "STEAD-P1-006", "STEAD-P1-007", "STEAD-P0-009"]
     module: ["search-work-graph-agent-access"]
     owned_directories: ["modules/search", "providers/search-postgres", "providers/search-opensearch", "packages/provider-sdk/search", "tests/integration/search", "packages/test-fixtures/search"]
     prohibited_boundaries: ["Search and graph projections may not become systems of record.", "Post-filtering may not leak counts, facets, snippets, suggestions, titles, IDs, or edges.", "Agents may not receive direct repository/database/search/NATS/object-store access."]
     acceptance_criteria: ["Index and query slice resources through PostgreSQL with canonical links, typed relationships, domain/label partitions, authoritative filtering, zero metadata leakage, and replay rebuild.", "All mapped requirement acceptance tests pass at the required layer and coverage floor.", "Authorization, classification, direct-path, observability, audit, compatibility, migration, upgrade, rollback, and documentation obligations are complete.", "Independent WS-13 review finds no unresolved critical/high defect, disallowed license, missing release evidence, or unauthorized disclosure path."]
-    automated_tests: ["T-STEAD-P1-008-CONTRACT", "T-DOM-006-ACCEPTANCE", "T-SRCH-001-ACCEPTANCE", "T-SRCH-002-ACCEPTANCE", "T-SRCH-003-ACCEPTANCE", "T-GRAPH-001-ACCEPTANCE"]
+    automated_tests: ["T-STEAD-P1-008-CONTRACT", "T-DOM-006-ACCEPTANCE", "T-UX-008-ACCEPTANCE", "T-SRCH-001-ACCEPTANCE", "T-SRCH-002-ACCEPTANCE", "T-SRCH-003-ACCEPTANCE", "T-GRAPH-001-ACCEPTANCE"]
     authorization_and_classification_behavior: "Apply domain/container partition filtering before retrieval and authoritative OpenFGA/OPA checks before returning any result or graph data; MCP uses the same API and decisions."
     observability_and_audit_requirements: "Measure indexing/replay lag and query latency with label/domain dimensions that cannot reveal protected cardinality; audit agent writes and sensitive query decisions."
     migration_and_backward_compatibility_implications: "Indexes and graph edges must rebuild from authoritative resources/events; canonical IDs and links survive provider changes."
@@ -457,7 +467,7 @@ issues:
     status: BLOCKED_PENDING_PHASE_0_APPROVAL
     requirement_ids: ["ART-001", "CICD-001", "CICD-005"]
     owner: "WS-09"
-    dependencies: ["GATE-P0-APPROVED", "STEAD-P1-003", "STEAD-P1-006", "STEAD-P1-007", "STEAD-P1-010", "STEAD-P0-010"]
+    dependencies: ["GATE-P0-APPROVED", "STEAD-P1-006", "STEAD-P1-007", "STEAD-P1-010", "STEAD-P1-013", "STEAD-P0-010"]
     module: ["ci-runners-artifacts-secrets"]
     owned_directories: ["modules/ci", "modules/artifact", "packages/provider-sdk/ci", "packages/provider-sdk/secrets", "tests/contract/ci", "packages/test-fixtures/ci"]
     prohibited_boundaries: ["No arbitrary public action fetch in secure profiles, unpinned action/image, long-lived job credential, cross-domain cache, secret in Git/event/log/search/frontend, or privileged runner without explicit exception and dedicated pool."]
@@ -469,23 +479,59 @@ issues:
     upgrade_and_rollback_behavior: "Pin and verify actions/images; require compatibility and cleanup tests, resumable artifact metadata migrations, and rollback to signed known-good catalogs."
     documentation_obligations: ["Document workflow policy, approved actions, runner isolation, secrets, artifact/SBOM/provenance links, exceptions, and incident cleanup."]
   - id: "STEAD-P1-005"
-    title: "Implement the sole unified web shell and golden interactions"
+    title: "Implement the universal shell and general Work plus Docs Project"
     epic_id: "EPIC-P1"
     phase: "phase-1"
     status: BLOCKED_PENDING_PHASE_0_APPROVAL
-    requirement_ids: ["PRIN-001", "PRIN-003", "UX-001", "UX-002", "UX-003", "UX-004", "UX-005"]
+    requirement_ids: ["PRIN-001", "PRIN-003", "PRIN-013", "PRIN-014", "DOM-008", "DOM-011", "UX-001", "UX-002", "UX-003", "UX-004", "UX-005", "UX-006", "UX-007", "UX-008", "UX-009"]
     owner: "WS-05"
     dependencies: ["GATE-P0-APPROVED", "STEAD-P1-002", "STEAD-P1-003", "STEAD-P1-004", "STEAD-P1-006", "STEAD-P1-007", "STEAD-P1-008", "STEAD-P0-006"]
     module: ["unified-frontend-design-system"]
     owned_directories: ["apps/web", "packages/design-system", "packages/api-client", "packages/test-fixtures/frontend"]
     prohibited_boundaries: ["Browser code may call only the versioned platform API; it may not call Gitea, Commonplace, OpenFGA, OPA, NATS, or storage directly.", "UI hiding may not be treated as authorization.", "Core navigation and workflow semantics may not become tenant-configurable."]
-    acceptance_criteria: ["Deliver the Devlane-derived shell, required primary/project navigation, shared creation/references/activity/inbox/search interactions, server-authoritative labels, stable links, and keyboard-accessible golden path.", "All mapped requirement acceptance tests pass at the required layer and coverage floor.", "Authorization, classification, direct-path, observability, audit, compatibility, migration, upgrade, rollback, and documentation obligations are complete.", "Independent WS-13 review finds no unresolved critical/high defect, disallowed license, missing release evidence, or unauthorized disclosure path."]
-    automated_tests: ["T-STEAD-P1-005-CONTRACT", "T-PRIN-001-ACCEPTANCE", "T-PRIN-003-ACCEPTANCE", "T-UX-001-ACCEPTANCE", "T-UX-002-ACCEPTANCE", "T-UX-003-ACCEPTANCE", "T-UX-004-ACCEPTANCE", "T-UX-005-ACCEPTANCE"]
+    acceptance_criteria: ["Before frontend feature expansion, establish Vitest with React Testing Library, Playwright, axe accessibility, and visual-regression harnesses against the shared design system and canonical API client.", "Deliver the Devlane-derived visual shell and TEST-009 general Project with universal Overview/Work/Docs, no Code/Delivery or repository vocabulary, and no source-code repository.", "Deliver Home, Inbox, My Work, Projects, Knowledge, Teams, Favorites, Recent, command/search, shared creation/references/activity, labels, stable links, keyboard access, and no dependency on Devlane ontology or routes.", "All mapped requirement acceptance tests pass at the required layer and coverage floor.", "Authorization, classification, direct-path, observability, audit, compatibility, migration, upgrade, rollback, and documentation obligations are complete.", "Independent WS-13 review finds no unresolved critical/high defect, disallowed license, missing release evidence, or unauthorized disclosure path."]
+    automated_tests: ["T-STEAD-P1-005-CONTRACT", "T-PRIN-001-ACCEPTANCE", "T-PRIN-003-ACCEPTANCE", "T-PRIN-013-ACCEPTANCE", "T-PRIN-014-ACCEPTANCE", "T-DOM-008-ACCEPTANCE", "T-DOM-011-ACCEPTANCE", "T-UX-001-ACCEPTANCE", "T-UX-002-ACCEPTANCE", "T-UX-003-ACCEPTANCE", "T-UX-004-ACCEPTANCE", "T-UX-005-ACCEPTANCE", "T-UX-006-ACCEPTANCE", "T-UX-007-ACCEPTANCE", "T-UX-008-ACCEPTANCE", "T-UX-009-ACCEPTANCE"]
     authorization_and_classification_behavior: "Display effective labels on protected content and policy warnings where required; rely on authoritative server decisions and reveal no denied-resource metadata."
     observability_and_audit_requirements: "Instrument frontend performance and error correlation without capturing protected content; ensure user actions carry correlation context for server audit."
     migration_and_backward_compatibility_implications: "Use canonical deep links and provider-independent IDs so provider migrations and redirects do not break navigation."
     upgrade_and_rollback_behavior: "Version API-client compatibility and design-system changes; preserve critical workflows and provide deploy rollback for frontend/API mismatch."
     documentation_obligations: ["Document navigation, interaction vocabulary, accessibility behavior, labels/markings, keyboard use, and API compatibility."]
+  - id: "STEAD-P1-013"
+    title: "Add the software Project Code and Pull Request capability extension"
+    epic_id: "EPIC-P1"
+    phase: "phase-1"
+    status: BLOCKED_PENDING_PHASE_0_APPROVAL
+    requirement_ids: ["PRIN-013", "ARCH-004", "DOM-004", "DOM-008", "SCM-001", "SCM-002", "SCM-003", "SCM-004", "SCM-005", "SCM-006", "TEST-010"]
+    owner: "WS-03"
+    dependencies: ["GATE-P0-APPROVED", "STEAD-P1-003", "STEAD-P1-005", "STEAD-P1-006"]
+    module: ["gitea-provider-integration"]
+    owned_directories: ["modules/scm", "providers/gitea", "packages/provider-sdk/scm", "tests/contract/gitea", "packages/test-fixtures/gitea"]
+    prohibited_boundaries: ["Must not begin before the TEST-009 general Work plus Docs checkpoint is usable and independently evidenced.", "Must not fork Gitea, use its database/internals, expose provider ontology as canonical, change universal Work values, or create Code for a general Project."]
+    acceptance_criteria: ["Activate the fixed software capability bundle for one Project and create/link one code repository, branch, commit, and Pull Request through approved provider interfaces.", "Preserve the same Platform shell, canonical Work/Document values, central authorization/classification path, hidden tracker, stable links, and typed Work/Doc/Code relationships.", "All mapped requirement acceptance tests pass at the required layer and coverage floor.", "Independent WS-13 review finds no unresolved critical/high defect, provider bypass, disallowed license, or unauthorized metadata disclosure."]
+    automated_tests: ["T-STEAD-P1-013-CONTRACT", "T-PRIN-013-ACCEPTANCE", "T-ARCH-004-ACCEPTANCE", "T-DOM-004-ACCEPTANCE", "T-DOM-008-ACCEPTANCE", "T-SCM-001-ACCEPTANCE", "T-SCM-002-ACCEPTANCE", "T-SCM-003-ACCEPTANCE", "T-SCM-004-ACCEPTANCE", "T-SCM-005-ACCEPTANCE", "T-SCM-006-ACCEPTANCE", "T-TEST-010-ACCEPTANCE"]
+    authorization_and_classification_behavior: "Code/review capability and every repository/Git/API path require active capability plus central OpenFGA/OPA and provider enforcement; denied capability/resources are absent, not disabled metadata."
+    observability_and_audit_requirements: "Trace and audit activation, repository/branch/commit/PR operations, permission reconciliation, provider webhooks, and denials with correlation/causation but no protected bodies or credentials."
+    migration_and_backward_compatibility_implications: "Capability activation is additive and provider-independent; canonical IDs/Work values remain stable and deactivation preserves history without exposing inactive surfaces."
+    upgrade_and_rollback_behavior: "Pin Gitea/version compatibility, preflight capability support, and roll back the UI/adapter while retaining protected canonical/provider history for forward reconciliation."
+    documentation_obligations: ["Document software capability activation, provider mapping, direct-path controls, deactivation/history behavior, compatibility, and recovery."]
+  - id: "STEAD-P1-014"
+    title: "Present the software Code and Delivery extension in the unified shell"
+    epic_id: "EPIC-P1"
+    phase: "phase-1"
+    status: BLOCKED_PENDING_PHASE_0_APPROVAL
+    requirement_ids: ["PRIN-013", "PRIN-014", "DOM-008", "UX-001", "UX-002", "UX-003", "UX-004", "UX-005", "UX-006", "UX-007", "UX-008", "UX-009", "TEST-010"]
+    owner: "WS-05"
+    dependencies: ["GATE-P0-APPROVED", "STEAD-P1-004", "STEAD-P1-007", "STEAD-P1-008", "STEAD-P1-009", "STEAD-P1-013"]
+    module: ["unified-frontend-design-system"]
+    owned_directories: ["apps/web", "packages/design-system", "packages/api-client", "packages/test-fixtures/frontend"]
+    prohibited_boundaries: ["Must not alter global navigation, canonical ontology/values, authorization, or object vocabulary established by the general path.", "Must not expose inactive/denied Code or Delivery metadata, call providers directly, copy Devlane routes/pages wholesale, or create more than five Project primary areas."]
+    acceptance_criteria: ["Show Code and Delivery only for the active authorized software Project, with Pull Requests under Code and Build/Package/Release/Artifact under Delivery.", "Use the same object header, peek, context strip, activity, search, keyboard, accessibility, security chrome, and deep-link language as general Work and Docs.", "All mapped requirement acceptance tests pass at the required layer and coverage floor.", "Independent WS-13 review finds no capability leak, WCAG critical-flow failure, Devlane ontology dependency, or unauthorized disclosure."]
+    automated_tests: ["T-STEAD-P1-014-CONTRACT", "T-PRIN-013-ACCEPTANCE", "T-PRIN-014-ACCEPTANCE", "T-DOM-008-ACCEPTANCE", "T-UX-001-ACCEPTANCE", "T-UX-002-ACCEPTANCE", "T-UX-003-ACCEPTANCE", "T-UX-004-ACCEPTANCE", "T-UX-005-ACCEPTANCE", "T-UX-006-ACCEPTANCE", "T-UX-007-ACCEPTANCE", "T-UX-008-ACCEPTANCE", "T-UX-009-ACCEPTANCE", "T-TEST-010-ACCEPTANCE"]
+    authorization_and_classification_behavior: "The server supplies active-and-authorized capability state; UI absence is supplemental and every data request is independently authorized/classification-filtered."
+    observability_and_audit_requirements: "Measure navigation/render/accessibility performance and correlate actions without protected content; capability denials and provider mutations remain server-audited."
+    migration_and_backward_compatibility_implications: "Generated clients and canonical deep links remain provider-independent; optional capability activation/deactivation cannot break general Project routes or serialized values."
+    upgrade_and_rollback_behavior: "Version design-system/API-client compatibility and permit frontend rollback without losing canonical or provider state; hide unsupported capability surfaces after preflight failure."
+    documentation_obligations: ["Document Code/Delivery IA, capability visibility, common object interactions, accessibility/keyboard behavior, and general-versus-software regression screens."]
   - id: "STEAD-P1-011"
     title: "Implement local install, effective config, health, OTel, doctor, backup, and restore baseline"
     epic_id: "EPIC-P1"
@@ -493,7 +539,7 @@ issues:
     status: BLOCKED_PENDING_PHASE_0_APPROVAL
     requirement_ids: ["PRIN-008", "PRIN-009", "PRIN-011", "DEP-001", "DEP-002", "OPS-001", "OPS-002", "TEST-007"]
     owner: "WS-12"
-    dependencies: ["GATE-P0-APPROVED", "STEAD-P1-001", "STEAD-P1-002", "STEAD-P1-003", "STEAD-P1-004", "STEAD-P1-005", "STEAD-P1-006", "STEAD-P1-007", "STEAD-P1-008", "STEAD-P1-009", "STEAD-P1-010", "STEAD-P0-013"]
+    dependencies: ["GATE-P0-APPROVED", "STEAD-P1-001", "STEAD-P1-002", "STEAD-P1-003", "STEAD-P1-004", "STEAD-P1-005", "STEAD-P1-006", "STEAD-P1-007", "STEAD-P1-008", "STEAD-P1-009", "STEAD-P1-010", "STEAD-P1-013", "STEAD-P1-014", "STEAD-P0-013"]
     module: ["installation-operations"]
     owned_directories: ["apps/platformctl", "deploy/compose", "deploy/helm", "deploy/airgap", "docs/operator", "tests/upgrade", "tests/backup-restore"]
     prohibited_boundaries: ["No required public cloud/SaaS control plane, outbound telemetry by default, cloud-specific core-chart CRD, unapproved air-gap network call, or upgrade without compatibility/preflight/backup.", "NATS backup may not be treated as the sole recovery source."]
@@ -509,14 +555,14 @@ issues:
     epic_id: "EPIC-P1"
     phase: "phase-1"
     status: BLOCKED_PENDING_PHASE_0_APPROVAL
-    requirement_ids: ["PRIN-010", "SEC-001", "SEC-002", "SEC-004", "SEC-006", "TEST-001", "TEST-002", "TEST-003", "TEST-005", "TEST-008", "TEST-009"]
+    requirement_ids: ["PRIN-010", "SEC-001", "SEC-002", "SEC-004", "SEC-006", "TEST-001", "TEST-002", "TEST-003", "TEST-005", "TEST-008", "TEST-009", "TEST-010"]
     owner: "WS-13"
-    dependencies: ["GATE-P0-APPROVED", "STEAD-P1-001", "STEAD-P1-002", "STEAD-P1-003", "STEAD-P1-004", "STEAD-P1-005", "STEAD-P1-006", "STEAD-P1-007", "STEAD-P1-008", "STEAD-P1-009", "STEAD-P1-010", "STEAD-P1-011", "STEAD-P0-014"]
+    dependencies: ["GATE-P0-APPROVED", "STEAD-P1-001", "STEAD-P1-002", "STEAD-P1-003", "STEAD-P1-004", "STEAD-P1-005", "STEAD-P1-006", "STEAD-P1-007", "STEAD-P1-008", "STEAD-P1-009", "STEAD-P1-010", "STEAD-P1-011", "STEAD-P1-013", "STEAD-P1-014", "STEAD-P0-014"]
     module: ["qa-security-release"]
     owned_directories: ["specs/traceability", "specs/oscal", "docs/testing", "docs/security", "docs/governance", "tests/contract/harness", "tests/e2e", "tests/security", "tests/classification", "tests/performance/harness", "packages/test-fixtures/harness"]
     prohibited_boundaries: ["May not approve its own implementation work, waive gates without documented authority/time bounds, edit production modules as a hidden fix, or pass a release with a known disclosure path, missing artifact, failed required test, or disallowed/unknown license."]
-    acceptance_criteria: ["Run all required Phase 1 layers and the golden Work plus Docs plus Code plus PR scenario, direct-path non-disclosure checks, restore and supported upgrade smoke; record independent QA/security approval or fail closed.", "All mapped requirement acceptance tests pass at the required layer and coverage floor.", "Authorization, classification, direct-path, observability, audit, compatibility, migration, upgrade, rollback, and documentation obligations are complete.", "Independent WS-13 review finds no unresolved critical/high defect, disallowed license, missing release evidence, or unauthorized disclosure path."]
-    automated_tests: ["T-STEAD-P1-012-CONTRACT", "T-PRIN-010-ACCEPTANCE", "T-SEC-001-ACCEPTANCE", "T-SEC-002-ACCEPTANCE", "T-SEC-004-ACCEPTANCE", "T-SEC-006-ACCEPTANCE", "T-TEST-001-ACCEPTANCE", "T-TEST-002-ACCEPTANCE", "T-TEST-003-ACCEPTANCE", "T-TEST-005-ACCEPTANCE", "T-TEST-008-ACCEPTANCE", "T-TEST-009-ACCEPTANCE"]
+    acceptance_criteria: ["Run all required Phase 1 layers and both golden scenarios: a general Work plus Docs Project with no source code and an additive software Work plus Docs plus Code plus PR Project.", "Run direct-path non-disclosure, hierarchy non-inheritance, capability visibility, restore, and supported upgrade smoke; record independent QA/security approval or fail closed.", "All mapped requirement acceptance tests pass at the required layer and coverage floor.", "Authorization, classification, direct-path, observability, audit, compatibility, migration, upgrade, rollback, and documentation obligations are complete.", "Independent WS-13 review finds no unresolved critical/high defect, disallowed license, missing release evidence, or unauthorized disclosure path."]
+    automated_tests: ["T-STEAD-P1-012-CONTRACT", "T-PRIN-010-ACCEPTANCE", "T-SEC-001-ACCEPTANCE", "T-SEC-002-ACCEPTANCE", "T-SEC-004-ACCEPTANCE", "T-SEC-006-ACCEPTANCE", "T-TEST-001-ACCEPTANCE", "T-TEST-002-ACCEPTANCE", "T-TEST-003-ACCEPTANCE", "T-TEST-005-ACCEPTANCE", "T-TEST-008-ACCEPTANCE", "T-TEST-009-ACCEPTANCE", "T-TEST-010-ACCEPTANCE"]
     authorization_and_classification_behavior: "Independently test deny-by-default policy, decision coverage, all classification matrix cases, and direct-provider/non-UI bypasses including absence of existence leakage."
     observability_and_audit_requirements: "Verify required telemetry/audit evidence, sensitive-data redaction, correlation, replay, tamper evidence where required, and gate decision records."
     migration_and_backward_compatibility_implications: "Test migration conformance, schema/event/API compatibility, upgrades from supported versions, backup/restore fidelity, and rollback/recovery."
@@ -563,14 +609,14 @@ issues:
     epic_id: "EPIC-P2"
     phase: "phase-2"
     status: BLOCKED_PENDING_PHASE_0_APPROVAL
-    requirement_ids: ["UX-003", "UX-004"]
+    requirement_ids: ["PRIN-014", "UX-003", "UX-004", "UX-006", "UX-007", "UX-009"]
     owner: "WS-05"
     dependencies: ["GATE-P0-APPROVED", "STEAD-P1-012"]
     module: ["unified-frontend-design-system"]
     owned_directories: ["apps/web", "packages/design-system", "packages/api-client", "packages/test-fixtures/frontend"]
     prohibited_boundaries: ["Browser code may call only the versioned platform API; it may not call Gitea, Commonplace, OpenFGA, OPA, NATS, or storage directly.", "UI hiding may not be treated as authorization.", "Core navigation and workflow semantics may not become tenant-configurable."]
     acceptance_criteria: ["Complete all required shell/project views and shared interactions, persistent classification/session indicators, policy warnings, progressive performance behavior, and WCAG 2.2 AA for critical flows.", "All mapped requirement acceptance tests pass at the required layer and coverage floor.", "Authorization, classification, direct-path, observability, audit, compatibility, migration, upgrade, rollback, and documentation obligations are complete.", "Independent WS-13 review finds no unresolved critical/high defect, disallowed license, missing release evidence, or unauthorized disclosure path."]
-    automated_tests: ["T-STEAD-P2-003-CONTRACT", "T-UX-003-ACCEPTANCE", "T-UX-004-ACCEPTANCE"]
+    automated_tests: ["T-STEAD-P2-003-CONTRACT", "T-PRIN-014-ACCEPTANCE", "T-UX-003-ACCEPTANCE", "T-UX-004-ACCEPTANCE", "T-UX-006-ACCEPTANCE", "T-UX-007-ACCEPTANCE", "T-UX-009-ACCEPTANCE"]
     authorization_and_classification_behavior: "Display effective labels on protected content and policy warnings where required; rely on authoritative server decisions and reveal no denied-resource metadata."
     observability_and_audit_requirements: "Instrument frontend performance and error correlation without capturing protected content; ensure user actions carry correlation context for server audit."
     migration_and_backward_compatibility_implications: "Use canonical deep links and provider-independent IDs so provider migrations and redirects do not break navigation."
@@ -613,23 +659,23 @@ issues:
     upgrade_and_rollback_behavior: "Use compatible event evolution, dual-read/dual-publish only when specified, drain/replay checks, and rollback without losing acknowledged mutations."
     documentation_obligations: ["Document event naming, subjects, payload schemas, delivery/replay/DLQ behavior, activity semantics, notification routing, and audit exports."]
   - id: "STEAD-P2-006"
-    title: "Complete unified search, work graph, and permission-aware MCP beta"
+    title: "Complete unified search, Work Graph, Agent Registry, and MCP/A2A beta"
     epic_id: "EPIC-P2"
     phase: "phase-2"
     status: BLOCKED_PENDING_PHASE_0_APPROVAL
-    requirement_ids: ["SRCH-001", "SRCH-003", "GRAPH-001", "GRAPH-002", "AGENT-005"]
+    requirement_ids: ["DOM-002", "DOM-010", "AUTH-006", "SRCH-001", "SRCH-003", "GRAPH-001", "GRAPH-002", "AGENT-001", "AGENT-002", "AGENT-003", "AGENT-004", "AGENT-005", "AGENT-006"]
     owner: "WS-08"
     dependencies: ["GATE-P0-APPROVED", "STEAD-P1-012"]
-    module: ["search-work-graph-agent-access"]
-    owned_directories: ["modules/search", "providers/search-postgres", "providers/search-opensearch", "packages/provider-sdk/search", "tests/integration/search", "packages/test-fixtures/search"]
-    prohibited_boundaries: ["Search and graph projections may not become systems of record.", "Post-filtering may not leak counts, facets, snippets, suggestions, titles, IDs, or edges.", "Agents may not receive direct repository/database/search/NATS/object-store access."]
-    acceptance_criteria: ["Cover all required resource kinds, facets/suggestions and graph traversals without leakage; add provider interface, full rebuild/reconciliation, and API-mediated attributable MCP operations.", "All mapped requirement acceptance tests pass at the required layer and coverage floor.", "Authorization, classification, direct-path, observability, audit, compatibility, migration, upgrade, rollback, and documentation obligations are complete.", "Independent WS-13 review finds no unresolved critical/high defect, disallowed license, missing release evidence, or unauthorized disclosure path."]
-    automated_tests: ["T-STEAD-P2-006-CONTRACT", "T-SRCH-001-ACCEPTANCE", "T-SRCH-003-ACCEPTANCE", "T-GRAPH-001-ACCEPTANCE", "T-GRAPH-002-ACCEPTANCE", "T-AGENT-005-ACCEPTANCE"]
-    authorization_and_classification_behavior: "Apply domain/container partition filtering before retrieval and authoritative OpenFGA/OPA checks before returning any result or graph data; MCP uses the same API and decisions."
-    observability_and_audit_requirements: "Measure indexing/replay lag and query latency with label/domain dimensions that cannot reveal protected cardinality; audit agent writes and sensitive query decisions."
-    migration_and_backward_compatibility_implications: "Indexes and graph edges must rebuild from authoritative resources/events; canonical IDs and links survive provider changes."
-    upgrade_and_rollback_behavior: "Provider swaps and schema changes require parallel rebuild/validation, cutover, and rollback to the prior projection without source-of-truth mutation."
-    documentation_obligations: ["Document SearchProvider, index partitions, authorization query plan, graph semantics, rebuild procedures, and MCP access controls."]
+    module: ["search-work-graph", "agent-interoperability"]
+    owned_directories: ["modules/search", "modules/agent", "providers/search-postgres", "providers/search-opensearch", "providers/agent-a2a", "packages/provider-sdk/search", "specs/mcp", "specs/a2a", "tests/integration/search", "tests/integration/agent", "packages/test-fixtures/search"]
+    prohibited_boundaries: ["Search and graph projections may not become systems of record.", "Post-filtering may not leak counts, facets, snippets, suggestions, titles, IDs, or edges.", "Agents may not receive direct provider business API, database, search-index, NATS, or object-store access; direct Git is the sole scoped exception.", "No model/provider/SDK/runtime/orchestrator coupling, broad human permission inheritance, unscoped credential, prompt/memory subsystem, or execution before ADR-CAND-017 and the approved phase issue."]
+    acceptance_criteria: ["Cover all required resource kinds, facets/suggestions and graph traversals without leakage; add provider interface and full rebuild/reconciliation.", "After ADR-CAND-017 is accepted, implement runtime-neutral Agent Registry/Card and Agent Run interoperability plus attributable Platform-API-mediated MCP and A2A behavior with task-scoped delegation, independent revocation, and cancellation.", "All mapped requirement acceptance tests pass at the required layer and coverage floor.", "Authorization, classification, direct-path, observability, audit, compatibility, migration, upgrade, rollback, and documentation obligations are complete.", "Independent WS-13 review finds no unresolved critical/high defect, disallowed license, missing release evidence, or unauthorized disclosure path."]
+    automated_tests: ["T-STEAD-P2-006-CONTRACT", "T-DOM-002-ACCEPTANCE", "T-DOM-010-ACCEPTANCE", "T-AUTH-006-ACCEPTANCE", "T-SRCH-001-ACCEPTANCE", "T-SRCH-003-ACCEPTANCE", "T-GRAPH-001-ACCEPTANCE", "T-GRAPH-002-ACCEPTANCE", "T-AGENT-001-ACCEPTANCE", "T-AGENT-002-ACCEPTANCE", "T-AGENT-003-ACCEPTANCE", "T-AGENT-004-ACCEPTANCE", "T-AGENT-005-ACCEPTANCE", "T-AGENT-006-ACCEPTANCE"]
+    authorization_and_classification_behavior: "Apply domain/container partition filtering before retrieval and authoritative OpenFGA/OPA checks before any result, graph, MCP, or A2A operation; agent allow is the delegator/agent/task/runtime/session/resource intersection and is independently revocable."
+    observability_and_audit_requirements: "Measure indexing/replay lag and query latency with dimensions that cannot reveal protected cardinality; audit actor/requester/delegation/task, registry changes, agent operations, dispatch/cancellation, writes, sensitive reads, policy revisions, correlation, and causation without prompts or protected bodies."
+    migration_and_backward_compatibility_implications: "Indexes and graph edges rebuild from authoritative resources/events; canonical IDs and links survive provider changes; Agent/Card/Run/MCP/A2A contracts require version negotiation, external-runtime portability, and coexistence migration."
+    upgrade_and_rollback_behavior: "Provider swaps and schema changes require parallel rebuild/validation and reversible cutover; agent interoperability upgrades preserve revocation/cancellation and support rollback to the prior compatible API/Card/tool profile without source mutation or orphaned credentials."
+    documentation_obligations: ["Document SearchProvider, index partitions, authorization query plan, graph semantics, rebuild procedures, ADR-CAND-017 disposition, Agent/Card/Run lifecycle, runtime-neutral MCP/A2A profiles, task/delegation/revocation controls, and direct-Git boundaries."]
   - id: "STEAD-P2-007"
     title: "Complete secure Actions visibility, runner pools, action catalog, artifacts, and secrets"
     epic_id: "EPIC-P2"
@@ -707,14 +753,14 @@ issues:
     epic_id: "EPIC-P2"
     phase: "phase-2"
     status: BLOCKED_PENDING_PHASE_0_APPROVAL
-    requirement_ids: ["SEC-002", "SEC-004", "TEST-002", "TEST-003", "TEST-004", "TEST-006", "TEST-008"]
+    requirement_ids: ["SEC-002", "SEC-004", "TEST-002", "TEST-003", "TEST-004", "TEST-006", "TEST-008", "TEST-010"]
     owner: "WS-13"
     dependencies: ["GATE-P0-APPROVED", "STEAD-P2-001", "STEAD-P2-002", "STEAD-P2-003", "STEAD-P2-004", "STEAD-P2-005", "STEAD-P2-006", "STEAD-P2-007", "STEAD-P2-008", "STEAD-P2-009", "STEAD-P2-010"]
     module: ["qa-security-release"]
     owned_directories: ["specs/traceability", "specs/oscal", "docs/testing", "docs/security", "docs/governance", "tests/contract/harness", "tests/e2e", "tests/security", "tests/classification", "tests/performance/harness", "packages/test-fixtures/harness"]
     prohibited_boundaries: ["May not approve its own implementation work, waive gates without documented authority/time bounds, edit production modules as a hidden fix, or pass a release with a known disclosure path, missing artifact, failed required test, or disallowed/unknown license."]
     acceptance_criteria: ["Run contract, integration, E2E, accessibility, classification, security, performance, migration, install, upgrade, restore, chaos, and fuzz suites; record independent approval or fail the candidate.", "All mapped requirement acceptance tests pass at the required layer and coverage floor.", "Authorization, classification, direct-path, observability, audit, compatibility, migration, upgrade, rollback, and documentation obligations are complete.", "Independent WS-13 review finds no unresolved critical/high defect, disallowed license, missing release evidence, or unauthorized disclosure path."]
-    automated_tests: ["T-STEAD-P2-011-CONTRACT", "T-SEC-002-ACCEPTANCE", "T-SEC-004-ACCEPTANCE", "T-TEST-002-ACCEPTANCE", "T-TEST-003-ACCEPTANCE", "T-TEST-004-ACCEPTANCE", "T-TEST-006-ACCEPTANCE", "T-TEST-008-ACCEPTANCE"]
+    automated_tests: ["T-STEAD-P2-011-CONTRACT", "T-SEC-002-ACCEPTANCE", "T-SEC-004-ACCEPTANCE", "T-TEST-002-ACCEPTANCE", "T-TEST-003-ACCEPTANCE", "T-TEST-004-ACCEPTANCE", "T-TEST-006-ACCEPTANCE", "T-TEST-008-ACCEPTANCE", "T-TEST-010-ACCEPTANCE"]
     authorization_and_classification_behavior: "Independently test deny-by-default policy, decision coverage, all classification matrix cases, and direct-provider/non-UI bypasses including absence of existence leakage."
     observability_and_audit_requirements: "Verify required telemetry/audit evidence, sensitive-data redaction, correlation, replay, tamper evidence where required, and gate decision records."
     migration_and_backward_compatibility_implications: "Test migration conformance, schema/event/API compatibility, upgrades from supported versions, backup/restore fidelity, and rollback/recovery."
@@ -851,14 +897,14 @@ issues:
     epic_id: "EPIC-P3"
     phase: "phase-3"
     status: BLOCKED_PENDING_PHASE_0_APPROVAL
-    requirement_ids: ["SEC-002", "SEC-004", "SEC-005", "TEST-002", "TEST-003", "TEST-008"]
+    requirement_ids: ["SEC-002", "SEC-004", "SEC-005", "TEST-002", "TEST-003", "TEST-008", "TEST-010"]
     owner: "WS-13"
     dependencies: ["GATE-P0-APPROVED", "STEAD-P3-001", "STEAD-P3-002", "STEAD-P3-003", "STEAD-P3-004", "STEAD-P3-005", "STEAD-P3-006", "STEAD-P3-007"]
     module: ["qa-security-release"]
     owned_directories: ["specs/traceability", "specs/oscal", "docs/testing", "docs/security", "docs/governance", "tests/contract/harness", "tests/e2e", "tests/security", "tests/classification", "tests/performance/harness", "packages/test-fixtures/harness"]
     prohibited_boundaries: ["May not approve its own implementation work, waive gates without documented authority/time bounds, edit production modules as a hidden fix, or pass a release with a known disclosure path, missing artifact, failed required test, or disallowed/unknown license."]
     acceptance_criteria: ["Run the complete release suite and security assessment, verify remediation and all artifacts/docs/licenses/audit/restore/upgrades/golden checks, and issue an independent approval only with no unresolved critical/high defect or disclosure path.", "All mapped requirement acceptance tests pass at the required layer and coverage floor.", "Authorization, classification, direct-path, observability, audit, compatibility, migration, upgrade, rollback, and documentation obligations are complete.", "Independent WS-13 review finds no unresolved critical/high defect, disallowed license, missing release evidence, or unauthorized disclosure path."]
-    automated_tests: ["T-STEAD-P3-008-CONTRACT", "T-SEC-002-ACCEPTANCE", "T-SEC-004-ACCEPTANCE", "T-SEC-005-ACCEPTANCE", "T-TEST-002-ACCEPTANCE", "T-TEST-003-ACCEPTANCE", "T-TEST-008-ACCEPTANCE"]
+    automated_tests: ["T-STEAD-P3-008-CONTRACT", "T-SEC-002-ACCEPTANCE", "T-SEC-004-ACCEPTANCE", "T-SEC-005-ACCEPTANCE", "T-TEST-002-ACCEPTANCE", "T-TEST-003-ACCEPTANCE", "T-TEST-008-ACCEPTANCE", "T-TEST-010-ACCEPTANCE"]
     authorization_and_classification_behavior: "Independently test deny-by-default policy, decision coverage, all classification matrix cases, and direct-provider/non-UI bypasses including absence of existence leakage."
     observability_and_audit_requirements: "Verify required telemetry/audit evidence, sensitive-data redaction, correlation, replay, tamper evidence where required, and gate decision records."
     migration_and_backward_compatibility_implications: "Test migration conformance, schema/event/API compatibility, upgrades from supported versions, backup/restore fidelity, and rollback/recovery."

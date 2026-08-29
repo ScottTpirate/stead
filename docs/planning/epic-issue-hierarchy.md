@@ -1,9 +1,11 @@
 # Stead epic and issue hierarchy
 
-Status: Phase 0 planning draft<br>
-Normative source: `unified_open_work_platform_master_build_directive.md`
+Status: Phase 0 closeout plan; ready for approval<br>
+Normative source: `docs/architecture/MASTER_BUILD_DIRECTIVE.md`
 
 This hierarchy decomposes the directive without changing its locked architecture or fixed ontology. The exhaustive requirement-to-issue mapping is in [the traceability register](../../specs/traceability/requirements.yaml). The complete machine-readable issue contracts are in [the implementation issue catalog](implementation-issue-catalog.yaml).
+
+Deferred implementation choices are enforced by the [ADR candidate implementation-gate index](../governance/adr-candidate-index.md). Passing `GATE-P0-APPROVED` does not waive a candidate's issue-specific decision deadline.
 
 ## Controlling rule
 
@@ -45,21 +47,21 @@ The rows are topologically ordered. Issues in the same wave may proceed concurre
 
 | Wave | Issue | Owner | Depends on | Contract result and requirement coverage |
 |---:|---|---|---|---|
-| 0 | STEAD-P0-001 | WS-01 | none | Constitution, precedence, locked decisions, repository layout, standards/license guardrails; PRIN-001…012, ARCH-001…005 |
-| 1 | STEAD-P0-002 | WS-01 | P0-001 | OWGP v0.1, resource/entity/relationship schemas, cardinality, conformance and compatibility; STD-001…002, DOM-001…007 |
+| 0 | STEAD-P0-001 | WS-01 | none | Canonical directive/reconciliation, constitution, 30 locked decisions, repository layout, standards/license guardrails; PRIN-001…015, ARCH-001…005 |
+| 1 | STEAD-P0-002 | WS-01 | P0-001 | OWGP v0.1, open-work entities/relationships, Team/Project/container/capability/lifecycle schemas/examples and compatibility; STD-001…002, DOM-001…011 |
 | 2 | STEAD-P0-003 | WS-02 | P0-001, P0-002 | Runtime responsibilities, module/table ownership, provider ports, work-item ownership, transactions and the transactional outbox; ARCH-003…004, DOM-004, EVT-002 |
 | 3 | STEAD-P0-004 | WS-03 | P0-001…003 | Capability-scoped Gitea interfaces, tracker mapping, reconciliation, provider enforcement and compatibility; SCM-001…006 |
 | 4 | STEAD-P0-005 | WS-04 | P0-001, P0-002, P0-004 | Git/OKF knowledge and document model, Commonplace upstream/patch/fallback, review and repository security boundary; DOM-005, DOC-001…005 |
-| 4 | STEAD-P0-007 | WS-06 | P0-001…004 | Secure-default/open-security/no-cross-domain principles, OIDC/SCIM, OpenFGA v0.1, OPA I/O, trusted attributes, label lattice, security domains, downgrade and bypass rules; PRIN-007,011–012, AUTH-001…005, CLS-001…008, DOM-007 |
-| 5 | STEAD-P0-006 | WS-05 | P0-001, P0-002, P0-005 | One product experience, sole shell, project views, interaction vocabulary, markings, accessibility and performance; PRIN-001, UX-001…005 |
+| 4 | STEAD-P0-007 | WS-06 | P0-001…004 | OIDC/SCIM, groups/principals, hierarchy non-inheritance, OpenFGA v0.1, OPA I/O/agent intersection, label lattice, domains, downgrade and bypass; PRIN-007,011–012,015, DOM-007,009–010, AUTH-001…006, CLS-001…008 |
+| 5 | STEAD-P0-006 | WS-05 | P0-001, P0-002, P0-005 | Universal/capability IA, presets, object surface, six persona flows, design constitution, Devlane boundary, markings/accessibility/performance; PRIN-001,013–014, DOM-008,011, UX-001…009 |
 | 5 | STEAD-P0-008 | WS-07 | P0-002, P0-003, P0-007 | CloudEvents/AsyncAPI, NATS and the WS-02 outbox publisher/consumer binding, delivery, activity, inbox, notification and audit contracts; EVT-001,003…004, ACT-001, NOTIF-001…002, AUD-001…002 |
 | 5 | STEAD-P0-011 | WS-10 | P0-002, P0-007 | BlobStore, portable object metadata, authorized URL, retention, scan and partition contracts; STOR-001…003; supports WS-09's ART-001 integration through the BlobStore port |
-| 6 | STEAD-P0-009 | WS-08 | P0-002, P0-007, P0-008 | SearchProvider, work-graph projection, non-disclosing query plan, rebuild and MCP contract; SRCH-001…003, GRAPH-001…002 |
+| 6 | STEAD-P0-009 | WS-08 | P0-002, P0-007, P0-008 | Multi-resource SearchProvider, Work Graph, non-disclosing query/rebuild, contract-only MCP/A2A seams; DOM-010, AUTH-006, SRCH-001…003, GRAPH-001…002 |
 | 6 | STEAD-P0-010 | WS-09 | P0-004, P0-007, P0-008, P0-011 | OCI/package integration, Actions, internal catalog, runners, artifact/provenance and SecretProvider contracts; ART-001, CICD-001…005 |
 | 6 | STEAD-P0-012 | WS-11 | P0-002, P0-004, P0-005, P0-007, P0-011 | Resumable migration stages, mappings, preservation, reconciliation, cutover and redirects; MIG-001…005 |
 | 7 | STEAD-P0-013 | WS-12 | P0-003, P0-004, P0-007, P0-008, P0-010, P0-011 | Infrastructure-agnostic/simple operation, install profiles, platformctl, Helm/air-gap, OTel/health, backup/restore and safe upgrades; PRIN-008…009, DEP-001…005, OPS-001…005 |
 | 7 | STEAD-P0-015 | WS-01 | P0-002, P0-003, P0-004, P0-007, P0-008, P0-009 | Principal/assignment seams, agent-ready auth/classification, dual actor/requester event and audit fields, API/MCP/scoped-Git boundary, future A2A direction, and the Phase 0 runtime non-goal; AGENT-001…007 |
-| 8 | STEAD-P0-014 | WS-13 | P0-001…013, P0-015 | Testing-as-architecture, 115-ID traceability, threat and bypass baselines, license gates, scope guard, golden plan, test strategy, release gates and independent approvals; PRIN-010, SEC-001…006, TEST-001…009, AGENT-001…007 |
+| 8 | STEAD-P0-014 | WS-13 | P0-001…013, P0-015 | 128-ID traceability, 33-threat/47-bypass baseline, license/scope gates, TEST-009/010 plans, closeout packet and independent approval rules; PRIN-010, SEC-001…006, TEST-001…010, AGENT-001…007 |
 | 9 | GATE-P0-APPROVED | Project owner + WS-01 + WS-06 + distinct independent WS-13 QA/security identities | P0-001…015 | Recorded approval of every Phase 0 artifact; opens, but does not complete, Phase 1 |
 
 ## Phase 1 executable vertical slice
@@ -71,17 +73,19 @@ The Phase 1 records preserve the approved principal, assignment, authorization, 
 | Order | Issue | Owner | Direct predecessors | Deliverable |
 |---:|---|---|---|---|
 | 1 | STEAD-P1-001 | WS-01 | GATE-P0-APPROVED | Locked monorepo/toolchains, schema/API lint, license/dependency guardrails |
-| 1 | STEAD-P1-006 | WS-06 | GATE-P0-APPROVED | Bootstrap/OIDC identity and central OpenFGA + OPA decision path |
-| 2 | STEAD-P1-002 | WS-02 | P1-001, approved core/auth contracts | Canonical modular core, PostgreSQL ownership, optimistic concurrency and atomic outbox |
-| 3 | STEAD-P1-003 | WS-03 | P1-002, P1-006 | Stock Gitea adapter, tracker/board/work mapping, linked code and PR |
-| 3 | STEAD-P1-010 | WS-10 | P1-002, P1-006 | Filesystem BlobStore and authorized attachment path |
-| 3 | STEAD-P1-007 | WS-07 | P1-002, P1-006 | JetStream/outbox delivery and basic activity, inbox and audit |
-| 4 | STEAD-P1-004 | WS-04 | P1-002, P1-003, P1-006, P1-010 | One deterministic Git/OKF document flow |
-| 4 | STEAD-P1-008 | WS-08 | P1-002, P1-006, P1-007 | PostgreSQL search and work-graph baseline with non-disclosure |
-| 4 | STEAD-P1-009 | WS-09 | P1-003, P1-006, P1-007, P1-010 | One pinned Action with build/SBOM/artifact/release trace |
-| 5 | STEAD-P1-005 | WS-05 | P1-002, P1-003, P1-004, P1-006, P1-007, P1-008 | Sole unified shell and golden interactions |
-| 6 | STEAD-P1-011 | WS-12 | P1-001…010 | One-command local install, OTel/health/doctor and backup/restore baseline |
-| 7 | STEAD-P1-012 | WS-13 | P1-001…011 | Independent golden-slice, bypass, restore and upgrade gate |
+| 2 | STEAD-P1-006 | WS-06 | GATE-P0-APPROVED, P1-001 | Bootstrap/OIDC identity and central OpenFGA + OPA decision path |
+| 3 | STEAD-P1-002 | WS-02 | P1-001, P1-006, approved core/auth contracts | Canonical modular core, PrincipalRef-based User/Agent Work assignment, PostgreSQL ownership, optimistic concurrency and atomic outbox |
+| 4 | STEAD-P1-003 | WS-03 | P1-002, P1-006 | Stock Gitea adapter, hidden tracker/board, provider-neutral Work backing and docs Git; no general code repo |
+| 4 | STEAD-P1-010 | WS-10 | P1-002, P1-006 | Filesystem BlobStore and authorized attachment path |
+| 4 | STEAD-P1-007 | WS-07 | P1-002, P1-006 | JetStream/outbox delivery and basic activity, inbox and audit |
+| 5 | STEAD-P1-004 | WS-04 | P1-002, P1-003, P1-006, P1-010 | One deterministic Git/OKF document flow |
+| 5 | STEAD-P1-008 | WS-08 | P1-002, P1-006, P1-007 | PostgreSQL search and work-graph baseline with non-disclosure |
+| 6 | STEAD-P1-005 | WS-05 | P1-002, P1-003, P1-004, P1-006, P1-007, P1-008 | Universal shell and complete TEST-009 general Work+Docs path |
+| 7 | STEAD-P1-013 | WS-03 | P1-003, P1-005, P1-006 | Additive software code repository, branch, commit and Pull Request path |
+| 8 | STEAD-P1-009 | WS-09 | P1-006, P1-007, P1-010, P1-013 | One pinned Action with build/SBOM/artifact/release trace |
+| 9 | STEAD-P1-014 | WS-05 | P1-004, P1-007…009, P1-013 | Present Code and Delivery in the same shell; complete TEST-010 UI path |
+| 10 | STEAD-P1-011 | WS-12 | P1-001…010, P1-013…014 | One-command local install, OTel/health/doctor and backup/restore baseline |
+| 11 | STEAD-P1-012 | WS-13 | P1-001…011, P1-013…014 | Independently gate TEST-009 and TEST-010, bypass, restore and upgrade |
 
 No Phase 2 issue opens merely because its implementation dependency is merged. The Phase 1 candidate must pass STEAD-P1-012 and receive its recorded release decision.
 
@@ -96,7 +100,7 @@ These issues are `BLOCKED_PENDING_PHASE_0_APPROVAL` and also depend on successfu
 | 1 | STEAD-P2-003 | WS-05 | P1-012 | Mature unified UX, markings and critical-flow WCAG 2.2 AA |
 | 1 | STEAD-P2-004 | WS-06 | P1-012 | Trusted attributes, signed label profiles, propagation/downgrade and bypass suite |
 | 1 | STEAD-P2-005 | WS-07 | P1-012 | Full inbox/channels and platform-wide audit coverage |
-| 1 | STEAD-P2-006 | WS-08 | P1-012 | Complete search/work graph and permission-aware MCP beta |
+| 1 | STEAD-P2-006 | WS-08 | P1-012 | Complete search/Work Graph, Agent Registry, and permission-aware MCP/A2A beta |
 | 1 | STEAD-P2-007 | WS-09 | P1-012 | Secure runner pools, approved actions, artifact and secret integration |
 | 1 | STEAD-P2-008 | WS-10 | P1-012 | Filesystem/S3/Azure/GCS BlobStore contract conformance |
 | 1 | STEAD-P2-009 | WS-11 | P1-012 | GitHub/Jira/Confluence discovery, dry run and initial import |
@@ -138,7 +142,7 @@ Any future child implementation issue must restate these fields with a narrower 
 
 Phase 0 models identity as a principal union containing at least `user`, `agent`, and `service_account`; permits an agent principal in canonical work-item assignment; reserves agent relationships and future delegation/task/runtime inputs in OpenFGA and OPA; and lets CloudEvents and audit records distinguish an acting principal from the initiating/requesting principal.
 
-Future agent business access is through canonical Platform APIs and the platform-wide MCP boundary. Scoped direct Git credentials are the only allowed direct provider path described by the addendum. MCP is the preferred future agent-to-platform interoperability path; A2A and Agent Card semantics remain future `SHOULD` seams, not Phase 0 deliverables.
+Future agent business access is through canonical Platform APIs and the platform-wide MCP boundary. Scoped direct Git credentials are the only permitted direct provider path. Phase 0 delivers only the canonical Agent/AgentRun schemas and MCP/A2A compatibility contracts; MCP tools, A2A dispatch, Agent Registry behavior, and agent execution remain out of scope.
 
 The future authorization result must be capable of intersecting delegator authority, agent-specific authority, task scope, runtime security domain, session/environment constraints, and resource classification/handling rules. The compatibility schema grants no authority by itself.
 

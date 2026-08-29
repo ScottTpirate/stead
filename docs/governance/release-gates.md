@@ -2,11 +2,11 @@
 
 | Field | Value |
 |---|---|
-| Status | Draft Phase 0 governance contract; no release authority is granted |
+| Status | Reconciled Phase 0 approval candidate; no release authority is granted |
 | Gate owner | Workstream 13 — QA/security/release |
 | Architecture gate owner | Workstream 1 — Architecture/standards |
 | Release decision | Independent QA approval **and** independent security approval; project-owner approval where this policy or an ADR requires it |
-| Normative requirements | §0; PRIN-010; ARCH-005; SCM-005; DEP-004–005; OPS-003–005; SEC-001–006; TEST-001–009; Phase 0; §21 locked decisions; §22 definition of done; AGENT-001–007 |
+| Normative requirements | §0; PRIN-010; ARCH-005; SCM-005; DEP-004–005; OPS-003–005; SEC-001–006; TEST-001–010; Phase 0; §21 locked decisions; §22 definition of done; AGENT-001–007 |
 | Related artifacts | [`architecture/constitution.md`](../architecture/constitution.md), [`testing/golden-vertical-slice.md`](../testing/golden-vertical-slice.md), [`security/threat-model.md`](../security/threat-model.md), [`security/classification-bypass-inventory.md`](../security/classification-bypass-inventory.md), [`governance/license-and-dependency-approval.md`](license-and-dependency-approval.md) |
 
 This policy governs Phase 0 exit, later milestone promotion, and every release candidate. It does not authorize Phase 1 implementation. A gate passes only for the exact source commit, build and artifact digests, dependency lock, contract/schema/model/policy versions, provider matrix, installation profiles, and evidence manifest reviewed. A later change invalidates affected evidence and approvals.
@@ -23,7 +23,7 @@ This policy governs Phase 0 exit, later milestone promotion, and every release c
 8. Unknown or disallowed distributed licenses, missing SBOM/signature/provenance/checksum/notices, or unapproved dependencies fail the candidate. License exceptions follow the separate ADR + legal + project-owner workflow.
 9. “Security-ready,” “FIPS-capable,” and control-mapping evidence do not authorize claims of certification, accreditation, FedRAMP authorization, FIPS validation, CMMC compliance, classified-system approval, cross-domain certification, or a SLSA level the exact process has not achieved.
 10. Release pressure, schedule, customer identity, administrative role, or previous approval does not override a deny gate.
-11. Agent-ready Phase 0 contracts do not authorize agent execution. No Phase 0 gate may be satisfied by implementing orchestration, prompting, model hosting, agent memory, `AgentRun`, A2A dispatch, a future Agent Registry, or the full MCP tool catalog.
+11. Agent-ready Phase 0 contracts do not authorize agent execution. Agent and AgentRun schemas are required, but no Phase 0 gate may be satisfied by implementing orchestration, prompting, model hosting, agent memory, AgentRun execution, A2A dispatch, Agent Registry behavior, or the full MCP tool catalog.
 12. A future agent release cannot inherit a human’s broad permissions. Its evidence must prove explicit delegation/task/resource scope, independent revocation, runtime/context intersection, canonical Platform API/MCP use, scoped direct Git credentials, external-runtime trust controls, and distinct requester/actor attribution.
 
 ## Roles, independence, and vetoes
@@ -54,6 +54,7 @@ The project owner must approve immutable versions of all items below after WS-01
 - product principles and the architecture constitution;
 - repository/module layout, database ownership and prohibited-boundary rules;
 - OWGP v0.1, canonical entity/resource/relationship schemas and ontology governance;
+- Team hierarchy/Project ownership, fixed capability/preset, universal Work/Document, and Project lifecycle contracts;
 - security-label schema/profile/lattice and inheritance/join/downgrade rules;
 - OpenFGA model v0.1 with model and migration test vectors;
 - OPA input/output, trusted-context, deny/error, bundle/version/signature contract and decision table;
@@ -65,7 +66,9 @@ The project owner must approve immutable versions of all items below after WS-01
 - requirements traceability register, dependency-ordered issue hierarchy, workstream ownership map and contract ownership matrix;
 - Phase 0 artifact backlog and ADR disposition;
 - golden vertical-slice scenario/test plan and this release-gate policy.
+- product/UX information architecture, design constitution, object surface, preset and persona-flow contracts;
 - agent-ready principal, assignment, OpenFGA, OPA, audit/event, Platform API/MCP and scoped-direct-Git compatibility seams for AGENT-001–006, together with the AGENT-007 non-goal.
+- reconciliation report and Phase 0 Closeout Packet.
 
 ### `GATE-P0-APPROVED` pass criteria
 
@@ -75,8 +78,8 @@ The project owner must approve immutable versions of all items below after WS-01
 4. Every contract has exactly one edit owner at a time and named consumers/reviewers; overlaps name an integration owner.
 5. All required Phase 0 artifacts are internally consistent, versioned, dependency-complete, and have no unresolved Critical/High **Phase 0 artifact defect**. Open implementation risks in the threat register are acceptable at Phase 0 only when they have an owned control/test/release gate; they remain blockers for the applicable executable milestone.
 6. Genuine unresolved implementation choices are either resolved by approved ADR or explicitly deferred with a decision deadline before the dependent issue. Locked decisions are not relabeled as open choices.
-7. The golden plan covers all 16 TEST-009 steps, the Phase 1 architecture proof, the complete TEST-004 matrix, direct paths, events, audit, backup/restore and upgrade without implementing features.
-8. Principal contracts accept `user`, `agent`, and `service_account`; assignment does not expose Gitea’s user-only limitation as canonical; OpenFGA reserves agent and explicit delegation/task/resource/revocation seams; OPA inputs reserve principal type and runtime domain/ceiling/compartment/model-provider/tool-scope/execution-environment context; events/audit preserve `requested_by` and `actor`; API/MCP/direct-Git boundaries are specified.
+7. The golden plan separately covers TEST-009 general work with no code repository and TEST-010 additive software delivery, plus the complete TEST-004 matrix, direct paths, hierarchy non-inheritance, capability absence, events, audit, backup/restore and upgrade without implementing features.
+8. PrincipalRef contracts accept `user`, `agent`, `service_account`, and non-acting `directory_group`; assignment does not expose Gitea’s user-only limitation as canonical; OpenFGA reserves explicit agent/delegation/task/resource/revocation seams; OPA inputs reserve runtime domain/ceiling/compartment/model-provider/tool-scope/environment; events/audit preserve `requested_by` and `actor`; API/MCP/direct-Git boundaries are specified.
 9. The Phase 0 scope audit proves no agent execution/orchestration/prompting/model-hosting/memory/A2A-dispatch/full-MCP implementation or mandatory model/SDK/provider dependency was introduced.
 10. Distinct independent QA and security reviewer identities verify completeness and contradiction checks from source, not only author summaries.
 11. The project owner records `APPROVED` against the exact commit/tag and artifact versions. Merge, publication, silence, or partial sign-off is not approval.
@@ -136,12 +139,13 @@ All gates are cumulative. `PASS` means the exact candidate has complete, success
 | `RG-06-PROVIDER` Provider compatibility | TEST-006, SCM-001–005, DOC-002–003 | Full Gitea capability suite on pinned current and previous two supported minors; RC/nightly signal when available; Commonplace/OKF compatibility where applicable; no internal DB/file use | Failed declared-version contract, webhook signature failure, permission-sync bypass, hidden direct DB dependency | QA + architecture; security for permission paths |
 | `RG-07-INSTALL-UPGRADE` Installation, air gap and upgrade | TEST-007, DEP-001–005 | Fresh local Compose and lightweight Kubernetes; external DB/object profile; optional OpenSearch when claimed; network-disabled air gap when applicable; all supported prior platform/Gitea upgrades; failure recovery; doctor; Helm schema/tests | Undocumented egress, unsupported claimed profile/version, failed migration/rollback recovery, missing backup/preflight | QA + security for profile/domain controls |
 | `RG-08-SECURITY` Security and supply-chain blockers | TEST-008, SEC-001–006, CICD-002–005 | No unwaived Critical/High vulnerability; no known disclosure; authz/classification, audit, backup/restore and install/upgrade green; approved licenses; scans; SBOM/signatures/provenance/checksums/notices present | Any TEST-008 failure condition; secret in artifact/evidence; signature not bound to candidate | Independent security + independent QA; legal where applicable |
-| `RG-09-GOLDEN` Golden end-to-end | TEST-009 | One uninterrupted traceable run of `GVS-001`–`GVS-016` from supported install through auth, work/docs/code/PR/build/release/search/non-disclosure, backup/restore, upgrade and repeated checks | Any functional, direct-path, non-disclosure, event, audit, restore, upgrade or post-upgrade assertion fails | Independent QA + independent security |
+| `RG-09-GENERAL-GOLDEN` General-work end-to-end | TEST-009 | One uninterrupted `GWS-001`–`GWS-014` run with Work+Docs, Team hierarchy, multi-scope knowledge and no code repository/Code/Delivery surface | Any assertion fails; any software-only concept leaks; hierarchy grants access | Independent QA + independent security |
+| `RG-09B-SOFTWARE-GOLDEN` Software extension end-to-end | TEST-010 | One uninterrupted `SWS-001`–`SWS-008` run adding Code/Delivery without changing shell, ontology or policy path | Any extension, provider, delivery, recovery, or capability-visibility assertion fails | Independent QA + independent security |
 | `RG-10-OPERABILITY` Reliability, observability and recovery | OPS-001–005, §22 | OTel traces/metrics/logs with safe context; health/doctor; published load fixtures/targets; graceful-degradation/chaos; complete backup/restore; runbooks and alerts | Protected body/secret in telemetry, acknowledged write loss, unavailable recovery, unpublished benchmark basis | QA + security + WS-12 review |
 | `RG-11-COMPAT-DOCS` Compatibility, migration, rollback and documentation | ARCH-005, MIG-001–005, DEP-005, §22 | API/event/schema compatibility and deprecation; migration behavior/provenance; upgrade/rollback constraints; operator/user/contributor/security docs; canonical export/import/redirect tests | Silent data loss, unreported unsupported construct, breaking change without version/migration period, undocumented irreversible migration | QA + architecture + security where data flow changes |
 | `RG-12-FINAL` Final disposition | §0, TEST-008, §22 | All earlier gates pass; waivers valid; no blocking defect; golden green; exact manifest signed; independent QA and security both explicitly approve | Self-approval, missing approver, veto, expired waiver, candidate changed after evidence | Independent QA **and** independent security; release manager verifies |
 
-### TEST-001 through TEST-009 coverage
+### TEST-001 through TEST-010 coverage
 
 | TEST requirement | Enforcing gate(s) | Required outcome |
 |---|---|---|
@@ -153,13 +157,14 @@ All gates are cumulative. `PASS` means the exact candidate has complete, success
 | TEST-006 Provider tests | RG-06 | Complete Gitea and applicable Commonplace compatibility contracts pass |
 | TEST-007 Installation/upgrade tests | RG-07 | Every required topology/profile/version/recovery test passes |
 | TEST-008 Security release gates | RG-08 and RG-12 | No enumerated blocker remains; only explicitly permitted vulnerability waiver may apply |
-| TEST-009 Golden scenario | RG-09 | All 16 ordered scenario steps and cross-cutting assertions pass |
+| TEST-009 General-work golden scenario | RG-09-GENERAL-GOLDEN | All 14 ordered steps pass with no code repository or software-only leakage |
+| TEST-010 Software-development golden extension | RG-09B-SOFTWARE-GOLDEN | All eight additive steps pass without changing canonical ontology, shell, or policy path |
 
 ## Golden scenario rules
 
-The approved [`golden-vertical-slice.md`](../testing/golden-vertical-slice.md) is a release-blocking executable specification. Phase 0 approves its contract only. The Phase 1 architecture proof runs the directive’s thin slice through identity, shared authorization, Project, Gitea-backed Work Item, Git/OKF Document, code repository/PR, NATS/outbox, inbox, PostgreSQL search, audit and local installation. It is an engineering milestone and may not be represented as a production release if the full release obligations are not met.
+The approved [`golden-vertical-slice.md`](../testing/golden-vertical-slice.md) is a release-blocking executable specification. Phase 0 approves its contract only. Phase 1 first proves the TEST-009 general Project through identity, Team hierarchy, shared authorization, Gitea-backed Work, multi-scope Git/OKF knowledge, NATS/outbox, inbox, search, audit and local installation without code; it then proves TEST-010 as an additive Code/Delivery extension in the same shell/model.
 
-Every actual release candidate runs the complete TEST-009 sequence, including Action/build/SBOM/artifact/release visibility, non-disclosure, backup/restore, supported upgrade and repeated post-upgrade checks. A split run assembled from different candidates, fixtures, policy versions or restored states does not satisfy the golden gate.
+Every actual release candidate runs complete TEST-009 and the applicable TEST-010 sequence, including non-disclosure, backup/restore, supported upgrade and post-upgrade checks. A split run assembled from different candidates, fixtures, policy versions or restored states does not satisfy either golden gate.
 
 ## Defects, failures and retests
 
@@ -215,8 +220,8 @@ The release manager then records `PUBLISHED` with repository/registry locations 
 
 ## Phase-specific application
 
-- **Phase 0:** `GATE-P0-APPROVED` only; contracts and test specifications are approved. AGENT-001–006 compatibility seams are reviewed, while AGENT-007 prohibits agent execution/orchestration/prompting/model hosting/memory/`AgentRun`/A2A dispatch/full MCP catalog. No feature implementation or product release is implied.
+- **Phase 0:** `GATE-P0-APPROVED` only; contracts and test specifications are approved. Agent/AgentRun schemas and AGENT-001–006 seams are reviewed, while AGENT-007 prohibits execution/orchestration/prompting/model hosting/memory/A2A dispatch/full MCP catalog. No feature implementation or product release is implied.
 - **Phase 1 architecture proof:** Phase 0 must already pass. Run the complete thin vertical-slice subset defined by the golden plan plus all gates applicable to changed executable components. It validates architecture but cannot claim production completeness.
-- **Phase 2 Pilot/Beta:** All candidate gates apply to delivered scope and every public release runs full TEST-009. Beta status does not relax authorization, disclosure, licensing, recovery or independent approval.
+- **Phase 2 Pilot/Beta:** All candidate gates apply to delivered scope and every public release runs full TEST-009 plus applicable TEST-010. Beta status does not relax authorization, disclosure, licensing, recovery or independent approval.
 - **Phase 3 Production 1.0:** All gates and claimed profiles apply, including air-gap, OSCAL artifact accuracy, real-time collaboration, OpenSearch/HA when shipped, tamper-evident audit, supply-chain outputs and production SLO evidence.
 - **Patch/security release:** All safety, traceability, supply-chain, upgrade/rollback and golden gates still apply. The relevant regression suite expands; urgency does not create self-approval or fail-open authority.

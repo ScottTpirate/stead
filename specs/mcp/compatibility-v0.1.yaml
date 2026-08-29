@@ -1,0 +1,9 @@
+schema_version: "0.1"
+status: contract_only
+transport: model_context_protocol
+resource_boundary: canonical_platform_api
+required_context: [actor, actor_type, requested_by_when_different, delegation_id_when_present, task_context_id_when_present, correlation_id, causation_id, security_domain, effective_security_label]
+authorization: same_openfga_opa_provider_path_as_platform_api
+audit: every_write_and_sensitive_read
+prohibited: [full_tool_catalog, agent_execution, provider_business_api, database_access, nats_access, direct_search_index_access, direct_object_store_access, prompt_or_memory_contract]
+git_exception: scoped_short_lived_revocable_repository_task_action_credentials

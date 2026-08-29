@@ -1,7 +1,7 @@
 # Phase 0 Contract Ownership Matrix
 
-Status: **Draft; no contract is implementation-approved until Phase 0 sign-off**<br>
-Normative source: `unified_open_work_platform_master_build_directive.md` version 0.2
+Status: **Ready for Phase 0 sign-off; no Phase 1 implementation is authorized**<br>
+Normative source: `docs/architecture/MASTER_BUILD_DIRECTIVE.md` version 0.2
 
 This registry gives every Phase 0 contract one editor and one merge lane. “Sole editor” is literal: consumers and reviewers may propose patches or review diffs, but they may not concurrently edit the registered contract. The contract owner integrates accepted changes.
 
@@ -43,7 +43,7 @@ Approval means an explicit recorded approval against the reviewed commit. “Pro
 
 All canonical JSON schemas use JSON Schema 2020-12. Resource schemas compose the common envelope; they do not fork or copy it. These rows are the complete Phase 0 canonical schema inventory. Adding another first-class resource is prohibited without ontology ADR and project-owner approval.
 
-Within `SCH-PRINCIPAL`, the `service_account` discriminator denotes the existing DOM-002 **Service Principal** entity; it does not define a second service-identity entity. The reserved `agent` principal type is an authorization/assignment seam, not a new DOM-002 first-class entity or Phase 0 agent runtime.
+Within `SCH-PRINCIPAL`, the `service_account` discriminator denotes the DOM-002 **Service Principal** entity; it does not define a second service-identity entity. `directory_group` is a membership/authorization subject but cannot act. Agent and Agent Run are canonical schemas, while orchestration and AgentRun execution remain outside Phase 0.
 
 | Contract ID / schema | Source path | Sole editor | Required reviewers / approvers | Primary consumers | Protocol / merge rule |
 |---|---|---|---|---|---|
@@ -55,16 +55,20 @@ Within `SCH-PRINCIPAL`, the `service_account` discriminator denotes the existing
 | `SCH-EXPORT-MANIFEST` | `/packages/domain-schemas/common/export-manifest/` | `WS-01` | `WS-10`, `WS-11`, `WS-12`; approve `WS-06`, `WS-13` | export/import/backup/exitability | `C-ARCH`; round-trip and portable-locator tests |
 | `SCH-INSTANCE` | `/packages/domain-schemas/resources/instance/` | `WS-01` | `WS-02`, `WS-12`; approve `WS-06`, `WS-13` | core, config, API, export | `C-ARCH` |
 | `SCH-ORGANIZATION` | `/packages/domain-schemas/resources/organization/` | `WS-01` | `WS-02`; approve `WS-06`, `WS-13` | organization, auth, providers, API | `C-ARCH` |
-| `SCH-PRINCIPAL` discriminated reference: `user`, `agent`, `service_account` | `/packages/domain-schemas/identity/principal/` | `WS-06` | `WS-01`, `WS-02`, `WS-07`, `WS-08`; approve `WS-13`, project owner | every actor/assignee/creator/reviewer/subscriber/request-principal field, OpenFGA/OPA, API/events/audit | `C-POLICY`; human-only assumptions forbidden; this is not Phase 0 Agent Registry/execution |
+| `SCH-PRINCIPAL` discriminated reference: `user`, `agent`, `service_account`, `directory_group` | `/packages/domain-schemas/identity/principal/` | `WS-06` | `WS-01`, `WS-02`, `WS-07`, `WS-08`; approve `WS-13`, project owner | actors, assignments, ownership, OpenFGA/OPA, API/events/audit | `C-POLICY`; only user/agent/service_account may act; Work assignment uses the narrower user/agent `SCH-WORK-ASSIGNMENT`; human-only assumptions forbidden |
 | `SCH-USER` | `/packages/domain-schemas/identity/user/` | `WS-06` | `WS-01`, `WS-07`, `WS-11`; approve `WS-13` | identity, auth, SCIM, audit, export | `C-ARCH`; trusted/self-asserted fields separated |
+| `SCH-DIRECTORY-GROUP` | `/packages/domain-schemas/identity/directory-group/` | `WS-06` | `WS-01`, `WS-02`; approve `WS-13` | identity, Team membership sync, authorization, export | `C-POLICY`; never an acting principal |
 | `SCH-SERVICE-PRINCIPAL` | `/packages/domain-schemas/identity/service-principal/` | `WS-06` | `WS-01`, `WS-07`, `WS-09`; approve `WS-13` | identity, auth, CI, MCP, audit | `C-ARCH`; short-lived credential semantics |
-| `SCH-TEAM` | `/packages/domain-schemas/resources/team/` | `WS-01` | `WS-02`, `WS-06`; approve `WS-13` | organization, auth, SCM, API | `C-ARCH` |
+| `SCH-AGENT` | `/packages/domain-schemas/identity/agent/` | `WS-06` | `WS-01`, `WS-02`, `WS-08`; approve `WS-07`, `WS-13`, project owner | identity, assignment, authorization, events/audit, future registry/MCP/A2A | `C-POLICY`; registration metadata only in Phase 0; no runtime coupling |
+| `SCH-AGENT-RUN` | `/packages/domain-schemas/identity/agent-run/` | `WS-06` | `WS-01`, `WS-02`, `WS-07`, `WS-08`; approve `WS-13`, project owner | future task-scoped authorization, events/audit, MCP/A2A | `C-POLICY`; state/provenance contract only; no Phase 0 execution |
+| `SCH-TEAM` | `/packages/domain-schemas/resources/team/` | `WS-01` | `WS-02`, `WS-06`; approve `WS-13` | organization, auth, SCM, API | `C-ARCH`; stable parent relation is acyclic and never implies authorization |
 | `SCH-INITIATIVE` | `/packages/domain-schemas/resources/initiative/` | `WS-01` | `WS-02`, `WS-08`; approve `WS-06`, `WS-13` | project/work/graph/API | `C-ARCH` |
-| `SCH-PROJECT` | `/packages/domain-schemas/resources/project/` | `WS-01` | `WS-02`, `WS-03`, `WS-04`; approve `WS-06`, `WS-13` | project, work, knowledge, SCM, API | `C-ARCH`; project is not repository invariant |
+| `SCH-PROJECT` | `/packages/domain-schemas/resources/project/` | `WS-01` | `WS-02`, `WS-03`, `WS-04`, `WS-05`; approve `WS-06`, `WS-13` | project, work, knowledge, optional SCM/delivery, API | `C-ARCH`; owning/contributing Teams, lifecycle, preset, capabilities; repository is optional |
+| `SCH-PROJECT-CAPABILITY` fixed capability and preset registry | `/packages/domain-schemas/resources/project-capability/` | `WS-01` | `WS-02`, `WS-03`, `WS-04`, `WS-05`; approve `WS-06`, `WS-13`, project owner | Project schema/API, navigation, providers, migration | `C-ARCH`; system-defined only; dependencies validated; no configurable ontology |
 | `SCH-CYCLE` | `/packages/domain-schemas/resources/cycle/` | `WS-01` | `WS-02`, `WS-03`; approve `WS-06`, `WS-13` | work, milestone mapping, API | `C-ARCH` |
-| `SCH-WORK-ITEM` | `/packages/domain-schemas/resources/work-item/` | `WS-01` | `WS-02`, `WS-03`; approve `WS-06`, `WS-13` | work, Gitea mapping, search, migration | `C-ARCH`; fixed types/statuses/priorities/nesting |
+| `SCH-WORK-ITEM` | `/packages/domain-schemas/resources/work-item/` | `WS-01` | `WS-02`, `WS-03`, `WS-04`; approve `WS-06`, `WS-13` | work, optional Gitea mapping, knowledge, search, migration | `C-ARCH`; general types deliverable/task/problem, fixed statuses/priorities/nesting |
 | `SCH-WORK-ASSIGNMENT` provider-independent assignee reference | `/packages/domain-schemas/resources/work-assignment/` | `WS-02` | `WS-01`, `WS-03`; approve `WS-06`, `WS-13` | Work Item schema/API, Gitea mapping, search/events/audit | `C-MODULE`; accepts `agent` principal even where Gitea projection must map only native users; assignment grants no execution authority |
-| `SCH-DOCUMENT` | `/packages/domain-schemas/resources/document/` | `WS-01` | `WS-04`; approve `WS-06`, `WS-13` | knowledge, search, migration, API | `C-ARCH`; fixed type/state and Git/OKF identity |
+| `SCH-DOCUMENT` | `/packages/domain-schemas/resources/document/` | `WS-01` | `WS-02`, `WS-04`; approve `WS-06`, `WS-13` | organization/team/project knowledge, search, migration, API | `C-ARCH`; exactly one Organization/Team/Project container, general fixed type/state, Git/OKF identity |
 | `SCH-REPOSITORY` | `/packages/domain-schemas/resources/repository/` | `WS-01` | `WS-03`; approve `WS-06`, `WS-13` | SCM, project, CI, search, migration | `C-ARCH`; one effective container label |
 | `SCH-BRANCH` | `/packages/domain-schemas/resources/branch/` | `WS-01` | `WS-03`; approve `WS-06`, `WS-13` | SCM, knowledge review, CI | `C-ARCH` |
 | `SCH-COMMIT` | `/packages/domain-schemas/resources/commit/` | `WS-01` | `WS-03`, `WS-09`; approve `WS-06`, `WS-13` | SCM, CI, graph, search | `C-ARCH` |
@@ -96,13 +100,13 @@ Within `SCH-PRINCIPAL`, the `service_account` discriminator denotes the existing
 |---|---|---|---|---|---|
 | `API-HTTP-BASE` authentication context, canonical IDs/URIs, pagination, RFC 9457, ETags, versioning | `WS-01` | `WS-02`, `WS-05`, `WS-12` | `WS-06`, `WS-13` | web, CLI, MCP, external clients | `C-PUBLIC`; lands before every group |
 | `API-ORGANIZATION` Instance/Organization/Team | `WS-01` | `WS-02` | `WS-06`, `WS-13` | web, CLI, SCIM/admin | `C-PUBLIC` |
-| `API-IDENTITY` Principal/User/Service Principal/provisioning status | `WS-01` | `WS-06` | `WS-13` | web admin, CLI, integrations | `C-PUBLIC`; canonical principal kind permits `agent`, but Phase 0 exposes no Agent Registry/execution; trusted attributes never self-editable |
+| `API-IDENTITY` Principal/User/Directory Group/Agent/Agent Run/Service Principal schemas and provisioning status | `WS-01` | `WS-06`, `WS-08` | `WS-13` | web admin, CLI, integrations, future MCP/A2A | `C-PUBLIC`; Phase 0 publishes representation seams only, not Agent Registry behavior or execution; trusted attributes never self-editable |
 | `API-AUTHORIZATION` permission/explanation-safe decision operations | `WS-01` | `WS-06` | `WS-13`, project owner | core, provider gateways, admin UI | `C-PUBLIC`; explanation cannot leak protected existence |
-| `API-PROJECT-WORK` Initiative/Project/Cycle/Work Item/assignment/Comment/relationship | `WS-01` | `WS-02`, `WS-03` | `WS-06`, `WS-13` | web, CLI, future MCP, migration | `C-PUBLIC`; assignee is `SCH-PRINCIPAL`, including `agent`, independent of Gitea-native user limitations |
-| `API-KNOWLEDGE` Document/edit/review/publish/attachment | `WS-01` | `WS-04`, `WS-10` | `WS-06`, `WS-13` | web, Commonplace headless client, CLI, MCP | `C-PUBLIC` |
+| `API-PROJECT-WORK` Initiative/Project/preset/capabilities/Team ownership/Cycle/Work Item/assignment/Comment/relationship | `WS-01` | `WS-02`, `WS-03`, `WS-05` | `WS-06`, `WS-13` | web, CLI, future MCP, migration | `C-PUBLIC`; Work is provider-neutral and assignee may be an agent despite Gitea limits |
+| `API-KNOWLEDGE` Organization/Team/Project-scoped Document/edit/review/publish/attachment | `WS-01` | `WS-04`, `WS-10` | `WS-06`, `WS-13` | web, Commonplace headless client, CLI, MCP | `C-PUBLIC`; container authorization and Git security boundary remain explicit |
 | `API-SCM` Repository/Branch/Commit/Pull Request/provider admin escape | `WS-01` | `WS-03` | `WS-06`, `WS-13` | web, CLI, MCP | `C-PUBLIC`; never proxies undocumented Gitea internals |
 | `API-CI-ARTIFACT` Build/Deployment/Release/Package/Artifact/runner/action catalog | `WS-01` | `WS-09`, `WS-10` | `WS-06`, `WS-13` | web, CLI, automation | `C-PUBLIC` |
-| `API-SEARCH-GRAPH` search/count/facet/suggestion/relationship traversal | `WS-01` | `WS-08` | `WS-06`, `WS-13` | web, CLI, future MCP | `C-PUBLIC`; authoritative filtering before any response metadata |
+| `API-SEARCH-GRAPH` typed multi-resource search/count/facet/suggestion/relationship traversal | `WS-01` | `WS-08` | `WS-06`, `WS-13` | web, CLI, future MCP | `C-PUBLIC`; canonical resource discriminator and authoritative filtering before any response metadata |
 | `API-AGENT-ACCESS-SEAM` canonical resource operations reusable by future platform-wide MCP | `WS-01` | `WS-08`, all affected domain owners | `WS-06`, `WS-13`, project owner | future external agent runtimes/MCP gateway | `C-PUBLIC`; Phase 0 preserves API compatibility only and defines no full MCP tool catalog, runtime, orchestration, model, memory, or A2A dispatch |
 | `API-ACTIVITY-INBOX` Activity/Notification/subscription | `WS-01` | `WS-07` | `WS-06`, `WS-13` | web, external channel workers | `C-PUBLIC` |
 | `API-AUDIT` authorized audit query/export | `WS-01` | `WS-07`, `WS-12` | `WS-06`, `WS-13`, project owner | security/admin UI, SIEM export | `C-PUBLIC`; content administration does not imply read access |
@@ -138,6 +142,7 @@ Future agents use canonical Platform APIs and the platform-wide MCP seam owned b
 | `P-IDENTITY-ATTRIBUTE` trusted attribute authority | `/packages/provider-sdk/identity/trusted-attributes/` | `WS-06` | approve `WS-01`, `WS-13` | configured authorities; identity/OPA | `C-PROVIDER`; unverifiable/expired denies |
 | `P-BLOBSTORE` `BlobStore` | `/packages/provider-sdk/blobstore/` | `WS-10` | `WS-04`, `WS-09`, `WS-12`; approve `WS-01`, `WS-06`, `WS-13` | filesystem/S3/Azure/GCS; knowledge/artifact/backup | `C-PROVIDER`; one suite must pass all implementations |
 | `P-SEARCH` `SearchProvider` | `/packages/provider-sdk/search/` | `WS-08` | approve `WS-01`, `WS-06`, `WS-13` | PostgreSQL/OpenSearch; search/graph | `C-PROVIDER`; identical non-disclosure and rebuild semantics |
+| `P-AGENT-A2A` `AgentA2AProvider` | `/specs/a2a/` and contract-only `/providers/agent-a2a/` | `WS-08` | all exposed domain owners; approve `WS-01`, `WS-06`, `WS-07`, `WS-13`, project owner | future external agent runtimes; `/modules/agent/` | `C-PROVIDER`; Phase 0 defines compatibility metadata only and prohibits dispatch, execution, runtime/model coupling, and provider-business-API access; it is the provider-interface alias of `INT-A2A-COMPAT` |
 | `P-NOTIFICATION-CHANNEL` `NotificationChannel` | `/packages/provider-sdk/notifications/` | `WS-07` | approve `WS-01`, `WS-06`, `WS-13` | email/webhook and later Teams/Slack; notification | `C-PROVIDER`; channel authorization/redaction required |
 | `P-SECRET` `SecretProvider` | `/packages/provider-sdk/secrets/` | `WS-09` | `WS-12`; approve `WS-01`, `WS-06`, `WS-13` | Kubernetes/basic and external adapters; CI/core/worker | `C-PROVIDER`; secrets never enter canonical payloads |
 | `P-RUNNER-POOL` runner-pool execution/control interface | `/packages/provider-sdk/ci/runner-pool/` | `WS-09` | `WS-03`, `WS-12`; approve `WS-01`, `WS-06`, `WS-13` | Gitea Actions/runners; ci/platformctl | `C-PROVIDER`; domain/pool isolation explicit |
@@ -166,6 +171,7 @@ No generic “provider” escape hatch exists. A new capability or provider impl
 | `/providers/blob-gcs/` | `WS-10` | `P-BLOBSTORE` | `WS-06`, `WS-12`, `WS-13` |
 | `/providers/search-postgres/` | `WS-08` | `P-SEARCH` | `WS-06`, `WS-07`, `WS-13` |
 | `/providers/search-opensearch/` | `WS-08` | `P-SEARCH` | `WS-06`, `WS-07`, `WS-12`, `WS-13` |
+| `/providers/agent-a2a/` (contract-only in Phase 0) | `WS-08` | `P-AGENT-A2A` / `INT-A2A-COMPAT` | `WS-01`, `WS-06`, `WS-07`, `WS-13`, project owner |
 | `/providers/identity-oidc/` | `WS-06` | `P-IDENTITY-OIDC` | `WS-01`, `WS-12`, `WS-13` |
 | `/providers/identity-scim/` | `WS-06` | `P-IDENTITY-SCIM` | `WS-01`, `WS-11`, `WS-13` |
 | `/providers/notifications-email/` | `WS-07` | `P-NOTIFICATION-CHANNEL` | `WS-06`, `WS-12`, `WS-13` |
@@ -232,6 +238,7 @@ All rows use the `EVT-CLOUDEVENT-BASE` envelope, the subject form `platform.<dom
 | `/modules/ci/` | `WS-09` | workflow/build/deployment/runner operations | `WS-01`, `WS-03`, `WS-06`, `WS-13` | core/worker integration via ports |
 | `/modules/artifact/` | `WS-09` | Package/Artifact/Release and blob-reference operations | `WS-01`, `WS-03`, `WS-06`, `WS-10`, `WS-13` | BlobStore is a port; no provider locator in domain |
 | `/modules/search/` | `WS-08` | search/work-graph projection and query ports | `WS-01`, all resource owners, `WS-06`, `WS-13` | worker registration by `WS-07`; API core wiring by `WS-02` |
+| `/modules/agent/` (contract-only in Phase 0) | `WS-08` | future Agent Registry/Card/Run interoperability port and MCP/A2A boundary | `WS-01`, `WS-02`, `WS-03`, `WS-06`, `WS-07`, `WS-13`, project owner | may consume canonical Platform API and scoped-Git contracts only; Phase 0 permits schemas/compatibility fixtures but no registry behavior, dispatch, execution, orchestration, prompting, model hosting, memory, or full MCP catalog |
 | `/modules/notification/` | `WS-07` | inbox/grouping/subscription/channel operations | `WS-01`, all event producers, `WS-06`, `WS-13` | worker/core composition owned by `WS-07`/`WS-02` |
 | `/modules/audit/` | `WS-07` | append-only audit/activity projection/export operations | `WS-01`, all audited owners, `WS-06`, `WS-12`, `WS-13` | no module may suppress required audit; worker registration by `WS-07` |
 | `/modules/migration/` | `WS-11` | migration job/stage/mapping/redirect operations | all destination owners, `WS-01`, `WS-06`, `WS-13` | core/worker/CLI integrate through approved ports |

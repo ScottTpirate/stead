@@ -4,21 +4,27 @@
 require "yaml"
 require "set"
 require "digest"
+require "json"
+require "open3"
 
 ROOT = File.expand_path("..", __dir__)
-DIRECTIVE_PATH = File.join(ROOT, "unified_open_work_platform_master_build_directive.md")
+DIRECTIVE_PATH = File.join(ROOT, "docs/architecture/MASTER_BUILD_DIRECTIVE.md")
 INVENTORY_PATH = File.join(ROOT, "specs/traceability/directive-inventory.yaml")
 REQUIREMENTS_PATH = File.join(ROOT, "specs/traceability/requirements.yaml")
 ISSUES_PATH = File.join(ROOT, "docs/planning/implementation-issue-catalog.yaml")
 SECURITY_FINDINGS_PATH = File.join(ROOT, "specs/traceability/security-findings.yaml")
 WORKSTREAM_OWNERSHIP_PATH = File.join(ROOT, "docs/architecture/workstream-ownership.md")
+ADR_CANDIDATE_INDEX_PATH = File.join(ROOT, "docs/governance/adr-candidate-index.md")
 
 EXPECTED_DIRECTIVE_VERSION = "0.2"
-EXPECTED_REQUIREMENT_COUNT = 115
+EXPECTED_REQUIREMENT_COUNT = 128
 EXPECTED_AGENT_IDS = (1..7).map { |number| format("AGENT-%03d", number) }.freeze
-EXPECTED_THREAT_IDS = (1..28).map { |number| format("TM-F%03d", number) }.freeze
-EXPECTED_BYPASS_IDS = (1..42).map { |number| format("CBI-%03d", number) }.freeze
+EXPECTED_V02_IDS = %w[PRIN-013 PRIN-014 PRIN-015 DOM-008 DOM-009 DOM-010 DOM-011 UX-006 UX-007 UX-008 UX-009 AUTH-006 TEST-010].freeze
+EXPECTED_THREAT_IDS = (1..33).map { |number| format("TM-F%03d", number) }.freeze
+EXPECTED_BYPASS_IDS = (1..47).map { |number| format("CBI-%03d", number) }.freeze
 EXPECTED_WORKSTREAM_IDS = (1..13).map { |number| format("WS-%02d", number) }.freeze
+EXPECTED_ADR_CANDIDATE_IDS = (1..21).map { |number| format("ADR-CAND-%03d", number) }.freeze
+EXPECTED_MACHINE_ADR_GATE_IDS = ((1..8).to_a + [21]).map { |number| format("ADR-CAND-%03d", number) }.freeze
 APPROVAL_GATE_ID = "GATE-P0-APPROVED"
 EXPECTED_GATE_APPROVERS = %w[
   project-owner
@@ -30,6 +36,84 @@ EXPECTED_GATE_APPROVERS = %w[
 VALID_PHASES = %w[phase-0 phase-1 phase-2 phase-3].freeze
 BLOCKED_PHASES = %w[phase-1 phase-2 phase-3].freeze
 BLOCKED_STATUS = "BLOCKED_PENDING_PHASE_0_APPROVAL"
+PHASE_ZERO_READY_STATUS = "READY_FOR_PHASE_0_APPROVAL"
+
+REQUIRED_PHASE_ZERO_FILES = %w[
+  README.md
+  docs/adr/INDEX.md
+  docs/adr/unresolved-implementation-choices.md
+  docs/architecture/MASTER_BUILD_DIRECTIVE.md
+  docs/architecture/PHASE0_RECONCILIATION_REPORT.md
+  docs/architecture/activity-model.md
+  docs/architecture/agent-access.md
+  docs/architecture/agent-ready-compatibility.md
+  docs/architecture/artifact-and-package-model.md
+  docs/architecture/constitution.md
+  docs/architecture/contract-ownership-matrix.md
+  docs/architecture/repository-layout-and-boundaries.md
+  docs/architecture/workstream-ownership.md
+  docs/architecture/canonical-domain-model.md
+  docs/architecture/product-and-ux-contracts.md
+  docs/architecture/authorization-contract.md
+  docs/architecture/blobstore-contract.md
+  docs/architecture/ci-runner-and-secrets-contract.md
+  docs/architecture/deployment-profiles.md
+  docs/architecture/security-label-lattice.md
+  docs/architecture/standards-matrix.md
+  docs/architecture/knowledge-contract.md
+  docs/architecture/provider-contracts/gitea.md
+  docs/architecture/search-resource-model.md
+  docs/architecture/search-contract.md
+  docs/architecture/search-graph/mcp-a2a-compatibility.md
+  docs/architecture/work-graph.md
+  docs/architecture/event-contract.md
+  docs/architecture/notification-contract.md
+  docs/architecture/audit-model.md
+  docs/architecture/observability-contract.md
+  docs/architecture/migration-contract.md
+  docs/architecture/unified-ux-contract.md
+  docs/governance/adr-candidate-index.md
+  docs/governance/license-and-dependency-approval.md
+  docs/governance/release-gates.md
+  docs/planning/epic-issue-hierarchy.md
+  docs/planning/implementation-issue-catalog.yaml
+  docs/planning/phase-0-artifact-backlog.md
+  docs/security/classification-bypass-inventory.md
+  docs/security/threat-model.md
+  docs/testing/golden-vertical-slice.md
+  docs/phase0/PHASE0_CLOSEOUT_PACKET.md
+  docs/phase0/VALIDATION_EVIDENCE.md
+  specs/traceability/directive-inventory.yaml
+  specs/traceability/requirements.yaml
+  specs/traceability/security-findings.yaml
+  specs/oscal/README.md
+  scripts/generate_directive_inventory.rb
+  scripts/validate_contracts.rb
+  scripts/validate_owgp_examples.js
+  specs/work-graph-profile/owgp-v0.1.md
+  specs/work-graph-profile/owgp-v0.1.schema.json
+  specs/work-graph-profile/examples.yaml
+  specs/openapi/platform-v1.yaml
+  specs/asyncapi/platform.yaml
+  specs/provider-interfaces.yaml
+  specs/migration/migration-job.schema.json
+  specs/migration/canonical-model-v0.1.yaml
+  specs/mcp/compatibility-v0.1.yaml
+  specs/a2a/compatibility-v0.1.yaml
+  packages/event-schemas/common/actor-context/actor-context.schema.json
+  packages/event-schemas/platform/platform-event.schema.json
+  policies/openfga/model.fga
+  policies/openfga/model-tests.yaml
+  policies/opa/input.schema.json
+  policies/opa/output.schema.json
+  policies/opa/decision-table.yaml
+  policies/security-label-profiles/profile.schema.json
+  policies/security-label-profiles/commercial.yaml
+  policies/security-label-profiles/us-government.yaml
+  policies/deployment-domains/domain-profile.schema.json
+  policies/deployment-domains/commercial.yaml
+  policies/deployment-domains/us-government.yaml
+].freeze
 
 REQUIREMENT_ARRAY_FIELDS = %w[
   implementation_modules
@@ -245,6 +329,11 @@ if directive_text
   unless missing_agent_ids.empty?
     failures << "#{relative_path(DIRECTIVE_PATH)}: missing agent-ready requirement IDs: #{format_ids(missing_agent_ids)}"
   end
+
+  missing_v02_ids = EXPECTED_V02_IDS - directive_ids
+  unless missing_v02_ids.empty?
+    failures << "#{relative_path(DIRECTIVE_PATH)}: missing v0.2 reconciliation requirement IDs: #{format_ids(missing_v02_ids)}"
+  end
 end
 
 inventory = load_yaml(INVENTORY_PATH, failures)
@@ -350,6 +439,7 @@ issues_document = load_yaml(ISSUES_PATH, failures)
 issue_records = records_field(issues_document, "issues", ISSUES_PATH, failures)
 epic_records = records_field(issues_document, "epics", ISSUES_PATH, failures)
 gate_records = records_field(issues_document, "gates", ISSUES_PATH, failures)
+adr_gate_records = records_field(issues_document, "adr_decision_gates", ISSUES_PATH, failures)
 
 issues_with_indexes = validate_records_are_mappings(
   issue_records,
@@ -364,6 +454,11 @@ epics_with_indexes = validate_records_are_mappings(
 gates_with_indexes = validate_records_are_mappings(
   gate_records,
   "#{relative_path(ISSUES_PATH)} gates",
+  failures
+)
+adr_gates_with_indexes = validate_records_are_mappings(
+  adr_gate_records,
+  "#{relative_path(ISSUES_PATH)} adr_decision_gates",
   failures
 )
 
@@ -386,6 +481,10 @@ issues_with_indexes.each do |issue, index|
   array_field(issue, "dependencies", context, failures, allow_empty: true)
   ISSUE_TEXT_FIELDS.each do |field|
     text_field(issue, field, context, failures)
+  end
+
+  if phase == "phase-0" && issue["status"] != PHASE_ZERO_READY_STATUS
+    failures << "#{context}: Phase 0 closeout issue #{issue_id} must have status #{PHASE_ZERO_READY_STATUS}"
   end
 end
 
@@ -445,6 +544,61 @@ end
 requirement_by_id = {}
 requirements_with_indexes.each do |requirement, _index|
   requirement_by_id[requirement["requirement_id"]] ||= requirement if nonempty_string?(requirement["requirement_id"])
+end
+
+adr_gate_ids = []
+adr_gates_with_indexes.each do |adr_gate, index|
+  context = "#{relative_path(ISSUES_PATH)} adr_decision_gates[#{index}]"
+  adr_id = text_field(adr_gate, "adr_id", context, failures)
+  deadline_issue = text_field(adr_gate, "decide_before_issue", context, failures)
+  dependent_issues = array_field(adr_gate, "dependent_issues", context, failures)
+  adr_gate_ids << adr_id if adr_id
+
+  failures << "#{context}: unknown decide_before_issue #{deadline_issue}" if deadline_issue && !issue_by_id.key?(deadline_issue)
+  dependent_issues.each do |issue_id|
+    failures << "#{context}: unknown dependent issue #{issue_id}" unless issue_by_id.key?(issue_id)
+  end
+  if deadline_issue && !dependent_issues.include?(deadline_issue)
+    failures << "#{context}: dependent_issues must include decide_before_issue #{deadline_issue}"
+  end
+end
+
+adr_gate_duplicates = duplicate_values(adr_gate_ids)
+failures << "#{relative_path(ISSUES_PATH)}: duplicate ADR decision gates: #{format_ids(adr_gate_duplicates)}" unless adr_gate_duplicates.empty?
+missing_adr_gates = EXPECTED_MACHINE_ADR_GATE_IDS - adr_gate_ids
+unexpected_adr_gates = adr_gate_ids - EXPECTED_MACHINE_ADR_GATE_IDS
+unless missing_adr_gates.empty? && unexpected_adr_gates.empty? && adr_gate_ids.length == EXPECTED_MACHINE_ADR_GATE_IDS.length
+  failures << "#{relative_path(ISSUES_PATH)}: ADR decision-gate IDs mismatch (missing: #{format_ids(missing_adr_gates)}; unexpected: #{format_ids(unexpected_adr_gates)})"
+end
+
+begin
+  adr_index_text = File.read(ADR_CANDIDATE_INDEX_PATH, encoding: "UTF-8")
+  documented_adr_ids = adr_index_text.scan(/ADR-CAND-\d{3}/).uniq
+  missing_documented_adrs = EXPECTED_ADR_CANDIDATE_IDS - documented_adr_ids
+  unexpected_documented_adrs = documented_adr_ids - EXPECTED_ADR_CANDIDATE_IDS
+  unless missing_documented_adrs.empty? && unexpected_documented_adrs.empty?
+    failures << "#{relative_path(ADR_CANDIDATE_INDEX_PATH)}: ADR candidate IDs mismatch (missing: #{format_ids(missing_documented_adrs)}; unexpected: #{format_ids(unexpected_documented_adrs)})"
+  end
+
+  undocumented_machine_gates = adr_gate_ids - documented_adr_ids
+  unless undocumented_machine_gates.empty?
+    failures << "#{relative_path(ADR_CANDIDATE_INDEX_PATH)}: missing machine-gated candidates #{format_ids(undocumented_machine_gates)}"
+  end
+
+  adr_gate_records.each do |adr_gate|
+    next unless adr_gate.is_a?(Hash)
+
+    adr_id = adr_gate["adr_id"]
+    deadline_issue = adr_gate["decide_before_issue"]
+    next unless nonempty_string?(adr_id) && nonempty_string?(deadline_issue)
+
+    index_row = adr_index_text.lines.find { |line| line.start_with?("| `#{adr_id}` |") }
+    unless index_row&.include?("`#{deadline_issue}`")
+      failures << "#{relative_path(ADR_CANDIDATE_INDEX_PATH)}: #{adr_id} must document deadline #{deadline_issue}"
+    end
+  end
+rescue Errno::ENOENT => error
+  failures << "#{relative_path(ADR_CANDIDATE_INDEX_PATH)}: cannot read file (#{error.message})"
 end
 
 approval_gate = gates_with_indexes.map(&:first).find { |gate| gate["id"] == APPROVAL_GATE_ID }
@@ -713,6 +867,183 @@ end
 
 cycle = find_cycle(graph)
 failures << "#{relative_path(ISSUES_PATH)}: dependency graph contains a cycle: #{cycle.join(' -> ')}" if cycle
+
+duplicate_required_files = duplicate_values(REQUIRED_PHASE_ZERO_FILES)
+unless duplicate_required_files.empty?
+  failures << "Phase 0 closeout artifact list contains duplicates: #{format_ids(duplicate_required_files)}"
+end
+
+REQUIRED_PHASE_ZERO_FILES.each do |path|
+  failures << "#{path}: missing required Phase 0 closeout artifact" unless File.file?(File.join(ROOT, path))
+end
+
+markdown_paths = [File.join(ROOT, "README.md"), *Dir.glob(File.join(ROOT, "docs/**/*.md"))].uniq.sort
+markdown_paths.each do |markdown_path|
+  source = File.read(markdown_path, encoding: "UTF-8")
+  source.scan(/\[[^\]]*\]\(([^)\n]+)\)/).flatten.each do |raw_target|
+    target = raw_target.strip
+    target = target[1...target.index(">")].to_s if target.start_with?("<") && target.include?(">")
+    target = target.split(/\s+/, 2).first.to_s unless raw_target.strip.start_with?("<")
+
+    next if target.empty?
+    next if target.start_with?("#", "http://", "https://", "mailto:", "data:")
+
+    local_path = target.split("#", 2).first
+    next if local_path.empty?
+
+    resolved_path = File.expand_path(local_path, File.dirname(markdown_path))
+    unless File.exist?(resolved_path)
+      failures << "#{relative_path(markdown_path)}: broken local Markdown link #{target.inspect}"
+    end
+  end
+rescue EncodingError => error
+  failures << "#{relative_path(markdown_path)}: invalid text encoding while checking links (#{error.message})"
+end
+
+json_contract_paths = %w[
+  specs/work-graph-profile/owgp-v0.1.schema.json
+  packages/event-schemas/common/actor-context/actor-context.schema.json
+  packages/event-schemas/platform/platform-event.schema.json
+  policies/opa/input.schema.json
+  policies/opa/output.schema.json
+  policies/security-label-profiles/profile.schema.json
+  policies/deployment-domains/domain-profile.schema.json
+  specs/migration/migration-job.schema.json
+]
+parsed_json = {}
+json_contract_paths.each do |path|
+  begin
+    parsed_json[path] = JSON.parse(File.read(File.join(ROOT, path), encoding: "UTF-8"))
+  rescue Errno::ENOENT
+    # Missing-file failure is already emitted above.
+  rescue JSON::ParserError => error
+    failures << "#{path}: invalid JSON (#{error.message.lines.first.strip})"
+  end
+end
+
+yaml_contract_paths = %w[
+  specs/openapi/platform-v1.yaml
+  specs/asyncapi/platform.yaml
+  specs/provider-interfaces.yaml
+  specs/mcp/compatibility-v0.1.yaml
+  specs/a2a/compatibility-v0.1.yaml
+  policies/openfga/model-tests.yaml
+  policies/opa/decision-table.yaml
+  policies/security-label-profiles/commercial.yaml
+  policies/security-label-profiles/us-government.yaml
+  policies/deployment-domains/commercial.yaml
+  policies/deployment-domains/us-government.yaml
+  specs/migration/canonical-model-v0.1.yaml
+]
+yaml_contract_paths.each { |path| load_yaml(File.join(ROOT, path), failures) }
+
+begin
+  examples = YAML.safe_load(
+    File.read(File.join(ROOT, "specs/work-graph-profile/examples.yaml"), encoding: "UTF-8"),
+    permitted_classes: [],
+    permitted_symbols: [],
+    aliases: true
+  )
+  expected_examples = %w[Organization DirectoryGroup Team Project WorkItem Document Repository PrincipalRef Agent AgentRun SecurityLabel Comment Activity Notification Audit]
+  actual_examples = examples.is_a?(Hash) && examples["examples"].is_a?(Hash) ? examples["examples"].keys : []
+  missing_examples = expected_examples - actual_examples
+  failures << "specs/work-graph-profile/examples.yaml: missing closeout examples: #{missing_examples.join(', ')}" unless missing_examples.empty?
+
+  if examples.is_a?(Hash) && examples["examples"].is_a?(Hash)
+    common_fields = %w[kind id uri schema_version version organization_id container title created_at created_by updated_at updated_by security_label_id effective_security_label provenance external_references relationships]
+    expected_kinds = {
+      "Organization" => "organization",
+      "DirectoryGroup" => "directory_group",
+      "Team" => "team",
+      "Project" => "project",
+      "WorkItem" => "work_item",
+      "Document" => "document",
+      "Repository" => "repository",
+      "Agent" => "agent",
+      "AgentRun" => "agent_run",
+      "SecurityLabel" => "security_label",
+      "Comment" => "comment",
+      "Activity" => "activity",
+      "Notification" => "notification",
+      "Audit" => "audit_record"
+    }
+    expected_kinds.each do |name, kind|
+      example = examples["examples"][name]
+      next unless example.is_a?(Hash)
+
+      missing_fields = common_fields - example.keys
+      failures << "specs/work-graph-profile/examples.yaml: #{name} omits common envelope fields #{missing_fields.join(', ')}" unless missing_fields.empty?
+      failures << "specs/work-graph-profile/examples.yaml: #{name} kind must be #{kind}" unless example["kind"] == kind
+      container_kind = example.dig("container", "kind")
+      failures << "specs/work-graph-profile/examples.yaml: #{name} container kind is invalid" unless %w[organization team project].include?(container_kind)
+    end
+  end
+rescue Psych::Exception => error
+  failures << "specs/work-graph-profile/examples.yaml: invalid YAML (#{error.message.lines.first.strip})"
+end
+
+owgp = parsed_json["specs/work-graph-profile/owgp-v0.1.schema.json"]
+if owgp
+  definitions = owgp["$defs"].is_a?(Hash) ? owgp["$defs"] : {}
+  expected_definitions = %w[ResourceEnvelope ResourceRef ContainerRef Instance Organization User DirectoryGroup Agent AgentRun ServicePrincipal Team Initiative Project Cycle WorkItem Document Repository Branch Commit PullRequest Build Deployment Release Package Artifact Attachment PrincipalRef ActingPrincipalRef WorkAssigneeRef SecurityLabel SecurityLabelValue Comment Activity Notification AuditRecord]
+  missing_definitions = expected_definitions - definitions.keys
+  failures << "specs/work-graph-profile/owgp-v0.1.schema.json: missing definitions: #{missing_definitions.join(', ')}" unless missing_definitions.empty?
+
+  principal_types = definitions.dig("PrincipalRef", "properties", "type", "enum") || []
+  expected_principal_types = %w[user agent service_account directory_group]
+  failures << "specs/work-graph-profile/owgp-v0.1.schema.json: PrincipalRef kinds mismatch" unless principal_types == expected_principal_types
+
+  work_types = definitions.dig("WorkItem", "allOf", 1, "properties", "work_type", "enum") || []
+  failures << "specs/work-graph-profile/owgp-v0.1.schema.json: WorkItem kinds must be deliverable/task/problem" unless work_types == %w[deliverable task problem]
+
+  document_types = definitions.dig("Document", "allOf", 1, "properties", "document_type", "enum") || []
+  failures << "specs/work-graph-profile/owgp-v0.1.schema.json: Document kinds must use universal values" unless document_types == %w[page specification decision procedure policy]
+
+  envelope_required = definitions.dig("ResourceEnvelope", "required") || []
+  expected_envelope_fields = %w[kind id uri schema_version version organization_id container title created_at created_by updated_at updated_by security_label_id effective_security_label provenance external_references relationships]
+  missing_envelope_fields = expected_envelope_fields - envelope_required
+  failures << "specs/work-graph-profile/owgp-v0.1.schema.json: common envelope omits #{missing_envelope_fields.join(', ')}" unless missing_envelope_fields.empty?
+
+  assignee_ref = definitions.dig("WorkItem", "allOf", 1, "properties", "assignees", "items", "$ref")
+  failures << "specs/work-graph-profile/owgp-v0.1.schema.json: Work Item assignees must use WorkAssigneeRef" unless assignee_ref == "#/$defs/WorkAssigneeRef"
+
+  resource_ref_required = definitions.dig("ResourceRef", "required") || []
+  failures << "specs/work-graph-profile/owgp-v0.1.schema.json: ResourceRef must use canonical kind/id/uri" unless resource_ref_required == %w[kind id uri]
+
+  repository_required = definitions.dig("Repository", "allOf", 1, "required") || []
+  failures << "specs/work-graph-profile/owgp-v0.1.schema.json: Repository must use a generic container" unless repository_required.include?("container") && !repository_required.include?("project_id")
+end
+
+begin
+  fga = File.read(File.join(ROOT, "policies/openfga/model.fga"), encoding: "UTF-8")
+  fga_without_comments = fga.lines.map { |line| line.split("#", 2).first }.join
+  %w[type\ user type\ agent type\ service_account type\ directory_group type\ team type\ project].each do |fragment|
+    failures << "policies/openfga/model.fga: missing #{fragment.tr('\\', '')}" unless fga.include?(fragment.tr("\\", ""))
+  end
+  team_block = fga_without_comments[/^type team\b.*?(?=^type\s|\z)/m] || ""
+  failures << "policies/openfga/model.fga: Team hierarchy must not define viewer inheritance from parent" if team_block.match?(/define\s+(viewer|member|editor):[^\n]*from parent/)
+rescue Errno::ENOENT
+  # Missing-file failure is already emitted above.
+end
+
+forbidden_agent_runtime_files = Dir.glob(File.join(ROOT, "{modules/agent,providers/agent-a2a}/**/*"), File::FNM_EXTGLOB).select do |path|
+  File.file?(path) && File.extname(path).match?(/\A\.(go|ts|tsx|js|jsx|py|rs|java|sh)\z/)
+end
+unless forbidden_agent_runtime_files.empty?
+  failures << "Phase 0 agent scope guard: executable runtime files found: #{forbidden_agent_runtime_files.map { |path| relative_path(path) }.join(', ')}"
+end
+
+owgp_stdout, owgp_stderr, owgp_status = Open3.capture3("node", File.join(ROOT, "scripts/validate_owgp_examples.js"), chdir: ROOT)
+unless owgp_status.success?
+  diagnostic = [owgp_stdout, owgp_stderr].join(" ").strip.gsub(/\s+/, " ")
+  failures << "scripts/validate_owgp_examples.js: #{diagnostic.empty? ? 'failed without diagnostic output' : diagnostic}"
+end
+
+contract_stdout, contract_stderr, contract_status = Open3.capture3("ruby", File.join(ROOT, "scripts/validate_contracts.rb"), chdir: ROOT)
+unless contract_status.success?
+  diagnostic = [contract_stdout, contract_stderr].join(" ").strip.gsub(/\s+/, " ")
+  failures << "scripts/validate_contracts.rb: #{diagnostic.empty? ? 'failed without diagnostic output' : diagnostic}"
+end
 
 if failures.empty?
   dependency_count = graph.values.sum(&:length)
