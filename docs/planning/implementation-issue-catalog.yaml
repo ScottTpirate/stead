@@ -19,15 +19,15 @@ gates:
     dependencies: ["STEAD-P0-001", "STEAD-P0-002", "STEAD-P0-003", "STEAD-P0-004", "STEAD-P0-005", "STEAD-P0-006", "STEAD-P0-007", "STEAD-P0-008", "STEAD-P0-009", "STEAD-P0-010", "STEAD-P0-011", "STEAD-P0-012", "STEAD-P0-013", "STEAD-P0-014", "STEAD-P0-015"]
     evidence: ["approved architecture constitution", "approved Phase 0 contracts", "128-ID traceability validation", "approved open-work reconciliation and agent-ready compatibility contract", "approved threat baseline and bypass inventory", "approved license workflow", "approved TEST-009 and TEST-010 plans", "approved Phase 0 closeout packet"]
 adr_decision_gates:
-  - {adr_id: ADR-CAND-001, decide_before_issue: STEAD-P1-001, dependent_issues: [STEAD-P1-001, STEAD-P1-002, STEAD-P2-009, STEAD-P3-006]}
-  - {adr_id: ADR-CAND-002, decide_before_issue: STEAD-P1-002, dependent_issues: [STEAD-P1-002, STEAD-P1-007, STEAD-P1-011, STEAD-P2-010]}
-  - {adr_id: ADR-CAND-003, decide_before_issue: STEAD-P1-006, dependent_issues: [STEAD-P1-006, STEAD-P1-003, STEAD-P1-007, STEAD-P1-008, STEAD-P1-012, STEAD-P2-006]}
-  - {adr_id: ADR-CAND-004, decide_before_issue: STEAD-P1-006, dependent_issues: [STEAD-P1-006, STEAD-P1-002, STEAD-P2-004]}
-  - {adr_id: ADR-CAND-005, decide_before_issue: STEAD-P1-006, dependent_issues: [STEAD-P1-006, STEAD-P2-004, STEAD-P2-006]}
-  - {adr_id: ADR-CAND-006, decide_before_issue: STEAD-P1-007, dependent_issues: [STEAD-P1-007, STEAD-P1-008, STEAD-P1-012, STEAD-P2-005]}
-  - {adr_id: ADR-CAND-007, decide_before_issue: STEAD-P1-006, dependent_issues: [STEAD-P1-006, STEAD-P1-011, STEAD-P2-004, STEAD-P2-010]}
-  - {adr_id: ADR-CAND-008, decide_before_issue: STEAD-P1-003, dependent_issues: [STEAD-P1-003, STEAD-P1-012, STEAD-P2-001]}
-  - {adr_id: ADR-CAND-021, decide_before_issue: STEAD-P1-006, dependent_issues: [STEAD-P1-006, STEAD-P1-002, STEAD-P1-005, STEAD-P2-003]}
+  - {adr_id: ADR-CAND-001, state: ACCEPTED, decision_record: docs/adr/0001-canonical-uri-and-compatibility-profile.md, project_owner_approval_required: false, decide_before_issue: STEAD-P1-001, dependent_issues: [STEAD-P1-001, STEAD-P1-002, STEAD-P2-009, STEAD-P3-006]}
+  - {adr_id: ADR-CAND-002, state: DEFERRED, decide_before_issue: STEAD-P1-015, dependent_issues: [STEAD-P1-015, STEAD-P1-006, STEAD-P1-002, STEAD-P1-007, STEAD-P1-011, STEAD-P2-010]}
+  - {adr_id: ADR-CAND-003, state: PROPOSED, decision_record: docs/adr/0005-authorization-and-policy-decision-topology.md, project_owner_approval_required: false, decide_before_issue: STEAD-P1-015, dependent_issues: [STEAD-P1-015, STEAD-P1-006, STEAD-P1-003, STEAD-P1-007, STEAD-P1-008, STEAD-P1-012, STEAD-P2-006]}
+  - {adr_id: ADR-CAND-004, state: PROPOSED, decision_record: docs/adr/0002-security-label-algebra-and-profile-identifiers.md, project_owner_approval_required: true, decide_before_issue: STEAD-P1-006, dependent_issues: [STEAD-P1-006, STEAD-P1-002, STEAD-P2-004]}
+  - {adr_id: ADR-CAND-005, state: PROPOSED, decision_record: docs/adr/0003-trusted-principal-and-runtime-attributes.md, project_owner_approval_required: true, decide_before_issue: STEAD-P1-006, dependent_issues: [STEAD-P1-006, STEAD-P2-004, STEAD-P2-006]}
+  - {adr_id: ADR-CAND-006, state: DEFERRED, decide_before_issue: STEAD-P1-007, dependent_issues: [STEAD-P1-007, STEAD-P1-008, STEAD-P1-012, STEAD-P2-005]}
+  - {adr_id: ADR-CAND-007, state: PROPOSED, decision_record: docs/adr/0006-signed-policy-bundle-distribution-and-activation.md, project_owner_approval_required: true, decide_before_issue: STEAD-P1-016, dependent_issues: [STEAD-P1-016, STEAD-P1-015, STEAD-P1-006, STEAD-P1-011, STEAD-P2-004, STEAD-P2-010]}
+  - {adr_id: ADR-CAND-008, state: DEFERRED, decide_before_issue: STEAD-P1-003, dependent_issues: [STEAD-P1-003, STEAD-P1-012, STEAD-P2-001]}
+  - {adr_id: ADR-CAND-021, state: PROPOSED, decision_record: docs/adr/0004-initial-team-role-and-authorization-semantics.md, project_owner_approval_required: true, decide_before_issue: STEAD-P1-006, dependent_issues: [STEAD-P1-006, STEAD-P1-002, STEAD-P1-005, STEAD-P2-003]}
 epics:
   - id: "EPIC-P0-A"
     title: "Constitution and canonical contracts"
@@ -343,6 +343,43 @@ issues:
     migration_and_backward_compatibility_implications: "Version public schemas and mappings; define compatibility, deprecation, conformance, and export/import behavior before implementation."
     upgrade_and_rollback_behavior: "Breaking API/event/schema changes require a major version and migration period; locked changes require ADR approval and a documented rollback path."
     documentation_obligations: ["Publish normative architecture, standards mappings, schema references, and ADR governance with requirement and test links."]
+  - id: "STEAD-P1-015"
+    title: "Implement the core authorization composition and transactional-outbox ports"
+    epic_id: "EPIC-P1"
+    phase: "phase-1"
+    status: DEPENDENCY_BLOCKED
+    requirement_ids: ["PRIN-005", "ARCH-003", "EVT-002", "AUD-001", "AUD-002"]
+    owner: "WS-02"
+    contributors: ["WS-06", "WS-07"]
+    dependencies: ["GATE-P0-APPROVED", "STEAD-P1-001", "STEAD-P0-003", "STEAD-P0-007", "STEAD-P0-008"]
+    module: ["stead-api-core-authorization-outbox-seam"]
+    owned_directories: ["apps/core", "apps/core/internal/outbox", "tests/integration/core", "packages/test-fixtures/core", "docs/architecture/core"]
+    prohibited_boundaries: ["Do not implement identity, OpenFGA, classification, or audit/event semantics in the composition root; consume WS-06 and WS-07 contracts through typed ports.", "Do not begin until ADR-CAND-002, ADR-CAND-003, and ADR-CAND-007 are accepted.", "No module may write core_outbox tables directly, write WS-07 audit tables, publish directly to NATS, or bypass the central authorization coordinator."]
+    acceptance_criteria: ["After ADR-CAND-002, ADR-CAND-003, and ADR-CAND-007 are accepted, implement the WS-02-owned PostgreSQL core_outbox migration/repository, transaction-scoped insertion port, authorization-module composition handoff, and compare-and-use transaction hook needed by ADR-0005/0006 without implementing domain features or policy rules.", "Prove an owning module can atomically compare an authorization fence, write only its own state, and append an immutable WS-07-owned audit/event intent through the outbox port; injected failures leave neither a partial domain mutation nor an unaudited effect permit.", "Publish the typed handoff consumed by STEAD-P1-006 so WS-06 can complete authorization/activation modules without editing apps/core or core_outbox ownership paths.", "All mapped requirement acceptance tests pass at the required layer and coverage floor.", "Independent WS-13 review finds no unresolved critical/high defect, ownership violation, disallowed license, or audit-before-effect bypass."]
+    automated_tests: ["T-STEAD-P1-015-CONTRACT", "T-PRIN-005-ACCEPTANCE", "T-ARCH-003-ACCEPTANCE", "T-EVT-002-ACCEPTANCE", "T-AUD-001-ACCEPTANCE", "T-AUD-002-ACCEPTANCE", "T-ADR-0005-SEQUENCE", "T-ADR-0005-FENCE", "T-ADR-0006-ATOMIC-ACTIVATION", "T-ADR-0006-AUDIT-PRIVACY"]
+    authorization_and_classification_behavior: "The seam carries complete opaque WS-06 decision/fence/permit data and fails closed on missing, stale, malformed, or mismatched values; WS-02 does not interpret or weaken policy."
+    observability_and_audit_requirements: "Record transaction outcome, safe fence/intent identifiers, correlation/causation, latency, rollback, and outbox lag without policy inputs, protected bodies, credentials, signatures, or high-cardinality metric labels."
+    migration_and_backward_compatibility_implications: "ADR-CAND-002 fixes the physical namespace and migration ordering first; the port and outbox record are versioned, module-neutral, and coexist through expand/contract changes."
+    upgrade_and_rollback_behavior: "Use forward/backward migration and crash-at-every-boundary tests; rollback may select only a version compatible with persisted outbox, effect-permit, and fence records, otherwise recover forward while protected operations deny."
+    documentation_obligations: ["Document core composition ownership, transaction/outbox port, authorization handoff, fence linearization, audit-intent ownership, migration ordering, failure recovery, and prohibited direct writes/publishes."]
+  - id: "STEAD-P1-016"
+    title: "Build deterministic policy activation archives and release attestations"
+    epic_id: "EPIC-P1"
+    phase: "phase-1"
+    status: DEPENDENCY_BLOCKED
+    requirement_ids: ["CICD-004", "SEC-002", "SEC-003", "TEST-008"]
+    owner: "WS-09"
+    dependencies: ["GATE-P0-APPROVED", "STEAD-P1-001", "STEAD-P0-010"]
+    module: ["policy-release-build-signing-evidence"]
+    owned_directories: ["modules/ci", "tests/contract/ci", "packages/test-fixtures/ci"]
+    prohibited_boundaries: ["Do not begin until ADR-CAND-007 is accepted against an immutable revision.", "WS-09 may construct deterministic payloads, embedded pre-signing evidence, signing requests, archives, and post-signing release attestations but may not edit policy/OpenFGA semantics, own runtime verification/activation, possess a signing private key by virtue of this issue, write activation/trust state, or approve its own release evidence.", "No self-referential digest, unsigned/unattested shortcut, network-required verifier, unbounded parser input, disallowed dependency, mutable transport identity, or protected content in release evidence is permitted."]
+    acceptance_criteria: ["Implement the WS-09-owned deterministic unsigned builder, strict activation/archive and release-attestation writers, signing-workflow integration, embedded pre-signing evidence production, and constructible post-signing release-attestation handoff selected by ADR-0006.", "Produce exact fixed vectors and negative fixtures consumed by the independent WS-06 verifier, including DSSE/base64/signature ceilings, strict ustar, content/self-reference, threshold, archive/attestation identity, offline, and reproducibility cases; no runtime authorization decision or activation authority is implemented here.", "Publish a typed immutable archive-plus-attestation handoff for STEAD-P1-006 and retain release signing under separately approved custody/approval rules.", "All mapped requirement acceptance tests pass at the required layer and coverage floor.", "Independent WS-13 review finds no unresolved critical/high defect, circular evidence, parser/resource-exhaustion bypass, disallowed license, missing provenance, or unauthorized signing path."]
+    automated_tests: ["T-STEAD-P1-016-CONTRACT", "T-TEST-008-ACCEPTANCE", "T-ADR-0006-DETERMINISTIC-BUILD", "T-ADR-0006-TRANSPORT-IDENTITY", "T-ADR-0006-DSSE", "T-ADR-0006-CONTENT-INTEGRITY", "T-ADR-0006-ARCHIVE-SAFETY", "T-ADR-0006-POLICY-CONFORMANCE"]
+    authorization_and_classification_behavior: "The build workflow consumes only versioned WS-06 policy/model/profile inputs, signs no authority by itself, keeps private keys outside the build, binds the selected trust/security profile, and fails closed on unknown, expired, unapproved, mismatched, or protected evidence."
+    observability_and_audit_requirements: "Record safe builder/workflow identity, source/lock/evidence/archive/attestation digests, signing request/result, threshold result, approvals, waivers, and failure reason with correlation/causation; never log policy payloads, signatures, private keys, credentials, protected bodies, or high-cardinality identifiers as metric labels."
+    migration_and_backward_compatibility_implications: "This is the first executable activation artifact and implements the approved pre-consumer signing-format correction; artifact/profile majors are explicit, unknown versions reject, and no unsigned Phase 0 fixture is grandfathered."
+    upgrade_and_rollback_behavior: "Rebuild and sign only from pinned compatible source/locks; distribute exact immutable archive/attestation pairs; rollback is a new forward release under current/higher trust and never reuses revoked signing evidence or mutable transport tags."
+    documentation_obligations: ["Document deterministic construction order, embedded versus post-signing evidence, DSSE/parser limits, strict archive format, custody separation, offline vectors, dependency/license review, transport identity, failure recovery, and the WS-09-to-WS-06 handoff."]
   - id: "STEAD-P1-002"
     title: "Implement modular core resources, PostgreSQL ownership, transactions, and outbox"
     epic_id: "EPIC-P1"
@@ -350,12 +387,12 @@ issues:
     status: DEPENDENCY_BLOCKED
     requirement_ids: ["PRIN-003", "PRIN-004", "PRIN-005", "PRIN-006", "PRIN-013", "ARCH-003", "ARCH-004", "ARCH-005", "STD-002", "DOM-001", "DOM-002", "DOM-003", "DOM-004", "DOM-006", "DOM-007", "DOM-008", "DOM-009", "DOM-010", "DOM-011", "EVT-002", "AGENT-001", "AGENT-002"]
     owner: "WS-02"
-    dependencies: ["GATE-P0-APPROVED", "STEAD-P1-001", "STEAD-P1-006", "STEAD-P0-003", "STEAD-P0-007"]
+    dependencies: ["GATE-P0-APPROVED", "STEAD-P1-001", "STEAD-P1-006", "STEAD-P1-015", "STEAD-P0-003", "STEAD-P0-007"]
     module: ["stead-api-domain"]
-    owned_directories: ["apps/core", "modules/organization", "modules/project", "modules/work"]
+    owned_directories: ["apps/core", "modules/organization", "modules/project", "modules/work", "tests/integration/core", "packages/test-fixtures/core"]
     prohibited_boundaries: ["May not call provider-specific implementations except through owned interfaces.", "May not write another module's tables or any upstream product database.", "May not publish domain events outside the transactional outbox or bypass central authorization."]
     acceptance_criteria: ["Implement module-owned Organization, hierarchical Team, capability-driven Project, and fixed general Work Item state, including User/Agent assignee links expressed through the WS-06-owned PrincipalRef contract, PostgreSQL migrations, optimistic concurrency, and atomic outbox writes; consume WS-06 identity/authorization and WS-04 knowledge ports without storing identity, Agent/AgentRun, or Document state.", "All mapped requirement acceptance tests pass at the required layer and coverage floor.", "Authorization, classification, direct-path, observability, audit, compatibility, migration, upgrade, rollback, and documentation obligations are complete.", "Independent WS-13 review finds no unresolved critical/high defect, disallowed license, missing release evidence, or unauthorized disclosure path."]
-    automated_tests: ["T-STEAD-P1-002-CONTRACT", "T-PRIN-003-ACCEPTANCE", "T-PRIN-004-ACCEPTANCE", "T-PRIN-005-ACCEPTANCE", "T-PRIN-006-ACCEPTANCE", "T-PRIN-013-ACCEPTANCE", "T-ARCH-003-ACCEPTANCE", "T-ARCH-004-ACCEPTANCE", "T-ARCH-005-ACCEPTANCE", "T-STD-002-ACCEPTANCE", "T-DOM-001-ACCEPTANCE", "T-DOM-002-ACCEPTANCE", "T-DOM-003-ACCEPTANCE", "T-DOM-004-ACCEPTANCE", "T-DOM-006-ACCEPTANCE", "T-DOM-007-ACCEPTANCE", "T-DOM-008-ACCEPTANCE", "T-DOM-009-ACCEPTANCE", "T-DOM-010-ACCEPTANCE", "T-DOM-011-ACCEPTANCE", "T-EVT-002-ACCEPTANCE", "T-AGENT-001-ACCEPTANCE", "T-AGENT-002-ACCEPTANCE", "T-ADR-0001-ALIAS"]
+    automated_tests: ["T-STEAD-P1-002-CONTRACT", "T-PRIN-003-ACCEPTANCE", "T-PRIN-004-ACCEPTANCE", "T-PRIN-005-ACCEPTANCE", "T-PRIN-006-ACCEPTANCE", "T-PRIN-013-ACCEPTANCE", "T-ARCH-003-ACCEPTANCE", "T-ARCH-004-ACCEPTANCE", "T-ARCH-005-ACCEPTANCE", "T-STD-002-ACCEPTANCE", "T-DOM-001-ACCEPTANCE", "T-DOM-002-ACCEPTANCE", "T-DOM-003-ACCEPTANCE", "T-DOM-004-ACCEPTANCE", "T-DOM-006-ACCEPTANCE", "T-DOM-007-ACCEPTANCE", "T-DOM-008-ACCEPTANCE", "T-DOM-009-ACCEPTANCE", "T-DOM-010-ACCEPTANCE", "T-DOM-011-ACCEPTANCE", "T-EVT-002-ACCEPTANCE", "T-AGENT-001-ACCEPTANCE", "T-AGENT-002-ACCEPTANCE", "T-ADR-0001-ALIAS", "T-ADR-0004-ROLE-ENUM", "T-ADR-0004-SUBJECT-TYPES", "T-ADR-0004-LEAD-CARDINALITY", "T-ADR-0004-REVOCATION-AND-SOURCES", "T-ADR-0004-MIGRATION-ROLLBACK"]
     authorization_and_classification_behavior: "Every protected mutation and read resolves the canonical resource, checks OpenFGA plus the policy-decision layer plus applicable provider enforcement, and fails closed."
     observability_and_audit_requirements: "Emit OTel spans/metrics with correlation and causation IDs; write required audit metadata and never log protected bodies or secrets."
     migration_and_backward_compatibility_implications: "Own versioned, module-local migrations and stable UUIDv7 resources; preserve export mappings and backward-compatible API behavior."
@@ -368,12 +405,79 @@ issues:
     status: DEPENDENCY_BLOCKED
     requirement_ids: ["PRIN-007", "PRIN-011", "PRIN-012", "PRIN-015", "DOM-007", "DOM-009", "DOM-010", "DOC-004", "AUTH-001", "AUTH-002", "AUTH-003", "AUTH-004", "AUTH-005", "AUTH-006", "CLS-001", "CLS-003", "CLS-004", "CLS-006", "CLS-008", "AGENT-001", "AGENT-003", "AGENT-006"]
     owner: "WS-06"
-    dependencies: ["GATE-P0-APPROVED", "STEAD-P1-001", "STEAD-P0-007"]
+    dependencies: ["GATE-P0-APPROVED", "STEAD-P1-001", "STEAD-P1-015", "STEAD-P1-016", "STEAD-P0-007"]
     module: ["identity-authorization-classification"]
-    owned_directories: ["modules/identity", "modules/authorization", "modules/classification", "policies/openfga", "policies/policy-decision", "policies/security-label-profiles", "providers/identity-oidc", "providers/identity-scim"]
+    owned_directories: ["modules/identity", "modules/authorization", "modules/classification", "policies/openfga", "policies/policy-decision", "policies/security-label-profiles", "providers/identity-oidc", "providers/identity-scim", "tests/contract/identity-authorization", "packages/test-fixtures/security"]
     prohibited_boundaries: ["No module-specific alternative authorization, self-asserted trusted attributes, administrator content bypass, or built-in cross-domain/write-down path.", "Per-item labels may not grant access beyond an enforceable container.", "Unsigned or unversioned policy bundles are prohibited."]
-    acceptance_criteria: ["After ADR-CAND-003 selects a conforming evaluator and topology, implement local bootstrap only for local mode, OIDC production authentication, central OpenFGA plus deterministic policy-decision evaluation, effective labels, security-domain ceiling, audit metadata, and fail-closed direct-path design; OPA/Rego is optional and must not leak into the canonical contract.", "Run every canonical policy decision row against the selected evaluator with deterministic replay, deny-on-timeout/unavailable/malformed-result coverage, and differential conformance if more than one evaluator is supported.", "All mapped requirement acceptance tests pass at the required layer and coverage floor.", "Authorization, classification, direct-path, observability, audit, compatibility, migration, upgrade, rollback, and documentation obligations are complete.", "Independent WS-13 review finds no unresolved critical/high defect, disallowed license, missing release evidence, or unauthorized disclosure path."]
-    automated_tests: ["T-STEAD-P1-006-CONTRACT", "T-PRIN-007-ACCEPTANCE", "T-PRIN-011-ACCEPTANCE", "T-PRIN-012-ACCEPTANCE", "T-PRIN-015-ACCEPTANCE", "T-DOM-007-ACCEPTANCE", "T-DOM-009-ACCEPTANCE", "T-DOM-010-ACCEPTANCE", "T-DOC-004-ACCEPTANCE", "T-AUTH-001-ACCEPTANCE", "T-AUTH-002-ACCEPTANCE", "T-AUTH-003-ACCEPTANCE", "T-AUTH-004-ACCEPTANCE", "T-AUTH-005-ACCEPTANCE", "T-AUTH-006-ACCEPTANCE", "T-CLS-001-ACCEPTANCE", "T-CLS-003-ACCEPTANCE", "T-CLS-004-ACCEPTANCE", "T-CLS-006-ACCEPTANCE", "T-CLS-008-ACCEPTANCE", "T-AGENT-001-ACCEPTANCE", "T-AGENT-003-ACCEPTANCE", "T-AGENT-006-ACCEPTANCE"]
+    acceptance_criteria: ["Only after ADR-CAND-002, ADR-CAND-003, ADR-CAND-004, ADR-CAND-005, ADR-CAND-007, and ADR-CAND-021 are accepted, STEAD-P1-015 supplies the owned core/outbox handoff, and STEAD-P1-016 supplies the immutable archive/attestation writer fixtures and handoff, implement local bootstrap only for local mode, OIDC production authentication, central OpenFGA plus deterministic policy-decision evaluation, effective labels, security-domain ceiling, runtime bundle verification/activation, audit metadata, and fail-closed direct-path design; OPA/Rego is optional and must not leak into the canonical contract.", "Implement the accepted decisions and every named ADR verification obligation owned by WS-06 without treating decision-record approval as implementation evidence; consume WS-09 build/release artifacts and WS-12 operational profiles only through their reviewed contracts.", "Run every canonical policy decision row against the selected evaluator with deterministic replay and deny-on-timeout, unavailable, malformed-result, stale-fence, and mixed-activation coverage; a second evaluator is prohibited until a superseding ADR defines differential conformance.", "All mapped requirement acceptance tests pass at the required layer and coverage floor.", "Authorization, classification, direct-path, observability, audit, compatibility, migration, upgrade, rollback, and documentation obligations are complete.", "Independent WS-13 review finds no unresolved critical/high defect, disallowed license, missing release evidence, or unauthorized disclosure path."]
+    automated_tests:
+      - "T-STEAD-P1-006-CONTRACT"
+      - "T-PRIN-007-ACCEPTANCE"
+      - "T-PRIN-011-ACCEPTANCE"
+      - "T-PRIN-012-ACCEPTANCE"
+      - "T-PRIN-015-ACCEPTANCE"
+      - "T-DOM-007-ACCEPTANCE"
+      - "T-DOM-009-ACCEPTANCE"
+      - "T-DOM-010-ACCEPTANCE"
+      - "T-DOC-004-ACCEPTANCE"
+      - "T-AUTH-001-ACCEPTANCE"
+      - "T-AUTH-002-ACCEPTANCE"
+      - "T-AUTH-003-ACCEPTANCE"
+      - "T-AUTH-004-ACCEPTANCE"
+      - "T-AUTH-005-ACCEPTANCE"
+      - "T-AUTH-006-ACCEPTANCE"
+      - "T-CLS-001-ACCEPTANCE"
+      - "T-CLS-003-ACCEPTANCE"
+      - "T-CLS-004-ACCEPTANCE"
+      - "T-CLS-006-ACCEPTANCE"
+      - "T-CLS-008-ACCEPTANCE"
+      - "T-AGENT-001-ACCEPTANCE"
+      - "T-AGENT-003-ACCEPTANCE"
+      - "T-AGENT-006-ACCEPTANCE"
+      - "T-ADR-0002-ID-VERSION"
+      - "T-ADR-0002-PARTIAL-ORDER"
+      - "T-ADR-0002-JOIN"
+      - "T-ADR-0002-INCOMPARABLE"
+      - "T-ADR-0002-CUI-PROFILE"
+      - "T-ADR-0002-CONTAINER-CEILING-FLOW"
+      - "T-ADR-0002-LOWERING"
+      - "T-ADR-0002-COMPAT-MIGRATION"
+      - "T-ADR-0002-BUNDLE-AUDIT"
+      - "T-ADR-0003-NORMALIZATION"
+      - "T-ADR-0003-AUTHORITY-PRECEDENCE"
+      - "T-ADR-0003-IDENTITY-CORRELATION"
+      - "T-ADR-0003-FRESHNESS-REVOCATION"
+      - "T-ADR-0003-AGENT-RUNTIME-BINDING"
+      - "T-ADR-0003-NO-SELF-ASSERTION"
+      - "T-ADR-0003-NONDISCLOSURE"
+      - "T-ADR-0003-DETERMINISM"
+      - "T-ADR-0003-MIGRATION-ROLLBACK"
+      - "T-ADR-0004-PERMISSION-MATRIX"
+      - "T-ADR-0004-SUBJECT-TYPES"
+      - "T-ADR-0004-HIERARCHY-NON-GRANT"
+      - "T-ADR-0004-ACCOUNTABILITY-NON-GRANT"
+      - "T-ADR-0004-GROUP-PROVISIONING"
+      - "T-ADR-0004-REVOCATION-AND-SOURCES"
+      - "T-ADR-0004-NONDISCLOSURE"
+      - "T-ADR-0005-TOPOLOGY"
+      - "T-ADR-0005-FAIL-CLOSED"
+      - "T-ADR-0005-ZERO-CACHE"
+      - "T-ADR-0005-DETERMINISM"
+      - "T-ADR-0005-FENCE"
+      - "T-ADR-0005-AGENT-INTERSECTION"
+      - "T-ADR-0005-PRINCIPALS"
+      - "T-ADR-0006-DSSE"
+      - "T-ADR-0006-CONTENT-INTEGRITY"
+      - "T-ADR-0006-ARCHIVE-SAFETY"
+      - "T-ADR-0006-TRUST-ROTATION"
+      - "T-ADR-0006-RECOVERY"
+      - "T-ADR-0006-MODEL-BINDING"
+      - "T-ADR-0006-ATOMIC-ACTIVATION"
+      - "T-ADR-0006-MIGRATION"
+      - "T-ADR-0006-POLICY-CONFORMANCE"
+      - "T-ADR-0006-ROLLBACK"
+      - "T-ADR-0006-FAILURE-INJECTION"
+      - "T-ADR-0006-AUDIT-PRIVACY"
     authorization_and_classification_behavior: "Combine authentication, trusted attributes, OpenFGA relationships, deterministic classification/context/information-flow/deny policy, and provider enforcement; all required checks must allow and expired/unverifiable attributes fail closed."
     observability_and_audit_requirements: "Audit decision metadata, model/policy versions, trusted-attribute provenance, label changes, downgrade approvals, and bypass denials without unnecessary sensitive content."
     migration_and_backward_compatibility_implications: "Version and migrate OpenFGA models, portable policy bundles, trusted attributes, labels, and lattice joins; reindex/invalidate all derived projections after policy-affecting changes."
@@ -391,7 +495,7 @@ issues:
     owned_directories: ["modules/scm", "providers/gitea", "tests/contract/gitea"]
     prohibited_boundaries: ["Must not fork Gitea, access Gitea tables/internal Go packages, or depend on undocumented files/endpoints.", "Must not expose raw-provider navigation as the routine UI.", "Must not weaken central policy to fit provider limitations."]
     acceptance_criteria: ["Implement documented-API/webhook/Git integration, automatic hidden tracker repository/board/labels, canonical issue mapping/reconciliation, docs-Git support, and permission sync without creating a code repository for a general Project.", "Implement and contract-test optional code/review provider ports, but defer the executable code/PR Project extension to STEAD-P1-013 after the general path.", "All mapped requirement acceptance tests pass at the required layer and coverage floor.", "Authorization, classification, direct-path, observability, audit, compatibility, migration, upgrade, rollback, and documentation obligations are complete.", "Independent WS-13 review finds no unresolved critical/high defect, disallowed license, missing release evidence, or unauthorized disclosure path."]
-    automated_tests: ["T-STEAD-P1-003-CONTRACT", "T-PRIN-002-ACCEPTANCE", "T-ARCH-004-ACCEPTANCE", "T-DOM-004-ACCEPTANCE", "T-SCM-001-ACCEPTANCE", "T-SCM-002-ACCEPTANCE", "T-SCM-003-ACCEPTANCE", "T-SCM-004-ACCEPTANCE", "T-SCM-005-ACCEPTANCE", "T-CLS-007-ACCEPTANCE", "T-TEST-006-ACCEPTANCE", "T-AGENT-002-ACCEPTANCE"]
+    automated_tests: ["T-STEAD-P1-003-CONTRACT", "T-PRIN-002-ACCEPTANCE", "T-ARCH-004-ACCEPTANCE", "T-DOM-004-ACCEPTANCE", "T-SCM-001-ACCEPTANCE", "T-SCM-002-ACCEPTANCE", "T-SCM-003-ACCEPTANCE", "T-SCM-004-ACCEPTANCE", "T-SCM-005-ACCEPTANCE", "T-CLS-007-ACCEPTANCE", "T-TEST-006-ACCEPTANCE", "T-AGENT-002-ACCEPTANCE", "T-ADR-0005-PROVIDER-PATH"]
     authorization_and_classification_behavior: "Reconcile repository/provider permissions from the central model; cover SSH, HTTPS, LFS, token, package, webhook, and raw-admin bypass paths."
     observability_and_audit_requirements: "Trace provider calls and reconciliation; audit direct-provider changes, resets, permission sync, webhook validation, and denied bypass attempts without secret leakage."
     migration_and_backward_compatibility_implications: "Keep canonical IDs provider-independent, preserve external references, and contract-test current, previous two minor, and next candidate Gitea versions."
@@ -445,7 +549,7 @@ issues:
     owned_directories: ["apps/worker", "modules/notification", "modules/audit", "packages/event-schemas"]
     prohibited_boundaries: ["NATS, activity, inbox, search, and audit projections are not authoritative business stores.", "No direct database-then-publish reliability path, non-idempotent durable consumer, global ordering assumption, or protected-content event payload.", "External notifications may not bypass channel policy."]
     acceptance_criteria: ["Deploy NATS JetStream, publish atomic outbox events, prove idempotency/replay/DLQ, and project a classification-aware activity, notification, and append-only audit trail for the slice.", "All mapped requirement acceptance tests pass at the required layer and coverage floor.", "Authorization, classification, direct-path, observability, audit, compatibility, migration, upgrade, rollback, and documentation obligations are complete.", "Independent WS-13 review finds no unresolved critical/high defect, disallowed license, missing release evidence, or unauthorized disclosure path."]
-    automated_tests: ["T-STEAD-P1-007-CONTRACT", "T-PRIN-005-ACCEPTANCE", "T-EVT-001-ACCEPTANCE", "T-EVT-002-ACCEPTANCE", "T-EVT-003-ACCEPTANCE", "T-EVT-004-ACCEPTANCE", "T-ACT-001-ACCEPTANCE", "T-NOTIF-001-ACCEPTANCE", "T-AUD-001-ACCEPTANCE", "T-AUD-002-ACCEPTANCE", "T-TEST-005-ACCEPTANCE", "T-AGENT-001-ACCEPTANCE", "T-AGENT-004-ACCEPTANCE", "T-ADR-0001-COMPAT"]
+    automated_tests: ["T-STEAD-P1-007-CONTRACT", "T-PRIN-005-ACCEPTANCE", "T-EVT-001-ACCEPTANCE", "T-EVT-002-ACCEPTANCE", "T-EVT-003-ACCEPTANCE", "T-EVT-004-ACCEPTANCE", "T-ACT-001-ACCEPTANCE", "T-NOTIF-001-ACCEPTANCE", "T-AUD-001-ACCEPTANCE", "T-AUD-002-ACCEPTANCE", "T-TEST-005-ACCEPTANCE", "T-AGENT-001-ACCEPTANCE", "T-AGENT-004-ACCEPTANCE", "T-ADR-0001-COMPAT", "T-ADR-0005-OBSERVABILITY"]
     authorization_and_classification_behavior: "Carry minimal label/domain metadata, authorize subscriptions and projections, redact unauthorized external channels, and prevent activity/inbox/audit existence leakage."
     observability_and_audit_requirements: "Propagate correlation/causation IDs; measure outbox lag, retries, dead letters, replay, notification delivery, and audit checkpoint health without protected payload logging."
     migration_and_backward_compatibility_implications: "Version CloudEvents/AsyncAPI schemas, define retention/replay and idempotency, and keep projections fully rebuildable."
@@ -463,7 +567,7 @@ issues:
     owned_directories: ["modules/search", "providers/search-postgres", "providers/search-opensearch", "packages/provider-sdk/search", "tests/integration/search", "packages/test-fixtures/search"]
     prohibited_boundaries: ["Search and graph projections may not become systems of record.", "Post-filtering may not leak counts, facets, snippets, suggestions, titles, IDs, or edges.", "Agents may not receive direct repository/database/search/NATS/object-store access."]
     acceptance_criteria: ["Index and query slice resources through PostgreSQL with canonical links, typed relationships, domain/label partitions, authoritative filtering, zero metadata leakage, and replay rebuild.", "All mapped requirement acceptance tests pass at the required layer and coverage floor.", "Authorization, classification, direct-path, observability, audit, compatibility, migration, upgrade, rollback, and documentation obligations are complete.", "Independent WS-13 review finds no unresolved critical/high defect, disallowed license, missing release evidence, or unauthorized disclosure path."]
-    automated_tests: ["T-STEAD-P1-008-CONTRACT", "T-DOM-006-ACCEPTANCE", "T-UX-008-ACCEPTANCE", "T-SRCH-001-ACCEPTANCE", "T-SRCH-002-ACCEPTANCE", "T-SRCH-003-ACCEPTANCE", "T-GRAPH-001-ACCEPTANCE"]
+    automated_tests: ["T-STEAD-P1-008-CONTRACT", "T-DOM-006-ACCEPTANCE", "T-UX-008-ACCEPTANCE", "T-SRCH-001-ACCEPTANCE", "T-SRCH-002-ACCEPTANCE", "T-SRCH-003-ACCEPTANCE", "T-GRAPH-001-ACCEPTANCE", "T-ADR-0005-NONDISCLOSURE"]
     authorization_and_classification_behavior: "Apply domain/container partition filtering before retrieval and authoritative OpenFGA/policy-decision checks before returning any result or graph data; MCP uses the same API and decisions."
     observability_and_audit_requirements: "Measure indexing/replay lag and query latency with label/domain dimensions that cannot reveal protected cardinality; audit agent writes and sensitive query decisions."
     migration_and_backward_compatibility_implications: "Indexes and graph edges must rebuild from authoritative resources/events; canonical IDs and links survive provider changes."
@@ -499,7 +603,7 @@ issues:
     owned_directories: ["apps/web", "packages/design-system", "packages/api-client", "packages/test-fixtures/frontend"]
     prohibited_boundaries: ["Browser code may call only the versioned platform API; it may not call Gitea, Commonplace, OpenFGA, the policy-decision layer, NATS, or storage directly.", "UI hiding may not be treated as authorization.", "Core navigation and workflow semantics may not become tenant-configurable."]
     acceptance_criteria: ["Before frontend feature expansion, establish Vitest with React Testing Library, Playwright, axe accessibility, and visual-regression harnesses against the shared design system and canonical API client.", "Deliver the Devlane-derived visual shell and TEST-009 general Project with universal Overview/Work/Docs, no Code/Delivery or repository vocabulary, and no source-code repository.", "Deliver Home, Inbox, My Work, Projects, Knowledge, Teams, Favorites, Recent, command/search, shared creation/references/activity, labels, stable links, keyboard access, and no dependency on Devlane ontology or routes.", "All mapped requirement acceptance tests pass at the required layer and coverage floor.", "Authorization, classification, direct-path, observability, audit, compatibility, migration, upgrade, rollback, and documentation obligations are complete.", "Independent WS-13 review finds no unresolved critical/high defect, disallowed license, missing release evidence, or unauthorized disclosure path."]
-    automated_tests: ["T-STEAD-P1-005-CONTRACT", "T-PRIN-001-ACCEPTANCE", "T-PRIN-003-ACCEPTANCE", "T-PRIN-013-ACCEPTANCE", "T-PRIN-014-ACCEPTANCE", "T-DOM-008-ACCEPTANCE", "T-DOM-011-ACCEPTANCE", "T-UX-001-ACCEPTANCE", "T-UX-002-ACCEPTANCE", "T-UX-003-ACCEPTANCE", "T-UX-004-ACCEPTANCE", "T-UX-005-ACCEPTANCE", "T-UX-006-ACCEPTANCE", "T-UX-007-ACCEPTANCE", "T-UX-008-ACCEPTANCE", "T-UX-009-ACCEPTANCE"]
+    automated_tests: ["T-STEAD-P1-005-CONTRACT", "T-PRIN-001-ACCEPTANCE", "T-PRIN-003-ACCEPTANCE", "T-PRIN-013-ACCEPTANCE", "T-PRIN-014-ACCEPTANCE", "T-DOM-008-ACCEPTANCE", "T-DOM-011-ACCEPTANCE", "T-UX-001-ACCEPTANCE", "T-UX-002-ACCEPTANCE", "T-UX-003-ACCEPTANCE", "T-UX-004-ACCEPTANCE", "T-UX-005-ACCEPTANCE", "T-UX-006-ACCEPTANCE", "T-UX-007-ACCEPTANCE", "T-UX-008-ACCEPTANCE", "T-UX-009-ACCEPTANCE", "T-ADR-0004-NONDISCLOSURE"]
     authorization_and_classification_behavior: "Display effective labels on protected content and policy warnings where required; rely on authoritative server decisions and reveal no denied-resource metadata."
     observability_and_audit_requirements: "Instrument frontend performance and error correlation without capturing protected content; ensure user actions carry correlation context for server audit."
     migration_and_backward_compatibility_implications: "Use canonical deep links and provider-independent IDs so provider migrations and redirects do not break navigation."
@@ -546,19 +650,19 @@ issues:
     epic_id: "EPIC-P1"
     phase: "phase-1"
     status: DEPENDENCY_BLOCKED
-    requirement_ids: ["PRIN-008", "PRIN-009", "PRIN-011", "DEP-001", "DEP-002", "OPS-001", "OPS-002", "TEST-007"]
+    requirement_ids: ["PRIN-008", "PRIN-009", "PRIN-011", "DEP-001", "DEP-002", "DEP-005", "OPS-001", "OPS-002", "OPS-003", "OPS-004", "TEST-007", "TEST-008"]
     owner: "WS-12"
-    dependencies: ["GATE-P0-APPROVED", "STEAD-P1-001", "STEAD-P1-002", "STEAD-P1-003", "STEAD-P1-004", "STEAD-P1-005", "STEAD-P1-006", "STEAD-P1-007", "STEAD-P1-008", "STEAD-P1-009", "STEAD-P1-010", "STEAD-P1-013", "STEAD-P1-014", "STEAD-P0-013"]
+    dependencies: ["GATE-P0-APPROVED", "STEAD-P1-001", "STEAD-P1-002", "STEAD-P1-003", "STEAD-P1-004", "STEAD-P1-005", "STEAD-P1-006", "STEAD-P1-007", "STEAD-P1-008", "STEAD-P1-009", "STEAD-P1-010", "STEAD-P1-013", "STEAD-P1-014", "STEAD-P1-015", "STEAD-P1-016", "STEAD-P0-013"]
     module: ["installation-operations"]
-    owned_directories: ["apps/steadctl", "deploy/compose", "deploy/helm", "deploy/airgap", "docs/operator", "tests/upgrade", "tests/backup-restore"]
-    prohibited_boundaries: ["No required public cloud/SaaS control plane, outbound telemetry by default, cloud-specific core-chart CRD, unapproved air-gap network call, or upgrade without compatibility/preflight/backup.", "NATS backup may not be treated as the sole recovery source."]
-    acceptance_criteria: ["Provide one-command local Compose installation with bundled baseline services, validated defaults, steadctl status/doctor/config, OTLP support, and a representative consistent backup/restore path.", "All mapped requirement acceptance tests pass at the required layer and coverage floor.", "Authorization, classification, direct-path, observability, audit, compatibility, migration, upgrade, rollback, and documentation obligations are complete.", "Independent WS-13 review finds no unresolved critical/high defect, disallowed license, missing release evidence, or unauthorized disclosure path."]
-    automated_tests: ["T-STEAD-P1-011-CONTRACT", "T-PRIN-008-ACCEPTANCE", "T-PRIN-009-ACCEPTANCE", "T-PRIN-011-ACCEPTANCE", "T-DEP-001-ACCEPTANCE", "T-DEP-002-ACCEPTANCE", "T-OPS-001-ACCEPTANCE", "T-OPS-002-ACCEPTANCE", "T-TEST-007-ACCEPTANCE", "T-ADR-0001-MIGRATION"]
+    owned_directories: ["apps/steadctl", "deploy/compose", "docs/operator", "tests/upgrade", "tests/backup-restore"]
+    prohibited_boundaries: ["No required public cloud/SaaS control plane, outbound telemetry by default, cloud-specific deployment dependency, or upgrade without compatibility/preflight/backup.", "Phase 1 may prove generic network-disabled policy verification but must not claim or implement the Phase 3 government-airgap profile or bundle.", "NATS backup may not be treated as the sole recovery source."]
+    acceptance_criteria: ["Provide one-command local Compose installation with bundled baseline services, validated defaults, steadctl status/doctor/config, OTLP support, and a representative consistent backup/restore path.", "Consume the exact WS-09 archive/attestation pair and WS-06 verifier/activation contracts to prove the ADR-0006-owned operational staging, generic network-disabled/offline verification, trust recovery, rollback, failure, backup/restore, and doctor obligations without moving artifact construction or runtime authorization ownership into WS-12.", "All mapped requirement acceptance tests pass at the required layer and coverage floor.", "Authorization, classification, direct-path, observability, audit, compatibility, migration, upgrade, rollback, and documentation obligations are complete.", "Independent WS-13 review finds no unresolved critical/high defect, disallowed license, missing release evidence, or unauthorized disclosure path."]
+    automated_tests: ["T-STEAD-P1-011-CONTRACT", "T-PRIN-009-ACCEPTANCE", "T-PRIN-011-ACCEPTANCE", "T-OPS-001-ACCEPTANCE", "T-OPS-002-ACCEPTANCE", "T-TEST-008-ACCEPTANCE", "T-ADR-0001-MIGRATION", "T-ADR-0005-MIGRATION-ROLLBACK", "T-ADR-0005-OBSERVABILITY", "T-ADR-0006-TRANSPORT-IDENTITY", "T-ADR-0006-TRUST-ROTATION", "T-ADR-0006-RECOVERY", "T-ADR-0006-OFFLINE", "T-ADR-0006-ATOMIC-ACTIVATION", "T-ADR-0006-ROLLBACK", "T-ADR-0006-FAILURE-INJECTION", "T-ADR-0006-BACKUP-RESTORE", "T-ADR-0006-AUDIT-PRIVACY"]
     authorization_and_classification_behavior: "Install profiles configure security domains, allowed integrations/storage/runners, TLS, identity, and policy with secure defaults; backup/restore/export destinations are policy authorized."
     observability_and_audit_requirements: "Provide OTel/OTLP, health/readiness/version/migration metrics, doctor checks, and audit records for install/config/upgrade/backup/restore without protected telemetry."
     migration_and_backward_compatibility_implications: "Installation profiles and effective config are versioned; backups preserve all authoritative stores, IDs, labels, permissions, Git hashes, history, audit, and URLs."
     upgrade_and_rollback_behavior: "Implement detect/preflight/backup/plan/expand-contract/safe-order/smoke/report with rollback when migrations permit and explicit forward recovery otherwise."
-    documentation_obligations: ["Publish guided install, profile configuration, Helm compatibility, air-gap use, observability, backup/restore drills, upgrades/rollback, SLO benchmarks, and diagnostics."]
+    documentation_obligations: ["Publish guided local installation, effective configuration, generic offline policy verification, observability, backup/restore drills, upgrades/rollback, and diagnostics; identify government-airgap and full Helm/profile guidance as later phase work."]
   - id: "STEAD-P1-012"
     title: "Independently gate the Phase 1 golden vertical slice"
     epic_id: "EPIC-P1"
@@ -566,12 +670,12 @@ issues:
     status: DEPENDENCY_BLOCKED
     requirement_ids: ["PRIN-010", "SEC-001", "SEC-002", "SEC-004", "SEC-006", "TEST-001", "TEST-002", "TEST-003", "TEST-005", "TEST-008", "TEST-009", "TEST-010"]
     owner: "WS-13"
-    dependencies: ["GATE-P0-APPROVED", "STEAD-P1-001", "STEAD-P1-002", "STEAD-P1-003", "STEAD-P1-004", "STEAD-P1-005", "STEAD-P1-006", "STEAD-P1-007", "STEAD-P1-008", "STEAD-P1-009", "STEAD-P1-010", "STEAD-P1-011", "STEAD-P1-013", "STEAD-P1-014", "STEAD-P0-014"]
+    dependencies: ["GATE-P0-APPROVED", "STEAD-P1-001", "STEAD-P1-002", "STEAD-P1-003", "STEAD-P1-004", "STEAD-P1-005", "STEAD-P1-006", "STEAD-P1-007", "STEAD-P1-008", "STEAD-P1-009", "STEAD-P1-010", "STEAD-P1-011", "STEAD-P1-013", "STEAD-P1-014", "STEAD-P1-015", "STEAD-P1-016", "STEAD-P0-014"]
     module: ["qa-security-release"]
     owned_directories: ["specs/traceability", "specs/oscal", "docs/testing", "docs/security", "docs/governance/release-evidence", "docs/governance/waivers", "tests/contract/harness", "tests/e2e", "tests/security", "tests/classification", "tests/performance/harness", "packages/test-fixtures/harness"]
     prohibited_boundaries: ["May not approve its own implementation work, waive gates without documented authority/time bounds, edit production modules as a hidden fix, or pass a release with a known disclosure path, missing artifact, failed required test, or disallowed/unknown license."]
     acceptance_criteria: ["Run all required Phase 1 layers and both golden scenarios: a general Work plus Docs Project with no source code and an additive software Work plus Docs plus Code plus PR Project.", "Run direct-path non-disclosure, hierarchy non-inheritance, capability visibility, restore, and supported upgrade smoke; record independent QA/security approval or fail closed.", "All mapped requirement acceptance tests pass at the required layer and coverage floor.", "Authorization, classification, direct-path, observability, audit, compatibility, migration, upgrade, rollback, and documentation obligations are complete.", "Independent WS-13 review finds no unresolved critical/high defect, disallowed license, missing release evidence, or unauthorized disclosure path."]
-    automated_tests: ["T-STEAD-P1-012-CONTRACT", "T-PRIN-010-ACCEPTANCE", "T-SEC-001-ACCEPTANCE", "T-SEC-002-ACCEPTANCE", "T-SEC-004-ACCEPTANCE", "T-SEC-006-ACCEPTANCE", "T-TEST-001-ACCEPTANCE", "T-TEST-002-ACCEPTANCE", "T-TEST-003-ACCEPTANCE", "T-TEST-005-ACCEPTANCE", "T-TEST-008-ACCEPTANCE", "T-TEST-009-ACCEPTANCE", "T-TEST-010-ACCEPTANCE"]
+    automated_tests: ["T-STEAD-P1-012-CONTRACT", "T-PRIN-010-ACCEPTANCE", "T-SEC-001-ACCEPTANCE", "T-SEC-002-ACCEPTANCE", "T-SEC-004-ACCEPTANCE", "T-SEC-006-ACCEPTANCE", "T-TEST-001-ACCEPTANCE", "T-TEST-002-ACCEPTANCE", "T-TEST-003-ACCEPTANCE", "T-TEST-005-ACCEPTANCE", "T-TEST-008-ACCEPTANCE", "T-TEST-009-ACCEPTANCE", "T-TEST-010-ACCEPTANCE", "T-ADR-0002-ID-VERSION", "T-ADR-0002-PARTIAL-ORDER", "T-ADR-0002-JOIN", "T-ADR-0002-INCOMPARABLE", "T-ADR-0002-CUI-PROFILE", "T-ADR-0002-CONTAINER-CEILING-FLOW", "T-ADR-0002-LOWERING", "T-ADR-0002-COMPAT-MIGRATION", "T-ADR-0002-BUNDLE-AUDIT", "T-ADR-0003-NORMALIZATION", "T-ADR-0003-AUTHORITY-PRECEDENCE", "T-ADR-0003-IDENTITY-CORRELATION", "T-ADR-0003-FRESHNESS-REVOCATION", "T-ADR-0003-AGENT-RUNTIME-BINDING", "T-ADR-0003-NO-SELF-ASSERTION", "T-ADR-0003-NONDISCLOSURE", "T-ADR-0003-DETERMINISM", "T-ADR-0003-MIGRATION-ROLLBACK", "T-ADR-0004-ROLE-ENUM", "T-ADR-0004-PERMISSION-MATRIX", "T-ADR-0004-SUBJECT-TYPES", "T-ADR-0004-LEAD-CARDINALITY", "T-ADR-0004-HIERARCHY-NON-GRANT", "T-ADR-0004-ACCOUNTABILITY-NON-GRANT", "T-ADR-0004-GROUP-PROVISIONING", "T-ADR-0004-REVOCATION-AND-SOURCES", "T-ADR-0004-NONDISCLOSURE", "T-ADR-0004-MIGRATION-ROLLBACK", "T-ADR-0005-TOPOLOGY", "T-ADR-0005-SEQUENCE", "T-ADR-0005-FAIL-CLOSED", "T-ADR-0005-ZERO-CACHE", "T-ADR-0005-DETERMINISM", "T-ADR-0005-FENCE", "T-ADR-0005-AGENT-INTERSECTION", "T-ADR-0005-PRINCIPALS", "T-ADR-0005-PROVIDER-PATH", "T-ADR-0005-NONDISCLOSURE", "T-ADR-0005-MIGRATION-ROLLBACK", "T-ADR-0005-OBSERVABILITY", "T-ADR-0006-DETERMINISTIC-BUILD", "T-ADR-0006-TRANSPORT-IDENTITY", "T-ADR-0006-DSSE", "T-ADR-0006-CONTENT-INTEGRITY", "T-ADR-0006-ARCHIVE-SAFETY", "T-ADR-0006-TRUST-ROTATION", "T-ADR-0006-RECOVERY", "T-ADR-0006-OFFLINE", "T-ADR-0006-MODEL-BINDING", "T-ADR-0006-ATOMIC-ACTIVATION", "T-ADR-0006-MIGRATION", "T-ADR-0006-POLICY-CONFORMANCE", "T-ADR-0006-ROLLBACK", "T-ADR-0006-FAILURE-INJECTION", "T-ADR-0006-BACKUP-RESTORE", "T-ADR-0006-AUDIT-PRIVACY"]
     authorization_and_classification_behavior: "Independently test deny-by-default policy, decision coverage, all classification matrix cases, and direct-provider/non-UI bypasses including absence of existence leakage."
     observability_and_audit_requirements: "Verify required telemetry/audit evidence, sensitive-data redaction, correlation, replay, tamper evidence where required, and gate decision records."
     migration_and_backward_compatibility_implications: "Test migration conformance, schema/event/API compatibility, upgrades from supported versions, backup/restore fidelity, and rollback/recovery."
@@ -895,7 +999,7 @@ issues:
     owned_directories: ["apps/steadctl", "deploy/compose", "deploy/helm", "deploy/airgap", "docs/operator", "tests/upgrade", "tests/backup-restore"]
     prohibited_boundaries: ["No required public cloud/SaaS control plane, outbound telemetry by default, cloud-specific core-chart CRD, unapproved air-gap network call, or upgrade without compatibility/preflight/backup.", "NATS backup may not be treated as the sole recovery source."]
     acceptance_criteria: ["Deliver offline signed bundles with no unapproved calls, government profile installation, HA guidance/tests, supported Kubernetes/Gitea/platform upgrade matrix, rollback/recovery, and published reproducible SLO validation.", "All mapped requirement acceptance tests pass at the required layer and coverage floor.", "Authorization, classification, direct-path, observability, audit, compatibility, migration, upgrade, rollback, and documentation obligations are complete.", "Independent WS-13 review finds no unresolved critical/high defect, disallowed license, missing release evidence, or unauthorized disclosure path."]
-    automated_tests: ["T-STEAD-P3-007-CONTRACT", "T-PRIN-008-ACCEPTANCE", "T-PRIN-012-ACCEPTANCE", "T-DEP-001-ACCEPTANCE", "T-DEP-002-ACCEPTANCE", "T-DEP-004-ACCEPTANCE", "T-DEP-005-ACCEPTANCE", "T-OPS-005-ACCEPTANCE", "T-TEST-007-ACCEPTANCE"]
+    automated_tests: ["T-STEAD-P3-007-CONTRACT", "T-PRIN-008-ACCEPTANCE", "T-PRIN-012-ACCEPTANCE", "T-DEP-001-ACCEPTANCE", "T-DEP-002-ACCEPTANCE", "T-DEP-004-ACCEPTANCE", "T-DEP-005-ACCEPTANCE", "T-OPS-005-ACCEPTANCE", "T-TEST-007-ACCEPTANCE", "T-ADR-0006-AIRGAP-EVIDENCE"]
     authorization_and_classification_behavior: "Install profiles configure security domains, allowed integrations/storage/runners, TLS, identity, and policy with secure defaults; backup/restore/export destinations are policy authorized."
     observability_and_audit_requirements: "Provide OTel/OTLP, health/readiness/version/migration metrics, doctor checks, and audit records for install/config/upgrade/backup/restore without protected telemetry."
     migration_and_backward_compatibility_implications: "Installation profiles and effective config are versioned; backups preserve all authoritative stores, IDs, labels, permissions, Git hashes, history, audit, and URLs."
@@ -913,7 +1017,7 @@ issues:
     owned_directories: ["specs/traceability", "specs/oscal", "docs/testing", "docs/security", "docs/governance", "tests/contract/harness", "tests/e2e", "tests/security", "tests/classification", "tests/performance/harness", "packages/test-fixtures/harness"]
     prohibited_boundaries: ["May not approve its own implementation work, waive gates without documented authority/time bounds, edit production modules as a hidden fix, or pass a release with a known disclosure path, missing artifact, failed required test, or disallowed/unknown license."]
     acceptance_criteria: ["Run the complete release suite and security assessment, verify remediation and all artifacts/docs/licenses/audit/restore/upgrades/golden checks, and issue an independent approval only with no unresolved critical/high defect or disclosure path.", "All mapped requirement acceptance tests pass at the required layer and coverage floor.", "Authorization, classification, direct-path, observability, audit, compatibility, migration, upgrade, rollback, and documentation obligations are complete.", "Independent WS-13 review finds no unresolved critical/high defect, disallowed license, missing release evidence, or unauthorized disclosure path."]
-    automated_tests: ["T-STEAD-P3-008-CONTRACT", "T-SEC-002-ACCEPTANCE", "T-SEC-004-ACCEPTANCE", "T-SEC-005-ACCEPTANCE", "T-TEST-002-ACCEPTANCE", "T-TEST-003-ACCEPTANCE", "T-TEST-008-ACCEPTANCE", "T-TEST-010-ACCEPTANCE"]
+    automated_tests: ["T-STEAD-P3-008-CONTRACT", "T-SEC-002-ACCEPTANCE", "T-SEC-004-ACCEPTANCE", "T-SEC-005-ACCEPTANCE", "T-TEST-002-ACCEPTANCE", "T-TEST-003-ACCEPTANCE", "T-TEST-008-ACCEPTANCE", "T-TEST-010-ACCEPTANCE", "T-ADR-0006-AIRGAP-EVIDENCE"]
     authorization_and_classification_behavior: "Independently test deny-by-default policy, decision coverage, all classification matrix cases, and direct-provider/non-UI bypasses including absence of existence leakage."
     observability_and_audit_requirements: "Verify required telemetry/audit evidence, sensitive-data redaction, correlation, replay, tamper evidence where required, and gate decision records."
     migration_and_backward_compatibility_implications: "Test migration conformance, schema/event/API compatibility, upgrades from supported versions, backup/restore fidelity, and rollback/recovery."

@@ -153,5 +153,5 @@ The checked-in OWGP examples and validator provide the first four contract-level
 | Architecture and standards (WS-01) | `/root/directive_audit` (WS-01 architecture) | ACCEPT | 2026-08-29; preserves locked architecture and resolves `ADR-CAND-001` |
 | Domain/provider/search/migration reviewers (WS-02/03/08/11) | pending implementation review | PENDING | Required before affected consumer implementation merges |
 | Security-contract review (WS-06) | pending reviewer | PENDING | Required before affected contract implementation merges |
-| Independent QA/security review (distinct WS-13 identities) | pending reviewers | PENDING | Required before affected contract implementation merges |
+| Independent QA/security review (distinct WS-13 identities) | `/root/contract_audit`; `/root/independent_security` | ACCEPT | 2026-08-29; executable URI/scope/kind/host tests, dependency and foundation review |
 | Project owner | not required for this conforming choice | N/A | No locked decision changes |

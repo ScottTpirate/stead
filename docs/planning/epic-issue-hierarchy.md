@@ -73,19 +73,21 @@ The Phase 1 records preserve the approved principal, assignment, authorization, 
 | Order | Issue | Owner | Direct predecessors | Deliverable |
 |---:|---|---|---|---|
 | 1 | STEAD-P1-001 | WS-01 | GATE-P0-APPROVED | Root manifests, CI and contract-test foundation, schema/API lint, dependency approvals/notices, and Devlane provenance |
-| 2 | STEAD-P1-006 | WS-06 | GATE-P0-APPROVED, P1-001 | Bootstrap/OIDC identity and central OpenFGA + policy-decision path |
-| 3 | STEAD-P1-002 | WS-02 | P1-001, P1-006, approved core/auth contracts | Canonical modular core, PrincipalRef-based User/Agent Work assignment, PostgreSQL ownership, optimistic concurrency and atomic outbox |
-| 4 | STEAD-P1-003 | WS-03 | P1-002, P1-006 | Stock Gitea adapter, hidden tracker/board, provider-neutral Work backing and docs Git; no general code repo |
-| 4 | STEAD-P1-010 | WS-10 | P1-002, P1-006 | Filesystem BlobStore and authorized attachment path |
-| 4 | STEAD-P1-007 | WS-07 | P1-002, P1-006 | JetStream/outbox delivery and basic activity, inbox and audit |
-| 5 | STEAD-P1-004 | WS-04 | P1-002, P1-003, P1-006, P1-010 | One deterministic Git/OKF document flow |
-| 5 | STEAD-P1-008 | WS-08 | P1-002, P1-006, P1-007 | PostgreSQL search and work-graph baseline with non-disclosure |
-| 6 | STEAD-P1-005 | WS-05 | P1-002, P1-003, P1-004, P1-006, P1-007, P1-008 | Universal shell and complete TEST-009 general Work+Docs path |
-| 7 | STEAD-P1-013 | WS-03 | P1-003, P1-005, P1-006 | Additive software code repository, branch, commit and Pull Request path |
-| 8 | STEAD-P1-009 | WS-09 | P1-006, P1-007, P1-010, P1-013 | One pinned Action with build/SBOM/artifact/release trace |
-| 9 | STEAD-P1-014 | WS-05 | P1-004, P1-007…009, P1-013 | Present Code and Delivery in the same shell; complete TEST-010 UI path |
-| 10 | STEAD-P1-011 | WS-12 | P1-001…010, P1-013…014 | One-command local install, OTel/health/doctor and backup/restore baseline |
-| 11 | STEAD-P1-012 | WS-13 | P1-001…011, P1-013…014 | Independently gate TEST-009 and TEST-010, bypass, restore and upgrade |
+| 2 | STEAD-P1-015 | WS-02, with WS-06/07 handoff | GATE-P0-APPROVED, P1-001, accepted ADR-CAND-002/003/007 | Owner-scoped core authorization composition, compare-and-use transaction hook, and `core_outbox` ports; no domain feature implementation |
+| 2 | STEAD-P1-016 | WS-09 | GATE-P0-APPROVED, P1-001, accepted ADR-CAND-007 | Deterministic policy activation archive, pre-signing evidence, post-signing release attestation, and immutable writer/fixture handoff; no runtime activation authority |
+| 3 | STEAD-P1-006 | WS-06 | P1-001, P1-015, P1-016, accepted security ADRs | Bootstrap/OIDC identity and central OpenFGA + policy-decision runtime verification/activation path |
+| 4 | STEAD-P1-002 | WS-02 | P1-001, P1-006, P1-015, approved core/auth contracts | Canonical modular core, PrincipalRef-based User/Agent Work assignment, PostgreSQL ownership, optimistic concurrency and atomic outbox |
+| 5 | STEAD-P1-003 | WS-03 | P1-002, P1-006 | Stock Gitea adapter, hidden tracker/board, provider-neutral Work backing and docs Git; no general code repo |
+| 5 | STEAD-P1-010 | WS-10 | P1-002, P1-006 | Filesystem BlobStore and authorized attachment path |
+| 5 | STEAD-P1-007 | WS-07 | P1-002, P1-006 | JetStream/outbox delivery and basic activity, inbox and audit |
+| 6 | STEAD-P1-004 | WS-04 | P1-002, P1-003, P1-006, P1-010 | One deterministic Git/OKF document flow |
+| 6 | STEAD-P1-008 | WS-08 | P1-002, P1-006, P1-007 | PostgreSQL search and work-graph baseline with non-disclosure |
+| 7 | STEAD-P1-005 | WS-05 | P1-002, P1-003, P1-004, P1-006, P1-007, P1-008 | Universal shell and complete TEST-009 general Work+Docs path |
+| 8 | STEAD-P1-013 | WS-03 | P1-003, P1-005, P1-006 | Additive software code repository, branch, commit and Pull Request path |
+| 9 | STEAD-P1-009 | WS-09 | P1-006, P1-007, P1-010, P1-013 | One pinned Action with build/SBOM/artifact/release trace |
+| 10 | STEAD-P1-014 | WS-05 | P1-004, P1-007…009, P1-013 | Present Code and Delivery in the same shell; complete TEST-010 UI path |
+| 11 | STEAD-P1-011 | WS-12 | P1-001…010, P1-013…016 | One-command local install, OTel/health/doctor, policy activation operations, and backup/restore baseline |
+| 12 | STEAD-P1-012 | WS-13 | P1-001…011, P1-013…016 | Independently gate TEST-009 and TEST-010, policy artifact/activation, bypass, restore and upgrade |
 
 No Phase 2 issue opens merely because its implementation dependency is merged. The Phase 1 candidate must pass STEAD-P1-012 and receive its recorded release decision.
 

@@ -52,8 +52,8 @@ requirements:
   - requirement_id: "PRIN-005"
     title: "Modular internals without microservice sprawl"
     implementation_modules: ["cross-cutting", "docs/architecture", "docs/adr"]
-    issue_ids: ["STEAD-P0-001", "STEAD-P1-001", "STEAD-P1-002", "STEAD-P1-007"]
-    test_ids: ["T-PRIN-005-ACCEPTANCE"]
+    issue_ids: ["STEAD-P0-001", "STEAD-P1-001", "STEAD-P1-002", "STEAD-P1-007", "STEAD-P1-015"]
+    test_ids: ["T-PRIN-005-ACCEPTANCE", "T-STEAD-P1-015-CONTRACT"]
     documentation: ["docs/architecture/constitution.md", "docs/contributor/architecture-governance.md"]
     status: IMPLEMENTATION_IN_PROGRESS
     release: "phase-1"
@@ -156,8 +156,8 @@ requirements:
   - requirement_id: "ARCH-003"
     title: "Runtime boundaries"
     implementation_modules: ["apps", "modules", "providers", "packages", "policies", "specs", "deploy", "tests"]
-    issue_ids: ["STEAD-P0-001", "STEAD-P0-003", "STEAD-P1-002"]
-    test_ids: ["T-ARCH-003-ACCEPTANCE"]
+    issue_ids: ["STEAD-P0-001", "STEAD-P0-003", "STEAD-P1-002", "STEAD-P1-015"]
+    test_ids: ["T-ARCH-003-ACCEPTANCE", "T-STEAD-P1-015-CONTRACT"]
     documentation: ["docs/architecture/constitution.md", "docs/architecture/repository-layout-and-boundaries.md"]
     status: DEPENDENCY_BLOCKED_PHASE_1
     release: "phase-1"
@@ -564,8 +564,8 @@ requirements:
   - requirement_id: "EVT-002"
     title: "Transactional outbox"
     implementation_modules: ["apps/core", "apps/worker", "packages/event-schemas"]
-    issue_ids: ["STEAD-P0-003", "STEAD-P1-002", "STEAD-P1-007"]
-    test_ids: ["T-EVT-002-ACCEPTANCE"]
+    issue_ids: ["STEAD-P0-003", "STEAD-P1-002", "STEAD-P1-007", "STEAD-P1-015"]
+    test_ids: ["T-EVT-002-ACCEPTANCE", "T-STEAD-P1-015-CONTRACT"]
     documentation: ["docs/architecture/event-contract.md", "specs/asyncapi/stead.yaml"]
     status: DEPENDENCY_BLOCKED_PHASE_1
     release: "phase-1"
@@ -612,16 +612,16 @@ requirements:
   - requirement_id: "AUD-001"
     title: "Platform-wide audit"
     implementation_modules: ["modules/audit", "apps/worker"]
-    issue_ids: ["STEAD-P0-008", "STEAD-P1-007", "STEAD-P2-005"]
-    test_ids: ["T-AUD-001-ACCEPTANCE"]
+    issue_ids: ["STEAD-P0-008", "STEAD-P1-007", "STEAD-P1-015", "STEAD-P2-005"]
+    test_ids: ["T-AUD-001-ACCEPTANCE", "T-STEAD-P1-015-CONTRACT"]
     documentation: ["docs/architecture/audit-model.md", "docs/operator/audit-export.md"]
     status: DEPENDENCY_BLOCKED_PHASE_1
     release: "phase-1"
   - requirement_id: "AUD-002"
     title: "Audit record requirements"
     implementation_modules: ["modules/audit", "apps/worker"]
-    issue_ids: ["STEAD-P0-008", "STEAD-P1-007", "STEAD-P3-003"]
-    test_ids: ["T-AUD-002-ACCEPTANCE"]
+    issue_ids: ["STEAD-P0-008", "STEAD-P1-007", "STEAD-P1-015", "STEAD-P3-003"]
+    test_ids: ["T-AUD-002-ACCEPTANCE", "T-STEAD-P1-015-CONTRACT"]
     documentation: ["docs/architecture/audit-model.md", "docs/operator/audit-export.md"]
     status: PHASE_GATED
     release: "phase-3"
@@ -724,8 +724,8 @@ requirements:
   - requirement_id: "CICD-004"
     title: "Supply-chain outputs"
     implementation_modules: ["modules/ci", "modules/artifact", "providers/gitea"]
-    issue_ids: ["STEAD-P0-010", "STEAD-P3-005"]
-    test_ids: ["T-CICD-004-ACCEPTANCE"]
+    issue_ids: ["STEAD-P0-010", "STEAD-P1-016", "STEAD-P3-005"]
+    test_ids: ["T-CICD-004-ACCEPTANCE", "T-STEAD-P1-016-CONTRACT"]
     documentation: ["docs/architecture/ci-runner-and-secrets-contract.md", "docs/operator/actions-catalog.md"]
     status: PHASE_GATED
     release: "phase-3"
@@ -812,8 +812,8 @@ requirements:
   - requirement_id: "DEP-005"
     title: "Upgrade behavior"
     implementation_modules: ["apps/steadctl", "deploy/compose", "deploy/helm", "deploy/airgap"]
-    issue_ids: ["STEAD-P0-013", "STEAD-P2-010", "STEAD-P3-007"]
-    test_ids: ["T-DEP-005-ACCEPTANCE"]
+    issue_ids: ["STEAD-P0-013", "STEAD-P1-011", "STEAD-P2-010", "STEAD-P3-007"]
+    test_ids: ["T-DEP-005-ACCEPTANCE", "T-STEAD-P1-011-CONTRACT"]
     documentation: ["docs/architecture/deployment-profiles.md", "docs/operator/install-upgrade-rollback.md"]
     status: PHASE_GATED
     release: "phase-2"
@@ -836,16 +836,16 @@ requirements:
   - requirement_id: "OPS-003"
     title: "Backup"
     implementation_modules: ["apps/steadctl", "apps/core", "apps/worker", "deploy"]
-    issue_ids: ["STEAD-P0-013", "STEAD-P2-010"]
-    test_ids: ["T-OPS-003-ACCEPTANCE"]
+    issue_ids: ["STEAD-P0-013", "STEAD-P1-011", "STEAD-P2-010"]
+    test_ids: ["T-OPS-003-ACCEPTANCE", "T-STEAD-P1-011-CONTRACT"]
     documentation: ["docs/architecture/observability-contract.md", "docs/operator/backup-restore.md", "docs/operator/reliability.md"]
     status: PHASE_GATED
     release: "phase-2"
   - requirement_id: "OPS-004"
     title: "Restore testing"
     implementation_modules: ["apps/steadctl", "apps/core", "apps/worker", "deploy"]
-    issue_ids: ["STEAD-P0-013", "STEAD-P2-010"]
-    test_ids: ["T-OPS-004-ACCEPTANCE"]
+    issue_ids: ["STEAD-P0-013", "STEAD-P1-011", "STEAD-P2-010"]
+    test_ids: ["T-OPS-004-ACCEPTANCE", "T-STEAD-P1-011-CONTRACT"]
     documentation: ["docs/architecture/observability-contract.md", "docs/operator/backup-restore.md", "docs/operator/reliability.md"]
     status: PHASE_GATED
     release: "phase-2"
@@ -868,16 +868,16 @@ requirements:
   - requirement_id: "SEC-002"
     title: "Dependency and supply-chain controls"
     implementation_modules: ["cross-cutting", "policies", "deploy", "tests/security"]
-    issue_ids: ["STEAD-P0-014", "STEAD-P1-012", "STEAD-P2-011", "STEAD-P3-008"]
-    test_ids: ["T-SEC-002-ACCEPTANCE"]
+    issue_ids: ["STEAD-P0-014", "STEAD-P1-012", "STEAD-P1-016", "STEAD-P2-011", "STEAD-P3-008"]
+    test_ids: ["T-SEC-002-ACCEPTANCE", "T-STEAD-P1-016-CONTRACT"]
     documentation: ["docs/security/threat-model.md", "docs/governance/license-and-dependency-approval.md", "specs/oscal"]
     status: PHASE_GATED
     release: "phase-3"
   - requirement_id: "SEC-003"
     title: "Cryptography"
     implementation_modules: ["cross-cutting", "policies", "deploy", "tests/security"]
-    issue_ids: ["STEAD-P0-014", "STEAD-P2-010", "STEAD-P3-002"]
-    test_ids: ["T-SEC-003-ACCEPTANCE"]
+    issue_ids: ["STEAD-P0-014", "STEAD-P1-016", "STEAD-P2-010", "STEAD-P3-002"]
+    test_ids: ["T-SEC-003-ACCEPTANCE", "T-STEAD-P1-016-CONTRACT"]
     documentation: ["docs/security/threat-model.md", "docs/governance/license-and-dependency-approval.md", "specs/oscal"]
     status: PHASE_GATED
     release: "phase-3"
@@ -964,8 +964,8 @@ requirements:
   - requirement_id: "TEST-008"
     title: "Security release gates"
     implementation_modules: ["tests", "specs/traceability"]
-    issue_ids: ["STEAD-P0-014", "STEAD-P1-012", "STEAD-P2-011", "STEAD-P3-008"]
-    test_ids: ["T-TEST-008-ACCEPTANCE"]
+    issue_ids: ["STEAD-P0-014", "STEAD-P1-011", "STEAD-P1-012", "STEAD-P1-016", "STEAD-P2-011", "STEAD-P3-008"]
+    test_ids: ["T-TEST-008-ACCEPTANCE", "T-STEAD-P1-011-CONTRACT", "T-STEAD-P1-016-CONTRACT"]
     documentation: ["docs/testing/golden-vertical-slice.md", "docs/governance/release-gates.md"]
     status: DEPENDENCY_BLOCKED_PHASE_1
     release: "phase-1"

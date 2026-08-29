@@ -20,5 +20,6 @@ go-check:
 contract-check:
 	ruby scripts/validate_phase0.rb
 	ruby scripts/validate_contracts.rb
+	ruby scripts/validate_adr_records.rb
 	scripts/run_pinned_node.sh node scripts/validate_owgp_examples.js
 	scripts/validate_openfga.sh
