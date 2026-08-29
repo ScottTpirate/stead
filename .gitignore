@@ -1,0 +1,23 @@
+# Local editor and OS state
+.DS_Store
+*~
+.idea/
+.vscode/
+
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Build and test output (language-specific rules may be added with approved tooling)
+coverage/
+dist/
+tmp/
+*.log
+
+# Phase 0 validation scratch
+.phase0-validation/

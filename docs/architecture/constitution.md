@@ -1,0 +1,161 @@
+# Stead architecture constitution
+
+**Status:** Draft Phase 0 approval candidate<br>
+**Normative source:** [`unified_open_work_platform_master_build_directive.md`](../../unified_open_work_platform_master_build_directive.md)<br>
+**Scope:** Governance and architecture constraints only; this document does not authorize feature implementation.
+
+## 1. Authority and interpretation
+
+The Master Build Directive is the normative project specification. This constitution is an index of its operating rules, not a replacement or reinterpretation. If this document, a backlog item, a contract, an ADR, or implementation conflicts with the directive, the directive wins until the project owner explicitly approves a conforming amendment.
+
+Normative terms use RFC 2119/RFC 8174 meanings. Conflicts are resolved in this order:
+
+1. prevent unauthorized disclosure, data loss, or integrity loss;
+2. preserve source-of-truth and module boundaries;
+3. preserve the unified end-user experience;
+4. preserve upgradeability and standards compatibility;
+5. preserve infrastructure portability;
+6. prefer implementation simplicity.
+
+Subagents do not resolve genuine ambiguity by inventing semantics. They apply an explicit directive default or submit an ADR with the alternatives, impacts, security effects, migrations, rollback, and tests.
+
+## 2. Phase gate
+
+Only Phase 0 architecture and contract work is authorized now. Phase 1 through Phase 3 implementation issues may be refined, estimated, and dependency-mapped, but remain `BLOCKED_PENDING_PHASE_0_APPROVAL`.
+
+Feature implementation may begin only after the project owner records approval of all of the following versioned artifacts:
+
+- this constitution and the directive's product principles;
+- OWGP v0.1;
+- canonical entity/resource/relationship schemas;
+- the security-label schema, profile rules, and join/lattice contract;
+- OpenFGA model v0.1 and model/migration tests;
+- OPA input/output and decision contract;
+- capability-specific provider interfaces;
+- the OpenAPI 3.1.1 skeleton and RFC 9457 error profile;
+- the AsyncAPI 3.1.x skeleton, CloudEvents profile, and event naming rules;
+- the canonical principal, assignment, delegation/task-context, and future agent-compatibility seams required by AGENT-001–007;
+- the database/table ownership map;
+- the threat-model and classification-bypass baseline;
+- the license and dependency policy;
+- the repository layout and boundary rules;
+- the golden vertical-slice test plan;
+- release gates and independent QA/security approval rules.
+
+Approval of an artifact means approval of a tagged or commit-addressed version. Silence, merge, or the creation of this repository is not approval. A later material change reopens affected approvals and blocks dependent implementation until reviewed.
+
+## 3. Locked decisions
+
+The following decisions are locked. Changing any one requires an ADR and explicit project-owner approval; ordinary issue or pull-request approval is insufficient.
+
+1. Stock Gitea, with no fork or direct database access.
+2. The Devlane-derived React/TypeScript frontend is the primary UI fork.
+3. No permanent Commonplace fork.
+4. Go for backend, worker, provider adapters, and CLI; React/TypeScript for the frontend.
+5. PostgreSQL is the authoritative platform relational store.
+6. NATS JetStream is present from the first vertical slice.
+7. Domain events use a transactional outbox.
+8. OpenFGA owns relationship and need-to-know authorization.
+9. OPA/Rego owns classification, ABAC, handling, context, and explicit-deny policy.
+10. Documentation uses Git, Markdown, and an OKF-compatible profile.
+11. The canonical ontology and workflow are fixed and opinionated.
+12. Every Platform Project has exactly one dedicated Gitea tracker repository.
+13. A cloneable repository/container is a classification and access-control boundary.
+14. The standards stack includes OpenAPI, JSON Schema, CloudEvents, AsyncAPI, OpenTelemetry, OCI, SPDX, SLSA-compatible provenance, and OSCAL.
+15. Docker/local and Helm/Kubernetes are first-class deployment targets.
+16. No cloud service is required.
+17. The core product performs no built-in cross-domain transfer.
+18. Essential security remains in the open-source distribution.
+19. Newly authored core code uses Apache-2.0 unless a specific MIT exception receives ADR and legal approval.
+20. No unapproved source-available, field-of-use-restricted, proprietary, or copyleft runtime dependency.
+
+The project/repository name is **Stead**. Directive-defined component and API names such as `platform-web`, `platform-core`, `platform-worker`, and `platformctl` remain unchanged unless an approved ADR updates their public naming and migration plan.
+
+## 4. Architectural invariants
+
+### 4.1 One product and one policy path
+
+Routine users receive one shell, navigation model, search, inbox, identity, and authorization model. The browser calls only the versioned platform API. Raw upstream interfaces are restricted administrative escape routes and are never the normal workflow.
+
+Every protected operation is deny-by-default and evaluates authentication, trusted attributes/session context, canonical resource and effective label, OpenFGA, OPA, provider/path enforcement, and audit metadata. No administrator role implies a classification or need-to-know bypass. UI hiding is not authorization.
+
+All new contracts distinguish a human identity from the acting principal. The canonical principal type set permits at least `user`, `agent`, and `service_account`; `service_account` denotes the existing Service Principal entity, while `agent` is a reserved principal type rather than a new Phase 0 first-class ontology entity. Actors, assignees, creators, reviewers, subscribers, and request principals are not assumed to be human. Agents inherit no broad human permission set. The authorization seam preserves explicit delegation, task scope, independently revocable agent authority, runtime/environment context, and the intersection of delegator, agent, task, runtime-domain/session, and resource-label constraints.
+
+### 4.2 Source-of-truth and module boundaries
+
+- Platform modules own their tables and migrations; a module never writes another module's tables.
+- Gitea and OpenFGA retain supported datastore boundaries.
+- Gitea integration uses supported APIs, webhooks, Git protocols, authentication, and configuration only.
+- `platform-core` performs synchronous domain operations and writes its outbox atomically.
+- `platform-worker` publishes/consumes/reconciles/indexes/notifies/audits/imports with idempotent at-least-once semantics.
+- NATS, search, activity, graph, inbox-derived views, and analytics are transport or rebuildable projections, not authoritative business stores.
+- Provider implementations sit behind narrow capability interfaces. Provider-specific locators and types do not leak into canonical clients or domain schemas.
+- Future agents use canonical Platform APIs and the platform-wide MCP interface for business resources. They do not use provider-specific business APIs. Direct Git protocol access is permitted only with scoped credentials that remain subject to central/provider enforcement.
+
+### 4.3 Fixed semantics and portable data
+
+The canonical entities, work-item types/statuses/priorities/estimates, document types/states, hierarchy, and relationship directions in the directive are closed sets. Display labels and tags may vary; semantics may not. New first-class entities, workflow states, arbitrary custom fields, or configurable ontology require ontology review and an approved ADR.
+
+Git repositories, Git/Markdown/OKF documents, portable attachment manifests, versioned JSON exports, CloudEvents, SCIM-compatible identity export, and documented standards mappings preserve exitability. No customer data may exist only in an opaque proprietary format.
+
+### 4.4 Classification containers and data flow
+
+A repository, tracker repository, docs repository, package namespace, runner pool, cache, artifact store, backup set, and deployment security domain are enforceable boundaries. Item labels may add markings but never grant access finer than the enclosing cloneable/provider container can enforce. Differing access requires a separate container.
+
+Derived resources take the defined join of all applicable source, explicit, container, and handling restrictions and never silently become less restrictive. Lowering or removing restrictions is denied by default, authorized and reasoned, fully audited, cache/projection invalidating, and two-person approved where the government profile requires it. Core Stead never automates cross-domain or write-down transfer.
+
+Audit and event contracts preserve the acting principal and type, a distinct initiating/requesting principal when applicable, delegation/task context, and correlation/causation. They can represent `requested_by = user:alice` with `actor = agent:backend-agent` without a schema revision.
+
+### 4.5 Compatibility and standards
+
+Public HTTP APIs use OpenAPI 3.1.1, JSON Schema 2020-12 payloads, RFC 9457 errors, UUIDv7 identifiers, ETags/conditional writes, and explicit compatibility periods. Events use CloudEvents 1.0 and AsyncAPI 3.1.x. Breaking API or event changes require a major version and migration period.
+
+The platform publishes profiles/mappings instead of adding unnecessary standards machinery. RDF databases, SPARQL, XACML, cloud-specific core dependencies, required outbound telemetry, and unbounded in-process plugins are outside the baseline architecture.
+
+Architecture remains compatible with external agent runtimes and does not require a model, model provider, agent SDK, or orchestration framework. MCP is the future agent-to-platform boundary; A2A and A2A Agent Card semantics are future interoperability profiles where applicable. Phase 0 builds no agent orchestration, prompting, model hosting, memory, AgentRun execution, A2A dispatch, or full MCP tool catalog unless another separately approved requirement already requires it.
+
+## 5. Contract and change control
+
+Each contract has exactly one editing workstream at a time, named in the contract ownership matrix. Consumers may propose changes but do not merge edits to a contract they do not own. Cross-workstream changes require:
+
+1. linked requirement IDs and impacted contracts/modules;
+2. an owner and named reviewers;
+3. compatibility, migration, upgrade, rollback, authorization, classification, observability, audit, and documentation analysis;
+4. schema/model/contract tests and golden-scenario impact;
+5. security review for any trust, label, identity, credential, export, direct-provider, or data-flow change;
+6. architecture review for any public or cross-module contract;
+7. an ADR plus project-owner approval for a locked decision or new ontology;
+8. integration by the designated owner when more than one workstream participates.
+
+Unapproved dependencies, unknown/disallowed licenses, direct upstream-database access, alternate authorization logic, or feature changes made ahead of their approved contract are merge blockers.
+
+## 6. Issue and completion contract
+
+Every implementation issue must declare:
+
+- requirement IDs;
+- owner;
+- dependencies;
+- module and owned directories;
+- prohibited boundaries;
+- acceptance criteria;
+- automated tests;
+- authorization and classification behavior;
+- observability and audit requirements;
+- migration and backward-compatibility implications;
+- upgrade and rollback behavior;
+- documentation obligations.
+
+An issue is not complete until applicable contracts, server-side policy, direct-provider bypass coverage, tests, telemetry without sensitive leakage, audit, migration, compatibility, upgrade/rollback, backup/restore, accessibility, documentation, licenses/SBOM, and independent QA/security evidence are complete. An implementation author cannot grant final approval to their own release candidate.
+
+## 7. Architecture approval record
+
+| Artifact | Version/commit | Architecture review | QA/security review | Project-owner approval | Status |
+|---|---|---|---|---|---|
+| Constitution and principles | pending | pending | pending | pending | **Not approved** |
+| OWGP and canonical schemas | pending | pending | pending | pending | **Not approved** |
+| Authorization/classification contracts | pending | pending | pending | pending | **Not approved** |
+| Provider/API/event/database contracts | pending | pending | pending | pending | **Not approved** |
+| Threat, license, layout, and golden-test baselines | pending | pending | pending | pending | **Not approved** |
+
+Until every row is approved against immutable versions, all Phase 1–3 implementation remains blocked.

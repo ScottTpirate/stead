@@ -1,0 +1,106 @@
+name: Implementation issue
+description: Required contract for any Phase 1-3 implementation work
+title: "[IMPLEMENTATION] "
+labels:
+  - implementation
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Phase 1-3 work remains blocked until the immutable Phase 0 approval record unblocks it. Complete every field; use `not applicable` only with a concrete reason.
+  - type: input
+    id: requirement_ids
+    attributes:
+      label: Requirement IDs
+      description: Every normative requirement implemented or affected.
+      placeholder: AUTH-002, CLS-006
+    validations:
+      required: true
+  - type: input
+    id: owner
+    attributes:
+      label: Owner
+      description: One accountable WS-NN owner and integration owner when cross-workstream.
+    validations:
+      required: true
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies
+      description: Issue and approved-contract dependencies, including GATE-P0-APPROVED.
+    validations:
+      required: true
+  - type: textarea
+    id: module_directories
+    attributes:
+      label: Module and owned directories
+      description: Name the module(s), files/directories this issue may edit, and contract owner for cross-owned changes.
+    validations:
+      required: true
+  - type: textarea
+    id: prohibited_boundaries
+    attributes:
+      label: Prohibited boundaries
+      description: Direct databases/imports/APIs/providers/policy paths that this work must not cross.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance_criteria
+    attributes:
+      label: Acceptance criteria
+      description: Observable, falsifiable outcomes including failure behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: automated_tests
+    attributes:
+      label: Automated tests
+      description: Test IDs, layers, negative/fault/contract cases, and required coverage or mutation floor.
+    validations:
+      required: true
+  - type: textarea
+    id: auth_classification
+    attributes:
+      label: Authorization and classification behavior
+      description: Principal types and requester/actor context; server-side OpenFGA/OPA/provider checks; label propagation; non-disclosure; direct paths; fail-closed cases.
+    validations:
+      required: true
+  - type: textarea
+    id: observability_audit
+    attributes:
+      label: Observability and audit requirements
+      description: Safe traces/metrics/logs, correlation, required audit events, and data that must never be emitted.
+    validations:
+      required: true
+  - type: textarea
+    id: migration_compatibility
+    attributes:
+      label: Migration and backward-compatibility implications
+      description: Stored data, imports/exports, APIs/events/providers, deprecation, and old-version behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: upgrade_rollback
+    attributes:
+      label: Upgrade and rollback behavior
+      description: Preconditions, expand/contract sequence, backup, rollback or forward recovery, and abort criteria.
+    validations:
+      required: true
+  - type: textarea
+    id: documentation
+    attributes:
+      label: Documentation obligations
+      description: API/schema/operator/user/contributor/security/ADR/release-note updates as applicable.
+    validations:
+      required: true
+  - type: checkboxes
+    id: gate
+    attributes:
+      label: Gate acknowledgements
+      options:
+        - label: The issue is blocked until all named Phase 0 contracts are approved.
+          required: true
+        - label: Dependencies and licenses will follow the approval workflow before merge.
+          required: true
+        - label: The implementation owner will not self-approve the release evidence.
+          required: true
