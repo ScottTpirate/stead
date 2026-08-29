@@ -60,7 +60,7 @@ Locked contracts contain no unexplained TBD or ambiguous cardinality. Security-l
 [Golden scenario plans](../testing/golden-vertical-slice.md) specify:
 
 - `TEST-009`: 14-step general Work+Docs path with Team hierarchy, three knowledge scopes, Agent assignment seam, non-disclosure, events, restore and upgrade, and no code repository;
-- `TEST-010`: eight-step additive software path for Code/PR/build/package/artifact/release without changing ontology, shell or policy;
+- `TEST-010`: nine-step additive software path for Code/PR/build/package/artifact/release plus capability restriction/deactivation/re-enable without changing ontology, shell or policy;
 - shared schema/API/event, OpenFGA and policy-decision, property/fuzz, integration/replay, browser/accessibility, security/classification, install/restore/upgrade, provider, performance and supply-chain coverage.
 
 [Release gates](../governance/release-gates.md) require independent QA and security approval, preserve first failures, prohibit self-approval, and give no waiver for disclosure, cross-domain/write-down, acknowledged-write loss, missing audit, failed restore, or disallowed dependency.

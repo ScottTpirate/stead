@@ -25,6 +25,18 @@ EXPECTED_BYPASS_IDS = (1..47).map { |number| format("CBI-%03d", number) }.freeze
 EXPECTED_WORKSTREAM_IDS = (1..13).map { |number| format("WS-%02d", number) }.freeze
 EXPECTED_ADR_CANDIDATE_IDS = (1..21).map { |number| format("ADR-CAND-%03d", number) }.freeze
 EXPECTED_MACHINE_ADR_GATE_IDS = ((1..8).to_a + [21]).map { |number| format("ADR-CAND-%03d", number) }.freeze
+EXPECTED_GOLDEN_STEP_IDS = {
+  "GWS" => %w[
+    GWS-001-INSTALL GWS-002-IDENTITY GWS-003-TEAMS GWS-004-PROJECT GWS-005-PROVISION
+    GWS-006-WORK GWS-007-KNOWLEDGE GWS-008-CONNECT GWS-009-EVENTS GWS-010-ATTENTION
+    GWS-011-NONDISCLOSURE GWS-012-AGENT-SEAM GWS-013-RECOVERY GWS-014-UPGRADE
+  ],
+  "SWS" => %w[
+    SWS-001-CAPABILITIES SWS-002-WORK-DOC SWS-003-CODE SWS-004-REVIEW-EVENT
+    SWS-005-DELIVERY SWS-006-SEARCH SWS-007-PROVIDER SWS-008-RECOVERY
+    SWS-009-CAPABILITY-CHANGE
+  ]
+}.freeze
 APPROVAL_GATE_ID = "GATE-P0-APPROVED"
 EXPECTED_GATE_APPROVERS = %w[
   project-owner
@@ -877,6 +889,26 @@ end
 
 REQUIRED_PHASE_ZERO_FILES.each do |path|
   failures << "#{path}: missing required Phase 0 closeout artifact" unless File.file?(File.join(ROOT, path))
+end
+
+golden_path = File.join(ROOT, "docs/testing/golden-vertical-slice.md")
+release_gates_path = File.join(ROOT, "docs/governance/release-gates.md")
+closeout_path = File.join(ROOT, "docs/phase0/PHASE0_CLOSEOUT_PACKET.md")
+if File.file?(golden_path)
+  golden_source = File.read(golden_path, encoding: "UTF-8")
+  EXPECTED_GOLDEN_STEP_IDS.each do |prefix, expected_ids|
+    actual_ids = golden_source.scan(/^\| `((?:#{prefix})-[0-9]{3}-[A-Z0-9-]+)` \|/).flatten
+    failures << "#{relative_path(golden_path)}: #{prefix} step IDs mismatch" unless actual_ids == expected_ids
+  end
+end
+if File.file?(release_gates_path)
+  release_gates_source = File.read(release_gates_path, encoding: "UTF-8")
+  failures << "#{relative_path(release_gates_path)}: software golden gate must require SWS-001 through SWS-009" unless release_gates_source.include?("`SWS-001`–`SWS-009`")
+  failures << "#{relative_path(release_gates_path)}: TEST-010 coverage must require all nine additive steps" unless release_gates_source.include?("All nine additive steps")
+end
+if File.file?(closeout_path)
+  closeout_source = File.read(closeout_path, encoding: "UTF-8")
+  failures << "#{relative_path(closeout_path)}: closeout packet must describe TEST-010 as a nine-step path" unless closeout_source.include?("`TEST-010`: nine-step additive software path")
 end
 
 normalization_paths = Dir.glob(
