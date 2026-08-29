@@ -1,0 +1,193 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.stead.invalid/governance/dependency-approvals-v1.schema.json",
+  "title": "Stead dependency approval registry",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "policy_reference",
+    "default_decision",
+    "release_eligible_statuses",
+    "records"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "policy_reference": {
+      "const": "docs/governance/license-and-dependency-approval.md"
+    },
+    "default_decision": { "const": "DENY" },
+    "release_eligible_statuses": {
+      "type": "array",
+      "const": ["APPROVED"]
+    },
+    "records": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/approvalRecord" }
+    }
+  },
+  "$defs": {
+    "nonEmptyString": { "type": "string", "minLength": 1 },
+    "stringArray": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/nonEmptyString" },
+      "uniqueItems": true
+    },
+    "approvalRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "approval_id",
+        "component",
+        "usage",
+        "decision",
+        "obligations",
+        "security",
+        "change",
+        "adr",
+        "legal_approval"
+      ],
+      "properties": {
+        "approval_id": {
+          "type": "string",
+          "pattern": "^DEP-APP-[A-Z0-9-]+$"
+        },
+        "component": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name",
+            "kind",
+            "ecosystem",
+            "source_url",
+            "version",
+            "digest",
+            "license_expression"
+          ],
+          "properties": {
+            "name": { "$ref": "#/$defs/nonEmptyString" },
+            "kind": {
+              "enum": [
+                "source_snapshot",
+                "github_action",
+                "oci_image",
+                "binary_toolchain",
+                "cli_binary",
+                "npm_package"
+              ]
+            },
+            "ecosystem": {
+              "enum": ["git", "github-actions", "oci", "go-toolchain", "binary", "npm"]
+            },
+            "source_url": { "type": "string", "format": "uri" },
+            "version": { "$ref": "#/$defs/nonEmptyString" },
+            "digest": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["algorithm", "value"],
+              "properties": {
+                "algorithm": { "enum": ["git-sha1", "sha256", "sha512-sri"] },
+                "value": { "$ref": "#/$defs/nonEmptyString" }
+              }
+            },
+            "license_expression": { "$ref": "#/$defs/nonEmptyString" }
+          }
+        },
+        "usage": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "owner",
+            "directories",
+            "purpose",
+            "relationship",
+            "distributed_in",
+            "linkage_or_interface"
+          ],
+          "properties": {
+            "owner": { "$ref": "#/$defs/nonEmptyString" },
+            "directories": { "$ref": "#/$defs/stringArray" },
+            "purpose": { "$ref": "#/$defs/nonEmptyString" },
+            "relationship": {
+              "enum": ["source-reference", "build", "test", "ci-action", "clean-room-build"]
+            },
+            "distributed_in": { "$ref": "#/$defs/stringArray" },
+            "linkage_or_interface": { "$ref": "#/$defs/nonEmptyString" }
+          }
+        },
+        "decision": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "category",
+            "status",
+            "independent_approval_required",
+            "approvers",
+            "approved_at"
+          ],
+          "properties": {
+            "category": { "enum": ["ALLOW-PERMISSIVE", "REVIEW-NONRUNTIME"] },
+            "status": { "enum": ["REVIEWED_PENDING_INDEPENDENT_APPROVAL", "APPROVED", "REJECTED", "REVOKED"] },
+            "independent_approval_required": { "const": true },
+            "approvers": { "$ref": "#/$defs/stringArray" },
+            "approved_at": {
+              "oneOf": [
+                { "type": "null" },
+                { "type": "string", "format": "date-time" }
+              ]
+            }
+          }
+        },
+        "obligations": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["notices", "source_or_offer", "modifications"],
+          "properties": {
+            "notices": { "$ref": "#/$defs/stringArray" },
+            "source_or_offer": { "$ref": "#/$defs/nonEmptyString" },
+            "modifications": { "$ref": "#/$defs/nonEmptyString" }
+          }
+        },
+        "security": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "vulnerability_result",
+            "provenance_result",
+            "maintenance_risk",
+            "permissions_and_network"
+          ],
+          "properties": {
+            "vulnerability_result": { "$ref": "#/$defs/nonEmptyString" },
+            "provenance_result": { "$ref": "#/$defs/nonEmptyString" },
+            "maintenance_risk": { "$ref": "#/$defs/nonEmptyString" },
+            "permissions_and_network": { "$ref": "#/$defs/nonEmptyString" }
+          }
+        },
+        "change": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["update_policy", "rollback_version", "rollback_constraints"],
+          "properties": {
+            "update_policy": { "$ref": "#/$defs/nonEmptyString" },
+            "rollback_version": { "$ref": "#/$defs/nonEmptyString" },
+            "rollback_constraints": { "$ref": "#/$defs/nonEmptyString" }
+          }
+        },
+        "adr": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/nonEmptyString" }
+          ]
+        },
+        "legal_approval": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/nonEmptyString" }
+          ]
+        }
+      }
+    }
+  }
+}

@@ -1,6 +1,6 @@
 # Unresolved implementation choices requiring ADRs
 
-**Status:** Reconciled candidate queue; all entries deferred to their named decision point<br>
+**Status:** Active candidate queue; `ADR-CAND-001` is resolved and all remaining entries are deferred to their named decision point<br>
 **Rule:** An ADR may select among conforming options; it may not silently change a locked decision.
 
 ## Admission test
@@ -9,13 +9,18 @@ A choice belongs here only when it is unresolved by the directive and has durabl
 
 Each accepted ADR must state requirement IDs, options including status quo, decision drivers, security/classification and privacy effects, affected contracts/owners, standards mapping, data migration/backward compatibility, upgrade/rollback/recovery, test and observability changes, dependency/license evidence, and a supersession plan. Locked-decision changes additionally require explicit project-owner approval.
 
-## Deferred choices required before dependent implementation
+Phase 0 fixed each candidate's non-negotiable boundary without selecting its physical implementation. None is a conflict introduced by the v0.2 reconciliation. Each candidate in the deferred tables remains `DEFERRED` and blocks the named dependent implementation until an ADR is accepted.
 
-Phase 0 fixes each candidate's non-negotiable boundary but does not need to select its physical implementation. None is a conflict introduced by the v0.2 reconciliation. Each remains `DEFERRED` and blocks the named dependent implementation—not the Phase 0 owner review—until an ADR is accepted.
+## Resolved candidates
+
+| Candidate | Disposition | Decision |
+|---|---|---|
+| `ADR-CAND-001` Canonical URI and compatibility profile | `ACCEPTED` on 2026-08-29 | [ADR-0001](./0001-canonical-uri-and-compatibility-profile.md) selects registered provider/host-independent `urn:uuid` identity with globally unique UUIDv7, mandatory separate tenancy/kind fields, a server-derived trusted-origin browser URL, version coexistence, redirects, migration, rollback, non-disclosure, and conformance tests. |
+
+## Deferred choices required before dependent implementation
 
 | Candidate | Decision genuinely left open | Non-negotiable constraints | Owner / reviewers | Blocks |
 |---|---|---|---|---|
-| `ADR-CAND-001` Canonical URI and compatibility profile | Exact provider-independent URI grammar, tenant scoping, resource-kind encoding, canonical URL versus URI relationship, schema-version negotiation, and deprecation window | UUIDv7 remains the canonical ID; links survive provider migration; OWGP/OSLC/PROV mapping; no provider locator leaks | WS-01 / WS-02,03,08,11,13 | OWGP v0.1, schemas, OpenAPI, redirects |
 | `ADR-CAND-002` PostgreSQL module isolation and cross-module reads | Database-versus-schema layout, table namespace conventions, read-only contract views/API use, transaction coordination, and migration ordering inside the modular monolith | PostgreSQL authoritative; one owner per table/migration; no direct cross-module writes; Gitea/OpenFGA boundaries; projections rebuildable | WS-01 / WS-02,07,12,13 | Database ownership map, outbox, backup/upgrade |
 | `ADR-CAND-003` Authorization and policy-decision topology | Select the deterministic policy evaluator (OPA/Rego is one permitted option, not a default), in-process versus separately addressable topology, OpenFGA-to-policy-decision call sequence, fail-closed timeouts, decision cache keys/TTL, invalidation, provider credential issuance, and representation of delegation/task scope/independent agent revocation | Central combined OpenFGA and implementation-neutral policy-decision path; identical-input/revision determinism and canonical conformance fixtures; `user`/`agent`/`service_account`; no broad human-to-agent inheritance; future delegator/agent/task/runtime/session/resource intersection; no module alternative; no admin bypass; provider-path enforcement; auditable model/bundle versions | WS-06 / WS-01,02,03,07,08,13 | API security contract, direct-provider controls, agent-ready seams, golden tests |
 | `ADR-CAND-004` Security-label algebra and profile identifiers | Formal partial order/join representation, incomparable compartments/releasability/handling composition, commercial profile vocabulary, stable IDs, and schema/profile version compatibility | Directive fields and US values; CUI is handling, not a level; derived content never weakens; ceiling/cross-domain deny; signed profiles; two-person downgrade where required | WS-06 / WS-01,04,08,09,10,12,13 | Label schema, policy-decision layer/OpenFGA inputs, every data contract |
@@ -48,7 +53,7 @@ These decisions are real but do not authorize Phase 0 to design feature depth pr
 
 ## Choices that do not currently require an ADR
 
-- Naming the repository/project **Stead** while retaining directive-defined `platform-*` component contract names.
+- Naming the repository/project **Stead** and using the locked `stead-web`, `stead-api`, `stead-worker`, and `steadctl` deployable component names.
 - Choosing a formatter, linter, test runner, or patch version that stays inside approved contracts and license policy.
 - Adding a test fixture, diagnostic message, or internal refactor that changes no contract, policy result, data representation, or boundary.
 - Organization display labels, branding, tags, notification settings, and approved provider configuration already permitted by PRIN-003 and UX-005.

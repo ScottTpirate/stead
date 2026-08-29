@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | Reconciled Phase 0 approval candidate; no release authority is granted |
+| Status | Phase 0 baseline approved at tag `phase0`; no product-release authority is granted |
 | Gate owner | Workstream 13 — QA/security/release |
 | Architecture gate owner | Workstream 1 — Architecture/standards |
 | Release decision | Independent QA approval **and** independent security approval; project-owner approval where this policy or an ADR requires it |

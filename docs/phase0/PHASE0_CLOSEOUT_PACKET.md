@@ -1,10 +1,11 @@
 # Phase 0 Closeout Packet
 
-Status: **READY FOR PROJECT-OWNER REVIEW — `GATE-P0-APPROVED` remains PENDING**
+Status: **APPROVED — `GATE-P0-APPROVED` passed for tag `phase0` at `e24a4d9d05ad6df19c5bcaa9c385ee74fd5d8c31`**
 Prepared: 2026-08-28
+Approved: 2026-08-29
 Normative revision: [MASTER_BUILD_DIRECTIVE.md](../architecture/MASTER_BUILD_DIRECTIVE.md)
 
-This packet closes Phase 0 artifact production, not the approval gate and not Phase 1. Contract/specification tests are executable now; implementation-dependent control and golden results remain planned release gates. No project-owner, architecture, QA, or security approval is inferred by merge.
+This packet closes Phase 0 artifact production and records the five required approvals against one immutable revision. Contract/specification tests are executable now; implementation-dependent control and golden results remain planned release gates. Approval activates only dependency-ready Phase 1 work and does not imply a product release.
 
 ## 1. Requirements traceability
 
@@ -19,7 +20,7 @@ Locked contracts contain no unexplained TBD or ambiguous cardinality. Security-l
 ## 2. Architecture constitution
 
 - [Constitution](../architecture/constitution.md): precedence, all 30 locked decisions, invariants, phase freeze, completion and approval rules.
-- [ADR index](../adr/INDEX.md): no accepted/rejected implementation ADR yet; 21 genuine candidates deferred to explicit pre-implementation deadlines; no reconciliation conflict.
+- At the approved `phase0` revision, the [ADR index](../adr/INDEX.md) had no accepted/rejected implementation ADR; 21 genuine candidates were deferred to explicit pre-implementation deadlines with no reconciliation conflict. Phase 1 ADR dispositions are subsequent governance records and do not rewrite this baseline.
 - [Workstream ownership](../architecture/workstream-ownership.md): one accountable owner for every requirement across 13 workstreams.
 - [Contract ownership matrix](../architecture/contract-ownership-matrix.md) and [repository/database boundaries](../architecture/repository-layout-and-boundaries.md): sole editors, consumers, prohibited paths, modules/namespaces and integration roots.
 - [Provider capability matrix](../../specs/provider-interfaces.yaml): narrow ports, capability applicability, common auth/error/audit/compatibility/migration rules.
@@ -73,16 +74,16 @@ Locked contracts contain no unexplained TBD or ambiguous cardinality. Security-l
 - Each issue names requirement IDs, owner, dependencies, module/directories, prohibited boundaries, acceptance/tests, policy, observability/audit, migration/compatibility, upgrade/rollback and documentation.
 - Integration checkpoints are canonical schemas/API, core transaction/outbox, central authorization, provider conformance, dual product paths, event/projection rebuild, recovery, then independent gate.
 - Rollback uses schema compatibility/expand-contract, pinned provider preflight, reversible frontend deployment, authoritative-store backup and documented forward recovery when data migrations cannot reverse.
-- Phase 1 remains `BLOCKED_PENDING_PHASE_0_APPROVAL`; even after owner approval, deferred ADR deadlines and issue dependencies still apply.
+- `STEAD-P1-001` is now `COMPLETED_PHASE_1`; every later Phase 1 issue remains dependency/ADR-gated, and Phase 2–3 issues remain `PHASE_GATED`. Deferred ADR deadlines and issue dependencies still apply.
 
 ## Approval record
 
 | Required disposition | Reviewer identity | Immutable revision | State |
 |---|---|---|---|
-| WS-01 architecture | — | — | PENDING |
-| WS-06 security-contract | — | — | PENDING |
-| WS-13 independent QA | — | — | PENDING |
-| WS-13 independent security (distinct identity) | — | — | PENDING |
-| Project owner | — | — | PENDING |
+| WS-01 architecture | `/root/directive_audit` | `e24a4d9d05ad6df19c5bcaa9c385ee74fd5d8c31` (`phase0`) | APPROVED |
+| WS-06 security-contract | `/root/security_contract` | `e24a4d9d05ad6df19c5bcaa9c385ee74fd5d8c31` (`phase0`) | APPROVED |
+| WS-13 independent QA | `/root/contract_audit` | `e24a4d9d05ad6df19c5bcaa9c385ee74fd5d8c31` (`phase0`) | APPROVED |
+| WS-13 independent security (distinct identity) | `/root/independent_security` | `e24a4d9d05ad6df19c5bcaa9c385ee74fd5d8c31` (`phase0`) | APPROVED |
+| Project owner | `explicit 2026-08-29 instruction to tag and begin Phase 1 when green` | `e24a4d9d05ad6df19c5bcaa9c385ee74fd5d8c31` (`phase0`) | APPROVED |
 
-Phase 1 may begin only after all five dispositions approve the same immutable revision and the gate state is explicitly changed. This packet requests that review; it does not perform or simulate it.
+All five dispositions approved the same immutable revision and the gate state is now explicit. This record authorizes the dependency-ready Phase 1 foundation issue only; subsequent activation remains governed by issue dependencies, ADR deadlines, and release gates.

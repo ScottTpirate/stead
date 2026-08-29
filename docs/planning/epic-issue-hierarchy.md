@@ -1,6 +1,6 @@
 # Stead epic and issue hierarchy
 
-Status: Phase 0 closeout plan; ready for approval<br>
+Status: Phase 0 baselined; Phase 1 foundation active<br>
 Normative source: `docs/architecture/MASTER_BUILD_DIRECTIVE.md`
 
 This hierarchy decomposes the directive without changing its locked architecture or fixed ontology. The exhaustive requirement-to-issue mapping is in [the traceability register](../../specs/traceability/requirements.yaml). The complete machine-readable issue contracts are in [the implementation issue catalog](implementation-issue-catalog.yaml).
@@ -9,9 +9,9 @@ Deferred implementation choices are enforced by the [ADR candidate implementatio
 
 ## Controlling rule
 
-Only Phase 0 contract, architecture, planning, threat-model, test-design, and governance work is authorized. Every Phase 1, Phase 2, and Phase 3 issue has status `BLOCKED_PENDING_PHASE_0_APPROVAL`.
+Phase 0 contract, architecture, planning, threat-model, test-design, and governance work is baselined at tag `phase0`. `STEAD-P1-001` is `COMPLETED_PHASE_1`; later Phase 1 issues remain `DEPENDENCY_BLOCKED` until their exact dependencies and ADR gates pass, and every Phase 2–3 issue is `PHASE_GATED`.
 
-`GATE-P0-APPROVED` remains `PENDING` until WS-01 records architecture approval, WS-06 records security-contract approval, two distinct independent WS-13 reviewer identities record separate QA and security approvals, and the project owner approves all required Phase 0 artifacts. Approval must be recorded against the same immutable revision; a merged draft, passing formatter, or implementation-owner review is not approval. Any proposed change to a locked decision requires its own ADR and project-owner approval.
+`GATE-P0-APPROVED` is `APPROVED` against tag `phase0`, immutable commit `e24a4d9d05ad6df19c5bcaa9c385ee74fd5d8c31`, with the five dispositions recorded in the closeout packet. The gate opens dependency-ready work only. Any proposed change to a locked decision still requires its own ADR and project-owner approval.
 
 ## Epic hierarchy
 
@@ -35,10 +35,10 @@ Stead
 ├── EPIC-P0-C  Operational assurance and approval
 │   ├── STEAD-P0-013  Deployment/operations/upgrade/restore contract
 │   └── STEAD-P0-014  Traceability/threat/golden/release-gate package
-├── GATE-P0-APPROVED  Project owner + WS-01 + WS-06 + distinct independent WS-13 QA/security approvals
-├── EPIC-P1  Executable vertical slice [BLOCKED]
-├── EPIC-P2  Pilot/Beta [BLOCKED]
-└── EPIC-P3  Production 1.0 [BLOCKED]
+├── GATE-P0-APPROVED  Approved at phase0 / e24a4d9d05ad6df19c5bcaa9c385ee74fd5d8c31
+├── EPIC-P1  Executable vertical slice [FOUNDATION ACTIVE]
+├── EPIC-P2  Pilot/Beta [PHASE GATED]
+└── EPIC-P3  Production 1.0 [PHASE GATED]
 ```
 
 ## Phase 0 dependency order
@@ -66,13 +66,13 @@ The rows are topologically ordered. Issues in the same wave may proceed concurre
 
 ## Phase 1 executable vertical slice
 
-All issues below are planning records only and are blocked on `GATE-P0-APPROVED`. The ordering deliberately establishes central authorization before any provider-backed protected workflow.
+`STEAD-P1-001` is complete. All later Phase 1 issues remain dependency/ADR-gated; the ordering deliberately establishes central authorization before any provider-backed protected workflow.
 
 The Phase 1 records preserve the approved principal, assignment, authorization, audit/event, API/MCP, scoped-Git, and classification seams. They do not implicitly authorize agent orchestration, prompting, model hosting, agent memory, AgentRun execution, or A2A dispatch.
 
 | Order | Issue | Owner | Direct predecessors | Deliverable |
 |---:|---|---|---|---|
-| 1 | STEAD-P1-001 | WS-01 | GATE-P0-APPROVED | Locked monorepo/toolchains, schema/API lint, license/dependency guardrails |
+| 1 | STEAD-P1-001 | WS-01 | GATE-P0-APPROVED | Root manifests, CI and contract-test foundation, schema/API lint, dependency approvals/notices, and Devlane provenance |
 | 2 | STEAD-P1-006 | WS-06 | GATE-P0-APPROVED, P1-001 | Bootstrap/OIDC identity and central OpenFGA + policy-decision path |
 | 3 | STEAD-P1-002 | WS-02 | P1-001, P1-006, approved core/auth contracts | Canonical modular core, PrincipalRef-based User/Agent Work assignment, PostgreSQL ownership, optimistic concurrency and atomic outbox |
 | 4 | STEAD-P1-003 | WS-03 | P1-002, P1-006 | Stock Gitea adapter, hidden tracker/board, provider-neutral Work backing and docs Git; no general code repo |
@@ -91,7 +91,7 @@ No Phase 2 issue opens merely because its implementation dependency is merged. T
 
 ## Phase 2 Pilot/Beta
 
-These issues are `BLOCKED_PENDING_PHASE_0_APPROVAL` and also depend on successful Phase 1 independent validation.
+These issues are `PHASE_GATED` and depend on successful Phase 1 independent validation and its recorded release decision.
 
 | Order | Issue | Owner | Direct predecessors | Deliverable |
 |---:|---|---|---|---|
@@ -109,7 +109,7 @@ These issues are `BLOCKED_PENDING_PHASE_0_APPROVAL` and also depend on successfu
 
 ## Phase 3 Production 1.0
 
-These issues are `BLOCKED_PENDING_PHASE_0_APPROVAL` and also depend on the successful Pilot/Beta gate.
+These issues are `PHASE_GATED` and depend on the successful Pilot/Beta gate.
 
 | Order | Issue | Owner | Direct predecessors | Deliverable |
 |---:|---|---|---|---|

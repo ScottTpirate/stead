@@ -1,16 +1,16 @@
 # ADR candidate implementation-gate index
 
-Status: **Phase 0 approval candidate; every listed decision remains deferred**
+Status: **Phase 1 active; `ADR-CAND-001` is resolved and remaining candidates stay deferred to their named gates**
 
-This index converts the narrative ADR queue into enforceable issue-activation deadlines. It does not approve an ADR, reopen a locked decision, or authorize implementation. `GATE-P0-APPROVED` and the applicable ADR gate must both pass before a dependent issue becomes active. The machine-readable mirror for the first-slice and Team-relation gates is `adr_decision_gates` in [`implementation-issue-catalog.yaml`](../planning/implementation-issue-catalog.yaml).
+This index converts the narrative ADR queue into enforceable issue-activation deadlines. [ADR-0001](../adr/0001-canonical-uri-and-compatibility-profile.md) records the accepted `ADR-CAND-001` decision; this index does not approve any other ADR, reopen a locked decision, or authorize unrelated implementation. `GATE-P0-APPROVED` and each applicable unresolved ADR gate must both pass before a dependent issue becomes active. The machine-readable mirror for the first-slice and Team-relation gates is `adr_decision_gates` in [`implementation-issue-catalog.yaml`](../planning/implementation-issue-catalog.yaml).
 
-Candidates `ADR-CAND-001`–`ADR-CAND-021` are described in [the unresolved implementation-choice queue](../adr/unresolved-implementation-choices.md). The detail below makes the new Team-relation deadline explicit for reviewers.
+Candidates `ADR-CAND-001`–`ADR-CAND-021` and their dispositions are described in [the implementation-choice queue](../adr/unresolved-implementation-choices.md). The detail below makes the new Team-relation deadline explicit for reviewers.
 
 ## Issue activation deadlines
 
 | Candidate | Decision must be accepted before | Known dependent issues | Enforcement note |
 |---|---|---|---|
-| `ADR-CAND-001` | `STEAD-P1-001` becomes active | `STEAD-P1-001`, `STEAD-P1-002`, `STEAD-P2-009`, `STEAD-P3-006` | Canonical URI/version/redirect grammar must precede executable schema, storage, import, and redirect work. |
+| `ADR-CAND-001` | **RESOLVED by [ADR-0001](../adr/0001-canonical-uri-and-compatibility-profile.md); accepted before `STEAD-P1-001` activation** | `STEAD-P1-001`, `STEAD-P1-002`, `STEAD-P2-009`, `STEAD-P3-006` | Registered `urn:uuid` identity, explicit scope fields, trusted-origin browser derivation, compatibility, redirect, migration, and rollback rules now govern dependent work. |
 | `ADR-CAND-002` | `STEAD-P1-002` becomes active | `STEAD-P1-002`, `STEAD-P1-007`, `STEAD-P1-011`, `STEAD-P2-010` | Physical namespace isolation and transaction coordination precede database/outbox and recovery implementation. |
 | `ADR-CAND-003` | `STEAD-P1-006` becomes active | `STEAD-P1-006`, `STEAD-P1-003`, `STEAD-P1-007`, `STEAD-P1-008`, `STEAD-P1-012`, `STEAD-P2-006` | A conforming deterministic policy evaluator, authorization topology, timeout/cache, revocation, and provider-enforcement behavior precede the first executable decision path; OPA/Rego is optional, not presumed. |
 | `ADR-CAND-004` | `STEAD-P1-006` becomes active | `STEAD-P1-006`, `STEAD-P1-002`, `STEAD-P2-004` | The formal label algebra/profile identifier representation precedes policy and persisted labeled-resource implementation. |

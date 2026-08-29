@@ -1,10 +1,10 @@
 # Phase 0 validation evidence
 
-Status: **Contract checks pass; approval and implementation-dependent tests remain pending**
+Status: **Phase 0 contract checks and approval gate pass; implementation-dependent tests remain pending**
 Executed: 2026-08-29
 Scope: reconciled Phase 0 specification and closeout artifacts
 
-This record distinguishes executable contract evidence from future implementation evidence. It does not represent project-owner, architecture, QA, security, compliance, accreditation, or release approval. The `GATE-P0-APPROVED` dispositions in the closeout packet remain pending.
+This record distinguishes executable contract evidence from future implementation evidence. The contract evidence below supported the five `GATE-P0-APPROVED` dispositions recorded against tag `phase0`, commit `e24a4d9d05ad6df19c5bcaa9c385ee74fd5d8c31`; it does not represent compliance accreditation, a product release, or later implementation acceptance.
 
 | Check | Command | Result |
 |---|---|---|
@@ -15,15 +15,20 @@ This record distinguishes executable contract evidence from future implementatio
 | OpenAPI semantic validation | `npx --yes @redocly/cli@2.49.0 lint specs/openapi/platform-v1.yaml --extends=minimal` | Valid with zero errors and zero warnings. The CLI was used as an audit tool and is not a committed product dependency. |
 | AsyncAPI semantic validation | `npx --yes @asyncapi/cli@6.0.2 validate specs/asyncapi/stead.yaml` | Valid with no governance issues; 74 event types are schema-bound to exactly one of 19 required channel families, each with send and receive operations. The CLI was used as an audit tool and is not a committed product dependency. |
 | OpenFGA executable model | `fga model test --tests policies/openfga/model-tests.yaml` with official CLI v0.7.20 (`53f7369399e29251c0b2f786ac9f6946042d017e`) | 16/16 suites and 80/80 checks pass. |
+
+The CLI result above is immutable Phase 0 baseline evidence, not a current dependency
+approval. Phase 1 CI removed that binary after its rebuilt dependency inventory no longer
+passed `RG-08`; the same 16 suites and 80 assertions now run through the bounded,
+repository-owned OpenFGA 1.1 contract evaluator until a vulnerability-clean exact upstream
+test tool is independently approved.
 | Phase 0 integrated gate | `ruby scripts/validate_phase0.rb` | Passes requirements, issues, dependency graph, 13 workstreams, release gate, exact 14-step general/9-step software golden linkage, ADR deadlines, security traceability, required artifacts, local links, agent-runtime scope guard, and nested contract runners. |
 | Patch hygiene | `git diff --cached --check` before commit and `git show --check HEAD` after commit | Passes for tracked modifications and every new file. |
 | Repository visibility | `gh repo view ScottTpirate/stead --json nameWithOwner,visibility,isPrivate,defaultBranchRef` | `ScottTpirate/stead` is private and uses `main` as the default branch. |
 
-The integrated validator also confirms 33 threat findings, 47 classification-bypass controls, all later-phase issues directly blocked by `GATE-P0-APPROVED`, and no executable Agent runtime files under the reserved Agent module/provider paths.
+The integrated validator also confirms 33 threat findings, 47 classification-bypass controls, every later-phase issue directly dependent on `GATE-P0-APPROVED`, approved-mode issue/requirement status rules, and no executable Agent runtime files under the reserved Agent module/provider paths.
 
 ## Intentionally pending evidence
 
-- Project-owner, WS-01, WS-06, independent QA, and independently identified security approvals on one immutable revision.
 - Phase 1 runtime, browser, accessibility, provider, security/classification, performance, backup/restore, and supported-upgrade results.
 - Release-candidate signatures, SBOMs, SLSA provenance, policy-bundle digests/key IDs, vulnerability scans, and license-decision evidence for selected implementation dependencies.
 

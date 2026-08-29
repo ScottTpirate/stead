@@ -18,6 +18,10 @@ coverage/
 dist/
 tmp/
 *.log
+node_modules/
+*.tsbuildinfo
+.cache/
+/bin/
 
 # Phase 0 validation scratch
 .phase0-validation/

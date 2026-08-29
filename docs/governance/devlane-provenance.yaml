@@ -1,0 +1,68 @@
+schema_version: "1.0"
+record_id: DEVLANE-PROVENANCE-001
+status: PINNED_SOURCE_NOT_IMPORTED
+upstream:
+  repository: https://github.com/Devlaner/devlane
+  commit: 7719dcadf91f881b5aefe8b74012ffcfbba0bc17
+  tree: a568d1d11bab6012ffce1345193dcb537fa43556
+  license:
+    path: LICENSE
+    blob: b39a03349aaf17ccb61bef17f9f0e88d86a746ca
+    expression: MIT
+    notice: NOTICE-DEVLANE-MIT
+intended_use:
+  product_component: stead-web
+  role: visual foundation, interaction-pattern source, and component source
+  canonical_contract: false
+  excluded_source_concepts:
+    - Modules
+    - Epics
+    - Pages
+    - Board
+    - Intake
+    - Archives
+    - Drafts
+    - source route structure
+import:
+  imported: false
+  imported_paths: []
+  destination_paths: []
+  import_commit: null
+  rule: >-
+    No Devlane code or asset may be copied until this exact source candidate receives
+    independent dependency approval. Each later import must record source paths,
+    destination paths, file digests, modifications, applicable notices, and review evidence.
+  backend_boundary: >-
+    The Devlane backend, routes, and ontology are not Stead contracts or systems of record.
+    Imported frontend code must call canonical Stead APIs only.
+update:
+  trigger: a proposed source commit, tree, license blob, import scope, or distribution change
+  procedure: >-
+    Create a new dependency candidate, verify the immutable commit and tree directly from
+    upstream, compare license and notice obligations, review source and transitive changes,
+    rerun frontend, contract, accessibility, security, and notice checks, then obtain
+    independent approval before import or merge.
+  floating_refs_prohibited: true
+rollback:
+  current_state: >-
+    No source is imported, so rollback is removal of the unused candidate reference only.
+  after_import: >-
+    Restore the last independently approved import ledger and Stead revision; remove files
+    introduced only by the rejected update; rebuild from locked inputs; rerun provenance,
+    notice, security, accessibility, contract, and product-ontology checks. Preserve MIT
+    notices for any Devlane-derived material that remains distributed.
+notice_retention:
+  required_while_distributed: true
+  canonical_notice_file: THIRD_PARTY_NOTICES.md
+  modification_statement_required: true
+requirements:
+  - PRIN-002
+  - PRIN-005
+  - PRIN-006
+  - SEC-001
+tests:
+  - T-STEAD-P1-001-CONTRACT
+  - T-PRIN-002-ACCEPTANCE
+  - T-PRIN-005-ACCEPTANCE
+  - T-PRIN-006-ACCEPTANCE
+  - T-SEC-001-ACCEPTANCE

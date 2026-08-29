@@ -4,13 +4,24 @@
   "title": "Stead Open Work Graph Profile 0.1",
   "$defs": {
     "UuidV7": {"type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"},
+    "CanonicalResourceUri": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^urn:uuid:[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "CanonicalBrowserUrl": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https://[^/?#@]+/r/[a-z][a-z0-9_]*/[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
     "ResourceRef": {
       "type": "object",
       "required": ["kind", "id", "uri"],
       "properties": {
         "kind": {"enum": ["instance", "organization", "user", "directory_group", "agent", "agent_run", "service_principal", "team", "initiative", "project", "cycle", "work_item", "document", "repository", "branch", "commit", "pull_request", "build", "deployment", "release", "package", "artifact", "attachment", "comment", "activity", "notification", "audit_record", "security_label"]},
         "id": {"$ref": "#/$defs/UuidV7"},
-        "uri": {"type": "string", "format": "uri"}
+        "uri": {"$ref": "#/$defs/CanonicalResourceUri"},
+        "browser_url": {"$ref": "#/$defs/CanonicalBrowserUrl"}
       },
       "additionalProperties": false
     },
@@ -87,12 +98,16 @@
     },
     "ResourceEnvelope": {
       "type": "object",
-      "required": ["kind", "id", "uri", "schema_version", "version", "organization_id", "container", "title", "created_at", "created_by", "updated_at", "updated_by", "security_label_id", "effective_security_label", "provenance", "external_references", "relationships"],
+      "required": ["kind", "id", "uri", "browser_url", "schema_version", "version", "instance_id", "scope_kind", "scope_id", "organization_id", "container", "title", "created_at", "created_by", "updated_at", "updated_by", "security_label_id", "effective_security_label", "provenance", "external_references", "relationships"],
       "properties": {
         "kind": {"$ref": "#/$defs/ResourceRef/properties/kind"},
         "id": {"$ref": "#/$defs/UuidV7"},
-        "uri": {"type": "string", "format": "uri"},
+        "uri": {"$ref": "#/$defs/CanonicalResourceUri"},
+        "browser_url": {"$ref": "#/$defs/CanonicalBrowserUrl"},
         "schema_version": {"const": "1.0"},
+        "instance_id": {"$ref": "#/$defs/UuidV7"},
+        "scope_kind": {"enum": ["instance", "organization"]},
+        "scope_id": {"$ref": "#/$defs/UuidV7"},
         "organization_id": {"$ref": "#/$defs/UuidV7"},
         "container": {"$ref": "#/$defs/ContainerRef"},
         "project_id": {"$ref": "#/$defs/UuidV7"},

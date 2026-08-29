@@ -45,10 +45,54 @@ EXPECTED_GATE_APPROVERS = %w[
   WS-13-independent-qa
   WS-13-independent-security
 ].freeze
+PHASE_ZERO_BASELINE_COMMIT = "e24a4d9d05ad6df19c5bcaa9c385ee74fd5d8c31"
+PHASE_ZERO_BASELINE_TAG = "phase0"
+EXPECTED_APPROVAL_RECORDS = [
+  { "role" => "project-owner", "identity" => "explicit 2026-08-29 instruction to tag and begin Phase 1 when green", "disposition" => "APPROVED" },
+  { "role" => "WS-01-architecture", "identity" => "/root/directive_audit", "disposition" => "APPROVED" },
+  { "role" => "WS-06-security-contract", "identity" => "/root/security_contract", "disposition" => "APPROVED" },
+  { "role" => "WS-13-independent-qa", "identity" => "/root/contract_audit", "disposition" => "APPROVED" },
+  { "role" => "WS-13-independent-security", "identity" => "/root/independent_security", "disposition" => "APPROVED" }
+].freeze
 VALID_PHASES = %w[phase-0 phase-1 phase-2 phase-3].freeze
-BLOCKED_PHASES = %w[phase-1 phase-2 phase-3].freeze
-BLOCKED_STATUS = "BLOCKED_PENDING_PHASE_0_APPROVAL"
-PHASE_ZERO_READY_STATUS = "READY_FOR_PHASE_0_APPROVAL"
+VALID_GATE_STATES = %w[PENDING APPROVED].freeze
+PENDING_PHASE_ZERO_STATUS = "READY_FOR_PHASE_0_APPROVAL"
+PENDING_LATER_STATUS = "BLOCKED_PENDING_PHASE_0_APPROVAL"
+APPROVED_PHASE_ZERO_STATUS = "BASELINED_PHASE_0"
+ACTIVE_FOUNDATION_ISSUE_ID = "STEAD-P1-001"
+ACTIVE_PHASE_ONE_STATUS = "COMPLETED_PHASE_1"
+BLOCKED_PHASE_ONE_STATUS = "DEPENDENCY_BLOCKED"
+LATER_PHASE_STATUS = "PHASE_GATED"
+ACTIVE_FOUNDATION_REQUIREMENT_IDS = %w[
+  PRIN-002 PRIN-005 PRIN-006 ARCH-001 ARCH-002 ARCH-005 STD-001 SEC-001 SEC-006
+].freeze
+PENDING_PHASE_ZERO_REQUIREMENT_STATUS = "READY_FOR_PHASE_0_APPROVAL"
+PENDING_LATER_REQUIREMENT_STATUS = "BLOCKED_PENDING_PHASE_0_APPROVAL"
+BASELINED_REQUIREMENT_STATUS = "BASELINED_PHASE_0"
+ACTIVE_REQUIREMENT_STATUS = "IMPLEMENTATION_IN_PROGRESS"
+BLOCKED_PHASE_ONE_REQUIREMENT_STATUS = "DEPENDENCY_BLOCKED_PHASE_1"
+LATER_PHASE_REQUIREMENT_STATUS = "PHASE_GATED"
+REQUIRED_FOUNDATION_OWNED_PATHS = %w[
+  .gitignore
+  .npmrc
+  .tool-versions
+  go.mod
+  go.sum
+  package.json
+  package-lock.json
+  tsconfig.base.json
+  Makefile
+  .github/workflows
+  scripts
+  tests/contract/architecture
+  packages/test-fixtures/architecture
+  docs/governance/dependency-approvals.schema.json
+  docs/governance/dependency-approvals.yaml
+  docs/governance/devlane-provenance.yaml
+  THIRD_PARTY_NOTICES.md
+  third_party/devlane
+  docs/contributor/development.md
+].freeze
 
 REQUIRED_PHASE_ZERO_FILES = %w[
   README.md
@@ -497,9 +541,6 @@ issues_with_indexes.each do |issue, index|
     text_field(issue, field, context, failures)
   end
 
-  if phase == "phase-0" && issue["status"] != PHASE_ZERO_READY_STATUS
-    failures << "#{context}: Phase 0 closeout issue #{issue_id} must have status #{PHASE_ZERO_READY_STATUS}"
-  end
 end
 
 issue_duplicates = duplicate_values(issue_ids)
@@ -616,7 +657,12 @@ rescue Errno::ENOENT => error
 end
 
 approval_gate = gates_with_indexes.map(&:first).find { |gate| gate["id"] == APPROVAL_GATE_ID }
+gate_state = approval_gate && approval_gate["state"]
 if approval_gate
+  unless VALID_GATE_STATES.include?(gate_state)
+    failures << "#{relative_path(ISSUES_PATH)}: #{APPROVAL_GATE_ID} state must be one of #{VALID_GATE_STATES.join(', ')}"
+  end
+
   approvers = approval_gate["approvers"].is_a?(Array) ? approval_gate["approvers"] : []
   missing_approvers = EXPECTED_GATE_APPROVERS - approvers
   unexpected_approvers = approvers - EXPECTED_GATE_APPROVERS
@@ -632,6 +678,97 @@ if approval_gate
   unexpected_dependencies = dependencies - expected_dependencies
   unless missing_dependencies.empty? && unexpected_dependencies.empty? && dependencies.length == expected_dependencies.length
     failures << "#{relative_path(ISSUES_PATH)}: #{APPROVAL_GATE_ID} dependencies must include every and only Phase 0 issue (missing: #{format_ids(missing_dependencies)}; unexpected: #{format_ids(unexpected_dependencies)})"
+  end
+
+  if gate_state == "APPROVED"
+    unless approval_gate["immutable_revision"] == PHASE_ZERO_BASELINE_COMMIT
+      failures << "#{relative_path(ISSUES_PATH)}: #{APPROVAL_GATE_ID} immutable_revision must be #{PHASE_ZERO_BASELINE_COMMIT}"
+    end
+    unless approval_gate["tag"] == PHASE_ZERO_BASELINE_TAG
+      failures << "#{relative_path(ISSUES_PATH)}: #{APPROVAL_GATE_ID} tag must be #{PHASE_ZERO_BASELINE_TAG.inspect}"
+    end
+    unless approval_gate["approved_at"] == "2026-08-29"
+      failures << "#{relative_path(ISSUES_PATH)}: #{APPROVAL_GATE_ID} approved_at must be \"2026-08-29\""
+    end
+
+    approval_records = approval_gate["approval_records"]
+    unless approval_records == EXPECTED_APPROVAL_RECORDS
+      failures << "#{relative_path(ISSUES_PATH)}: #{APPROVAL_GATE_ID} approval_records must contain the five exact approved reviewer identities in canonical order"
+    end
+
+    if Dir.exist?(File.join(ROOT, ".git"))
+      tag_revision, tag_error, tag_status = Open3.capture3("git", "rev-parse", "#{PHASE_ZERO_BASELINE_TAG}^{}", chdir: ROOT)
+      unless tag_status.success? && tag_revision.strip == PHASE_ZERO_BASELINE_COMMIT
+        diagnostic = tag_error.strip.gsub(/\s+/, " ")
+        failures << "#{relative_path(ISSUES_PATH)}: tag #{PHASE_ZERO_BASELINE_TAG} must resolve to #{PHASE_ZERO_BASELINE_COMMIT}#{diagnostic.empty? ? '' : " (#{diagnostic})"}"
+      end
+    end
+  end
+end
+
+if VALID_GATE_STATES.include?(gate_state)
+  expected_issue_status = lambda do |issue|
+    if gate_state == "PENDING"
+      issue["phase"] == "phase-0" ? PENDING_PHASE_ZERO_STATUS : PENDING_LATER_STATUS
+    elsif issue["phase"] == "phase-0"
+      APPROVED_PHASE_ZERO_STATUS
+    elsif issue["id"] == ACTIVE_FOUNDATION_ISSUE_ID
+      ACTIVE_PHASE_ONE_STATUS
+    elsif issue["phase"] == "phase-1"
+      BLOCKED_PHASE_ONE_STATUS
+    else
+      LATER_PHASE_STATUS
+    end
+  end
+
+  issues_with_indexes.each do |issue, index|
+    expected_status = expected_issue_status.call(issue)
+    next if issue["status"] == expected_status
+
+    failures << "#{relative_path(ISSUES_PATH)} issues[#{index}]: #{issue['id']} must have status #{expected_status} while #{APPROVAL_GATE_ID} is #{gate_state}"
+  end
+
+  expected_requirement_status = lambda do |requirement|
+    if gate_state == "PENDING"
+      requirement["release"] == "phase-0-contract" ? PENDING_PHASE_ZERO_REQUIREMENT_STATUS : PENDING_LATER_REQUIREMENT_STATUS
+    elsif requirement["release"] == "phase-0-contract"
+      BASELINED_REQUIREMENT_STATUS
+    elsif ACTIVE_FOUNDATION_REQUIREMENT_IDS.include?(requirement["requirement_id"])
+      ACTIVE_REQUIREMENT_STATUS
+    elsif requirement["release"] == "phase-1"
+      BLOCKED_PHASE_ONE_REQUIREMENT_STATUS
+    else
+      LATER_PHASE_REQUIREMENT_STATUS
+    end
+  end
+
+  requirements_with_indexes.each do |requirement, index|
+    expected_status = expected_requirement_status.call(requirement)
+    next if requirement["status"] == expected_status
+
+    failures << "#{relative_path(REQUIREMENTS_PATH)} requirements[#{index}]: #{requirement['requirement_id']} must have status #{expected_status} while #{APPROVAL_GATE_ID} is #{gate_state}"
+  end
+
+  expected_status_semantics = if gate_state == "PENDING"
+                                [PENDING_PHASE_ZERO_REQUIREMENT_STATUS, PENDING_LATER_REQUIREMENT_STATUS]
+                              else
+                                [BASELINED_REQUIREMENT_STATUS, ACTIVE_REQUIREMENT_STATUS, BLOCKED_PHASE_ONE_REQUIREMENT_STATUS, LATER_PHASE_REQUIREMENT_STATUS]
+                              end
+  actual_status_semantics = requirements_document.is_a?(Hash) && requirements_document["status_semantics"].is_a?(Hash) ? requirements_document["status_semantics"] : {}
+  unless actual_status_semantics.keys == expected_status_semantics && actual_status_semantics.values.all? { |value| nonempty_string?(value) }
+    failures << "#{relative_path(REQUIREMENTS_PATH)}: status_semantics must define exactly #{expected_status_semantics.join(', ')} in canonical order for #{gate_state} mode"
+  end
+
+  if gate_state == "APPROVED"
+    foundation_issue = issues_with_indexes.map(&:first).find { |issue| issue["id"] == ACTIVE_FOUNDATION_ISSUE_ID }
+    foundation_paths = foundation_issue && foundation_issue["owned_directories"].is_a?(Array) ? foundation_issue["owned_directories"] : []
+    missing_foundation_paths = REQUIRED_FOUNDATION_OWNED_PATHS - foundation_paths
+    unless missing_foundation_paths.empty?
+      failures << "#{relative_path(ISSUES_PATH)}: #{ACTIVE_FOUNDATION_ISSUE_ID} is missing foundation ownership paths: #{format_ids(missing_foundation_paths)}"
+    end
+    unless foundation_issue && foundation_issue["module"].is_a?(Array) && foundation_issue["module"].include?("repository-foundation")
+      failures << "#{relative_path(ISSUES_PATH)}: #{ACTIVE_FOUNDATION_ISSUE_ID} module must include repository-foundation"
+    end
   end
 end
 
@@ -869,11 +1006,8 @@ issues_with_indexes.each do |issue, index|
     graph[issue_id] << dependency
   end
 
-  next unless BLOCKED_PHASES.include?(issue["phase"])
+  next if issue["phase"] == "phase-0"
 
-  unless issue["status"] == BLOCKED_STATUS
-    failures << "#{relative_path(ISSUES_PATH)} issues[#{index}]: #{issue_id} in #{issue['phase']} must have status #{BLOCKED_STATUS}"
-  end
   unless dependencies.include?(APPROVAL_GATE_ID)
     failures << "#{relative_path(ISSUES_PATH)} issues[#{index}]: #{issue_id} in #{issue['phase']} must directly depend on #{APPROVAL_GATE_ID}"
   end
@@ -909,6 +1043,12 @@ end
 if File.file?(closeout_path)
   closeout_source = File.read(closeout_path, encoding: "UTF-8")
   failures << "#{relative_path(closeout_path)}: closeout packet must describe TEST-010 as a nine-step path" unless closeout_source.include?("`TEST-010`: nine-step additive software path")
+  if gate_state == "APPROVED"
+    failures << "#{relative_path(closeout_path)}: approved closeout must name tag #{PHASE_ZERO_BASELINE_TAG} and immutable revision #{PHASE_ZERO_BASELINE_COMMIT}" unless closeout_source.include?(PHASE_ZERO_BASELINE_TAG) && closeout_source.include?(PHASE_ZERO_BASELINE_COMMIT)
+    EXPECTED_APPROVAL_RECORDS.each do |record|
+      failures << "#{relative_path(closeout_path)}: approved closeout must name reviewer identity #{record['identity'].inspect}" unless closeout_source.include?(record["identity"])
+    end
+  end
 end
 
 normalization_paths = Dir.glob(
@@ -1114,7 +1254,7 @@ end
 
 if failures.empty?
   dependency_count = graph.values.sum(&:length)
-  puts "Phase 0 validation passed: requirements=#{directive_ids.length} issues=#{issue_ids.length} threat_findings=#{threat_ids.length} bypass_controls=#{bypass_ids.length} epics=#{epic_ids.length} gates=#{gate_ids.length} workstreams=#{actual_workstreams.length} dependency_links=#{dependency_count}"
+  puts "Phase 0 validation passed: gate_state=#{gate_state} requirements=#{directive_ids.length} issues=#{issue_ids.length} threat_findings=#{threat_ids.length} bypass_controls=#{bypass_ids.length} epics=#{epic_ids.length} gates=#{gate_ids.length} workstreams=#{actual_workstreams.length} dependency_links=#{dependency_count}"
   exit 0
 end
 

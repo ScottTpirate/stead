@@ -1,0 +1,374 @@
+schema_version: "1.0"
+policy_reference: docs/governance/license-and-dependency-approval.md
+default_decision: DENY
+release_eligible_statuses: [APPROVED]
+records:
+  - approval_id: DEP-APP-DEVLANE-SOURCE-7719DCAD
+    component:
+      name: devlane-source
+      kind: source_snapshot
+      ecosystem: git
+      source_url: https://github.com/Devlaner/devlane
+      version: 7719dcadf91f881b5aefe8b74012ffcfbba0bc17
+      digest: { algorithm: git-sha1, value: 7719dcadf91f881b5aefe8b74012ffcfbba0bc17 }
+      license_expression: MIT
+    usage:
+      owner: WS-01 intake; WS-05 import and frontend
+      directories: [docs/governance, third_party/devlane, apps/web]
+      purpose: Pinned visual, interaction-pattern, and component source for the future stead-web fork; no source is imported yet.
+      relationship: source-reference
+      distributed_in: []
+      linkage_or_interface: Immutable source reference only; any import requires a file-level provenance ledger and canonical Stead API boundary.
+    decision: { category: ALLOW-PERMISSIVE, status: APPROVED, independent_approval_required: true, approvers: ["/root/contract_audit", "/root/independent_security"], approved_at: "2026-08-29T09:55:02-04:00" }
+    obligations:
+      notices: [NOTICE-DEVLANE-MIT]
+      source_or_offer: Preserve the MIT license and copyright notice with every distributed derived copy.
+      modifications: Mark the frontend as Devlane-derived and record modifications at import/update time.
+    security:
+      vulnerability_result: Independent QA/security review approved this inert exact source reference on 2026-08-29; no source is imported or executed.
+      provenance_result: Commit, tree a568d1d11bab6012ffce1345193dcb537fa43556, and LICENSE blob b39a03349aaf17ccb61bef17f9f0e88d86a746ca are pinned in devlane-provenance.yaml.
+      maintenance_risk: Permanent fork requires owned updates and removal of source backend/ontology coupling.
+      permissions_and_network: No runtime permission or network access is authorized by this source pin.
+    change:
+      update_policy: Every new commit, tree, license blob, import scope, or distribution mode requires a new reviewed candidate.
+      rollback_version: git:e24a4d9d05ad6df19c5bcaa9c385ee74fd5d8c31
+      rollback_constraints: No code is imported; remove the candidate reference. After import, restore the last approved import ledger and retain notices for material still distributed.
+    adr: null
+    legal_approval: null
+
+  - approval_id: DEP-APP-ACTIONS-CHECKOUT-3D3C42E5
+    component:
+      name: actions/checkout
+      kind: github_action
+      ecosystem: github-actions
+      source_url: https://github.com/actions/checkout
+      version: v7.0.1
+      digest: { algorithm: git-sha1, value: 3d3c42e5aac5ba805825da76410c181273ba90b1 }
+      license_expression: MIT
+    usage:
+      owner: WS-01 repository foundation
+      directories: [.github/workflows]
+      purpose: Read the candidate revision into an ephemeral CI workspace.
+      relationship: ci-action
+      distributed_in: []
+      linkage_or_interface: GitHub Actions runner action pinned by immutable commit with credential persistence disabled.
+    decision: { category: REVIEW-NONRUNTIME, status: APPROVED, independent_approval_required: true, approvers: ["/root/contract_audit", "/root/independent_security"], approved_at: "2026-08-29T09:55:02-04:00" }
+    obligations: { notices: [], source_or_offer: Not distributed in Stead artifacts., modifications: Used unmodified at the pinned commit. }
+    security:
+      vulnerability_result: Independent QA/security review approved the exact action tree on 2026-08-29; no current Critical/High production-tree finding was found, and known Moderate findings remain monitored.
+      provenance_result: Upstream repository and immutable commit are recorded; floating tags are prohibited.
+      maintenance_risk: GitHub-hosted action; review every update and preserve the ability to replace it with native checkout.
+      permissions_and_network: Repository contents read only; persist-credentials is false and no write permission is granted.
+    change: { update_policy: "New action commit requires provenance and security review.", rollback_version: "git:e24a4d9d05ad6df19c5bcaa9c385ee74fd5d8c31", rollback_constraints: "Remove the action and return to the immutable dependency-free Phase 0 baseline; no data migration." }
+    adr: null
+    legal_approval: null
+
+  - approval_id: DEP-APP-GO-ARCHIVE-1-27-0-LINUX-AMD64
+    component:
+      name: go1.27.0.linux-amd64.tar.gz
+      kind: binary_toolchain
+      ecosystem: go-toolchain
+      source_url: https://go.dev/dl/go1.27.0.linux-amd64.tar.gz
+      version: 1.27.0
+      digest: { algorithm: sha256, value: 675c26c449cbb18fc24b74650de1eabbae6e16f64326fd85a283fb3b58280685 }
+      license_expression: BSD-3-Clause
+    usage:
+      owner: WS-01 repository foundation
+      directories: [.github/workflows, docs/contributor]
+      purpose: Verifiable Linux amd64 Go toolchain fallback and clean-room validation input.
+      relationship: build
+      distributed_in: []
+      linkage_or_interface: Download only from go.dev and execute only after exact SHA-256 verification.
+    decision: { category: REVIEW-NONRUNTIME, status: APPROVED, independent_approval_required: true, approvers: ["/root/contract_audit", "/root/independent_security"], approved_at: "2026-08-29T09:55:02-04:00" }
+    obligations: { notices: [], source_or_offer: Build tool only and not included in Stead releases., modifications: Archive is used unmodified. }
+    security:
+      vulnerability_result: Independent QA/security review approved the exact archive and extracted binary on 2026-08-29; Stead Go vet/test/build and vulnerability scans passed.
+      provenance_result: Official download URL, exact version, and SHA-256 are recorded.
+      maintenance_risk: Platform-specific archive; other platforms need separately reviewed digests.
+      permissions_and_network: No network access is needed after verified acquisition; never install over a system toolchain in CI.
+    change: { update_policy: "Each Go version and platform archive requires its own exact digest review.", rollback_version: "git:e24a4d9d05ad6df19c5bcaa9c385ee74fd5d8c31", rollback_constraints: "Remove the temporary toolchain and return to the immutable dependency-free Phase 0 baseline; no product-state migration." }
+    adr: null
+    legal_approval: null
+
+  - approval_id: DEP-APP-NODE-ARCHIVE-26-8-1-LINUX-X64
+    component:
+      name: node-v26.8.1-linux-x64.tar.xz
+      kind: binary_toolchain
+      ecosystem: binary
+      source_url: https://nodejs.org/dist/v26.8.1/node-v26.8.1-linux-x64.tar.xz
+      version: 26.8.1
+      digest: { algorithm: sha256, value: 3e301118d7df53d563b7e96c1617545f26e2f76f9724be668d6cab65c15dda5d }
+      license_expression: MIT AND LicenseRef-Node-Bundled-Third-Party-Notices
+    usage:
+      owner: WS-01 repository foundation
+      directories: [.github/workflows, .tool-versions, package.json, docs/contributor]
+      purpose: Linux x64 Node interpreter and npm toolchain used for frontend and contract validation.
+      relationship: build
+      distributed_in: []
+      linkage_or_interface: Repository-owned wrapper downloads the official Linux x64 archive, verifies its SHA-256 and extracted Node binary SHA-256, and executes node and npm only from that verified tree.
+    decision: { category: REVIEW-NONRUNTIME, status: APPROVED, independent_approval_required: true, approvers: ["/root/contract_audit", "/root/independent_security"], approved_at: "2026-08-29T09:55:02-04:00" }
+    obligations:
+      notices: []
+      source_or_offer: Build tool only; if distribution is ever proposed, retain the Node MIT license and every bundled third-party notice in the archive LICENSE.
+      modifications: Official archive is used unmodified and is not included in Stead releases.
+    security:
+      vulnerability_result: Independent QA/security review approved the exact archive, bundled-component scope, and extracted binary on 2026-08-29; the locked npm audit reports zero findings.
+      provenance_result: Official nodejs.org URL, exact version, and SHA-256 from v26.8.1 SHASUMS256.txt are recorded.
+      maintenance_risk: This approval candidate covers Linux x64 only; each platform archive and Node update needs separate provenance and security evaluation.
+      permissions_and_network: Toolchain may install the exact npm lock during CI; lifecycle scripts, telemetry, credentials, and package publishing are disabled.
+    change: { update_policy: "Each Node version and platform archive requires its own official checksum, bundled-license, compatibility, and security review.", rollback_version: "git:e24a4d9d05ad6df19c5bcaa9c385ee74fd5d8c31", rollback_constraints: "Return to the immutable dependency-free Phase 0 baseline; rebuild and rerun all contract checks before admitting a replacement." }
+    adr: null
+    legal_approval: null
+
+  - approval_id: DEP-APP-NPM-ASYNCAPI-SPECS-6-11-1
+    component:
+      name: "@asyncapi/specs"
+      kind: npm_package
+      ecosystem: npm
+      source_url: https://registry.npmjs.org/@asyncapi/specs/-/specs-6.11.1.tgz
+      version: 6.11.1
+      digest: { algorithm: sha512-sri, value: "sha512-A3WBLqAKGoJ2+6FWFtpjBlCQ1oFCcs4GxF7zsIGvNqp/klGUHjlA3aAcZ9XMMpLGE8zPeYDz2x9FmO6DSuKraQ==" }
+      license_expression: Apache-2.0
+    usage:
+      owner: WS-01 repository foundation; WS-07 event contracts
+      directories: [package.json, package-lock.json, scripts, specs/asyncapi]
+      purpose: Supply the official AsyncAPI 3.1.0 JSON Schema used to validate the checked-in contract without the vulnerable AsyncAPI CLI dependency tree.
+      relationship: test
+      distributed_in: []
+      linkage_or_interface: Exact direct devDependency read only by the repository validation script.
+    decision: { category: REVIEW-NONRUNTIME, status: APPROVED, independent_approval_required: true, approvers: ["/root/contract_audit", "/root/independent_security"], approved_at: "2026-08-29T09:55:02-04:00" }
+    obligations: { notices: [], source_or_offer: Development validation dependency only., modifications: Package is used unmodified. }
+    security: { vulnerability_result: "npm audit reports zero known vulnerabilities for the current lockfile; independent QA and security review approved this exact lock and candidate on 2026-08-29.", provenance_result: "Exact npm tarball URL and lockfile SRI are recorded.", maintenance_risk: "Schema semantics and package contents require review on every update.", permissions_and_network: "Installation is lockfile-only with lifecycle scripts disabled in CI; validation reads a bundled schema and performs no outbound calls." }
+    change: { update_policy: "Exact version, tarball SRI, transitive audit, schema behavior, and license must be reviewed for every update.", rollback_version: "git:e24a4d9d05ad6df19c5bcaa9c385ee74fd5d8c31", rollback_constraints: "Return to the immutable dependency-free Phase 0 baseline or restore a subsequently approved exact version." }
+    adr: null
+    legal_approval: null
+
+  - approval_id: DEP-APP-NPM-YAML-2-9-0
+    component:
+      name: yaml
+      kind: npm_package
+      ecosystem: npm
+      source_url: https://registry.npmjs.org/yaml/-/yaml-2.9.0.tgz
+      version: 2.9.0
+      digest: { algorithm: sha512-sri, value: "sha512-2AvhNX3mb8zd6Zy7INTtSpl1F15HW6Wnqj0srWlkKLcpYl/gMIMJiyuGq2KeI2YFxUPjdlB+3Lc10seMLtL4cA==" }
+      license_expression: ISC
+    usage:
+      owner: WS-01 repository foundation; WS-07 event contracts
+      directories: [package.json, package-lock.json, scripts, specs/asyncapi]
+      purpose: Parse the checked-in AsyncAPI YAML into data validated against the official bundled schema.
+      relationship: test
+      distributed_in: []
+      linkage_or_interface: Exact direct devDependency executed only by the repository validation script.
+    decision: { category: REVIEW-NONRUNTIME, status: APPROVED, independent_approval_required: true, approvers: ["/root/contract_audit", "/root/independent_security"], approved_at: "2026-08-29T09:55:02-04:00" }
+    obligations: { notices: [], source_or_offer: Development validation dependency only., modifications: Package is used unmodified. }
+    security: { vulnerability_result: "npm audit reports zero known vulnerabilities for the current lockfile; independent QA and security review approved this exact lock and candidate on 2026-08-29.", provenance_result: "Exact npm tarball URL and lockfile SRI are recorded.", maintenance_risk: "YAML parsing behavior requires malicious/negative fixture review on update.", permissions_and_network: "Installation is lockfile-only with lifecycle scripts disabled; execution reads one repository contract only and performs no outbound calls." }
+    change: { update_policy: "Exact version, tarball SRI, transitive audit, parser behavior, and license must be reviewed for every update.", rollback_version: "git:e24a4d9d05ad6df19c5bcaa9c385ee74fd5d8c31", rollback_constraints: "Return to the immutable dependency-free Phase 0 baseline or restore a subsequently approved exact version." }
+    adr: null
+    legal_approval: null
+
+  - approval_id: DEP-APP-NPM-REDOCLY-CLI-2-49-0
+    component:
+      name: "@redocly/cli"
+      kind: npm_package
+      ecosystem: npm
+      source_url: https://registry.npmjs.org/@redocly/cli/-/cli-2.49.0.tgz
+      version: 2.49.0
+      digest: { algorithm: sha512-sri, value: "sha512-87UuARXYrPIiHhd/UriamL4BApuPgB0E91coBtoPG6PK4giTwiuo3dI4RoyMGhsC7TwgAnL8PJuhCwGymgwbVA==" }
+      license_expression: MIT
+    usage:
+      owner: WS-01 repository foundation
+      directories: [package.json, package-lock.json, specs/openapi]
+      purpose: Lint the checked-in OpenAPI contract with the pinned minimal ruleset.
+      relationship: test
+      distributed_in: []
+      linkage_or_interface: Exact direct devDependency invoked from npm scripts with telemetry disabled in CI.
+    decision: { category: REVIEW-NONRUNTIME, status: APPROVED, independent_approval_required: true, approvers: ["/root/contract_audit", "/root/independent_security"], approved_at: "2026-08-29T09:55:02-04:00" }
+    obligations: { notices: [], source_or_offer: Development validation dependency only., modifications: Package is used unmodified. }
+    security: { vulnerability_result: "npm audit reports zero known vulnerabilities for the current lockfile; independent QA and security review approved this exact lock and candidate on 2026-08-29.", provenance_result: "Exact npm tarball URL and lockfile SRI are recorded.", maintenance_risk: "Rules and transitive dependencies can change; updates require contract-diff review.", permissions_and_network: "Installation is lockfile-only with lifecycle scripts disabled; telemetry and outbound contract upload are disabled." }
+    change: { update_policy: "Exact version, tarball SRI, transitive audit, output diff, and license must be reviewed for every update.", rollback_version: "git:e24a4d9d05ad6df19c5bcaa9c385ee74fd5d8c31", rollback_constraints: "Return to the immutable dependency-free Phase 0 baseline or restore a subsequently approved exact version." }
+    adr: null
+    legal_approval: null
+
+  - approval_id: DEP-APP-NPM-AJV-8-20-0
+    component:
+      name: ajv
+      kind: npm_package
+      ecosystem: npm
+      source_url: https://registry.npmjs.org/ajv/-/ajv-8.20.0.tgz
+      version: 8.20.0
+      digest: { algorithm: sha512-sri, value: "sha512-Thbli+OlOj+iMPYFBVBfJ3OmCAnaSyNn4M1vz9T6Gka5Jt9ba/HIR56joy65tY6kx/FCF5VXNB819Y7/GUrBGA==" }
+      license_expression: MIT
+    usage:
+      owner: WS-01 repository foundation
+      directories: [package.json, package-lock.json, scripts]
+      purpose: Validate repository JSON Schema fixtures through a small checked-in script.
+      relationship: test
+      distributed_in: []
+      linkage_or_interface: Exact direct devDependency; no dynamic schema or executable download.
+    decision: { category: REVIEW-NONRUNTIME, status: APPROVED, independent_approval_required: true, approvers: ["/root/contract_audit", "/root/independent_security"], approved_at: "2026-08-29T09:55:02-04:00" }
+    obligations: { notices: [], source_or_offer: Development validation dependency only., modifications: Package is used unmodified. }
+    security: { vulnerability_result: "npm audit reports zero known vulnerabilities for the current lockfile; independent QA and security review approved this exact lock and candidate on 2026-08-29.", provenance_result: "Exact npm tarball URL and lockfile SRI are recorded.", maintenance_risk: "JSON Schema behavior requires fixture and negative-test review on update.", permissions_and_network: "Installation is lockfile-only with lifecycle scripts disabled; execution reads repository fixtures only." }
+    change: { update_policy: "Exact version, tarball SRI, transitive audit, schema conformance, and license must be reviewed for every update.", rollback_version: "git:e24a4d9d05ad6df19c5bcaa9c385ee74fd5d8c31", rollback_constraints: "Return to the immutable dependency-free Phase 0 baseline or restore a subsequently approved exact version; public schemas remain separately versioned." }
+    adr: null
+    legal_approval: null
+
+  - approval_id: DEP-APP-NPM-AJV-FORMATS-3-0-1
+    component:
+      name: ajv-formats
+      kind: npm_package
+      ecosystem: npm
+      source_url: https://registry.npmjs.org/ajv-formats/-/ajv-formats-3.0.1.tgz
+      version: 3.0.1
+      digest: { algorithm: sha512-sri, value: "sha512-8iUql50EUR+uUcdRQ3HDqa6EVyo3docL8g5WJ3FNcWmu62IbkGUue/pEyLBW8VGKKucTPgqeks4fIU1DA4yowQ==" }
+      license_expression: MIT
+    usage:
+      owner: WS-01 repository foundation
+      directories: [package.json, package-lock.json, scripts]
+      purpose: Supply deterministic standard format validation to the AJV schema harness.
+      relationship: test
+      distributed_in: []
+      linkage_or_interface: Exact direct devDependency loaded only by the checked-in schema validator.
+    decision: { category: REVIEW-NONRUNTIME, status: APPROVED, independent_approval_required: true, approvers: ["/root/contract_audit", "/root/independent_security"], approved_at: "2026-08-29T09:55:02-04:00" }
+    obligations: { notices: [], source_or_offer: Development validation dependency only., modifications: Package is used unmodified. }
+    security: { vulnerability_result: "npm audit reports zero known vulnerabilities for the current lockfile; independent QA and security review approved this exact lock and candidate on 2026-08-29.", provenance_result: "Exact npm tarball URL and lockfile SRI are recorded.", maintenance_risk: "Format semantics require negative-fixture review on update.", permissions_and_network: "Installation is lockfile-only with lifecycle scripts disabled; execution reads repository fixtures only." }
+    change: { update_policy: "Exact version, tarball SRI, transitive audit, fixture behavior, and license must be reviewed for every update.", rollback_version: "git:e24a4d9d05ad6df19c5bcaa9c385ee74fd5d8c31", rollback_constraints: "Return to the immutable dependency-free Phase 0 baseline or restore a subsequently approved exact version together with its compatible AJV." }
+    adr: null
+    legal_approval: null
+
+  - approval_id: DEP-APP-NPM-REACT-19-2-4
+    component:
+      name: react
+      kind: npm_package
+      ecosystem: npm
+      source_url: https://registry.npmjs.org/react/-/react-19.2.4.tgz
+      version: 19.2.4
+      digest: { algorithm: sha512-sri, value: "sha512-9nfp2hYpCwOjAN+8TZFGhtWEwgvWHXqESH8qT89AT/lWklpLON22Lc8pEtnpsZz7VmawabSU0gCjnj8aC0euHQ==" }
+      license_expression: MIT
+    usage:
+      owner: WS-05 frontend
+      directories: [apps/web, package-lock.json]
+      purpose: Render the stead-web application shell.
+      relationship: build
+      distributed_in: [stead-web]
+      linkage_or_interface: Exact workspace runtime dependency bundled into the browser application.
+    decision: { category: ALLOW-PERMISSIVE, status: APPROVED, independent_approval_required: true, approvers: ["/root/contract_audit", "/root/independent_security"], approved_at: "2026-08-29T09:55:02-04:00" }
+    obligations: { notices: [NOTICE-REACT-MIT], source_or_offer: Include the applicable MIT copyright and permission notice in third-party notices., modifications: Package is used unmodified; Stead application code is separate. }
+    security: { vulnerability_result: "npm audit reports zero known vulnerabilities for the current lockfile; independent QA and security review approved this exact lock and candidate on 2026-08-29.", provenance_result: "Exact npm tarball URL and workspace lockfile SRI are recorded.", maintenance_risk: "Browser runtime dependency; security and compatibility review is required for every update.", permissions_and_network: "React receives no ambient credential or network authority; application access remains behind canonical Stead APIs." }
+    change: { update_policy: "Exact version, SRI, transitive audit, browser tests, bundle diff, and license must be reviewed for every update.", rollback_version: "git:e24a4d9d05ad6df19c5bcaa9c385ee74fd5d8c31", rollback_constraints: "Return to the immutable dependency-free Phase 0 baseline or restore a subsequently approved exact web dependency set." }
+    adr: null
+    legal_approval: null
+
+  - approval_id: DEP-APP-NPM-REACT-DOM-19-2-4
+    component:
+      name: react-dom
+      kind: npm_package
+      ecosystem: npm
+      source_url: https://registry.npmjs.org/react-dom/-/react-dom-19.2.4.tgz
+      version: 19.2.4
+      digest: { algorithm: sha512-sri, value: "sha512-AXJdLo8kgMbimY95O2aKQqsz2iWi9jMgKJhRBAxECE4IFxfcazB2LmzloIoibJI3C12IlY20+KFaLv+71bUJeQ==" }
+      license_expression: MIT
+    usage:
+      owner: WS-05 frontend
+      directories: [apps/web, package-lock.json]
+      purpose: Bind the React stead-web shell to the browser DOM.
+      relationship: build
+      distributed_in: [stead-web]
+      linkage_or_interface: Exact workspace runtime dependency bundled into the browser application.
+    decision: { category: ALLOW-PERMISSIVE, status: APPROVED, independent_approval_required: true, approvers: ["/root/contract_audit", "/root/independent_security"], approved_at: "2026-08-29T09:55:02-04:00" }
+    obligations: { notices: [NOTICE-REACT-MIT], source_or_offer: Include the applicable MIT copyright and permission notice in third-party notices., modifications: Package is used unmodified; Stead application code is separate. }
+    security: { vulnerability_result: "npm audit reports zero known vulnerabilities for the current lockfile; independent QA and security review approved this exact lock and candidate on 2026-08-29.", provenance_result: "Exact npm tarball URL and workspace lockfile SRI are recorded.", maintenance_risk: "Browser runtime dependency; security and compatibility review is required for every update.", permissions_and_network: "React DOM receives no ambient credential or provider authority; rendering cannot make local authorization decisions." }
+    change: { update_policy: "Exact version, SRI, transitive audit, browser tests, bundle diff, and license must be reviewed for every update.", rollback_version: "git:e24a4d9d05ad6df19c5bcaa9c385ee74fd5d8c31", rollback_constraints: "Return to the immutable dependency-free Phase 0 baseline or restore a subsequently approved exact React pair." }
+    adr: null
+    legal_approval: null
+
+  - approval_id: DEP-APP-NPM-TYPES-REACT-19-2-14
+    component:
+      name: "@types/react"
+      kind: npm_package
+      ecosystem: npm
+      source_url: https://registry.npmjs.org/@types/react/-/react-19.2.14.tgz
+      version: 19.2.14
+      digest: { algorithm: sha512-sri, value: "sha512-ilcTH/UniCkMdtexkoCN0bI7pMcJDvmQFPvuPvmEaYA/NSfFTAgdUSLAoVjaRJm7+6PvcM+q1zYOwS4wTYMF9w==" }
+      license_expression: MIT
+    usage:
+      owner: WS-05 frontend
+      directories: [apps/web, package-lock.json]
+      purpose: Type declarations for the pinned React frontend dependency.
+      relationship: build
+      distributed_in: []
+      linkage_or_interface: Exact workspace devDependency consumed only by TypeScript checks/builds.
+    decision: { category: REVIEW-NONRUNTIME, status: APPROVED, independent_approval_required: true, approvers: ["/root/contract_audit", "/root/independent_security"], approved_at: "2026-08-29T09:55:02-04:00" }
+    obligations: { notices: [], source_or_offer: Build-time declarations only and not intentionally distributed., modifications: Package is used unmodified. }
+    security: { vulnerability_result: "npm audit reports zero known vulnerabilities for the current lockfile; independent QA and security review approved this exact lock and candidate on 2026-08-29.", provenance_result: "Exact npm tarball URL and lockfile SRI are recorded.", maintenance_risk: "Must remain compatible with the exact React and TypeScript versions.", permissions_and_network: "Build-time type declarations have no runtime authority." }
+    change: { update_policy: "Review with React and TypeScript compatibility, SRI, lockfile, audit, and license changes.", rollback_version: "git:e24a4d9d05ad6df19c5bcaa9c385ee74fd5d8c31", rollback_constraints: "Return to the immutable dependency-free Phase 0 baseline or restore a subsequently approved compatible declaration set." }
+    adr: null
+    legal_approval: null
+
+  - approval_id: DEP-APP-NPM-TYPES-REACT-DOM-19-2-3
+    component:
+      name: "@types/react-dom"
+      kind: npm_package
+      ecosystem: npm
+      source_url: https://registry.npmjs.org/@types/react-dom/-/react-dom-19.2.3.tgz
+      version: 19.2.3
+      digest: { algorithm: sha512-sri, value: "sha512-jp2L/eY6fn+KgVVQAOqYItbF0VY/YApe5Mz2F0aykSO8gx31bYCZyvSeYxCHKvzHG5eZjc+zyaS5BrBWya2+kQ==" }
+      license_expression: MIT
+    usage:
+      owner: WS-05 frontend
+      directories: [apps/web, package-lock.json]
+      purpose: Type declarations for the pinned React DOM frontend dependency.
+      relationship: build
+      distributed_in: []
+      linkage_or_interface: Exact workspace devDependency consumed only by TypeScript checks/builds.
+    decision: { category: REVIEW-NONRUNTIME, status: APPROVED, independent_approval_required: true, approvers: ["/root/contract_audit", "/root/independent_security"], approved_at: "2026-08-29T09:55:02-04:00" }
+    obligations: { notices: [], source_or_offer: Build-time declarations only and not intentionally distributed., modifications: Package is used unmodified. }
+    security: { vulnerability_result: "npm audit reports zero known vulnerabilities for the current lockfile; independent QA and security review approved this exact lock and candidate on 2026-08-29.", provenance_result: "Exact npm tarball URL and lockfile SRI are recorded.", maintenance_risk: "Must remain compatible with the exact React DOM, React, and TypeScript versions.", permissions_and_network: "Build-time type declarations have no runtime authority." }
+    change: { update_policy: "Review with React DOM and TypeScript compatibility, SRI, lockfile, audit, and license changes.", rollback_version: "git:e24a4d9d05ad6df19c5bcaa9c385ee74fd5d8c31", rollback_constraints: "Return to the immutable dependency-free Phase 0 baseline or restore a subsequently approved compatible declaration set." }
+    adr: null
+    legal_approval: null
+
+  - approval_id: DEP-APP-NPM-TYPESCRIPT-5-9-3
+    component:
+      name: typescript
+      kind: npm_package
+      ecosystem: npm
+      source_url: https://registry.npmjs.org/typescript/-/typescript-5.9.3.tgz
+      version: 5.9.3
+      digest: { algorithm: sha512-sri, value: "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==" }
+      license_expression: Apache-2.0
+    usage:
+      owner: WS-05 frontend; WS-01 toolchain
+      directories: [apps/web, package-lock.json, tsconfig.base.json]
+      purpose: Compile and type-check the stead-web TypeScript source.
+      relationship: build
+      distributed_in: []
+      linkage_or_interface: Exact workspace devDependency; compiler output is reviewed separately from the compiler package.
+    decision: { category: REVIEW-NONRUNTIME, status: APPROVED, independent_approval_required: true, approvers: ["/root/contract_audit", "/root/independent_security"], approved_at: "2026-08-29T09:55:02-04:00" }
+    obligations: { notices: [], source_or_offer: Build compiler only and not included in Stead artifacts., modifications: Package is used unmodified. }
+    security: { vulnerability_result: "npm audit reports zero known vulnerabilities for the current lockfile; independent QA and security review approved this exact lock and candidate on 2026-08-29.", provenance_result: "Exact npm tarball URL and workspace lockfile SRI are recorded.", maintenance_risk: "Compiler output and strictness may change; updates require typecheck/build diff.", permissions_and_network: "Compiler receives repository source only and no credentials or network authority." }
+    change: { update_policy: "Exact compiler version, SRI, output/typecheck diff, audit, and license must be reviewed for every update.", rollback_version: "git:e24a4d9d05ad6df19c5bcaa9c385ee74fd5d8c31", rollback_constraints: "Return to the immutable dependency-free Phase 0 baseline or restore a subsequently approved compiler/config/lockfile set." }
+    adr: null
+    legal_approval: null
+
+  - approval_id: DEP-APP-NPM-VITE-7-3-6
+    component:
+      name: vite
+      kind: npm_package
+      ecosystem: npm
+      source_url: https://registry.npmjs.org/vite/-/vite-7.3.6.tgz
+      version: 7.3.6
+      digest: { algorithm: sha512-sri, value: "sha512-4XP60spRGjSZFf1qYH+dJIkK2znL3zQfl9KkOV9MkkRR/3Dls0dxaBsQPTloEc5BLXWPL9vsOxopxyKoMmDueg==" }
+      license_expression: MIT
+    usage:
+      owner: WS-05 frontend; WS-01 toolchain
+      directories: [apps/web, package-lock.json]
+      purpose: Produce the stead-web static browser bundle.
+      relationship: build
+      distributed_in: []
+      linkage_or_interface: Exact workspace devDependency; only its deterministic build output may enter stead-web.
+    decision: { category: REVIEW-NONRUNTIME, status: APPROVED, independent_approval_required: true, approvers: ["/root/contract_audit", "/root/independent_security"], approved_at: "2026-08-29T09:55:02-04:00" }
+    obligations: { notices: [], source_or_offer: Build tool is not included as a package in Stead artifacts; generated output is scanned., modifications: Package is used unmodified. }
+    security: { vulnerability_result: "npm audit reports zero known vulnerabilities for the current lockfile; independent QA and security review approved this exact lock and candidate on 2026-08-29.", provenance_result: "Exact npm tarball URL and lockfile SRI are recorded.", maintenance_risk: "Build plugins, output, transitive graph, and development-server surface require review on update.", permissions_and_network: "CI executes build only with lifecycle scripts disabled, telemetry disabled, no dev server, and no credentials." }
+    change: { update_policy: "Exact version, SRI, build/bundle diff, transitive audit, browser tests, and license must be reviewed for every update.", rollback_version: "git:e24a4d9d05ad6df19c5bcaa9c385ee74fd5d8c31", rollback_constraints: "Return to the immutable dependency-free Phase 0 baseline or restore a subsequently approved Vite/config/lockfile set." }
+    adr: null
+    legal_approval: null

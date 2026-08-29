@@ -1,6 +1,6 @@
 # Golden vertical-slice scenarios and executable test plan
 
-Status: **Phase 0 approval candidate; implementation remains blocked**
+Status: **Approved Phase 0 test contract; Phase 1 implementation is dependency-ordered**
 Primary requirements: `TEST-009`, `TEST-010`, `TEST-002`–`TEST-008`, `AUTH-006`, `CLS-006`–`CLS-008`, `EVT-001`–`EVT-004`, `AGENT-001`–`AGENT-007`
 
 Phase 1 must prove two paths in one product and canonical model. The general-work path is independently useful and never creates a code repository. The software path is an additive capability extension. A pass requires all positive and negative assertions before and after restore and supported upgrade; retries preserve the first failure and cannot convert it to pass.

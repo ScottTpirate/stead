@@ -5,6 +5,19 @@ info:
   description: Phase 0 canonical contract skeleton. It exposes Platform ontology, never Gitea or Devlane ontology.
 servers:
   - url: /api/v1
+x-stead-identity-profile:
+  adr: ADR-0001
+  canonical_uri: 'urn:uuid:<resource_uuid>'
+  identity_uuid: globally_unique_uuidv7
+  browser_url: 'https://<configured-origin>/r/<kind>/<uuid>'
+  browser_url_derivation: server_only_from_exact_trusted_origin_and_validated_kind_id
+  mandatory_scope_fields: [instance_id, scope_kind, scope_id, organization_id, kind]
+  scope_kinds: [instance, organization]
+x-stead-versioning:
+  api_major: 1
+  compatible_schema_major: 1
+  event_major: 1
+  breaking_major_coexistence: at_least_two_stable_releases_and_180_days_after_successor_ga_whichever_is_longer
 security:
   - oidc: []
 tags:
@@ -112,8 +125,11 @@ components:
     IfMatch: {name: If-Match, in: header, required: true, schema: {type: string}, description: Strong current ETag required for mutation}
   headers:
     ETag: {schema: {type: string}, description: Strong resource version validator}
+    SteadSchemaVersion: {schema: {type: string, pattern: '^[1-9][0-9]*\.[0-9]+$'}, description: Exact response representation schema version}
   schemas:
     UuidV7: {$ref: '../work-graph-profile/owgp-v0.1.schema.json#/$defs/UuidV7'}
+    CanonicalResourceUri: {$ref: '../work-graph-profile/owgp-v0.1.schema.json#/$defs/CanonicalResourceUri'}
+    CanonicalBrowserUrl: {$ref: '../work-graph-profile/owgp-v0.1.schema.json#/$defs/CanonicalBrowserUrl'}
     Organization: {$ref: '../work-graph-profile/owgp-v0.1.schema.json#/$defs/Organization'}
     Team: {$ref: '../work-graph-profile/owgp-v0.1.schema.json#/$defs/Team'}
     Project: {$ref: '../work-graph-profile/owgp-v0.1.schema.json#/$defs/Project'}
@@ -124,10 +140,17 @@ components:
     AgentRun: {$ref: '../work-graph-profile/owgp-v0.1.schema.json#/$defs/AgentRun'}
     ProjectView:
       type: object
-      required: [id, uri, title, purpose, lifecycle_state, owning_team_id, authorized_capabilities, visible_areas, effective_security_label, version]
+      required: [kind, id, uri, browser_url, schema_version, instance_id, scope_kind, scope_id, organization_id, title, purpose, lifecycle_state, owning_team_id, authorized_capabilities, visible_areas, effective_security_label, version]
       properties:
+        kind: {const: project}
         id: {$ref: '#/components/schemas/UuidV7'}
-        uri: {type: string, format: uri}
+        uri: {$ref: '#/components/schemas/CanonicalResourceUri'}
+        browser_url: {$ref: '#/components/schemas/CanonicalBrowserUrl'}
+        schema_version: {const: '1.0'}
+        instance_id: {$ref: '#/components/schemas/UuidV7'}
+        scope_kind: {const: organization}
+        scope_id: {$ref: '#/components/schemas/UuidV7'}
+        organization_id: {$ref: '#/components/schemas/UuidV7'}
         title: {type: string}
         purpose: {type: string}
         lifecycle_state: {enum: [planned, active, paused, completed, canceled]}
@@ -168,11 +191,17 @@ components:
       additionalProperties: false
     SearchResult:
       type: object
-      required: [resource_type, id, uri, title, effective_security_label]
+      required: [resource_type, id, uri, browser_url, schema_version, instance_id, scope_kind, scope_id, organization_id, title, effective_security_label]
       properties:
         resource_type: {enum: [organization, team, project, work_item, document, person, agent, repository, branch, commit, code_file, code_symbol, pull_request, build, deployment, release, package, artifact, attachment, comment]}
         id: {$ref: '#/components/schemas/UuidV7'}
-        uri: {type: string, format: uri}
+        uri: {$ref: '#/components/schemas/CanonicalResourceUri'}
+        browser_url: {$ref: '#/components/schemas/CanonicalBrowserUrl'}
+        schema_version: {const: '1.0'}
+        instance_id: {$ref: '#/components/schemas/UuidV7'}
+        scope_kind: {enum: [instance, organization]}
+        scope_id: {$ref: '#/components/schemas/UuidV7'}
+        organization_id: {$ref: '#/components/schemas/UuidV7'}
         title: {type: string}
         snippet: {type: string}
         effective_security_label: {$ref: '../work-graph-profile/owgp-v0.1.schema.json#/$defs/SecurityLabelValue'}
@@ -190,11 +219,11 @@ components:
         correlation_id: {type: string}
       additionalProperties: false
   responses:
-    Organization: {description: Organization, headers: {ETag: {$ref: '#/components/headers/ETag'}}, content: {application/json: {schema: {$ref: '#/components/schemas/Organization'}}}}
-    TeamList: {description: Authorized Teams only, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/Team'}}}}}
-    ProjectView: {description: Authorization-filtered Project summary with capability-derived visible areas, headers: {ETag: {$ref: '#/components/headers/ETag'}}, content: {application/json: {schema: {$ref: '#/components/schemas/ProjectView'}}}}
-    WorkItem: {description: Work Item, headers: {ETag: {$ref: '#/components/headers/ETag'}}, content: {application/json: {schema: {$ref: '#/components/schemas/WorkItem'}}}}
-    WorkItemList: {description: Authorized Work Items only, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/WorkItem'}}}}}
-    DocumentList: {description: Authorized Documents in the selected container, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/Document'}}}}}
-    SearchResults: {description: Authorized results and aggregates only, content: {application/json: {schema: {type: object, required: [items, total], properties: {items: {type: array, items: {$ref: '#/components/schemas/SearchResult'}}, total: {type: integer, minimum: 0}}, additionalProperties: false}}}}
+    Organization: {description: Organization, headers: {ETag: {$ref: '#/components/headers/ETag'}, Stead-Schema-Version: {$ref: '#/components/headers/SteadSchemaVersion'}}, content: {application/json: {schema: {$ref: '#/components/schemas/Organization'}}}}
+    TeamList: {description: Authorized Teams only, headers: {Stead-Schema-Version: {$ref: '#/components/headers/SteadSchemaVersion'}}, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/Team'}}}}}
+    ProjectView: {description: Authorization-filtered Project summary with capability-derived visible areas, headers: {ETag: {$ref: '#/components/headers/ETag'}, Stead-Schema-Version: {$ref: '#/components/headers/SteadSchemaVersion'}}, content: {application/json: {schema: {$ref: '#/components/schemas/ProjectView'}}}}
+    WorkItem: {description: Work Item, headers: {ETag: {$ref: '#/components/headers/ETag'}, Stead-Schema-Version: {$ref: '#/components/headers/SteadSchemaVersion'}}, content: {application/json: {schema: {$ref: '#/components/schemas/WorkItem'}}}}
+    WorkItemList: {description: Authorized Work Items only, headers: {Stead-Schema-Version: {$ref: '#/components/headers/SteadSchemaVersion'}}, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/WorkItem'}}}}}
+    DocumentList: {description: Authorized Documents in the selected container, headers: {Stead-Schema-Version: {$ref: '#/components/headers/SteadSchemaVersion'}}, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/Document'}}}}}
+    SearchResults: {description: Authorized results and aggregates only, headers: {Stead-Schema-Version: {$ref: '#/components/headers/SteadSchemaVersion'}}, content: {application/json: {schema: {type: object, required: [items, total], properties: {items: {type: array, items: {$ref: '#/components/schemas/SearchResult'}}, total: {type: integer, minimum: 0}}, additionalProperties: false}}}}
     Problem: {description: RFC 9457 error with non-leaking semantics, content: {application/problem+json: {schema: {$ref: '#/components/schemas/Problem'}}}}

@@ -1,8 +1,8 @@
 # Stead architecture constitution
 
-**Status:** Ready for Phase 0 approval<br>
+**Status:** Phase 0 baseline approved at tag `phase0`; Phase 1 foundation active<br>
 **Normative source:** [`MASTER_BUILD_DIRECTIVE.md`](./MASTER_BUILD_DIRECTIVE.md)<br>
-**Scope:** Governance and architecture constraints only; this document does not authorize feature implementation.
+**Scope:** Governance and architecture constraints; implementation authority remains issue- and gate-scoped.
 
 ## 1. Authority and interpretation
 
@@ -21,9 +21,9 @@ Subagents do not resolve genuine ambiguity by inventing semantics. They apply an
 
 ## 2. Phase gate
 
-Only Phase 0 architecture and contract work is authorized now. Phase 1 through Phase 3 implementation issues may be refined, estimated, and dependency-mapped, but remain `BLOCKED_PENDING_PHASE_0_APPROVAL`.
+`GATE-P0-APPROVED` passed against tag `phase0`, commit `e24a4d9d05ad6df19c5bcaa9c385ee74fd5d8c31`. `STEAD-P1-001` is complete. Later Phase 1 issues remain dependency- and ADR-gated, while Phase 2 and Phase 3 remain phase-gated.
 
-Feature implementation may begin only after the project owner records approval of all of the following versioned artifacts:
+The gate approved all of the following versioned artifacts as the immutable Phase 0 baseline:
 
 - this constitution and the directive's product principles;
 - OWGP v0.1;
@@ -43,7 +43,7 @@ Feature implementation may begin only after the project owner records approval o
 - the Phase 0 reconciliation report and closeout packet;
 - release gates and independent QA/security approval rules.
 
-Approval of an artifact means approval of a tagged or commit-addressed version. Silence, merge, or the creation of this repository is not approval. A later material change reopens affected approvals and blocks dependent implementation until reviewed.
+Approval of an artifact means approval of a tagged or commit-addressed version. Silence, merge, or the creation of this repository is not approval. A later material change reopens affected approvals and blocks dependent implementation until reviewed. Phase 0 approval does not waive any issue dependency, ADR deadline, security/QA review, or later release gate.
 
 ## 3. Locked decisions
 
@@ -163,10 +163,10 @@ An issue is not complete until applicable contracts, server-side policy, direct-
 
 | Artifact | Version/commit | Architecture review | QA/security review | Project-owner approval | Status |
 |---|---|---|---|---|---|
-| Constitution and principles | pending | pending | pending | pending | **Not approved** |
-| OWGP and canonical schemas | pending | pending | pending | pending | **Not approved** |
-| Authorization/classification contracts | pending | pending | pending | pending | **Not approved** |
-| Provider/API/event/database contracts | pending | pending | pending | pending | **Not approved** |
-| Threat, license, layout, and golden-test baselines | pending | pending | pending | pending | **Not approved** |
+| Constitution and principles | `phase0` / `e24a4d9d05ad6df19c5bcaa9c385ee74fd5d8c31` | `/root/directive_audit` | `/root/contract_audit`; `/root/independent_security` | explicit 2026-08-29 instruction to tag and begin Phase 1 when green | **Approved** |
+| OWGP and canonical schemas | `phase0` / `e24a4d9d05ad6df19c5bcaa9c385ee74fd5d8c31` | `/root/directive_audit` | `/root/contract_audit`; `/root/independent_security` | explicit 2026-08-29 instruction to tag and begin Phase 1 when green | **Approved** |
+| Authorization/classification contracts | `phase0` / `e24a4d9d05ad6df19c5bcaa9c385ee74fd5d8c31` | `/root/directive_audit`; `/root/security_contract` | `/root/contract_audit`; `/root/independent_security` | explicit 2026-08-29 instruction to tag and begin Phase 1 when green | **Approved** |
+| Provider/API/event/database contracts | `phase0` / `e24a4d9d05ad6df19c5bcaa9c385ee74fd5d8c31` | `/root/directive_audit`; `/root/security_contract` | `/root/contract_audit`; `/root/independent_security` | explicit 2026-08-29 instruction to tag and begin Phase 1 when green | **Approved** |
+| Threat, license, layout, and golden-test baselines | `phase0` / `e24a4d9d05ad6df19c5bcaa9c385ee74fd5d8c31` | `/root/directive_audit`; `/root/security_contract` | `/root/contract_audit`; `/root/independent_security` | explicit 2026-08-29 instruction to tag and begin Phase 1 when green | **Approved** |
 
-Until every row is approved against immutable versions, all Phase 1–3 implementation remains blocked.
+This approval activates dependency-ready Phase 1 work only. A material baseline change must be reviewed against the affected contract and immutable evidence before dependent implementation proceeds.

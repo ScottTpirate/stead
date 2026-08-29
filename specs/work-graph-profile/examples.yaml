@@ -1,6 +1,7 @@
 schema_version: "0.1"
 note: "Bodies and secrets are intentionally absent; repeated IDs make the graph testable. YAML merge keys expand the common resource envelope in each example."
 shared:
+  instance_id: &instance 018f0000-0000-7000-8000-000000000000
   organization_id: &org 018f0000-0000-7000-8000-000000000001
   user_id: &alice 018f0000-0000-7000-8000-000000000002
   agent_id: &agent 018f0000-0000-7000-8000-000000000003
@@ -8,13 +9,17 @@ shared:
   project_id: &project 018f0000-0000-7000-8000-000000000005
   work_id: &work 018f0000-0000-7000-8000-000000000006
   label_id: &label_id 018f0000-0000-7000-8000-000000000016
-  organization_container: &organization_container {kind: organization, id: *org, uri: "https://stead.example/o/acme"}
-  project_container: &project_container {kind: project, id: *project, uri: "https://stead.example/o/acme/projects/ONB"}
+  configured_origin: https://stead.example
+  organization_container: &organization_container {kind: organization, id: *org, uri: "urn:uuid:018f0000-0000-7000-8000-000000000001", browser_url: "https://stead.example/r/organization/018f0000-0000-7000-8000-000000000001"}
+  project_container: &project_container {kind: project, id: *project, uri: "urn:uuid:018f0000-0000-7000-8000-000000000005", browser_url: "https://stead.example/r/project/018f0000-0000-7000-8000-000000000005"}
   label: &label {profile_id: commercial, sensitivity_level: internal, handling_regimes: [], categories: [], compartments: [], dissemination_controls: [], releasable_to: [], export_controls: [], derivation_sources: [], version: 1}
   provenance: &provenance {created_at: "2026-08-28T12:00:00Z", created_by: {type: user, id: *alice}, derived_from: [], source_metadata: {}}
   envelope: &envelope
     schema_version: "1.0"
     version: 1
+    instance_id: *instance
+    scope_kind: organization
+    scope_id: *org
     organization_id: *org
     created_at: "2026-08-28T12:00:00Z"
     created_by: {type: user, id: *alice}
@@ -26,11 +31,25 @@ shared:
     external_references: []
     relationships: []
 examples:
+  Instance:
+    <<: *envelope
+    kind: instance
+    id: *instance
+    uri: "urn:uuid:018f0000-0000-7000-8000-000000000000"
+    browser_url: "https://stead.example/r/instance/018f0000-0000-7000-8000-000000000000"
+    scope_kind: instance
+    scope_id: *instance
+    container: *organization_container
+    title: Stead example instance
+    name: Stead example instance
   Organization:
     <<: *envelope
     kind: organization
     id: *org
-    uri: "https://stead.example/o/acme"
+    uri: "urn:uuid:018f0000-0000-7000-8000-000000000001"
+    browser_url: "https://stead.example/r/organization/018f0000-0000-7000-8000-000000000001"
+    scope_kind: instance
+    scope_id: *instance
     container: *organization_container
     title: Acme
     key: ACME
@@ -39,7 +58,8 @@ examples:
     <<: *envelope
     kind: directory_group
     id: 018f0000-0000-7000-8000-000000000007
-    uri: "https://stead.example/o/acme/groups/hr"
+    uri: "urn:uuid:018f0000-0000-7000-8000-000000000007"
+    browser_url: "https://stead.example/r/directory_group/018f0000-0000-7000-8000-000000000007"
     container: *organization_container
     title: HR Directory Group
     display_name: HR Directory Group
@@ -49,7 +69,8 @@ examples:
     <<: *envelope
     kind: team
     id: *team
-    uri: "https://stead.example/o/acme/teams/people-ops"
+    uri: "urn:uuid:018f0000-0000-7000-8000-000000000004"
+    browser_url: "https://stead.example/r/team/018f0000-0000-7000-8000-000000000004"
     container: *organization_container
     title: People Operations
     key: PEOPLE
@@ -60,7 +81,8 @@ examples:
     <<: *envelope
     kind: project
     id: *project
-    uri: "https://stead.example/o/acme/projects/ONB"
+    uri: "urn:uuid:018f0000-0000-7000-8000-000000000005"
+    browser_url: "https://stead.example/r/project/018f0000-0000-7000-8000-000000000005"
     container: *organization_container
     title: Employee onboarding
     key: ONB
@@ -75,7 +97,8 @@ examples:
     <<: *envelope
     kind: work_item
     id: *work
-    uri: "https://stead.example/o/acme/projects/ONB/work/ONB-1"
+    uri: "urn:uuid:018f0000-0000-7000-8000-000000000006"
+    browser_url: "https://stead.example/r/work_item/018f0000-0000-7000-8000-000000000006"
     container: *project_container
     project_id: *project
     title: Prepare first-week schedule
@@ -92,8 +115,9 @@ examples:
     <<: *envelope
     kind: document
     id: 018f0000-0000-7000-8000-000000000009
-    uri: "https://stead.example/o/acme/teams/people-ops/docs/onboarding"
-    container: {kind: team, id: *team, uri: "https://stead.example/o/acme/teams/people-ops"}
+    uri: "urn:uuid:018f0000-0000-7000-8000-000000000009"
+    browser_url: "https://stead.example/r/document/018f0000-0000-7000-8000-000000000009"
+    container: {kind: team, id: *team, uri: "urn:uuid:018f0000-0000-7000-8000-000000000004", browser_url: "https://stead.example/r/team/018f0000-0000-7000-8000-000000000004"}
     title: Onboarding procedure
     body: "# Onboarding procedure"
     document_type: procedure
@@ -105,7 +129,8 @@ examples:
     <<: *envelope
     kind: repository
     id: 018f0000-0000-7000-8000-000000000010
-    uri: "https://stead.example/o/acme/projects/ONB/repositories/tracker"
+    uri: "urn:uuid:018f0000-0000-7000-8000-000000000010"
+    browser_url: "https://stead.example/r/repository/018f0000-0000-7000-8000-000000000010"
     container: *project_container
     project_id: *project
     title: ONB Work backing
@@ -116,7 +141,8 @@ examples:
     <<: *envelope
     kind: agent
     id: *agent
-    uri: "https://stead.example/o/acme/agents/backend-agent"
+    uri: "urn:uuid:018f0000-0000-7000-8000-000000000003"
+    browser_url: "https://stead.example/r/agent/018f0000-0000-7000-8000-000000000003"
     container: *organization_container
     title: Backend Agent
     display_name: Backend Agent
@@ -128,7 +154,8 @@ examples:
     <<: *envelope
     kind: agent_run
     id: 018f0000-0000-7000-8000-000000000011
-    uri: "https://stead.example/o/acme/agent-runs/run-1"
+    uri: "urn:uuid:018f0000-0000-7000-8000-000000000011"
+    browser_url: "https://stead.example/r/agent_run/018f0000-0000-7000-8000-000000000011"
     container: *project_container
     project_id: *project
     title: Backend Agent run for ONB-1
@@ -145,7 +172,8 @@ examples:
     <<: *envelope
     kind: security_label
     id: *label_id
-    uri: "https://stead.example/o/acme/security-labels/internal"
+    uri: "urn:uuid:018f0000-0000-7000-8000-000000000016"
+    browser_url: "https://stead.example/r/security_label/018f0000-0000-7000-8000-000000000016"
     container: *organization_container
     title: Commercial internal
     profile_id: commercial
@@ -161,11 +189,12 @@ examples:
     <<: *envelope
     kind: comment
     id: 018f0000-0000-7000-8000-000000000012
-    uri: "https://stead.example/o/acme/comments/12"
+    uri: "urn:uuid:018f0000-0000-7000-8000-000000000012"
+    browser_url: "https://stead.example/r/comment/018f0000-0000-7000-8000-000000000012"
     container: *project_container
     project_id: *project
     title: Comment on ONB-1
-    subject: {kind: work_item, id: *work, uri: "https://stead.example/o/acme/projects/ONB/work/ONB-1"}
+    subject: {kind: work_item, id: *work, uri: "urn:uuid:018f0000-0000-7000-8000-000000000006", browser_url: "https://stead.example/r/work_item/018f0000-0000-7000-8000-000000000006"}
     author: {type: user, id: *alice}
     body_format: markdown
     body: Schedule draft is ready for review.
@@ -173,11 +202,12 @@ examples:
     <<: *envelope
     kind: activity
     id: 018f0000-0000-7000-8000-000000000013
-    uri: "https://stead.example/o/acme/activity/13"
+    uri: "urn:uuid:018f0000-0000-7000-8000-000000000013"
+    browser_url: "https://stead.example/r/activity/018f0000-0000-7000-8000-000000000013"
     container: *project_container
     project_id: *project
     title: Agent assigned to ONB-1
-    subject: {kind: work_item, id: *work, uri: "https://stead.example/o/acme/projects/ONB/work/ONB-1"}
+    subject: {kind: work_item, id: *work, uri: "urn:uuid:018f0000-0000-7000-8000-000000000006", browser_url: "https://stead.example/r/work_item/018f0000-0000-7000-8000-000000000006"}
     verb: assigned
     actor_context: {actor: {type: agent, id: *agent}, requested_by: {type: user, id: *alice}, delegation_id: delegation-1, task_context_id: task-1, correlation_id: corr-1, causation_id: cause-1}
     occurred_at: "2026-08-28T12:01:00Z"
@@ -185,12 +215,13 @@ examples:
     <<: *envelope
     kind: notification
     id: 018f0000-0000-7000-8000-000000000014
-    uri: "https://stead.example/o/acme/notifications/14"
+    uri: "urn:uuid:018f0000-0000-7000-8000-000000000014"
+    browser_url: "https://stead.example/r/notification/018f0000-0000-7000-8000-000000000014"
     container: *project_container
     project_id: *project
     title: ONB-1 assignment changed
     recipient: {type: user, id: *alice}
-    subject: {kind: work_item, id: *work, uri: "https://stead.example/o/acme/projects/ONB/work/ONB-1"}
+    subject: {kind: work_item, id: *work, uri: "urn:uuid:018f0000-0000-7000-8000-000000000006", browser_url: "https://stead.example/r/work_item/018f0000-0000-7000-8000-000000000006"}
     source_event_id: event-14
     actor_context: {actor: {type: agent, id: *agent}, requested_by: {type: user, id: *alice}, delegation_id: delegation-1, task_context_id: task-1, correlation_id: corr-1, causation_id: cause-1}
     thread_key: work-item:ONB-1
@@ -201,12 +232,13 @@ examples:
     <<: *envelope
     kind: audit_record
     id: 018f0000-0000-7000-8000-000000000015
-    uri: "https://stead.example/o/acme/audit/15"
+    uri: "urn:uuid:018f0000-0000-7000-8000-000000000015"
+    browser_url: "https://stead.example/r/audit_record/018f0000-0000-7000-8000-000000000015"
     container: *project_container
     project_id: *project
     title: Work assignment update
     action: work.assignment.update
-    subject: {kind: work_item, id: *work, uri: "https://stead.example/o/acme/projects/ONB/work/ONB-1"}
+    subject: {kind: work_item, id: *work, uri: "urn:uuid:018f0000-0000-7000-8000-000000000006", browser_url: "https://stead.example/r/work_item/018f0000-0000-7000-8000-000000000006"}
     actor_context: {actor: {type: agent, id: *agent}, requested_by: {type: user, id: *alice}, delegation_id: delegation-1, task_context_id: task-1, correlation_id: corr-1, causation_id: cause-1}
     authentication_context: {method: agent_delegation, authenticated_at: "2026-08-28T12:00:59Z", identity_provider: local-bootstrap, session_reference_hash: session-hash-1, authentication_context_class: local, credential_revision: cred-1}
     decision: allow
