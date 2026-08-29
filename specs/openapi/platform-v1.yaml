@@ -177,6 +177,7 @@ components:
         snippet: {type: string}
         effective_security_label: {$ref: '../work-graph-profile/owgp-v0.1.schema.json#/$defs/SecurityLabelValue'}
         container: {$ref: '../work-graph-profile/owgp-v0.1.schema.json#/$defs/ContainerRef'}
+      additionalProperties: false
     Problem:
       type: object
       required: [type, title, status, correlation_id]
@@ -187,6 +188,7 @@ components:
         detail: {type: string, description: Must not disclose denied resource existence or protected metadata}
         instance: {type: string, format: uri-reference}
         correlation_id: {type: string}
+      additionalProperties: false
   responses:
     Organization: {description: Organization, headers: {ETag: {$ref: '#/components/headers/ETag'}}, content: {application/json: {schema: {$ref: '#/components/schemas/Organization'}}}}
     TeamList: {description: Authorized Teams only, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/Team'}}}}}
@@ -194,5 +196,5 @@ components:
     WorkItem: {description: Work Item, headers: {ETag: {$ref: '#/components/headers/ETag'}}, content: {application/json: {schema: {$ref: '#/components/schemas/WorkItem'}}}}
     WorkItemList: {description: Authorized Work Items only, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/WorkItem'}}}}}
     DocumentList: {description: Authorized Documents in the selected container, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/Document'}}}}}
-    SearchResults: {description: Authorized results and aggregates only, content: {application/json: {schema: {type: object, required: [items, total], properties: {items: {type: array, items: {$ref: '#/components/schemas/SearchResult'}}, total: {type: integer, minimum: 0}}}}}}
+    SearchResults: {description: Authorized results and aggregates only, content: {application/json: {schema: {type: object, required: [items, total], properties: {items: {type: array, items: {$ref: '#/components/schemas/SearchResult'}}, total: {type: integer, minimum: 0}}, additionalProperties: false}}}}
     Problem: {description: RFC 9457 error with non-leaking semantics, content: {application/problem+json: {schema: {$ref: '#/components/schemas/Problem'}}}}

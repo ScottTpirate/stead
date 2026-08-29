@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://stead.example/specs/migration/job/0.1",
+  "$id": "https://stead.example/specs/migration/migration-job-v0.1.schema.json",
   "type": "object",
   "required": ["job_id", "schema_version", "source", "target_organization_id", "stage", "checkpoint", "inventory", "mapping", "quarantine", "validation", "cutover", "redirects"],
   "properties": {

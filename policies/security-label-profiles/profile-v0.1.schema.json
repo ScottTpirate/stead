@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://stead.example/policies/security-label-profile/0.1",
+  "$id": "https://stead.example/policies/security-label-profiles/profile-v0.1.schema.json",
   "type": "object",
   "required": ["profile_id", "version", "sensitivity_order", "handling_regimes", "allowed_categories", "allowed_compartments", "dissemination_controls", "releasability_groups", "export_controls", "join", "lowering", "two_person_lowering", "bundle_signing"],
   "properties": {

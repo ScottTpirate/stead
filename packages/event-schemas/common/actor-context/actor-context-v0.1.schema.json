@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://stead.example/schemas/events/actor-context/0.1",
+  "$id": "https://stead.example/packages/event-schemas/common/actor-context/actor-context-v0.1.schema.json",
   "title": "Actor Context",
   "type": "object",
   "required": ["actor", "correlation_id", "causation_id"],

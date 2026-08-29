@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://stead.example/specs/owgp/0.1/schema.json",
+  "$id": "https://stead.example/specs/work-graph-profile/owgp-v0.1.schema.json",
   "title": "Stead Open Work Graph Profile 0.1",
   "$defs": {
     "UuidV7": {"type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"},
@@ -247,8 +247,28 @@
       "allOf": [{"$ref": "#/$defs/ResourceEnvelope"}, {"type": "object", "required": ["recipient", "subject", "source_event_id", "actor_context", "thread_key", "reason", "state"], "properties": {"kind": {"const": "notification"}, "recipient": {"$ref": "#/$defs/PrincipalRef"}, "subject": {"$ref": "#/$defs/ResourceRef"}, "source_event_id": {"type": "string"}, "actor_context": {"$ref": "#/$defs/ActorContext"}, "thread_key": {"type": "string"}, "reason": {"type": "string"}, "state": {"enum": ["unread", "read", "archived"]}, "redaction": {"enum": ["none", "metadata_only", "suppressed"]}}}],
       "unevaluatedProperties": false
     },
+    "AuthenticationContext": {
+      "type": "object",
+      "required": ["method", "authenticated_at"],
+      "properties": {
+        "method": {"type": "string", "minLength": 1},
+        "authenticated_at": {"type": "string", "format": "date-time"},
+        "identity_provider": {"type": "string"},
+        "session_reference_hash": {"type": "string"},
+        "authentication_context_class": {"type": "string"},
+        "credential_revision": {"type": "string"}
+      },
+      "additionalProperties": false
+    },
+    "AuditChangeContext": {
+      "oneOf": [
+        {"type": "object", "required": ["mode"], "properties": {"mode": {"const": "not_applicable"}}, "additionalProperties": false},
+        {"type": "object", "required": ["mode", "before_hash", "after_hash"], "properties": {"mode": {"const": "hashes"}, "before_hash": {"type": "string", "minLength": 1}, "after_hash": {"type": "string", "minLength": 1}}, "additionalProperties": false},
+        {"type": "object", "required": ["mode", "changed_fields", "before_hash", "after_hash"], "properties": {"mode": {"const": "controlled_delta"}, "changed_fields": {"type": "array", "items": {"type": "string"}, "minItems": 1, "uniqueItems": true}, "before_hash": {"type": "string", "minLength": 1}, "after_hash": {"type": "string", "minLength": 1}}, "additionalProperties": false}
+      ]
+    },
     "AuditRecord": {
-      "allOf": [{"$ref": "#/$defs/ResourceEnvelope"}, {"type": "object", "required": ["action", "subject", "actor_context", "decision", "authorization_context", "request_id", "origin", "outcome", "occurred_at"], "properties": {"kind": {"const": "audit_record"}, "action": {"type": "string"}, "subject": {"$ref": "#/$defs/ResourceRef"}, "actor_context": {"$ref": "#/$defs/ActorContext"}, "decision": {"enum": ["allow", "deny", "not_applicable"]}, "authorization_context": {"type": "object", "required": ["relationship", "action"], "properties": {"relationship": {"type": "string"}, "action": {"type": "string"}, "reason_codes": {"type": "array", "items": {"type": "string"}}}, "additionalProperties": false}, "authorization_model_id": {"type": "string"}, "policy_bundle_id": {"type": "string"}, "request_id": {"type": "string"}, "source_ip": {"type": "string"}, "network_zone": {"type": "string"}, "device_id": {"type": "string"}, "origin": {"type": "object", "required": ["service"], "properties": {"service": {"type": "string"}, "provider": {"type": "string"}}, "additionalProperties": false}, "outcome": {"enum": ["success", "failure", "denied"]}, "occurred_at": {"type": "string", "format": "date-time"}, "before_hash": {"type": "string"}, "after_hash": {"type": "string"}}}],
+      "allOf": [{"$ref": "#/$defs/ResourceEnvelope"}, {"type": "object", "required": ["action", "subject", "actor_context", "authentication_context", "decision", "authorization_context", "authorization_model_id", "policy_bundle_id", "request_id", "origin", "outcome", "occurred_at", "change_context"], "properties": {"kind": {"const": "audit_record"}, "action": {"type": "string"}, "subject": {"$ref": "#/$defs/ResourceRef"}, "actor_context": {"$ref": "#/$defs/ActorContext"}, "authentication_context": {"$ref": "#/$defs/AuthenticationContext"}, "decision": {"enum": ["allow", "deny", "not_applicable"]}, "authorization_context": {"type": "object", "required": ["relationship", "action"], "properties": {"relationship": {"type": "string"}, "action": {"type": "string"}, "reason_codes": {"type": "array", "items": {"type": "string"}}}, "additionalProperties": false}, "authorization_model_id": {"type": "string", "minLength": 1}, "policy_bundle_id": {"type": "string", "minLength": 1}, "request_id": {"type": "string"}, "source_ip": {"type": "string"}, "network_zone": {"type": "string"}, "device_id": {"type": "string"}, "origin": {"type": "object", "required": ["service"], "properties": {"service": {"type": "string"}, "provider": {"type": "string"}}, "additionalProperties": false}, "outcome": {"enum": ["success", "failure", "denied"]}, "occurred_at": {"type": "string", "format": "date-time"}, "change_context": {"$ref": "#/$defs/AuditChangeContext"}}}],
       "unevaluatedProperties": false
     }
   },

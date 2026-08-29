@@ -234,7 +234,7 @@ components:
         time: {type: string, format: date-time}
         datacontenttype: {const: application/json}
         dataschema: {type: string, format: uri}
-        data: {$ref: '../../packages/event-schemas/platform/platform-event.schema.json'}
+        data: {$ref: '../../packages/event-schemas/platform/platform-event-v0.1.schema.json'}
       additionalProperties: false
     OrganizationCloudEventEnvelope:
       allOf:

@@ -208,6 +208,7 @@ examples:
     action: work.assignment.update
     subject: {kind: work_item, id: *work, uri: "https://stead.example/o/acme/projects/ONB/work/ONB-1"}
     actor_context: {actor: {type: agent, id: *agent}, requested_by: {type: user, id: *alice}, delegation_id: delegation-1, task_context_id: task-1, correlation_id: corr-1, causation_id: cause-1}
+    authentication_context: {method: agent_delegation, authenticated_at: "2026-08-28T12:00:59Z", identity_provider: local-bootstrap, session_reference_hash: session-hash-1, authentication_context_class: local, credential_revision: cred-1}
     decision: allow
     authorization_context: {relationship: editor, action: work.assignment.update, reason_codes: [relationship_allow, classification_allow]}
     authorization_model_id: fga-v1
@@ -219,5 +220,4 @@ examples:
     origin: {service: work-api, provider: gitea-adapter}
     outcome: success
     occurred_at: "2026-08-28T12:01:00Z"
-    before_hash: abc
-    after_hash: def
+    change_context: {mode: hashes, before_hash: abc, after_hash: def}

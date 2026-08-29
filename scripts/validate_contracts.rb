@@ -4,29 +4,42 @@
 require "json"
 require "pathname"
 require "set"
+require "uri"
 require "yaml"
 
 ROOT = Pathname.new(__dir__).parent.expand_path
 
 DOCUMENTS = %w[
+  specs/schema-registry.yaml
   specs/work-graph-profile/owgp-v0.1.schema.json
   specs/openapi/platform-v1.yaml
   specs/asyncapi/platform.yaml
   specs/provider-interfaces.yaml
-  specs/migration/migration-job.schema.json
+  specs/migration/migration-job-v0.1.schema.json
   specs/migration/canonical-model-v0.1.yaml
-  packages/event-schemas/common/actor-context/actor-context.schema.json
-  packages/event-schemas/platform/platform-event.schema.json
-  policies/opa/input.schema.json
-  policies/opa/output.schema.json
+  packages/event-schemas/common/actor-context/actor-context-v0.1.schema.json
+  packages/event-schemas/platform/platform-event-v0.1.schema.json
+  policies/opa/input-v0.1.schema.json
+  policies/opa/output-v0.1.schema.json
   policies/opa/decision-table.yaml
-  policies/security-label-profiles/profile.schema.json
+  policies/security-label-profiles/profile-v0.1.schema.json
   policies/security-label-profiles/commercial.yaml
   policies/security-label-profiles/us-government.yaml
-  policies/deployment-domains/domain-profile.schema.json
+  policies/deployment-domains/domain-profile-v0.1.schema.json
   policies/deployment-domains/commercial.yaml
   policies/deployment-domains/us-government.yaml
   policies/openfga/model-tests.yaml
+].freeze
+
+JSON_SCHEMA_DOCUMENTS = %w[
+  specs/work-graph-profile/owgp-v0.1.schema.json
+  packages/event-schemas/common/actor-context/actor-context-v0.1.schema.json
+  packages/event-schemas/platform/platform-event-v0.1.schema.json
+  policies/opa/input-v0.1.schema.json
+  policies/opa/output-v0.1.schema.json
+  specs/migration/migration-job-v0.1.schema.json
+  policies/security-label-profiles/profile-v0.1.schema.json
+  policies/deployment-domains/domain-profile-v0.1.schema.json
 ].freeze
 
 CANONICAL_KINDS = %w[
@@ -139,21 +152,55 @@ DOCUMENTS.each do |relative|
   end
 end
 
+schema_ids = {}
+JSON_SCHEMA_DOCUMENTS.each do |relative|
+  schema_id = documents.dig(relative, "$id")
+  if schema_id.is_a?(String) && !schema_id.empty?
+    failures << "duplicate canonical schema $id #{schema_id}" if schema_ids.key?(schema_id)
+    schema_ids[schema_id] = relative
+  else
+    failures << "#{relative}: canonical JSON Schema must declare $id"
+  end
+end
+
+registry_entries = Array(documents.dig("specs/schema-registry.yaml", "schemas"))
+registry_map = registry_entries.each_with_object({}) do |entry, map|
+  next unless entry.is_a?(Hash)
+
+  schema_id = entry["id"]
+  path = entry["path"]
+  failures << "schema registry contains duplicate id #{schema_id}" if map.key?(schema_id)
+  map[schema_id] = path
+  failures << "schema registry #{schema_id} points to unknown path #{path}" unless JSON_SCHEMA_DOCUMENTS.include?(path)
+  failures << "schema registry #{schema_id} does not match #{path} $id" unless documents.dig(path, "$id") == schema_id
+end
+missing_registry_ids = schema_ids.keys - registry_map.keys
+unexpected_registry_ids = registry_map.keys - schema_ids.keys
+failures << "schema registry omits canonical ids: #{missing_registry_ids.join(', ')}" unless missing_registry_ids.empty?
+failures << "schema registry has unknown ids: #{unexpected_registry_ids.join(', ')}" unless unexpected_registry_ids.empty?
+
 documents.each do |relative, document|
   each_node(document) do |node|
     next unless node.is_a?(Hash) && node["$ref"].is_a?(String)
 
     reference = node["$ref"]
-    next if reference.match?(%r{\Ahttps?://})
-
     file_part, fragment = reference.split("#", 2)
-    target_relative = if file_part.nil? || file_part.empty?
+    target_relative = if reference.match?(%r{\Ahttps?://})
+                        registry_map[file_part]
+                      elsif file_part.nil? || file_part.empty?
                         relative
                       else
                         ROOT.join(relative).dirname.join(file_part).cleanpath.relative_path_from(ROOT).to_s
                       end
     begin
+      raise "canonical schema id is not registered" unless target_relative
+
       target_document = documents[target_relative] ||= parse(ROOT.join(target_relative))
+      if JSON_SCHEMA_DOCUMENTS.include?(relative) && file_part && !file_part.empty? && !reference.match?(%r{\Ahttps?://})
+        resolved_id = URI.join(document.fetch("$id"), file_part).to_s
+        expected_id = target_document["$id"]
+        raise "relative ref resolves to #{resolved_id}, not target $id #{expected_id}" unless resolved_id == expected_id
+      end
       pointer(target_document, fragment)
     rescue StandardError => error
       failures << "#{relative}: unresolved $ref #{reference.inspect} (#{error.message.lines.first.strip})"
@@ -195,6 +242,10 @@ patch_parameters = openapi.dig("paths", "/work-items/{work_item_id}", "patch", "
 failures << "OpenAPI Work Item update must require If-Match" unless patch_parameters.any? { |entry| entry["$ref"] == "#/components/parameters/IfMatch" }
 project_view_ref = openapi.dig("paths", "/projects/{project_id}", "get", "responses", "200", "$ref")
 failures << "OpenAPI Project read must use filtered ProjectView" unless project_view_ref == "#/components/responses/ProjectView"
+failures << "OpenAPI SearchResult must reject undeclared disclosure fields" unless openapi.dig("components", "schemas", "SearchResult", "additionalProperties") == false
+failures << "OpenAPI Problem must reject undeclared disclosure fields" unless openapi.dig("components", "schemas", "Problem", "additionalProperties") == false
+search_results_schema = openapi.dig("components", "responses", "SearchResults", "content", "application/json", "schema") || {}
+failures << "OpenAPI SearchResults wrapper must reject undeclared aggregate fields" unless search_results_schema["additionalProperties"] == false
 
 asyncapi = documents["specs/asyncapi/platform.yaml"] || {}
 failures << "AsyncAPI version must be 3.1.x" unless asyncapi["asyncapi"].to_s.start_with?("3.1.")
@@ -235,11 +286,11 @@ end
 all_event_types = (asyncapi["channels"] || {}).values.flat_map { |contract| Array(contract["x-event-types"]) }
 failures << "AsyncAPI event type values must belong to exactly one channel family" unless all_event_types.uniq.length == all_event_types.length
 
-event_data = documents["packages/event-schemas/platform/platform-event.schema.json"] || {}
+event_data = documents["packages/event-schemas/platform/platform-event-v0.1.schema.json"] || {}
 event_required = event_data["required"] || []
 failures << "Event data must require idempotency_key" unless event_required.include?("idempotency_key")
 failures << "Event data must not require capability context" if event_required.include?("capability_context") || event_required.include?("capabilities")
-actor_required = documents.dig("packages/event-schemas/common/actor-context/actor-context.schema.json", "required") || []
+actor_required = documents.dig("packages/event-schemas/common/actor-context/actor-context-v0.1.schema.json", "required") || []
 failures << "Actor context must require correlation and causation IDs" unless %w[correlation_id causation_id].all? { |field| actor_required.include?(field) }
 
 providers = documents["specs/provider-interfaces.yaml"] || {}
@@ -248,7 +299,7 @@ Array(providers["interfaces"]).each do |interface|
 end
 failures << "Provider common contract omits operation semantics" unless providers.dig("common_contract", "operation_semantics").is_a?(Hash)
 
-label_schema = documents["policies/security-label-profiles/profile.schema.json"] || {}
+label_schema = documents["policies/security-label-profiles/profile-v0.1.schema.json"] || {}
 required_label_fields = %w[allowed_categories allowed_compartments dissemination_controls releasability_groups export_controls join lowering two_person_lowering]
 missing_label_fields = required_label_fields - Array(label_schema["required"])
 failures << "Security-label profile schema omits: #{missing_label_fields.join(', ')}" unless missing_label_fields.empty?
@@ -261,7 +312,7 @@ end
 government_categories = Array(documents.dig("policies/security-label-profiles/us-government.yaml", "allowed_categories"))
 failures << "US-government profile must enumerate CUI categories/subcategories" unless government_categories.any? { |entry| entry["id"].to_s.start_with?("CUI_") && Array(entry["subcategories"]).any? }
 
-deployment_schema = documents["policies/deployment-domains/domain-profile.schema.json"] || {}
+deployment_schema = documents["policies/deployment-domains/domain-profile-v0.1.schema.json"] || {}
 %w[commercial us-government].each do |name|
   profile = documents["policies/deployment-domains/#{name}.yaml"] || {}
   missing = Array(deployment_schema["required"]) - profile.keys
@@ -269,7 +320,7 @@ deployment_schema = documents["policies/deployment-domains/domain-profile.schema
   validate_instance(profile, deployment_schema, "#{name} deployment-domain profile", failures)
 end
 
-opa_input = documents["policies/opa/input.schema.json"] || {}
+opa_input = documents["policies/opa/input-v0.1.schema.json"] || {}
 failures << "OPA input must use structured authorization" unless Array(opa_input["required"]).include?("authorization") && !opa_input.key?("relationship_authorized")
 agent_terms = opa_input.dig("properties", "authorization", "properties", "agent_intersection", "required") || []
 expected_agent_terms = %w[delegator_authority agent_authority task_scope runtime_domain session_environment resource_handling revocation_current]
@@ -303,7 +354,7 @@ failures << "OWGP SecurityLabelValue must reject undeclared fields" unless secur
   failures << "OWGP #{field} must use ActingPrincipalRef" unless reference == "#/$defs/ActingPrincipalRef"
 end
 
-migration_schema = documents["specs/migration/migration-job.schema.json"] || {}
+migration_schema = documents["specs/migration/migration-job-v0.1.schema.json"] || {}
 migration_validation = migration_schema.dig("properties", "validation", "required") || []
 %w[provenance_complete authorization_non_regression].each do |field|
   failures << "Migration validation omits #{field}" unless migration_validation.include?(field)
@@ -311,6 +362,13 @@ end
 checkpoint_stages = migration_schema.dig("properties", "checkpoint", "properties", "stage", "enum") || []
 job_stages = migration_schema.dig("properties", "stage", "enum") || []
 failures << "Migration checkpoint stage must use the job stage enum" unless checkpoint_stages == job_stages
+
+audit_required = definitions.dig("AuditRecord", "allOf", 1, "required") || []
+expected_audit_context = %w[authentication_context authorization_model_id policy_bundle_id change_context]
+missing_audit_context = expected_audit_context - audit_required
+failures << "OWGP AuditRecord omits mandatory audit context: #{missing_audit_context.join(', ')}" unless missing_audit_context.empty?
+failures << "OWGP AuthenticationContext must be closed" unless definitions.dig("AuthenticationContext", "additionalProperties") == false
+failures << "OWGP AuditChangeContext must define hashes, controlled delta, and not-applicable modes" unless Array(definitions.dig("AuditChangeContext", "oneOf")).length == 3
 
 if failures.empty?
   puts "Contract validation passed: documents=#{documents.length} refs=resolved openfga_suites=#{test_suites.length} openfga_assertions=#{check_assertions}"

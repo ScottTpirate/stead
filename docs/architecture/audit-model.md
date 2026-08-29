@@ -1,6 +1,6 @@
 # Audit model
 
-Audit uses OWGP `AuditRecord` plus the shared actor context. It records action, canonical subject/container, actor, actor type, requester when different, delegation/task, authorization relationship/action/reason context, decision, policy/model versions, request ID, source IP/network/device context, originating service/provider, outcome, correlation/causation, timestamp, and controlled before/after hashes. This supports `requested_by=user:alice` with `actor=agent:backend-agent` without schema change.
+Audit uses OWGP `AuditRecord` plus the shared actor context. It requires action, canonical subject/container, actor, actor type, requester when different, delegation/task, authentication method/time and applicable provider/session-reference-hash/assurance/credential-revision context, authorization relationship/action/reasons, decision, policy/model versions, request ID, source IP/network/device context, originating service/provider, outcome, correlation/causation, timestamp, and an explicit not-applicable, before/after-hash, or controlled-delta change context. Authentication context contains references or hashes, never bearer credentials. This supports `requested_by=user:alice` with `actor=agent:backend-agent` without schema change.
 
 Records are append-only and access-controlled. Security-policy administrators do not gain content access by role. Query/export, retention, checkpoint, restore, and failed/denied bypass operations are themselves audited. Bodies, secrets, credentials, prompts, and agent memory are excluded.
 

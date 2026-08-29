@@ -7,7 +7,7 @@ An operation is allowed only when authentication/trusted context is valid, OpenF
 
 The OPA input declares which additional context families an action requires. Data-flow context carries the destination domain/ceiling/profiles/organizations/releasability/channel, proposed label, and any reasoned/authorized lowering request. CI context carries runner pool/domain, approved image digest, network/egress, secret scope, artifact label, and deployment environment. Infrastructure context carries admission/storage/backup/restore/integration target, provider, ceiling, encryption, network, and applicable backup/integration identity. A required context family that is absent or unverifiable denies.
 
-The authoritative contracts are [OpenFGA model](../../policies/openfga/model.fga), [model tests](../../policies/openfga/model-tests.yaml), [OPA input](../../policies/opa/input.schema.json), [OPA output](../../policies/opa/output.schema.json), and [decision table](../../policies/opa/decision-table.yaml).
+The authoritative contracts are [OpenFGA model](../../policies/openfga/model.fga), [model tests](../../policies/openfga/model-tests.yaml), [OPA input](../../policies/opa/input-v0.1.schema.json), [OPA output](../../policies/opa/output-v0.1.schema.json), and [decision table](../../policies/opa/decision-table.yaml).
 
 Team `parent` is organizational context only; the model intentionally defines no viewer/member/editor relation through a parent. Project owning/contributing Teams also grant nothing without explicit authorization tuples. Restrictive OPA policy may cascade only through a named, tested policy rule.
 

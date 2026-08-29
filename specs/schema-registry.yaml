@@ -1,0 +1,27 @@
+schema_version: "1.0"
+description: Canonical JSON Schema identifiers and their repository-local resolution paths.
+schemas:
+  - id: https://stead.example/specs/work-graph-profile/owgp-v0.1.schema.json
+    path: specs/work-graph-profile/owgp-v0.1.schema.json
+    dialect: https://json-schema.org/draft/2020-12/schema
+  - id: https://stead.example/packages/event-schemas/common/actor-context/actor-context-v0.1.schema.json
+    path: packages/event-schemas/common/actor-context/actor-context-v0.1.schema.json
+    dialect: https://json-schema.org/draft/2020-12/schema
+  - id: https://stead.example/packages/event-schemas/platform/platform-event-v0.1.schema.json
+    path: packages/event-schemas/platform/platform-event-v0.1.schema.json
+    dialect: https://json-schema.org/draft/2020-12/schema
+  - id: https://stead.example/policies/opa/input-v0.1.schema.json
+    path: policies/opa/input-v0.1.schema.json
+    dialect: https://json-schema.org/draft/2020-12/schema
+  - id: https://stead.example/policies/opa/output-v0.1.schema.json
+    path: policies/opa/output-v0.1.schema.json
+    dialect: https://json-schema.org/draft/2020-12/schema
+  - id: https://stead.example/specs/migration/migration-job-v0.1.schema.json
+    path: specs/migration/migration-job-v0.1.schema.json
+    dialect: https://json-schema.org/draft/2020-12/schema
+  - id: https://stead.example/policies/security-label-profiles/profile-v0.1.schema.json
+    path: policies/security-label-profiles/profile-v0.1.schema.json
+    dialect: https://json-schema.org/draft/2020-12/schema
+  - id: https://stead.example/policies/deployment-domains/domain-profile-v0.1.schema.json
+    path: policies/deployment-domains/domain-profile-v0.1.schema.json
+    dialect: https://json-schema.org/draft/2020-12/schema

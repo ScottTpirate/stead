@@ -3,7 +3,7 @@
 Status: **Phase 0 approval candidate**
 Requirements: `MIG-001`–`MIG-005`
 
-The normative machine contract is [migration job schema](../../specs/migration/migration-job.schema.json) with a [canonical Phase 0 profile](../../specs/migration/canonical-model-v0.1.yaml).
+The normative machine contract is [migration job schema](../../specs/migration/migration-job-v0.1.schema.json) with a [canonical Phase 0 profile](../../specs/migration/canonical-model-v0.1.yaml).
 
 Every connector implements `discover → analyze → map → dry_run → import → validate → delta_sync → cutover → finalize`. Stages are resumable, idempotent, versioned, audited, and checkpointed without source credentials in state.
 

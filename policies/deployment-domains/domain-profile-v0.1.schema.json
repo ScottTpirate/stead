@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://stead.example/policies/deployment-domain/0.1",
+  "$id": "https://stead.example/policies/deployment-domains/domain-profile-v0.1.schema.json",
   "type": "object",
   "required": ["domain_id", "version", "classification_ceiling", "allowed_label_profiles", "allowed_integrations", "allowed_notification_channels", "storage", "backup", "runner", "network"],
   "properties": {

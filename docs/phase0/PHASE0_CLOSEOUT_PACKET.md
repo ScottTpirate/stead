@@ -26,21 +26,21 @@ Locked contracts contain no unexplained TBD or ambiguous cardinality. Security-l
 
 ## 3. Domain contracts
 
-- [OWGP 0.1](../../specs/work-graph-profile/owgp-v0.1.md) and its [JSON Schema](../../specs/work-graph-profile/owgp-v0.1.schema.json) cover every fixed canonical entity; [examples](../../specs/work-graph-profile/examples.yaml) exercise 15 representative core, principal, agent-seam, event, notification, and audit shapes.
+- [OWGP 0.1](../../specs/work-graph-profile/owgp-v0.1.md) and its [JSON Schema](../../specs/work-graph-profile/owgp-v0.1.schema.json) cover every fixed canonical entity; the [schema registry](../../specs/schema-registry.yaml) resolves all eight standalone JSON Schemas by canonical `$id`; [examples](../../specs/work-graph-profile/examples.yaml) exercise 15 representative core, principal, agent-seam, event, notification, and audit shapes.
 - The schema fixes generic container, provenance, typed relationships, Project capability/preset, Team parent/depth, one owning and contributing Teams, universal Work/Document values, Project lifecycle, and separate archival metadata.
 - [Canonical domain model](../architecture/canonical-domain-model.md), [knowledge contract](../architecture/knowledge-contract.md), and [migration model](../architecture/migration-contract.md) record cardinality, Git boundaries, compatibility, export/import and rollback.
 
 ## 4. Identity and security
 
 - [OpenFGA model](../../policies/openfga/model.fga) and [test matrix](../../policies/openfga/model-tests.yaml) include user, agent, service account, directory group, explicit Project/Team relations, assignment non-grant, delegation/task seams, and proof that hierarchy alone grants nothing.
-- [OPA input](../../policies/opa/input.schema.json), [output](../../policies/opa/output.schema.json), and [decision table](../../policies/opa/decision-table.yaml) specify deny-by-default, label/context/capability policy and the six-way future-agent intersection.
+- [OPA input](../../policies/opa/input-v0.1.schema.json), [output](../../policies/opa/output-v0.1.schema.json), and [decision table](../../policies/opa/decision-table.yaml) specify deny-by-default, label/context/capability policy and the six-way future-agent intersection.
 - [Security-label lattice](../architecture/security-label-lattice.md), versioned commercial/government label profiles, and machine-readable commercial/government deployment-domain profiles define join, categories/compartments/dissemination/releasability/export rules, boundaries, ceilings, allowed integrations/storage/backups/runners/networks, lowering, and cross-domain denial.
 - [Threat model](../security/threat-model.md) and [bypass inventory](../security/classification-bypass-inventory.md) cover direct providers and metadata leakage through search, counts, suggestions, inbox, activity, graph, navigation, notifications, exports and errors.
 
 ## 5. APIs and events
 
 - [OpenAPI 3.1.1](../../specs/openapi/platform-v1.yaml) exposes canonical Organization/Team/Project/Work/Knowledge/Identity/Search resources, exact Organization/Team/Project Document scopes, filtered Project capability views, ETags/If-Match, idempotency, dedicated create/update schemas, and non-leaking RFC 9457 errors.
-- [AsyncAPI 3.1](../../specs/asyncapi/platform.yaml), [CloudEvent data](../../packages/event-schemas/platform/platform-event.schema.json), and [actor context](../../packages/event-schemas/common/actor-context/actor-context.schema.json) define subject partitioning, container, capabilities, classification, idempotency, acting/requesting principals, delegation/task, correlation and causation.
+- [AsyncAPI 3.1](../../specs/asyncapi/platform.yaml), [CloudEvent data](../../packages/event-schemas/platform/platform-event-v0.1.schema.json), and [actor context](../../packages/event-schemas/common/actor-context/actor-context-v0.1.schema.json) define subject partitioning, container, capabilities, classification, idempotency, acting/requesting principals, delegation/task, correlation and causation.
 - [Event contract](../architecture/event-contract.md) and [audit model](../architecture/audit-model.md) define outbox, replay/DLQ/idempotency, minimization, rebuild and compatible evolution.
 - [MCP](../../specs/mcp/compatibility-v0.1.yaml) and [A2A](../../specs/a2a/compatibility-v0.1.yaml) are contract-only and reuse Platform policy/audit boundaries.
 

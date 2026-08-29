@@ -86,31 +86,33 @@ REQUIRED_PHASE_ZERO_FILES = %w[
   specs/traceability/directive-inventory.yaml
   specs/traceability/requirements.yaml
   specs/traceability/security-findings.yaml
+  specs/schema-registry.yaml
   specs/oscal/README.md
   scripts/generate_directive_inventory.rb
   scripts/validate_contracts.rb
   scripts/validate_owgp_examples.js
+  scripts/validate_json_schemas.sh
   specs/work-graph-profile/owgp-v0.1.md
   specs/work-graph-profile/owgp-v0.1.schema.json
   specs/work-graph-profile/examples.yaml
   specs/openapi/platform-v1.yaml
   specs/asyncapi/platform.yaml
   specs/provider-interfaces.yaml
-  specs/migration/migration-job.schema.json
+  specs/migration/migration-job-v0.1.schema.json
   specs/migration/canonical-model-v0.1.yaml
   specs/mcp/compatibility-v0.1.yaml
   specs/a2a/compatibility-v0.1.yaml
-  packages/event-schemas/common/actor-context/actor-context.schema.json
-  packages/event-schemas/platform/platform-event.schema.json
+  packages/event-schemas/common/actor-context/actor-context-v0.1.schema.json
+  packages/event-schemas/platform/platform-event-v0.1.schema.json
   policies/openfga/model.fga
   policies/openfga/model-tests.yaml
-  policies/opa/input.schema.json
-  policies/opa/output.schema.json
+  policies/opa/input-v0.1.schema.json
+  policies/opa/output-v0.1.schema.json
   policies/opa/decision-table.yaml
-  policies/security-label-profiles/profile.schema.json
+  policies/security-label-profiles/profile-v0.1.schema.json
   policies/security-label-profiles/commercial.yaml
   policies/security-label-profiles/us-government.yaml
-  policies/deployment-domains/domain-profile.schema.json
+  policies/deployment-domains/domain-profile-v0.1.schema.json
   policies/deployment-domains/commercial.yaml
   policies/deployment-domains/us-government.yaml
 ].freeze
@@ -902,13 +904,13 @@ end
 
 json_contract_paths = %w[
   specs/work-graph-profile/owgp-v0.1.schema.json
-  packages/event-schemas/common/actor-context/actor-context.schema.json
-  packages/event-schemas/platform/platform-event.schema.json
-  policies/opa/input.schema.json
-  policies/opa/output.schema.json
-  policies/security-label-profiles/profile.schema.json
-  policies/deployment-domains/domain-profile.schema.json
-  specs/migration/migration-job.schema.json
+  packages/event-schemas/common/actor-context/actor-context-v0.1.schema.json
+  packages/event-schemas/platform/platform-event-v0.1.schema.json
+  policies/opa/input-v0.1.schema.json
+  policies/opa/output-v0.1.schema.json
+  policies/security-label-profiles/profile-v0.1.schema.json
+  policies/deployment-domains/domain-profile-v0.1.schema.json
+  specs/migration/migration-job-v0.1.schema.json
 ]
 parsed_json = {}
 json_contract_paths.each do |path|

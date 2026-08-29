@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://stead.example/policies/opa/output/0.1",
+  "$id": "https://stead.example/policies/opa/output-v0.1.schema.json",
   "title": "Stead policy decision",
   "type": "object",
   "required": ["allow", "decision_id", "policy_bundle_id", "reason_codes", "obligations", "cache"],

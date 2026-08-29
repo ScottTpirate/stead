@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://stead.example/schemas/events/platform-event/0.1",
+  "$id": "https://stead.example/packages/event-schemas/platform/platform-event-v0.1.schema.json",
   "title": "Stead CloudEvent data",
   "type": "object",
   "required": ["schema_version", "organization_id", "security_domain_id", "container", "effective_security_label", "actor_context", "resource", "idempotency_key"],
@@ -19,7 +19,7 @@
       "additionalProperties": false
     },
     "effective_security_label": {"$ref": "../../../specs/work-graph-profile/owgp-v0.1.schema.json#/$defs/SecurityLabelValue"},
-    "actor_context": {"$ref": "../common/actor-context/actor-context.schema.json"},
+    "actor_context": {"$ref": "../common/actor-context/actor-context-v0.1.schema.json"},
     "resource": {"$ref": "../../../specs/work-graph-profile/owgp-v0.1.schema.json#/$defs/ResourceRef"},
     "idempotency_key": {"type": "string", "minLength": 8},
     "changed_fields": {"type": "array", "items": {"type": "string"}, "uniqueItems": true}

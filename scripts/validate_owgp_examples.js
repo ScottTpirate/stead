@@ -181,6 +181,21 @@ expectInvalid(
   "Project",
   "Project rejects undeclared ontology fields",
 );
+const auditWithoutAuthentication = {...examples.Audit};
+delete auditWithoutAuthentication.authentication_context;
+expectInvalid(
+  auditWithoutAuthentication,
+  "AuditRecord",
+  "AuditRecord requires authentication context",
+);
+const auditWithoutPolicyVersions = {...examples.Audit};
+delete auditWithoutPolicyVersions.authorization_model_id;
+delete auditWithoutPolicyVersions.policy_bundle_id;
+expectInvalid(
+  auditWithoutPolicyVersions,
+  "AuditRecord",
+  "AuditRecord requires authorization model and policy bundle versions",
+);
 
 if (errors.length > 0) {
   console.error(`OWGP example validation failed (${errors.length}):`);
@@ -188,4 +203,4 @@ if (errors.length > 0) {
   process.exit(1);
 }
 
-console.log(`OWGP examples passed semantic schema checks: ${Object.keys(exampleDefinitions).length} valid and 4 negative fixtures`);
+console.log(`OWGP examples passed semantic schema checks: ${Object.keys(exampleDefinitions).length} valid and 6 negative fixtures`);

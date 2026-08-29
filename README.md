@@ -32,6 +32,7 @@ Validate the machine-readable Phase 0 planning package with:
 
 ```bash
 ruby scripts/validate_phase0.rb
+scripts/validate_json_schemas.sh
 ```
 
 ## Naming
