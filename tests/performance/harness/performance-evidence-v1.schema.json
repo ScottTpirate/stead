@@ -1,0 +1,251 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stead.dev/schemas/performance/evidence-v1.schema.json",
+  "title": "Stead performance evidence v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "evidence_id",
+    "evidence_kind",
+    "candidate_eligible",
+    "source",
+    "scenario",
+    "counts",
+    "timings_ms",
+    "sizes",
+    "web_vitals",
+    "count_budgets",
+    "scaling_trials",
+    "baseline_comparison",
+    "telemetry"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "evidence_id": { "type": "string", "minLength": 1 },
+    "evidence_kind": { "enum": ["measurement", "test_fixture"] },
+    "candidate_eligible": { "type": "boolean" },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["revision", "dirty", "recorded_at", "tool_versions"],
+      "properties": {
+        "revision": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "dirty": { "type": "boolean" },
+        "recorded_at": { "type": "string", "format": "date-time" },
+        "tool_versions": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "scenario": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "benchmark_profile",
+        "disclosure_mode",
+        "dataset_version",
+        "device",
+        "network",
+        "topology",
+        "corpus",
+        "load_shape",
+        "state",
+        "sample_count",
+        "ordinary_read",
+        "primary_surface_after_shell",
+        "set_oriented",
+        "frontend_touched"
+      ],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "type": {
+          "enum": [
+            "hot_composed_metadata_api",
+            "same_region_metadata_api",
+            "metadata_mutation",
+            "remote_search_first_results",
+            "project_route_useful_content",
+            "cold_initial_application",
+            "projection_to_visible",
+            "input_acknowledgement",
+            "command_palette_local_results"
+          ]
+        },
+        "benchmark_profile": { "enum": ["standard", "high_assurance"] },
+        "disclosure_mode": { "enum": ["request_boundary", "commit_boundary"] },
+        "dataset_version": { "type": "string", "minLength": 1 },
+        "device": { "type": "string", "minLength": 1 },
+        "network": { "type": "string", "minLength": 1 },
+        "topology": { "type": "string", "minLength": 1 },
+        "corpus": { "type": "string", "minLength": 1 },
+        "load_shape": { "type": "string", "minLength": 1 },
+        "state": { "enum": ["cold", "warm"] },
+        "sample_count": { "type": "integer", "minimum": 1 },
+        "ordinary_read": { "type": "boolean" },
+        "primary_surface_after_shell": { "type": "boolean" },
+        "set_oriented": { "type": "boolean" },
+        "frontend_touched": { "type": "boolean" }
+      }
+    },
+    "counts": { "$ref": "#/$defs/counts" },
+    "timings_ms": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["latency", "sql", "openfga", "policy", "provider", "projection_lag"],
+      "properties": {
+        "latency": { "$ref": "#/$defs/percentiles" },
+        "sql": { "$ref": "#/$defs/percentiles" },
+        "openfga": { "$ref": "#/$defs/percentiles" },
+        "policy": { "$ref": "#/$defs/percentiles" },
+        "provider": { "$ref": "#/$defs/percentiles" },
+        "projection_lag": { "$ref": "#/$defs/percentiles" }
+      }
+    },
+    "sizes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["response_bytes", "eager_javascript_gzip_bytes", "lazy_javascript_chunks", "frontend_baseline"],
+      "properties": {
+        "response_bytes": { "type": "integer", "minimum": 0 },
+        "eager_javascript_gzip_bytes": { "type": "integer", "minimum": 0, "maximum": 256000 },
+        "lazy_javascript_chunks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "capability", "gzip_bytes"],
+            "properties": {
+              "name": { "type": "string", "minLength": 1 },
+              "capability": { "type": "string", "minLength": 1 },
+              "gzip_bytes": { "type": "integer", "minimum": 0 }
+            }
+          }
+        },
+        "frontend_baseline": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "required": ["baseline_id", "baseline_gzip_bytes", "current_gzip_bytes", "delta_gzip_bytes", "lazy_chunk_delta_gzip_bytes"],
+          "properties": {
+            "baseline_id": { "type": "string", "minLength": 1 },
+            "baseline_gzip_bytes": { "type": "integer" },
+            "current_gzip_bytes": { "type": "integer" },
+            "delta_gzip_bytes": { "type": "integer" },
+            "lazy_chunk_delta_gzip_bytes": { "type": "integer" }
+          }
+        }
+      }
+    },
+    "web_vitals": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lcp_ms", "inp_ms", "cls"],
+      "properties": {
+        "lcp_ms": { "type": "number", "minimum": 0 },
+        "inp_ms": { "type": "number", "minimum": 0 },
+        "cls": { "type": "number", "minimum": 0 }
+      }
+    },
+    "count_budgets": { "$ref": "#/$defs/setOrientedCounts" },
+    "scaling_trials": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/scalingTrial" }
+    },
+    "baseline_comparison": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["metric", "baseline", "current", "regression_percent", "critical", "independent_review_ref"],
+        "properties": {
+          "metric": { "type": "string", "minLength": 1 },
+          "baseline": { "type": "number", "exclusiveMinimum": 0 },
+          "current": { "type": "number", "minimum": 0 },
+          "regression_percent": { "type": "number" },
+          "critical": { "type": "boolean" },
+          "independent_review_ref": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "telemetry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["safe_correlation_id", "protected_content_canary_hits"],
+      "properties": {
+        "safe_correlation_id": { "type": "string", "minLength": 1 },
+        "protected_content_canary_hits": { "const": 0 }
+      }
+    }
+  },
+  "$defs": {
+    "percentiles": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["p50", "p95", "p99"],
+      "properties": {
+        "p50": { "type": "number", "minimum": 0 },
+        "p95": { "type": "number", "minimum": 0 },
+        "p99": { "type": "number", "minimum": 0 }
+      }
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "browser_requests",
+        "sql_queries",
+        "postgres_writes",
+        "openfga_calls",
+        "policy_calls",
+        "provider_calls",
+        "nats_waits",
+        "logical_audit_operations",
+        "browser_forbidden_origin_requests",
+        "authorization_cache_hits"
+      ],
+      "properties": {
+        "browser_requests": { "type": "integer", "minimum": 0 },
+        "sql_queries": { "type": "integer", "minimum": 0 },
+        "postgres_writes": { "type": "integer", "minimum": 0 },
+        "openfga_calls": { "type": "integer", "minimum": 0 },
+        "policy_calls": { "type": "integer", "minimum": 0 },
+        "provider_calls": { "type": "integer", "minimum": 0 },
+        "nats_waits": { "type": "integer", "minimum": 0 },
+        "logical_audit_operations": { "type": "integer", "minimum": 0 },
+        "browser_forbidden_origin_requests": { "const": 0 },
+        "authorization_cache_hits": { "const": 0 }
+      }
+    },
+    "setOrientedCounts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sql_queries", "postgres_writes", "openfga_calls", "policy_calls", "provider_calls", "logical_audit_operations"],
+      "properties": {
+        "sql_queries": { "type": "integer", "minimum": 0 },
+        "postgres_writes": { "type": "integer", "minimum": 0 },
+        "openfga_calls": { "type": "integer", "minimum": 0 },
+        "policy_calls": { "type": "integer", "minimum": 0 },
+        "provider_calls": { "type": "integer", "minimum": 0 },
+        "logical_audit_operations": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "scalingTrial": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["result_count", "sql_queries", "postgres_writes", "openfga_calls", "policy_calls", "provider_calls", "logical_audit_operations"],
+      "properties": {
+        "result_count": { "type": "integer", "minimum": 0 },
+        "sql_queries": { "type": "integer", "minimum": 0 },
+        "postgres_writes": { "type": "integer", "minimum": 0 },
+        "openfga_calls": { "type": "integer", "minimum": 0 },
+        "policy_calls": { "type": "integer", "minimum": 0 },
+        "provider_calls": { "type": "integer", "minimum": 0 },
+        "logical_audit_operations": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}

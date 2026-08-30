@@ -1,0 +1,32 @@
+{
+  "schema_version": "1.0",
+  "dataset_id": "stead-standard-request-boundary-v1",
+  "benchmark_profile": "standard",
+  "disclosure_mode": "request_boundary",
+  "topology": "colocated single-region Phase 1 reference deployment",
+  "device": "documented four-core reference client with hardware and governor recorded by the runner",
+  "network": "same-region shaped network; exact latency, bandwidth, and loss recorded per run",
+  "corpus": "synthetic authorized Organization, parent/child Teams, general Project, Work, Docs, activity, inbox, audit, search, and additive software fixtures",
+  "load_shapes": [
+    { "id": "single-user-hot", "concurrency": 1, "samples": 100, "state": "warm" },
+    { "id": "single-user-cold", "concurrency": 1, "samples": 20, "state": "cold" },
+    { "id": "set-oriented-scale", "result_counts": [1, 25, 100, 250], "state": "warm" }
+  ],
+  "required_labels": [
+    "source revision",
+    "component and schema versions",
+    "dataset version",
+    "device",
+    "network",
+    "topology",
+    "corpus",
+    "load shape",
+    "cold or warm state",
+    "disclosure mode"
+  ],
+  "notes": [
+    "This file fixes the evidence shape, not fabricated benchmark results.",
+    "A high-assurance commit_boundary run uses a distinct dataset/profile and must never be reported as standard.",
+    "Protected content is synthetic; evidence contains safe aggregate counters only."
+  ]
+}

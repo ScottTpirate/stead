@@ -1,0 +1,21 @@
+{
+  "schema_version": "1.0",
+  "baseline_id": "foundation-shell-a799f2e",
+  "scope": "minimal-foundation-shell-only",
+  "source_revision": "a799f2e3d166eab4489e7451a5b53f59a9d78f50",
+  "source_pr": "https://github.com/ScottTpirate/stead/pull/1",
+  "ci_run": "https://github.com/ScottTpirate/stead/actions/runs/33316292110",
+  "measured_command": "npm run build && npm run validate:web-bundle",
+  "budget_bytes_gzip": 256000,
+  "eager_javascript_bytes_gzip": 60808,
+  "measured_files": [
+    {
+      "file": "assets/index-C25eOy4C.js",
+      "gzip_bytes": 60808
+    }
+  ],
+  "lazy_capability_chunks_excluded": true,
+  "mature_devlane_interface_complete": false,
+  "perf_005_complete": false,
+  "interpretation": "This is the merged minimal foundation shell baseline. Every frontend PR must report eager and lazy deltas; this record is not evidence that the mature Devlane-derived interface satisfies PERF-005."
+}

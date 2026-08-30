@@ -19,3 +19,35 @@ Every result records source revision, deployment topology, disclosure mode, devi
 - `T-PERF-006-ACCEPTANCE`: run Go microbenchmarks for hot components, browser and end-to-end golden latency, bundle checks, projection-lag measurement, and regression comparison. An unexplained regression over ten percent in a critical baselined metric fails independent review; release ceilings always fail when exceeded.
 
 The initial executable bundle check is `npm run validate:web-bundle`, run after the production frontend build by `make foundation-check`. Query-, provider-, authorization-call-, browser-, and end-to-end harnesses land with their owning Phase 1 implementation issues before those paths are accepted.
+
+## Phase 1 evidence foundation
+
+The first machine-readable evidence contract lives in
+`tests/performance/harness/performance-evidence-v1.schema.json`. The companion
+semantic validator enforces the relationships JSON Schema cannot express:
+percentile order, exact disclosure-mode labeling, one composed request, zero
+direct browser/provider/NATS bypasses, zero authorization-decision cache hits,
+one logical composed-read audit operation, set-oriented count budgets, every
+PERF-002 engineering target and OPS-005 release ceiling, the eager bundle
+ceiling, and independently reviewed regressions.
+
+Run the owned harness tests with:
+
+```bash
+ruby tests/performance/harness/performance_foundation_test.rb
+ruby tests/performance/harness/verify_evidence.rb \
+  packages/test-fixtures/harness/performance/standard-request-boundary-valid.json
+scripts/run_pinned_node.sh node \
+  tests/performance/harness/performance_schema_test.mjs
+```
+
+`tests/performance/datasets/standard-request-boundary-v1.json` fixes the labels
+and load shapes every standard result must record. It does not fabricate
+measurements. Production modules expose counters through their own issues and
+owners; WS-13 consumes those counters here and remains independent of the
+implementation approval.
+
+The recorded `60,808`-byte gzip eager result is scoped to the merged minimal
+foundation shell at `a799f2e3d166eab4489e7451a5b53f59a9d78f50`. It is a delta
+baseline for subsequent frontend PRs, not evidence that the mature
+Devlane-derived Stead interface has completed `PERF-005`.
