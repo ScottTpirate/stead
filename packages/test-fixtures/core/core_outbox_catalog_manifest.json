@@ -1,0 +1,87 @@
+{
+  "deployment_key": "0123456789abcdef",
+  "installation_uuid": "00000000-0000-4000-8000-000000000001",
+  "databases": [
+    {"name": "stead_0123456789abcdef", "owner": "database_owner"}
+  ],
+  "roles": [
+    {
+      "semantic_id": "database_owner",
+      "name": "sd_0123456789abcdef_own_db",
+      "binding": "stead-role:v1:00000000-0000-4000-8000-000000000001:database_owner",
+      "properties": {"superuser": false, "inherit": false, "create_role": false, "create_database": false, "login": false, "replication": false, "bypass_rls": false, "connection_limit": -1, "password_present": false, "valid_until_utc": "", "configuration": []}
+    },
+    {
+      "semantic_id": "core_outbox_owner",
+      "name": "sd_0123456789abcdef_own_core_outbox",
+      "binding": "stead-role:v1:00000000-0000-4000-8000-000000000001:core_outbox_owner",
+      "properties": {"superuser": false, "inherit": false, "create_role": false, "create_database": false, "login": false, "replication": false, "bypass_rls": false, "connection_limit": -1, "password_present": false, "valid_until_utc": "", "configuration": []}
+    },
+    {
+      "semantic_id": "core_outbox_read_write",
+      "name": "sd_0123456789abcdef_rw_core_outbox",
+      "binding": "stead-role:v1:00000000-0000-4000-8000-000000000001:core_outbox_read_write",
+      "properties": {"superuser": false, "inherit": false, "create_role": false, "create_database": false, "login": false, "replication": false, "bypass_rls": false, "connection_limit": -1, "password_present": false, "valid_until_utc": "", "configuration": []}
+    },
+    {
+      "semantic_id": "core_outbox_execution",
+      "name": "sd_0123456789abcdef_x_core_outbox",
+      "binding": "stead-role:v1:00000000-0000-4000-8000-000000000001:core_outbox_execution",
+      "properties": {"superuser": false, "inherit": true, "create_role": false, "create_database": false, "login": false, "replication": false, "bypass_rls": false, "connection_limit": -1, "password_present": false, "valid_until_utc": "", "configuration": []}
+    },
+    {
+      "semantic_id": "api_login",
+      "name": "sd_0123456789abcdef_login_api",
+      "binding": "stead-role:v1:00000000-0000-4000-8000-000000000001:api_login",
+      "properties": {"superuser": false, "inherit": false, "create_role": false, "create_database": false, "login": true, "replication": false, "bypass_rls": false, "connection_limit": 20, "password_present": true, "valid_until_utc": "", "configuration": []}
+    }
+  ],
+  "principals": [
+    {"semantic_id": "bootstrap_grantor", "name": "stead_bootstrap"},
+    {"semantic_id": "public_schema_owner", "name": "pg_database_owner"}
+  ],
+  "memberships": [
+    {"role": "core_outbox_read_write", "member": "core_outbox_execution", "grantor": "bootstrap_grantor", "admin_option": false, "inherit_option": true, "set_option": false},
+    {"role": "core_outbox_execution", "member": "api_login", "grantor": "bootstrap_grantor", "admin_option": false, "inherit_option": false, "set_option": true}
+  ],
+  "schemas": [
+    {"name": "core_outbox", "owner": "core_outbox_owner"},
+    {"name": "public", "owner": "public_schema_owner"}
+  ],
+  "objects": [],
+  "database_acls": [
+    {"database": "stead_0123456789abcdef", "grantor": "database_owner", "grantee": "database_owner", "privilege": "CONNECT", "grant_option": false},
+    {"database": "stead_0123456789abcdef", "grantor": "database_owner", "grantee": "database_owner", "privilege": "CREATE", "grant_option": false},
+    {"database": "stead_0123456789abcdef", "grantor": "database_owner", "grantee": "database_owner", "privilege": "TEMPORARY", "grant_option": false},
+    {"database": "stead_0123456789abcdef", "grantor": "database_owner", "grantee": "api_login", "privilege": "CONNECT", "grant_option": false}
+  ],
+  "schema_acls": [
+    {"schema": "core_outbox", "grantor": "core_outbox_owner", "grantee": "core_outbox_owner", "privilege": "CREATE", "grant_option": false},
+    {"schema": "core_outbox", "grantor": "core_outbox_owner", "grantee": "core_outbox_owner", "privilege": "USAGE", "grant_option": false},
+    {"schema": "core_outbox", "grantor": "core_outbox_owner", "grantee": "core_outbox_read_write", "privilege": "USAGE", "grant_option": false},
+    {"schema": "public", "grantor": "public_schema_owner", "grantee": "public_schema_owner", "privilege": "CREATE", "grant_option": false},
+    {"schema": "public", "grantor": "public_schema_owner", "grantee": "public_schema_owner", "privilege": "USAGE", "grant_option": false}
+  ],
+  "object_acls": [],
+  "default_acls": [
+    {"owner": "core_outbox_owner", "object_kind": "table", "grantor": "core_outbox_owner", "grantee": "core_outbox_owner", "privilege": "DELETE", "grant_option": false},
+    {"owner": "core_outbox_owner", "object_kind": "table", "grantor": "core_outbox_owner", "grantee": "core_outbox_owner", "privilege": "INSERT", "grant_option": false},
+    {"owner": "core_outbox_owner", "object_kind": "table", "grantor": "core_outbox_owner", "grantee": "core_outbox_owner", "privilege": "REFERENCES", "grant_option": false},
+    {"owner": "core_outbox_owner", "object_kind": "table", "grantor": "core_outbox_owner", "grantee": "core_outbox_owner", "privilege": "SELECT", "grant_option": false},
+    {"owner": "core_outbox_owner", "object_kind": "table", "grantor": "core_outbox_owner", "grantee": "core_outbox_owner", "privilege": "TRIGGER", "grant_option": false},
+    {"owner": "core_outbox_owner", "object_kind": "table", "grantor": "core_outbox_owner", "grantee": "core_outbox_owner", "privilege": "TRUNCATE", "grant_option": false},
+    {"owner": "core_outbox_owner", "object_kind": "table", "grantor": "core_outbox_owner", "grantee": "core_outbox_owner", "privilege": "UPDATE", "grant_option": false},
+    {"owner": "core_outbox_owner", "object_kind": "sequence", "grantor": "core_outbox_owner", "grantee": "core_outbox_owner", "privilege": "SELECT", "grant_option": false},
+    {"owner": "core_outbox_owner", "object_kind": "sequence", "grantor": "core_outbox_owner", "grantee": "core_outbox_owner", "privilege": "UPDATE", "grant_option": false},
+    {"owner": "core_outbox_owner", "object_kind": "sequence", "grantor": "core_outbox_owner", "grantee": "core_outbox_owner", "privilege": "USAGE", "grant_option": false},
+    {"owner": "core_outbox_owner", "object_kind": "routine", "grantor": "core_outbox_owner", "grantee": "core_outbox_owner", "privilege": "EXECUTE", "grant_option": false},
+    {"owner": "core_outbox_owner", "object_kind": "type", "grantor": "core_outbox_owner", "grantee": "core_outbox_owner", "privilege": "USAGE", "grant_option": false},
+    {"owner": "core_outbox_owner", "schema": "core_outbox", "object_kind": "table", "grantor": "core_outbox_owner", "grantee": "core_outbox_read_write", "privilege": "DELETE", "grant_option": false},
+    {"owner": "core_outbox_owner", "schema": "core_outbox", "object_kind": "table", "grantor": "core_outbox_owner", "grantee": "core_outbox_read_write", "privilege": "INSERT", "grant_option": false},
+    {"owner": "core_outbox_owner", "schema": "core_outbox", "object_kind": "table", "grantor": "core_outbox_owner", "grantee": "core_outbox_read_write", "privilege": "SELECT", "grant_option": false},
+    {"owner": "core_outbox_owner", "schema": "core_outbox", "object_kind": "table", "grantor": "core_outbox_owner", "grantee": "core_outbox_read_write", "privilege": "UPDATE", "grant_option": false},
+    {"owner": "core_outbox_owner", "schema": "core_outbox", "object_kind": "sequence", "grantor": "core_outbox_owner", "grantee": "core_outbox_read_write", "privilege": "SELECT", "grant_option": false},
+    {"owner": "core_outbox_owner", "schema": "core_outbox", "object_kind": "sequence", "grantor": "core_outbox_owner", "grantee": "core_outbox_read_write", "privilege": "UPDATE", "grant_option": false},
+    {"owner": "core_outbox_owner", "schema": "core_outbox", "object_kind": "sequence", "grantor": "core_outbox_owner", "grantee": "core_outbox_read_write", "privilege": "USAGE", "grant_option": false}
+  ]
+}
