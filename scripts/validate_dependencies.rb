@@ -228,10 +228,55 @@ if ARGV.first == "--test-rollback"
   exit(candidate == FOUNDATION_ROLLBACK_TARGET ? 0 : 1)
 end
 
-def load_yaml(path)
-  YAML.safe_load_file(path, permitted_classes: [], permitted_symbols: [], aliases: false)
+def strict_yaml_node_errors(node, path = "$")
+  case node
+  when Psych::Nodes::Mapping
+    errors = []
+    seen_keys = Set.new
+    node.children.each_slice(2) do |key_node, value_node|
+      unless key_node.is_a?(Psych::Nodes::Scalar)
+        errors << "#{path}: mapping keys must be scalars"
+        next
+      end
+
+      key = key_node.value
+      errors << "#{path}: duplicate mapping key #{key.inspect}" unless seen_keys.add?(key)
+      errors.concat(strict_yaml_node_errors(value_node, "#{path}.#{key}"))
+    end
+    errors
+  when Psych::Nodes::Sequence
+    node.children.each_with_index.flat_map do |entry, index|
+      strict_yaml_node_errors(entry, "#{path}[#{index}]")
+    end
+  when Psych::Nodes::Alias
+    ["#{path}: YAML aliases are prohibited"]
+  else
+    []
+  end
+end
+
+def strict_yaml_structure_errors(source, filename: "fixture.yaml")
+  stream = Psych.parse_stream(source, filename: filename)
+  documents = stream.children
+  return ["#{filename}: YAML must contain exactly one document"] unless documents.length == 1
+
+  root = documents.first.root
+  return ["#{filename}: YAML document must not be empty"] if root.nil?
+
+  strict_yaml_node_errors(root)
 rescue Psych::Exception => e
-  abort "#{path.delete_prefix(ROOT + "/")}: YAML error: #{e.message}"
+  ["#{filename}: YAML parse error: #{e.message}"]
+end
+
+def load_yaml(path)
+  relative = path.delete_prefix(ROOT + "/")
+  source = File.read(path)
+  structure_errors = strict_yaml_structure_errors(source, filename: relative)
+  abort structure_errors.join("\n") unless structure_errors.empty?
+
+  YAML.safe_load(source, permitted_classes: [], permitted_symbols: [], aliases: false, filename: relative)
+rescue Psych::Exception => e
+  abort "#{relative}: YAML error: #{e.message}"
 end
 
 def resolve_ref(root_schema, reference)
@@ -853,6 +898,39 @@ def run_validator_self_tests
   registry_fixture = load_yaml(REGISTRY_PATH)
   registry_components = registry_fixture.fetch("records").to_h { |record| [record.dig("component", "name"), record] }
   provenance_fixture = load_yaml(PROVENANCE_PATH)
+  provenance_source = File.read(PROVENANCE_PATH)
+  registry_source = File.read(REGISTRY_PATH)
+  raw_yaml_mutations = {
+    "provenance duplicate approval status" => provenance_source.sub(
+      "  status: REVIEWED_PENDING_INDEPENDENT_APPROVAL\n",
+      "  status: APPROVED\n  status: REVIEWED_PENDING_INDEPENDENT_APPROVAL\n"
+    ),
+    "provenance duplicate scope" => provenance_source.sub(
+      "  scope_version: stead-primitives-v1\n",
+      "  scope_version: expanded-scope\n  scope_version: stead-primitives-v1\n"
+    ),
+    "registry duplicate approval ID" => registry_source.sub(
+      "  - approval_id: DEP-APP-DEVLANE-STEAD-PRIMITIVES-7719DCAD\n",
+      "  - approval_id: DEP-APP-MALICIOUS\n    approval_id: DEP-APP-DEVLANE-STEAD-PRIMITIVES-7719DCAD\n"
+    ),
+    "provenance trailing document" => "#{provenance_source}\n---\nstatus: APPROVED\napproved_source_distribution: true\n",
+    "registry trailing document" => "#{registry_source}\n---\ndecision:\n  status: APPROVED\n  approvers: [arbitrary-one, arbitrary-two]\n"
+  }
+  raw_yaml_mutation_survivors = raw_yaml_mutations.filter_map do |label, mutated_source|
+    guard_count += 1
+    label if strict_yaml_structure_errors(mutated_source, filename: "#{label}.yaml").empty?
+  end
+  unless raw_yaml_mutation_survivors.empty?
+    failures << "strict YAML parser mutation survivors: #{raw_yaml_mutation_survivors.join(', ')}"
+  end
+
+  reordered_mapping_a = { "second" => { "beta" => 2, "alpha" => 1 }, "first" => true }
+  reordered_mapping_b = { "first" => true, "second" => { "alpha" => 1, "beta" => 2 } }
+  unless canonical_sha256(reordered_mapping_a) == canonical_sha256(reordered_mapping_b)
+    failures << "canonical candidate digest changed under mapping-key reorder"
+  end
+  guard_count += 1
+
   baseline_devlane_errors = devlane_candidate_errors(provenance_fixture, registry_components)
   unless baseline_devlane_errors.empty?
     failures << "Devlane self-test fixture does not match the exact pending candidate: #{baseline_devlane_errors.join('; ')}"
