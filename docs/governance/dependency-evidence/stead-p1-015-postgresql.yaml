@@ -1,0 +1,189 @@
+schema_version: "1.0"
+issue_id: STEAD-P1-015
+issue_number: 38
+candidate_state: REJECTED_QUARANTINED_NOT_INTEGRATED
+recorded_at: "2026-08-30T21:35:54Z"
+evidence_scope:
+  - exact Go module identity and pgxpool closure proposed for stead-api
+  - exact OCI index and Linux amd64 platform identity proposed for CI-only PostgreSQL tests
+independent_review:
+  candidate_revision: f929649e9c5896d579147b922fdd87659f26c2ff
+  completed_at: "2026-08-30T21:35:54Z"
+  disposition: REVISE_HOLD
+  release_eligible: false
+  evidence_references: [github-pr-39-comment-5471438314, github-issue-38-comment-5471438378]
+limitations:
+  - Independent review reproduced identity and provenance facts but rejected both exact candidates; reproduced facts are not approval.
+  - No Go module has been added to go.mod or go.sum and no application source imports pgx.
+  - No workflow references or activates the PostgreSQL image.
+  - Compact SHA-256 report bindings are retained below; raw scanner reports are not checked into this governance-only branch and must be regenerated against the recorded database snapshots before any successor decision.
+
+go_candidate:
+  approval_id: DEP-APP-GO-PGX-V5-5-10-0
+  module: github.com/jackc/pgx/v5
+  version: v5.10.0
+  module_sum: "h1:VhSvgU2jSli8o3AqIEOTJr7rZwAEUVo4E4XhR94Zfr0="
+  go_mod_sum: "h1:mal1tBGAFfLHvZzaYh77YS/eC6IX9OWbRV1QIIM0Jn4="
+  upstream:
+    repository: https://github.com/jackc/pgx
+    tag: v5.10.0
+    tag_commit: 7293fb11125be0373a92f716683f2d494f6fd4b0
+    license_expression: MIT
+  notice_id: NOTICE-PGX-MIT
+  notice_quarantine:
+    marker: "STEAD-NOTICE-QUARANTINE:DEP-APP-GO-PGX-V5-5-10-0:REJECTED-NOT-RELEASE-INPUT"
+    status: REJECTED_EVIDENCE_ONLY
+    release_notice_input: false
+    begin_marker: "<!-- BEGIN STEAD-NOTICE-QUARANTINE:DEP-APP-GO-PGX-V5-5-10-0:REJECTED-NOT-RELEASE-INPUT -->"
+    section_heading: "## REJECTED / QUARANTINED — pgx v5.10.0 closure notices (not release input)"
+    framing: |-
+      These exact six notices are rejected intake evidence only; this block is not approved,
+      distributed, or a release-notice input. Any reuse requires a new approval ID and independent approval.
+    end_marker: "<!-- END STEAD-NOTICE-QUARANTINE:DEP-APP-GO-PGX-V5-5-10-0:REJECTED-NOT-RELEASE-INPUT -->"
+    notice_ids: [NOTICE-PGX-MIT, NOTICE-PGPASSFILE-MIT, NOTICE-PGSERVICEFILE-MIT, NOTICE-PUDDLE-MIT, NOTICE-GO-X-SYNC-BSD-3-CLAUSE, NOTICE-GO-X-TEXT-BSD-3-CLAUSE]
+  proposed_relationship: runtime
+  proposed_distribution: [stead-api]
+  vulnerability_scan:
+    status: REJECTED_REACHABLE_VULNERABILITY
+    completed_at: "2026-08-30T21:35:54Z"
+    tool:
+      name: govulncheck
+      version: v1.7.0
+      go_version: go1.27.0
+      database: https://vuln.go.dev
+      database_updated_at: "2026-08-28T14:47:45Z"
+    result:
+      advisory_id: GO-2026-5970
+      cve_id: CVE-2026-56852
+      vulnerable_module: golang.org/x/text
+      vulnerable_version: v0.29.0
+      fixed_version: v0.39.0
+      reachable_path: github.com/jackc/pgx/v5 SCRAM authentication
+    evidence_digest:
+      closure_go_mod_sha256: 42d674c3b77defbc95c0b96a077302adc47f70b049520843df185b13cebada49
+      closure_go_sum_sha256: 2f18690ef7080bc7b609a33b4f779b44e197f6f6c5f405c34e51a8931579c8c0
+  provenance_review:
+    status: REPRODUCED_NOT_APPROVED
+    result: Exact tag commit, module and go.mod checksums, pgxpool closure, license files, and notice obligations reproduced.
+  possible_successor:
+    status: UNAPPROVED_INFORMATION_ONLY
+    selected_modules:
+      - module: golang.org/x/text
+        version: v0.39.0
+        module_sum: "h1:UbZz4pLOvn600D6Oh6GGEI6VAmndrEBLv8/6BEXzyus="
+        go_mod_sum: "h1:3UwRclnC2g0TU9x8PZiyfOajCd1zaUNHF9cvqcQZ+ZM="
+      - module: golang.org/x/sync
+        version: v0.21.0
+        module_sum: "h1:HLII4xRRTtCRkxYp4HNFF0Js/Og6q2i++KXbg0gHCwM="
+        go_mod_sum: "h1:9xrNwdLfx4jkKbNva9FpL6vEN7evnE43NNNJQ2LF3+0="
+    govulncheck_findings: 0
+    closure_go_mod_sha256: 925e120507c7b457b98f5dcb68a05f3044ab9883a608c591f6a9f7bdbb636ac4
+    closure_go_sum_sha256: 760a7e8525ac7caaf6fa69cbc51ae7661a0a942369b9412e1a2cd17655e51a33
+    required_next_step: New immutable intake revision, exact closure/checksums/notices, compatibility tests, and fresh independent rescan.
+  pgxpool_module_closure:
+    - module: github.com/jackc/pgpassfile
+      version: v1.0.0
+      module_sum: "h1:/6Hmqy13Ss2zCq62VdNG8tM1wchn8zjSGOBJ6icpsIM="
+      go_mod_sum: "h1:CEx0iS5ambNFdcRtxPj5JhEz+xB6uRky5eyVu/W2HEg="
+      upstream_repository: https://github.com/jackc/pgpassfile
+      upstream_commit: 99d8e8e28945ffceaf75b0299fcb2bb656b8a683
+      license_expression: MIT
+      notice_id: NOTICE-PGPASSFILE-MIT
+    - module: github.com/jackc/pgservicefile
+      version: v0.0.0-20240606120523-5a60cdf6a761
+      module_sum: "h1:iCEnooe7UlwOQYpKFhBabPMi4aNAfoODPEFNiAnClxo="
+      go_mod_sum: "h1:5TJZWKEWniPve33vlWYSoGYefn3gLQRzjfDlhSJ9ZKM="
+      upstream_repository: https://github.com/jackc/pgservicefile
+      upstream_commit: 5a60cdf6a76120dc3d5152b95f3b5fd8aa7cc9eb
+      license_expression: MIT
+      notice_id: NOTICE-PGSERVICEFILE-MIT
+    - module: github.com/jackc/puddle/v2
+      version: v2.2.2
+      module_sum: "h1:PR8nw+E/1w0GLuRFSmiioY6UooMp6KJv0/61nB7icHo="
+      go_mod_sum: "h1:vriiEXHvEE654aYKXXjOvZM39qJ0q+azkZFrfEOc3H4="
+      upstream_repository: https://github.com/jackc/puddle
+      upstream_commit: bd09d14bd4018b6d65a9d7770e2f3ddf8b00af1c
+      license_expression: MIT
+      notice_id: NOTICE-PUDDLE-MIT
+    - module: golang.org/x/sync
+      version: v0.17.0
+      module_sum: "h1:l60nONMj9l5drqw6jlhIELNv9I0A4OFgRsG9k2oT9Ug="
+      go_mod_sum: "h1:9KTHXmSnoGruLpwFjVSX0lNNA75CykiMECbovNTZqGI="
+      upstream_repository: https://github.com/golang/sync
+      upstream_commit: 04914c200cb38d4ea960ee6a4c314a028c632991
+      license_expression: BSD-3-Clause
+      notice_id: NOTICE-GO-X-SYNC-BSD-3-CLAUSE
+    - module: golang.org/x/text
+      version: v0.29.0
+      module_sum: "h1:1neNs90w9YzJ9BocxfsQNHKuAT4pkghyXc4nhZ6sJvk="
+      go_mod_sum: "h1:7MhJOA9CD2qZyOKYazxdYMF85OwPdEr9jTtBpO7ydH4="
+      upstream_repository: https://github.com/golang/text
+      upstream_commit: e69f31bf9cf2f46bd3325bc9bad37fe9001731c2
+      license_expression: BSD-3-Clause
+      notice_id: NOTICE-GO-X-TEXT-BSD-3-CLAUSE
+
+oci_candidate:
+  approval_id: DEP-APP-OCI-POSTGRES-16-BOOKWORM-BB3E1A57
+  reference: postgres:16-bookworm
+  registry_repository: docker.io/library/postgres
+  source: https://hub.docker.com/_/postgres
+  index_digest: "sha256:bb3e1a57e5407e0a5280b4211980a5e537f4abd234a87014ac979849a78dd825"
+  selected_platform:
+    os: linux
+    architecture: amd64
+    manifest_digest: "sha256:1938c16e9d2f10a6a3623b344b64ae8d45f407f2c5f34f0979468bb689b9227a"
+    config_digest: "sha256:5f71c21b69a7977b82247582e2e731ed76bdebaadb7dd7945ed76bcc9ed06632"
+  postgres_package_version: 16.15-1.pgdg12+2
+  created: "2026-08-25T00:42:19.848754437Z"
+  source_revision: 9d15534160ade17f2b6c455a39ee967c49b1937d
+  proposed_relationship: ci_test_service
+  proposed_distribution: []
+  vulnerability_scan:
+    status: REJECTED_UNRESOLVED_CRITICAL_HIGH
+    completed_at: "2026-08-30T21:35:54Z"
+    reviewed_disposition: Both independent scanners retain unresolved Critical/High findings after the reviewed non-applicable results; RG-08 is not satisfied.
+    reports:
+      - tool: trivy
+        version: 0.74.0
+        database_version: 2
+        database_updated_at: "2026-08-30T19:01:43.110912224Z"
+        report_created_at: "2026-08-30T21:27:24.886430412Z"
+        report_sha256: 928280778e02c072db6b3f05a4e8fee9b535b2a75eca668dfba689697e1be720
+        raw_os_critical: 15
+        raw_os_high: 45
+      - tool: grype
+        version: 0.118.0
+        database_schema: v6.1.9
+        database_built_at: "2026-08-30T06:27:52Z"
+        report_created_at: "2026-08-30T21:29:44.933982995Z"
+        report_sha256: 5307fb983fbe1d72971956244d538e4caec97d41e75a9f64304cc0bbbb010693
+        raw_os_critical: 26
+        raw_os_high: 49
+  package_license_inventory:
+    status: REJECTED_INCOMPLETE_LICENSE_CLASSIFICATION
+    tool: syft
+    version: 1.51.1
+    report_sha256: a5859ae8a27dac4117c518a4cc0a8433c6e336633143edb386a59c2eaba678e8
+    published_spdx_license_concluded: NOASSERTION
+    published_spdx_noassertion_concluded_packages: 204
+    scanner_custom_tokens: [Custom-Unicode, Custom-pg_dump, Custom-regex]
+    disposition: Legal/policy normalization is incomplete; UNKNOWN remains rejected and quarantined.
+  published_supply_chain_statements:
+    status: REPRODUCED_UNSIGNED_EVIDENCE_ONLY
+    attestation_manifest_digest: "sha256:4ba017d475bffe5bb91d50107c339b64a43853b264a2426ceddfa47557939ea3"
+    subject_manifest_digest: "sha256:1938c16e9d2f10a6a3623b344b64ae8d45f407f2c5f34f0979468bb689b9227a"
+    spdx:
+      predicate_type: https://spdx.dev/Document
+      version: SPDX-2.3
+      layer_digest: "sha256:90162b18863727e5883dc9c5fcae8c65b6ff353e7e9caa03292e77626d386d47"
+    slsa:
+      predicate_type: https://slsa.dev/provenance/v0.2
+      layer_digest: "sha256:81926168df652b2566d246259a832e999ed94d3c134671eb1adb6e07a292f05e"
+      source_revision: 9d15534160ade17f2b6c455a39ee967c49b1937d
+    assurance_limit: Published statements are digest-bound provenance evidence only; no SLSA level or approval is claimed.
+  signature_attestation_review:
+    status: REJECTED_NO_COSIGN_SIGNATURE_OR_SIGNED_ATTESTATION
+    tool: cosign
+    version: 3.1.3
+    checked_digests: ["sha256:bb3e1a57e5407e0a5280b4211980a5e537f4abd234a87014ac979849a78dd825", "sha256:1938c16e9d2f10a6a3623b344b64ae8d45f407f2c5f34f0979468bb689b9227a"]
+    result: No Cosign signature or signed Cosign attestation was found for either digest.
