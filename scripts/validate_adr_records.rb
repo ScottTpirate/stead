@@ -96,6 +96,71 @@ REQUIRED_SECTIONS = [
   "Reviews and approvals"
 ].freeze
 
+ADR_0007_REQUIREMENT_TEST_MAPPING = {
+  "PRIN-005" => %w[
+    T-ADR-0007-NAMESPACE-ROLES
+    T-ADR-0007-FOREIGN-WRITE-DENIAL
+    T-ADR-0007-CROSS-MODULE-READS
+  ],
+  "ARCH-003" => %w[
+    T-ADR-0007-TRANSACTION-PORTS
+  ],
+  "ARCH-004" => %w[
+    T-ADR-0007-NAMESPACE-ROLES
+    T-ADR-0007-FOREIGN-WRITE-DENIAL
+    T-ADR-0007-CROSS-MODULE-READS
+    T-ADR-0007-MIGRATION-ORDERING
+  ],
+  "EVT-002" => %w[
+    T-ADR-0007-OUTBOX-ATOMICITY
+    T-ADR-0007-FAILURE-INJECTION
+  ],
+  "AUD-001" => %w[
+    T-ADR-0007-OUTBOX-ATOMICITY
+    T-ADR-0007-FAILURE-INJECTION
+  ],
+  "AUD-002" => %w[
+    T-ADR-0007-OUTBOX-ATOMICITY
+    T-ADR-0007-BACKUP-RESTORE
+    T-ADR-0007-FAILURE-INJECTION
+  ],
+  "DEP-005" => %w[
+    T-ADR-0007-MIGRATION-ORDERING
+    T-ADR-0007-UPGRADE-ROLLBACK
+    T-ADR-0007-BACKUP-RESTORE
+    T-ADR-0007-FAILURE-INJECTION
+  ],
+  "OPS-003" => %w[
+    T-ADR-0007-BACKUP-RESTORE
+  ],
+  "OPS-004" => %w[
+    T-ADR-0007-BACKUP-RESTORE
+    T-ADR-0007-FAILURE-INJECTION
+  ],
+  "PERF-003" => %w[
+    T-ADR-0007-OUTBOX-ATOMICITY
+    T-ADR-0007-CROSS-MODULE-READS
+    T-ADR-0007-OBSERVABILITY-PERFORMANCE
+  ],
+  "PERF-004" => %w[
+    T-ADR-0007-CROSS-MODULE-READS
+    T-ADR-0007-DURABLE-EFFECTS
+    T-ADR-0007-OBSERVABILITY-PERFORMANCE
+  ],
+  "TEST-005" => %w[
+    T-ADR-0007-OUTBOX-ATOMICITY
+    T-ADR-0007-FAILURE-INJECTION
+  ],
+  "TEST-007" => %w[
+    T-ADR-0007-NAMESPACE-ROLES
+    T-ADR-0007-FOREIGN-WRITE-DENIAL
+    T-ADR-0007-MIGRATION-ORDERING
+    T-ADR-0007-UPGRADE-ROLLBACK
+    T-ADR-0007-BACKUP-RESTORE
+    T-ADR-0007-FAILURE-INJECTION
+  ]
+}.transform_values(&:freeze).freeze
+
 def load_yaml(relative)
   YAML.safe_load(
     ROOT.join(relative).read(encoding: "UTF-8"),
@@ -137,6 +202,42 @@ def adr_requirement_traceability_failures(requirements:, adr_number:, claimed_re
   undeclared_tests = registered_tests - declared_tests
   unless undeclared_tests.empty?
     failures << "requirements register names undeclared ADR-#{adr_number} tests: #{undeclared_tests.to_a.sort.join(', ')}"
+  end
+
+  failures
+end
+
+def registered_adr_requirement_test_edges(requirements:, adr_number:)
+  test_prefix = "T-ADR-#{adr_number}-"
+  requirements.each_with_object(Set.new) do |record, edges|
+    Array(record["test_ids"]).each do |test_id|
+      edges << [record.fetch("requirement_id"), test_id] if test_id.start_with?(test_prefix)
+    end
+  end
+end
+
+def expected_adr_requirement_test_edges(requirement_test_mapping)
+  requirement_test_mapping.each_with_object(Set.new) do |(requirement_id, test_ids), edges|
+    test_ids.each { |test_id| edges << [requirement_id, test_id] }
+  end
+end
+
+def format_adr_requirement_test_edges(edges)
+  edges.to_a.sort.map { |edge| edge.join(" -> ") }.join(", ")
+end
+
+def exact_adr_requirement_mapping_failures(requirements:, adr_number:, expected_edges:)
+  registered_edges = registered_adr_requirement_test_edges(requirements: requirements, adr_number: adr_number)
+  failures = []
+
+  missing_edges = expected_edges - registered_edges
+  unless missing_edges.empty?
+    failures << "ADR-#{adr_number} requirement mapping missing required edges: #{format_adr_requirement_test_edges(missing_edges)}"
+  end
+
+  unexpected_edges = registered_edges - expected_edges
+  unless unexpected_edges.empty?
+    failures << "ADR-#{adr_number} requirement mapping has unexpected edges: #{format_adr_requirement_test_edges(unexpected_edges)}"
   end
 
   failures
@@ -266,31 +367,43 @@ adr_0007_traceability_failures = adr_requirement_traceability_failures(
 )
 failures.concat(adr_0007_traceability_failures)
 
-# Exercise the same validator against a one-link deletion in a copy of the
-# repository-owned registry. At least one required mapping must introduce a
-# failure; otherwise the completeness checks are not mutation-sensitive.
-adr_0007_mutation_detected = requirements.each_with_index.any? do |record, record_index|
-  next false unless requirements_by_number.fetch("0007", []).include?(record.fetch("requirement_id"))
+adr_0007_expected_edges = expected_adr_requirement_test_edges(ADR_0007_REQUIREMENT_TEST_MAPPING).freeze
+unless adr_0007_expected_edges.length == 36
+  failures << "ADR-0007 closed requirement mapping must contain exactly 36 edges, found #{adr_0007_expected_edges.length}"
+end
 
-  Array(record["test_ids"]).each_index.any? do |test_index|
-    test_id = record.fetch("test_ids").fetch(test_index)
-    next false unless test_id.start_with?("T-ADR-0007-")
+adr_0007_exact_mapping_failures = exact_adr_requirement_mapping_failures(
+  requirements: requirements,
+  adr_number: "0007",
+  expected_edges: adr_0007_expected_edges
+)
+failures.concat(adr_0007_exact_mapping_failures)
 
-    mutated_requirements = requirements.map do |registered_requirement|
-      registered_requirement.merge("test_ids" => Array(registered_requirement["test_ids"]).dup)
-    end
-    mutated_requirements.fetch(record_index).fetch("test_ids").delete_at(test_index)
-    mutated_failures = adr_requirement_traceability_failures(
-      requirements: mutated_requirements,
-      adr_number: "0007",
-      claimed_requirement_ids: requirements_by_number.fetch("0007", []),
-      declared_test_ids: tests_by_number.fetch("0007", [])
-    )
-    !(mutated_failures.to_set - adr_0007_traceability_failures.to_set).empty?
+# Delete every required edge independently from a copy of the repository-owned
+# registry and exercise the same exact-mapping validator against each mutant.
+adr_0007_mutation_survivors = []
+adr_0007_expected_edges.to_a.sort.each do |requirement_id, test_id|
+  mutated_requirements = requirements.map do |registered_requirement|
+    registered_requirement.merge("test_ids" => Array(registered_requirement["test_ids"]).dup)
+  end
+  mutated_record = mutated_requirements.find { |record| record.fetch("requirement_id") == requirement_id }
+  removed_test = mutated_record&.fetch("test_ids", [])&.delete(test_id)
+  if removed_test.nil?
+    adr_0007_mutation_survivors << "#{requirement_id} -> #{test_id} (edge absent before mutation)"
+    next
+  end
+
+  mutation_failures = exact_adr_requirement_mapping_failures(
+    requirements: mutated_requirements,
+    adr_number: "0007",
+    expected_edges: adr_0007_expected_edges
+  )
+  if mutation_failures.empty?
+    adr_0007_mutation_survivors << "#{requirement_id} -> #{test_id}"
   end
 end
-unless adr_0007_mutation_detected
-  failures << "ADR-0007 traceability mutation guard did not detect any single required mapping deletion"
+unless adr_0007_mutation_survivors.empty?
+  failures << "ADR-0007 exact-mapping mutation survivors: #{adr_0007_mutation_survivors.join(', ')}"
 end
 
 security_issue = issues["STEAD-P1-006"]
@@ -652,6 +765,8 @@ missing_accepted_tests = tests_by_number.fetch("0001", []).to_set - catalog_test
 failures << "implementation issue catalog omits accepted ADR-0001 tests: #{missing_accepted_tests.to_a.sort.join(', ')}" unless missing_accepted_tests.empty?
 
 if failures.empty?
+  killed_mutations = adr_0007_expected_edges.length - adr_0007_mutation_survivors.length
+  puts "ADR-0007 exact-mapping mutation guard: PASS (#{killed_mutations}/#{adr_0007_expected_edges.length} required edge deletions killed)"
   puts "ADR traceability validation: PASS (records=#{paths.length}, requirements=#{known_requirement_ids.length}, tests=#{all_test_owners.length})"
 else
   warn "ADR traceability validation: FAIL (#{failures.length} issue#{failures.length == 1 ? '' : 's'})"
