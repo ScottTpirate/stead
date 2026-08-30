@@ -198,6 +198,39 @@ ownership cannot replace either DSSE envelope or the deployment assurance
 result. The golden vector verifies wholly from checked-in bytes with no network,
 TUF, public PKI, transparency service, registry, KMS, or proprietary dependency.
 
+## WS-09 lifecycle observation seam
+
+`ObservedWorkflow` wraps the lifecycle-relevant construction operations without
+changing their existing function signatures or deterministic implementation:
+unsigned preparation, activation finalization, archive inspection and exact
+validation, release-attestation preparation, release-handoff finalization, and
+transport-descriptor construction. Each call attempts exactly one terminal
+`LifecycleEvent` on success or failure. Events declare `authority: none`, name
+WS-09 as producer and WS-07 as the durable-audit owner, and contain only stable
+workflow/stage/outcome/error codes; bounded operation, correlation, and
+causation identifiers; syntactically valid existing SHA-256 identities; bounded
+receipt/review/waiver and archive counts; and deployment-policy signing and
+approval thresholds.
+
+Lifecycle identifiers are limited to 128 ASCII identifier bytes and are copied
+when the wrapper is created. They are never passed into canonical encoders,
+signing requests, DSSE envelopes, archives, attestations, handoffs, or transport
+descriptors. Events expose no payload, envelope, archive, signature, key,
+credential, protected body, source/path, parser text, arbitrary attributes, or
+metric-label map. The callback receives a value-only event with no slices,
+maps, pointers, or interfaces. Different lifecycle identifiers therefore leave
+all typed and byte outputs identical.
+
+Observation is fail closed: a missing observer, callback error, callback panic,
+concurrent use, or callback reentry returns only the stable
+`lifecycle_observer_failed` code and discards otherwise valid operation output.
+One `ObservedWorkflow` represents one serialized flow. The observer interface
+itself performs no I/O and grants no database, network, provider, filesystem,
+signing, policy, or authorization capability. Implementations may pass the
+bounded event to a separately authorized WS-07 adapter, but durable audit,
+outbox transactions, retry, retention, metric projection, and delivery remain
+outside this package and under WS-07 ownership.
+
 Build/sign/archive/attestation interruption leaves no runtime state because this
 module owns none. Retry from pinned source/lock/recipe and declared metadata;
 reuse returned bytes only when their exact digests still match. Rollback is a
@@ -221,6 +254,11 @@ verification. The vector uses a public,
 non-secret, nonproduction P-256 scalar solely to make independent verification
 repeatable. No private material exists in the fixture and its key has no Stead
 trust authority.
+
+`observation/lifecycle-contract.json` closes the allowed observation schema,
+ownership, identifier ceiling, terminal outcomes, stage inventory, and exact
+safe event/fact fields. It is a test contract only and is never included in a
+release archive or signed payload.
 
 ### RG-03 control-flow branch-arm gate
 

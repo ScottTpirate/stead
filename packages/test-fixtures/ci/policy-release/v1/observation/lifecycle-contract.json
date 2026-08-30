@@ -1,0 +1,60 @@
+{
+  "schema_version": "1.0.0",
+  "authority": "none",
+  "producer_owner": "WS-09",
+  "durable_audit_owner": "WS-07",
+  "identifier_max_bytes": 128,
+  "observer_failure_code": "lifecycle_observer_failed",
+  "workflows": [
+    "policy_activation",
+    "policy_release",
+    "policy_transport"
+  ],
+  "outcomes": [
+    "failure",
+    "success"
+  ],
+  "stages": [
+    "prepare_unsigned_activation",
+    "finalize_activation_archive",
+    "inspect_activation_archive",
+    "validate_activation_archive",
+    "prepare_release_attestation",
+    "finalize_release_handoff",
+    "build_transport_descriptor"
+  ],
+  "event_fields": [
+    "authority",
+    "context",
+    "durable_audit_owner",
+    "error_code",
+    "facts",
+    "outcome",
+    "producer_owner",
+    "schema_version",
+    "stage",
+    "workflow"
+  ],
+  "fact_fields": [
+    "activation_set_id",
+    "archive_digest",
+    "archive_entry_count",
+    "archive_file_count",
+    "deployment_policy_digest",
+    "distinct_custodians_required",
+    "evidence_manifest_digest",
+    "lowering_approval_threshold",
+    "policy_bundle_id",
+    "presented_assurance_result_digest",
+    "presented_offline_report_digest",
+    "presented_review_receipt_count",
+    "presented_signing_receipt_set_digest",
+    "presented_signing_receipt_count",
+    "presented_waiver_receipt_count",
+    "release_attestation_envelope_digest",
+    "release_attestation_id",
+    "required_signature_threshold",
+    "signed_envelope_digest",
+    "trust_recovery_approval_threshold"
+  ]
+}

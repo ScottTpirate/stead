@@ -17,6 +17,21 @@ func BenchmarkPrepareUnsigned(b *testing.B) {
 	}
 }
 
+func BenchmarkObservedPrepareUnsigned(b *testing.B) {
+	input := fixtureBuildInput(b, "commercial", 1, false)
+	workflow, err := policyrelease.NewObservedWorkflow(lifecycleContext("benchmark"), policyrelease.LifecycleObserverFunc(func(policyrelease.LifecycleEvent) error { return nil }))
+	if err != nil {
+		b.Fatal(err)
+	}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for iteration := 0; iteration < b.N; iteration++ {
+		if _, err := workflow.PrepareUnsigned(input); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
 func BenchmarkFinalizeActivationArchive(b *testing.B) {
 	unsigned, err := policyrelease.PrepareUnsigned(fixtureBuildInput(b, "commercial", 1, false))
 	if err != nil {

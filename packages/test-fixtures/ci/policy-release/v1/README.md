@@ -14,6 +14,11 @@ profile/assurance/trust inputs, then binds its identity into the build review
 and exact SLSA source/lock/subject fields. All caller-provided evidence, review, waiver, assurance,
 offline-check, signature, key-ID, and custodian material is digest-bound and
 explicitly labeled unverified; the fixture claims no authority.
+`observation/lifecycle-contract.json` inventories the exact WS-09 terminal
+observation codes and value-only safe fields consumable by a separately owned
+WS-07 durable audit/outbox adapter. It is out-of-artifact test metadata: it is
+not included in source inputs, signed bytes, archives, handoffs, or transport
+descriptors and grants no persistence or delivery authority.
 `vectors/negative-cases.json` is the stable inventory of fail-closed parser,
 archive, assurance, identity, custody, offline, and TUF non-authority cases.
 The test records every vector by its catalog/ADR obligation.
