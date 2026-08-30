@@ -1,0 +1,10 @@
+{
+  "contract_version": "stead.core.transaction-coordinator/v1",
+  "key": "test_operation",
+  "outbox_policy": "required",
+  "participants": [
+    {"key": "participant_a", "owner": "owner_a", "after": [], "declares_write": true},
+    {"key": "participant_b", "owner": "owner_b", "after": ["participant_a"], "declares_write": true},
+    {"key": "participant_c", "owner": "owner_c", "after": ["participant_b"], "declares_write": true}
+  ]
+}

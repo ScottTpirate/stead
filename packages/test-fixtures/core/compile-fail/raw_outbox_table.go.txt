@@ -1,0 +1,7 @@
+package compilecontract
+
+import outbox "github.com/ScottTpirate/stead/apps/core/internal/outbox"
+
+func rejected(scope outbox.TransactionScope) {
+	scope.Exec("INSERT INTO core_outbox.event_intents")
+}

@@ -1,0 +1,16 @@
+{
+  "scope": "P1-015-CORE-PORTS compile-time negative boundaries",
+  "cases": [
+    {"id": "foreign_internal_import", "placement": "foreign", "source": "foreign_internal_import.go.txt", "expected": "use of internal package github.com/ScottTpirate/stead/apps/core/internal/transaction not allowed"},
+    {"id": "forge_owner_capability", "placement": "apps_core", "source": "forge_owner_capability.go.txt", "expected": "unknown field Owner"},
+    {"id": "late_participant", "placement": "apps_core", "source": "late_participant.go.txt", "expected": "plan.AddParticipant undefined"},
+    {"id": "caller_commit", "placement": "apps_core", "source": "caller_commit.go.txt", "expected": "coordinator.Commit undefined"},
+    {"id": "raw_sql", "placement": "apps_core", "source": "raw_sql.go.txt", "expected": "capability.Exec undefined"},
+    {"id": "role_selection", "placement": "apps_core", "source": "role_selection.go.txt", "expected": "capability.SetRole undefined"},
+    {"id": "mode_downgrade", "placement": "apps_core", "source": "mode_downgrade.go.txt", "expected": "coordinator.SetMode undefined"},
+    {"id": "effect_class_selection", "placement": "apps_core", "source": "effect_class_selection.go.txt", "expected": "coordinator.PrepareEffect undefined"},
+    {"id": "forge_bound_revision", "placement": "apps_core", "source": "forge_bound_revision.go.txt", "expected": "unknown field Opaque"},
+    {"id": "forge_durable_receipt", "placement": "apps_core", "source": "forge_durable_receipt.go.txt", "expected": "unknown field Opaque"},
+    {"id": "raw_outbox_table", "placement": "apps_core", "source": "raw_outbox_table.go.txt", "expected": "scope.Exec undefined"}
+  ]
+}

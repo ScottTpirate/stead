@@ -1,0 +1,5 @@
+package compilecontract
+
+import transaction "github.com/ScottTpirate/stead/apps/core/internal/transaction"
+
+var _ = transaction.OwnerCapability{Owner: "foreign"}
