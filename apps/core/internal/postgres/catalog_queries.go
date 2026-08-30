@@ -151,7 +151,7 @@ ORDER BY objects.schema_name, objects.object_kind, objects.object_name`,
            WHEN 'v' THEN 'view' WHEN 'm' THEN 'materialized_view' WHEN 'f' THEN 'foreign_table'
          END AS object_kind,
          c.relowner AS owner_oid,
-         COALESCE(c.relacl, pg_catalog.acldefault(CASE WHEN c.relkind = 'S' THEN 'S'::"char" ELSE 'r'::"char" END, c.relowner)) AS object_acl
+         COALESCE(c.relacl, pg_catalog.acldefault(CASE WHEN c.relkind = 'S' THEN 's'::"char" ELSE 'r'::"char" END, c.relowner)) AS object_acl
   FROM pg_catalog.pg_class AS c
   JOIN pg_catalog.pg_namespace AS n ON n.oid = c.relnamespace
   WHERE c.relkind IN ('r', 'p', 'S', 'v', 'm', 'f')
@@ -196,16 +196,18 @@ ORDER BY object_acls.schema_name, object_acls.object_kind, object_acls.object_na
     AND owned_schema.nspname NOT LIKE 'pg\_%' ESCAPE '\'
 ), effective_defaults AS (
   SELECT owners.owner_oid, owners.owner_name, ''::name AS schema_name, kinds.object_kind,
-         COALESCE(defaults.defaclacl, pg_catalog.acldefault(kinds.object_code, owners.owner_oid)) AS default_acl
+         COALESCE(defaults.defaclacl, pg_catalog.acldefault(kinds.acldefault_code, owners.owner_oid)) AS default_acl
   FROM deployment_schema_owners AS owners
   CROSS JOIN (VALUES
-    ('r'::"char", 'table'), ('S'::"char", 'sequence'),
-    ('f'::"char", 'routine'), ('T'::"char", 'type')
-  ) AS kinds(object_code, object_kind)
+    ('r'::"char", 'r'::"char", 'table'),
+    ('S'::"char", 's'::"char", 'sequence'),
+    ('f'::"char", 'f'::"char", 'routine'),
+    ('T'::"char", 'T'::"char", 'type')
+  ) AS kinds(defaclobjtype_code, acldefault_code, object_kind)
   LEFT JOIN pg_catalog.pg_default_acl AS defaults
     ON defaults.defaclrole = owners.owner_oid
    AND defaults.defaclnamespace = 0
-   AND defaults.defaclobjtype = kinds.object_code
+   AND defaults.defaclobjtype = kinds.defaclobjtype_code
   UNION ALL
   SELECT owner_role.oid, owner_role.rolname, ''::name,
          CASE defaults.defaclobjtype WHEN 'n' THEN 'schema' ELSE defaults.defaclobjtype::text END,

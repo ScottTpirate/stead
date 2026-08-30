@@ -293,6 +293,57 @@ func TestCatalogQueryContractsCoverExactACLInputs(t *testing.T) {
 	}
 }
 
+func TestCatalogACLObjectCodeMappingsAreClosedAndCaseSensitive(t *testing.T) {
+	byName := make(map[string]string)
+	for _, contract := range CatalogQueryContracts() {
+		byName[contract.Name] = contract.SQL
+	}
+	objectACLs, defaultACLs := byName["object_acls"], byName["default_acls"]
+	if err := validateACLObjectCodeMappings(objectACLs, defaultACLs); err != nil {
+		t.Fatalf("catalog ACL object-code mapping rejected: %v", err)
+	}
+
+	mutations := []struct {
+		name        string
+		objectACLs  string
+		defaultACLs string
+	}{
+		{"object_sequence_fallback_S_to_S", replaceOnce(t, objectACLs, `THEN 's'::"char"`, `THEN 'S'::"char"`), defaultACLs},
+		{"default_table_fallback_r_to_s", objectACLs, replaceOnce(t, defaultACLs, `('r'::"char", 'r'::"char", 'table')`, `('r'::"char", 's'::"char", 'table')`)},
+		{"default_sequence_fallback_s_to_S", objectACLs, replaceOnce(t, defaultACLs, `('S'::"char", 's'::"char", 'sequence')`, `('S'::"char", 'S'::"char", 'sequence')`)},
+		{"default_routine_fallback_f_to_r", objectACLs, replaceOnce(t, defaultACLs, `('f'::"char", 'f'::"char", 'routine')`, `('f'::"char", 'r'::"char", 'routine')`)},
+		{"default_type_fallback_T_to_r", objectACLs, replaceOnce(t, defaultACLs, `('T'::"char", 'T'::"char", 'type')`, `('T'::"char", 'r'::"char", 'type')`)},
+		{"fallback_uses_catalog_code", objectACLs, replaceOnce(t, defaultACLs, `acldefault(kinds.acldefault_code,`, `acldefault(kinds.defaclobjtype_code,`)},
+		{"catalog_match_uses_fallback_code", objectACLs, replaceOnce(t, defaultACLs, `defaclobjtype = kinds.defaclobjtype_code`, `defaclobjtype = kinds.acldefault_code`)},
+	}
+	for _, mutation := range mutations {
+		t.Run(mutation.name, func(t *testing.T) {
+			if err := validateACLObjectCodeMappings(mutation.objectACLs, mutation.defaultACLs); err == nil {
+				t.Fatal("object-code mutation survived the structural guard")
+			}
+		})
+	}
+}
+
+func validateACLObjectCodeMappings(objectACLs, defaultACLs string) error {
+	const sequenceObjectFallback = `pg_catalog.acldefault(CASE WHEN c.relkind = 'S' THEN 's'::"char" ELSE 'r'::"char" END, c.relowner)`
+	const defaultObjectPairs = `CROSS JOIN (VALUES
+    ('r'::"char", 'r'::"char", 'table'),
+    ('S'::"char", 's'::"char", 'sequence'),
+    ('f'::"char", 'f'::"char", 'routine'),
+    ('T'::"char", 'T'::"char", 'type')
+  ) AS kinds(defaclobjtype_code, acldefault_code, object_kind)`
+	if strings.Count(objectACLs, sequenceObjectFallback) != 1 {
+		return errors.New("object ACL fallback codes drifted")
+	}
+	if strings.Count(defaultACLs, defaultObjectPairs) != 1 ||
+		strings.Count(defaultACLs, `pg_catalog.acldefault(kinds.acldefault_code, owners.owner_oid)`) != 1 ||
+		strings.Count(defaultACLs, `defaults.defaclobjtype = kinds.defaclobjtype_code`) != 1 {
+		return errors.New("default ACL catalog/fallback object-code pairs drifted")
+	}
+	return nil
+}
+
 func TestDecodeManifestRejectsNonCanonicalJSONBeforeTypedDecode(t *testing.T) {
 	data, err := os.ReadFile(fixtureRoot + "core_outbox_catalog_manifest.json")
 	if err != nil {
