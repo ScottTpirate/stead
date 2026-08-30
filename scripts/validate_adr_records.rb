@@ -25,9 +25,8 @@ EXPECTED_P1_006_ADR_CANDIDATES = %w[
   ADR-CAND-007
   ADR-CAND-021
 ].freeze
-ADR_CANDIDATE_PREFIX = "ADR-CAND-".freeze
-ADR_CANDIDATE_TOKEN_PATTERN = /\AADR-CAND-\d{3}\z/.freeze
-ADR_CANDIDATE_ADJACENT_CHARACTER_PATTERN = /[\p{L}\p{N}\p{M}\p{Pc}\p{C}]/u.freeze
+EXPECTED_P1_006_ADR_GATE_CLAUSE =
+  "Only after ADR-CAND-002, ADR-CAND-003, ADR-CAND-004, ADR-CAND-005, ADR-CAND-007, and ADR-CAND-021 are accepted,".freeze
 
 ACCEPTED_RECORD_METADATA = {
   "0002" => {
@@ -255,137 +254,13 @@ def exact_adr_requirement_mapping_failures(requirements:, adr_number:, expected_
   failures
 end
 
-def markdown_whitespace?(character)
-  character.nil? || character.match?(/\p{Space}/u)
-end
-
-def markdown_punctuation?(character)
-  !character.nil? && character.match?(/[\p{P}\p{S}]/u)
-end
-
-def markdown_escaped?(characters, index)
-  backslashes = 0
-  cursor = index - 1
-  while cursor >= 0 && characters[cursor] == "\\"
-    backslashes += 1
-    cursor -= 1
+# The P1-006 approval prerequisite is intentionally a strict raw-source clause,
+# not rendered Markdown. Escapes, entities, formatting delimiters, links, HTML,
+# and cross-item composition cannot stand in for the machine-reviewed wording.
+def noncanonical_adr_candidate_fragments(criteria)
+  criteria.flat_map do |criterion|
+    criterion.to_s.scan(/ADR-CAND-[^\p{Zs}\t\n\f\r,.;:()\[\]{}"'`*]+/u)
   end
-  backslashes.odd?
-end
-
-def markdown_code_span_mask(characters)
-  protected = Array.new(characters.length, false)
-  cursor = 0
-
-  while cursor < characters.length
-    unless characters[cursor] == "`"
-      cursor += 1
-      next
-    end
-
-    opener_start = cursor
-    cursor += 1 while cursor < characters.length && characters[cursor] == "`"
-    opener_length = cursor - opener_start
-    next if markdown_escaped?(characters, opener_start)
-
-    search = cursor
-    closer_end = nil
-    while search < characters.length
-      unless characters[search] == "`"
-        search += 1
-        next
-      end
-
-      closer_start = search
-      search += 1 while search < characters.length && characters[search] == "`"
-      if search - closer_start == opener_length
-        closer_end = search
-        break
-      end
-    end
-
-    next unless closer_end
-
-    (opener_start...closer_end).each { |index| protected[index] = true }
-    cursor = closer_end
-  end
-
-  protected
-end
-
-def normalize_markdown_underscore_emphasis(text)
-  characters = text.each_char.to_a
-  protected = markdown_code_span_mask(characters)
-  delimiters = []
-  cursor = 0
-
-  while cursor < characters.length
-    unless characters[cursor] == "_" && !protected[cursor]
-      cursor += 1
-      next
-    end
-
-    delimiter_start = cursor
-    cursor += 1 while cursor < characters.length && characters[cursor] == "_" && !protected[cursor]
-    delimiter_end = cursor
-    next if markdown_escaped?(characters, delimiter_start)
-
-    previous_character = delimiter_start.zero? ? nil : characters[delimiter_start - 1]
-    next_character = delimiter_end == characters.length ? nil : characters[delimiter_end]
-    left_flanking = !markdown_whitespace?(next_character) &&
-      (!markdown_punctuation?(next_character) || markdown_whitespace?(previous_character) || markdown_punctuation?(previous_character))
-    right_flanking = !markdown_whitespace?(previous_character) &&
-      (!markdown_punctuation?(previous_character) || markdown_whitespace?(next_character) || markdown_punctuation?(next_character))
-
-    delimiters << {
-      start: delimiter_start,
-      finish: delimiter_end,
-      length: delimiter_end - delimiter_start,
-      can_open: left_flanking && (!right_flanking || markdown_punctuation?(previous_character)),
-      can_close: right_flanking && (!left_flanking || markdown_punctuation?(next_character))
-    }
-  end
-
-  open_delimiters = Hash.new { |hash, length| hash[length] = [] }
-  normalized_delimiters = []
-  delimiters.each do |delimiter|
-    opener = delimiter[:can_close] ? open_delimiters[delimiter[:length]].pop : nil
-    if opener
-      normalized_delimiters << opener << delimiter
-    elsif delimiter[:can_open]
-      open_delimiters[delimiter[:length]] << delimiter
-    end
-  end
-
-  normalized_delimiters.each do |delimiter|
-    (delimiter[:start]...delimiter[:finish]).each { |index| characters[index] = " " }
-  end
-  characters.join
-end
-
-def adr_candidate_identifier_adjacency?(character)
-  return false if markdown_whitespace?(character)
-
-  character == "-" || character.match?(ADR_CANDIDATE_ADJACENT_CHARACTER_PATTERN)
-end
-
-def adr_candidate_mentions(text)
-  normalized = normalize_markdown_underscore_emphasis(text)
-  characters = normalized.each_char.to_a
-  mentions = []
-  cursor = 0
-
-  while (candidate_start = normalized.index(ADR_CANDIDATE_PREFIX, cursor))
-    mention_start = candidate_start
-    mention_start -= 1 while mention_start.positive? && adr_candidate_identifier_adjacency?(characters[mention_start - 1])
-
-    mention_end = candidate_start + ADR_CANDIDATE_PREFIX.length
-    mention_end += 1 while mention_end < characters.length && adr_candidate_identifier_adjacency?(characters[mention_end])
-    mentions << characters[mention_start...mention_end].join
-    cursor = candidate_start + ADR_CANDIDATE_PREFIX.length
-  end
-
-  mentions
 end
 
 def p1_006_adr_gate_failures(adr_gates:, security_issue:)
@@ -404,18 +279,21 @@ def p1_006_adr_gate_failures(adr_gates:, security_issue:)
   end
 
   if security_issue
-    criteria = Array(security_issue["acceptance_criteria"]).join(" ")
-    candidate_mentions = adr_candidate_mentions(criteria)
-    malformed_candidate_mentions = candidate_mentions.reject { |candidate| candidate.match?(ADR_CANDIDATE_TOKEN_PATTERN) }
-    unless malformed_candidate_mentions.empty?
-      failures << "STEAD-P1-006 acceptance criteria contain non-exact ADR tokens: #{malformed_candidate_mentions.uniq.sort.join(', ')}"
+    criteria = Array(security_issue["acceptance_criteria"]).map(&:to_s)
+    canonical_clause_present = criteria.first&.start_with?(EXPECTED_P1_006_ADR_GATE_CLAUSE)
+    unless canonical_clause_present
+      failures << "STEAD-P1-006 acceptance criteria omit ADR gates: #{EXPECTED_P1_006_ADR_CANDIDATES.join(', ')} (exact raw gate clause missing)"
     end
-    acceptance_candidates = candidate_mentions.grep(ADR_CANDIDATE_TOKEN_PATTERN).to_set
-    missing_acceptance_candidates = expected_candidates - acceptance_candidates
-    unless missing_acceptance_candidates.empty?
-      failures << "STEAD-P1-006 acceptance criteria omit ADR gates: #{missing_acceptance_candidates.to_a.sort.join(', ')}"
+
+    residual_criteria = criteria.dup
+    residual_criteria[0] = residual_criteria.first.delete_prefix(EXPECTED_P1_006_ADR_GATE_CLAUSE) if canonical_clause_present
+    residual_fragments = noncanonical_adr_candidate_fragments(residual_criteria)
+    unless residual_fragments.empty?
+      failures << "STEAD-P1-006 acceptance criteria contain noncanonical ADR tokens outside the exact raw gate clause: #{residual_fragments.uniq.sort.join(', ')}"
     end
-    unexpected_acceptance_candidates = acceptance_candidates - expected_candidates
+
+    residual_candidates = residual_fragments.grep(/\AADR-CAND-\d{3}\z/).to_set
+    unexpected_acceptance_candidates = residual_candidates - expected_candidates
     unless unexpected_acceptance_candidates.empty?
       failures << "STEAD-P1-006 acceptance criteria add unexpected ADR gates: #{unexpected_acceptance_candidates.to_a.sort.join(', ')}"
     end
@@ -427,6 +305,10 @@ def p1_006_adr_gate_failures(adr_gates:, security_issue:)
 end
 
 failures = []
+canonical_clause_candidates = EXPECTED_P1_006_ADR_GATE_CLAUSE.scan(/ADR-CAND-\d{3}/)
+unless canonical_clause_candidates == EXPECTED_P1_006_ADR_CANDIDATES
+  failures << "STEAD-P1-006 canonical raw ADR gate clause must contain the ordered exact expected candidate set"
+end
 requirements = load_yaml("specs/traceability/requirements.yaml").fetch("requirements")
 known_requirement_ids = requirements.map { |record| record.fetch("requirement_id") }.to_set
 issue_catalog = load_yaml("docs/planning/implementation-issue-catalog.yaml")
@@ -591,14 +473,15 @@ end
 
 security_issue = issues["STEAD-P1-006"]
 failures.concat(p1_006_adr_gate_failures(adr_gates: adr_gates, security_issue: security_issue))
+p1_006_gate_mutation_count = 0
 
 # Exercise the coupled failure mode explicitly: deleting the same security ADR
 # from both the decision-gate dependency list and the dependent issue text must
 # be caught independently at both boundaries.
 if security_issue && adr_gates["ADR-CAND-002"]
-  candidate_parser_fixture = {
+  candidate_gate_fixture = {
     "acceptance_criteria" => [
-      "Required gates: #{EXPECTED_P1_006_ADR_CANDIDATES.join(', ')}."
+      "#{EXPECTED_P1_006_ADR_GATE_CLAUSE} continue with the bounded implementation."
     ]
   }
 
@@ -624,6 +507,7 @@ if security_issue && adr_gates["ADR-CAND-002"]
   unless missing_dependency_killed && missing_acceptance_killed
     failures << "STEAD-P1-006 paired ADR-CAND-002 deletion mutant survived one or both independent gate checks"
   end
+  p1_006_gate_mutation_count += 1
 
   added_adr_gates = adr_gates.transform_values do |gate|
     gate.merge("dependent_issues" => Array(gate["dependent_issues"]).dup)
@@ -645,74 +529,118 @@ if security_issue && adr_gates["ADR-CAND-002"]
   unless unexpected_dependency_killed && unexpected_acceptance_killed
     failures << "STEAD-P1-006 paired ADR-CAND-001 addition mutant survived one or both exact-set checks"
   end
+  p1_006_gate_mutation_count += 1
 
-  {
-    "numeric suffix" => ["ADR-CAND-0020", "ADR-CAND-0020"],
-    "hyphen suffix" => ["ADR-CAND-002-EXTRA", "ADR-CAND-002-EXTRA"],
-    "underscore suffix" => ["ADR-CAND-002_EXTRA", "ADR-CAND-002_EXTRA"],
-    "embedded prefix" => ["XADR-CAND-002", "XADR-CAND-002"],
-    "Unicode letter prefix" => ["éADR-CAND-002", "éADR-CAND-002"],
-    "Unicode letter suffix" => ["ADR-CAND-002界", "ADR-CAND-002界"],
-    "combining-mark suffix" => ["ADR-CAND-002\u0301", "ADR-CAND-002\u0301"],
-    "Unicode connector suffix" => ["ADR-CAND-002‿EXTRA", "ADR-CAND-002‿EXTRA"],
-    "zero-width suffix" => ["ADR-CAND-002\u200BEXTRA", "ADR-CAND-002\u200BEXTRA"],
-    "soft-hyphen suffix" => ["ADR-CAND-002\u00ADextra", "ADR-CAND-002\u00ADextra"],
-    "escaped emphasis literal" => ["\\_ADR-CAND-002_", "_ADR-CAND-002_"],
-    "code-span emphasis literal" => ["`_ADR-CAND-002_`", "_ADR-CAND-002_"],
-    "Unicode intraword emphasis" => ["é_ADR-CAND-002_", "é_ADR-CAND-002_"],
-    "unbalanced opening delimiter" => ["_ADR-CAND-002", "_ADR-CAND-002"],
-    "unbalanced closing delimiter" => ["ADR-CAND-002_", "ADR-CAND-002_"],
-    "mismatched one-two delimiters" => ["_ADR-CAND-002__", "_ADR-CAND-002__"],
-    "mismatched two-one delimiters" => ["__ADR-CAND-002_", "__ADR-CAND-002_"]
-  }.each do |mutation_name, (replacement, malformed_mention)|
-    nonexact_token_issue = candidate_parser_fixture.merge(
-      "acceptance_criteria" => Array(candidate_parser_fixture["acceptance_criteria"]).map do |criterion|
-        criterion.gsub("ADR-CAND-002", replacement)
+  canonical_fixture_failures = p1_006_adr_gate_failures(
+    adr_gates: adr_gates,
+    security_issue: candidate_gate_fixture
+  )
+  unless canonical_fixture_failures.empty?
+    failures << "STEAD-P1-006 exact raw ADR gate fixture failed: #{canonical_fixture_failures.join('; ')}"
+  end
+
+  EXPECTED_P1_006_ADR_CANDIDATES.each do |candidate|
+    missing_candidate_issue = candidate_gate_fixture.merge(
+      "acceptance_criteria" => candidate_gate_fixture.fetch("acceptance_criteria").map do |criterion|
+        criterion.gsub(candidate) { "ADR-CAND-REMOVED-BY-MUTANT" }
       end
     )
-    nonexact_token_failures = p1_006_adr_gate_failures(
+    missing_candidate_failures = p1_006_adr_gate_failures(
       adr_gates: adr_gates,
-      security_issue: nonexact_token_issue
+      security_issue: missing_candidate_issue
     )
-    malformed_token_killed = nonexact_token_failures.any? do |failure|
-      failure.start_with?("STEAD-P1-006 acceptance criteria contain non-exact ADR tokens:") && failure.include?(malformed_mention)
+    unless missing_candidate_failures.any? { |failure| failure.start_with?("STEAD-P1-006 acceptance criteria omit ADR gates:") }
+      failures << "STEAD-P1-006 #{candidate} raw-clause deletion mutant survived acceptance validation"
     end
-    missing_token_killed = nonexact_token_failures.any? do |failure|
+    p1_006_gate_mutation_count += 1
+
+    missing_gate_dependencies = adr_gates.transform_values do |gate|
+      gate.merge("dependent_issues" => Array(gate["dependent_issues"]).dup)
+    end
+    missing_gate_dependencies.fetch(candidate).fetch("dependent_issues").delete("STEAD-P1-006")
+    missing_gate_failures = p1_006_adr_gate_failures(
+      adr_gates: missing_gate_dependencies,
+      security_issue: candidate_gate_fixture
+    )
+    unless missing_gate_failures.any? { |failure| failure.start_with?("ADR gates omit STEAD-P1-006 dependencies:") && failure.include?(candidate) }
+      failures << "STEAD-P1-006 #{candidate} decision-gate deletion mutant survived dependency validation"
+    end
+    p1_006_gate_mutation_count += 1
+  end
+
+  noncanonical_gate_replacements = {
+    "numeric suffix" => "ADR-CAND-0020",
+    "ASCII hyphen suffix" => "ADR-CAND-002-EXTRA",
+    "underscore suffix" => "ADR-CAND-002_EXTRA",
+    "embedded prefix" => "XADR-CAND-002",
+    "Unicode letter prefix" => "éADR-CAND-002",
+    "Unicode letter suffix" => "ADR-CAND-002界",
+    "combining-mark suffix" => "ADR-CAND-002\u0301",
+    "Unicode connector suffix" => "ADR-CAND-002‿EXTRA",
+    "zero-width suffix" => "ADR-CAND-002\u200BEXTRA",
+    "soft-hyphen suffix" => "ADR-CAND-002\u00ADextra",
+    "vertical-tab suffix" => "ADR-CAND-002\u000BEXTRA",
+    "next-line suffix" => "ADR-CAND-002\u0085EXTRA",
+    "escaped underscore suffix" => "ADR-CAND-002\\_EXTRA",
+    "escaped hyphen suffix" => "ADR-CAND-002\\-EXTRA",
+    "escaped exact token" => "ADR\\-CAND\\-002",
+    "numeric underscore entity" => "ADR-CAND-002&#95;EXTRA",
+    "numeric hyphen entity" => "ADR-CAND-002&#45;EXTRA",
+    "numeric zero-width entity" => "ADR-CAND-002&#x200B;EXTRA",
+    "numeric combining entity" => "ADR-CAND-002&#x301;EXTRA",
+    "numeric connector entity" => "ADR-CAND-002&#x203F;EXTRA",
+    "numeric letter entity" => "ADR-CAND-002&#x754C;EXTRA",
+    "named underscore entity" => "ADR-CAND-002&lowbar;EXTRA",
+    "named hyphen entity" => "ADR-CAND-002&hyphen;EXTRA",
+    "single underscore emphasis" => "_ADR-CAND-002_",
+    "arbitrary underscore emphasis" => "_______ADR-CAND-002_______",
+    "code span" => "`ADR-CAND-002`",
+    "code-span literal emphasis" => "`_ADR-CAND-002_`",
+    "distant delimiter interaction" => "_ADR-CAND-002 __a_",
+    "partial strong delimiter" => "__ADR-CAND-002 is required___",
+    "valid nested delimiter A" => "___ADR-CAND-002__ x_",
+    "valid nested delimiter B" => "___ADR-CAND-002_ x__",
+    "HTML comment" => "<!-- ADR-CAND-002 -->",
+    "link label" => "[ADR-CAND-002](https://example.invalid/gate)"
+  }
+  "֊־᐀᠆‐‑‒–—―⸗⸚⸺⸻⹀⹝〜〰゠︱︲﹘﹣－𐺭".each_char.with_index do |dash, index|
+    noncanonical_gate_replacements["Unicode dash #{index + 1}"] = "ADR-CAND-002#{dash}EXTRA"
+  end
+  (1..32).each do |delimiter_length|
+    noncanonical_gate_replacements["escaped code opener length #{delimiter_length}"] =
+      "\\#{'`' * (delimiter_length + 1)}_ADR-CAND-002_#{'`' * delimiter_length}"
+  end
+
+  noncanonical_gate_replacements.each do |mutation_name, replacement|
+    p1_006_gate_mutation_count += 1
+    noncanonical_token_issue = candidate_gate_fixture.merge(
+      "acceptance_criteria" => Array(candidate_gate_fixture["acceptance_criteria"]).map do |criterion|
+        criterion.gsub("ADR-CAND-002") { replacement }
+      end
+    )
+    noncanonical_failures = p1_006_adr_gate_failures(
+      adr_gates: adr_gates,
+      security_issue: noncanonical_token_issue
+    )
+    canonical_clause_killed = noncanonical_failures.any? do |failure|
       failure.start_with?("STEAD-P1-006 acceptance criteria omit ADR gates:") && failure.include?("ADR-CAND-002")
     end
-    unless malformed_token_killed && missing_token_killed
-      failures << "STEAD-P1-006 #{mutation_name} ADR-CAND-002 mutant survived exact-token parsing"
+    unless canonical_clause_killed
+      failures << "STEAD-P1-006 #{mutation_name} mutant survived strict raw gate-clause validation"
     end
   end
 
-  valid_candidate_formats = {
-    "code span" => "`ADR-CAND-002`",
-    "asterisk emphasis" => "*ADR-CAND-002*",
-    "hyphen before emphasis" => "prefix-_ADR-CAND-002_",
-    "hyphen after emphasis" => "_ADR-CAND-002_-suffix"
-  }
-  [1, 2, 3, 4, 7].each do |delimiter_length|
-    delimiter = "_" * delimiter_length
-    valid_candidate_formats.merge!(
-      "#{delimiter_length}-underscore exact emphasis" => "#{delimiter}ADR-CAND-002#{delimiter}",
-      "#{delimiter_length}-underscore leading prose" => "#{delimiter}Require ADR-CAND-002#{delimiter}",
-      "#{delimiter_length}-underscore trailing prose" => "#{delimiter}ADR-CAND-002 is required#{delimiter}",
-      "#{delimiter_length}-underscore punctuation" => "#{delimiter}ADR-CAND-002,#{delimiter}"
+  ["_", "__", "___", "``", "```"].each do |delimiter|
+    p1_006_gate_mutation_count += 1
+    split_item_issue = candidate_gate_fixture.merge(
+      "acceptance_criteria" => [
+        candidate_gate_fixture.fetch("acceptance_criteria").first.gsub("ADR-CAND-002") { "#{delimiter}ADR-CAND-002" },
+        "later#{delimiter}"
+      ]
     )
-  end
-
-  valid_candidate_formats.each do |format_name, replacement|
-    formatted_security_issue = candidate_parser_fixture.merge(
-      "acceptance_criteria" => Array(candidate_parser_fixture["acceptance_criteria"]).map do |criterion|
-        criterion.gsub("ADR-CAND-002", replacement)
-      end
-    )
-    format_failures = p1_006_adr_gate_failures(
-      adr_gates: adr_gates,
-      security_issue: formatted_security_issue
-    )
-    unless format_failures.empty?
-      failures << "STEAD-P1-006 valid #{format_name} failed exact-token parsing: #{format_failures.join('; ')}"
+    split_item_failures = p1_006_adr_gate_failures(adr_gates: adr_gates, security_issue: split_item_issue)
+    unless split_item_failures.any? { |failure| failure.start_with?("STEAD-P1-006 acceptance criteria omit ADR gates:") }
+      failures << "STEAD-P1-006 cross-item #{delimiter.inspect} delimiter mutant survived strict item-boundary validation"
     end
   end
 end
@@ -1063,6 +991,7 @@ failures << "implementation issue catalog omits accepted ADR-0001 tests: #{missi
 
 if failures.empty?
   killed_mutations = adr_0007_expected_edges.length - adr_0007_mutation_survivors.length
+  puts "STEAD-P1-006 strict raw gate mutation guard: PASS (#{p1_006_gate_mutation_count}/#{p1_006_gate_mutation_count} mutations killed)"
   puts "ADR-0007 exact-mapping mutation guard: PASS (#{killed_mutations}/#{adr_0007_expected_edges.length} required edge deletions killed)"
   puts "ADR traceability validation: PASS (records=#{paths.length}, requirements=#{known_requirement_ids.length}, tests=#{all_test_owners.length})"
 else
