@@ -55,7 +55,7 @@ requirements:
     title: "Modular internals without microservice sprawl"
     implementation_modules: ["cross-cutting", "docs/architecture", "docs/adr"]
     issue_ids: ["STEAD-P0-001", "STEAD-P1-001", "STEAD-P1-002", "STEAD-P1-007", "STEAD-P1-015"]
-    test_ids: ["T-PRIN-005-ACCEPTANCE", "T-STEAD-P1-015-CONTRACT"]
+    test_ids: ["T-PRIN-005-ACCEPTANCE", "T-STEAD-P1-015-CONTRACT", "T-ADR-0007-NAMESPACE-ROLES", "T-ADR-0007-FOREIGN-WRITE-DENIAL", "T-ADR-0007-CROSS-MODULE-READS"]
     documentation: ["docs/architecture/constitution.md", "docs/contributor/architecture-governance.md"]
     status: IMPLEMENTATION_IN_PROGRESS
     release: "phase-1"
@@ -159,15 +159,15 @@ requirements:
     title: "Runtime boundaries"
     implementation_modules: ["apps", "modules", "providers", "packages", "policies", "specs", "deploy", "tests"]
     issue_ids: ["STEAD-P0-001", "STEAD-P0-003", "STEAD-P1-002", "STEAD-P1-015"]
-    test_ids: ["T-ARCH-003-ACCEPTANCE", "T-STEAD-P1-015-CONTRACT"]
+    test_ids: ["T-ARCH-003-ACCEPTANCE", "T-STEAD-P1-015-CONTRACT", "T-ADR-0007-TRANSACTION-PORTS"]
     documentation: ["docs/architecture/constitution.md", "docs/architecture/repository-layout-and-boundaries.md"]
     status: DEPENDENCY_BLOCKED_PHASE_1
     release: "phase-1"
   - requirement_id: "ARCH-004"
     title: "Database ownership"
     implementation_modules: ["apps", "modules", "providers", "packages", "policies", "specs", "deploy", "tests"]
-    issue_ids: ["STEAD-P0-001", "STEAD-P0-003", "STEAD-P1-002", "STEAD-P1-003", "STEAD-P1-013"]
-    test_ids: ["T-ARCH-004-ACCEPTANCE", "T-ADR-0009-DIRECT-CHANGE-ACCEPT", "T-ADR-0009-AMBIGUOUS-MUTATION"]
+    issue_ids: ["STEAD-P0-001", "STEAD-P0-003", "STEAD-P1-002", "STEAD-P1-003", "STEAD-P1-013", "STEAD-P1-017"]
+    test_ids: ["T-ARCH-004-ACCEPTANCE", "T-STEAD-P1-017-CONTRACT", "T-ADR-0007-NAMESPACE-ROLES", "T-ADR-0007-FOREIGN-WRITE-DENIAL", "T-ADR-0007-CROSS-MODULE-READS", "T-ADR-0007-MIGRATION-ORDERING", "T-ADR-0009-DIRECT-CHANGE-ACCEPT", "T-ADR-0009-AMBIGUOUS-MUTATION"]
     documentation: ["docs/architecture/constitution.md", "docs/architecture/repository-layout-and-boundaries.md"]
     status: DEPENDENCY_BLOCKED_PHASE_1
     release: "phase-1"
@@ -567,7 +567,7 @@ requirements:
     title: "Transactional outbox"
     implementation_modules: ["apps/core", "apps/worker", "packages/event-schemas"]
     issue_ids: ["STEAD-P0-003", "STEAD-P1-002", "STEAD-P1-007", "STEAD-P1-015"]
-    test_ids: ["T-EVT-002-ACCEPTANCE", "T-STEAD-P1-015-CONTRACT"]
+    test_ids: ["T-EVT-002-ACCEPTANCE", "T-STEAD-P1-015-CONTRACT", "T-ADR-0007-OUTBOX-ATOMICITY", "T-ADR-0007-FAILURE-INJECTION"]
     documentation: ["docs/architecture/event-contract.md", "specs/asyncapi/stead.yaml"]
     status: DEPENDENCY_BLOCKED_PHASE_1
     release: "phase-1"
@@ -615,7 +615,7 @@ requirements:
     title: "Platform-wide audit"
     implementation_modules: ["modules/audit", "apps/worker"]
     issue_ids: ["STEAD-P0-008", "STEAD-P1-007", "STEAD-P1-015", "STEAD-P2-005"]
-    test_ids: ["T-AUD-001-ACCEPTANCE", "T-STEAD-P1-015-CONTRACT"]
+    test_ids: ["T-AUD-001-ACCEPTANCE", "T-STEAD-P1-015-CONTRACT", "T-ADR-0007-OUTBOX-ATOMICITY", "T-ADR-0007-FAILURE-INJECTION"]
     documentation: ["docs/architecture/audit-model.md", "docs/operator/audit-export.md"]
     status: DEPENDENCY_BLOCKED_PHASE_1
     release: "phase-1"
@@ -623,7 +623,7 @@ requirements:
     title: "Audit record requirements"
     implementation_modules: ["modules/audit", "apps/worker"]
     issue_ids: ["STEAD-P0-008", "STEAD-P1-007", "STEAD-P1-015", "STEAD-P3-003"]
-    test_ids: ["T-AUD-002-ACCEPTANCE", "T-STEAD-P1-015-CONTRACT"]
+    test_ids: ["T-AUD-002-ACCEPTANCE", "T-STEAD-P1-015-CONTRACT", "T-ADR-0007-OUTBOX-ATOMICITY", "T-ADR-0007-BACKUP-RESTORE", "T-ADR-0007-FAILURE-INJECTION"]
     documentation: ["docs/architecture/audit-model.md", "docs/operator/audit-export.md"]
     status: PHASE_GATED
     release: "phase-3"
@@ -814,8 +814,8 @@ requirements:
   - requirement_id: "DEP-005"
     title: "Upgrade behavior"
     implementation_modules: ["apps/steadctl", "deploy/compose", "deploy/helm", "deploy/airgap"]
-    issue_ids: ["STEAD-P0-013", "STEAD-P1-011", "STEAD-P2-010", "STEAD-P3-007"]
-    test_ids: ["T-DEP-005-ACCEPTANCE", "T-STEAD-P1-011-CONTRACT"]
+    issue_ids: ["STEAD-P0-013", "STEAD-P1-011", "STEAD-P1-017", "STEAD-P2-010", "STEAD-P3-007"]
+    test_ids: ["T-DEP-005-ACCEPTANCE", "T-STEAD-P1-011-CONTRACT", "T-STEAD-P1-017-CONTRACT", "T-ADR-0007-MIGRATION-ORDERING", "T-ADR-0007-UPGRADE-ROLLBACK", "T-ADR-0007-BACKUP-RESTORE", "T-ADR-0007-FAILURE-INJECTION"]
     documentation: ["docs/architecture/deployment-profiles.md", "docs/operator/install-upgrade-rollback.md"]
     status: PHASE_GATED
     release: "phase-2"
@@ -838,16 +838,16 @@ requirements:
   - requirement_id: "OPS-003"
     title: "Backup"
     implementation_modules: ["apps/steadctl", "apps/core", "apps/worker", "deploy"]
-    issue_ids: ["STEAD-P0-013", "STEAD-P1-011", "STEAD-P2-010"]
-    test_ids: ["T-OPS-003-ACCEPTANCE", "T-STEAD-P1-011-CONTRACT"]
+    issue_ids: ["STEAD-P0-013", "STEAD-P1-011", "STEAD-P1-017", "STEAD-P2-010"]
+    test_ids: ["T-OPS-003-ACCEPTANCE", "T-STEAD-P1-011-CONTRACT", "T-STEAD-P1-017-CONTRACT", "T-ADR-0007-BACKUP-RESTORE"]
     documentation: ["docs/architecture/observability-contract.md", "docs/operator/backup-restore.md", "docs/operator/reliability.md"]
     status: PHASE_GATED
     release: "phase-2"
   - requirement_id: "OPS-004"
     title: "Restore testing"
     implementation_modules: ["apps/steadctl", "apps/core", "apps/worker", "deploy"]
-    issue_ids: ["STEAD-P0-013", "STEAD-P1-011", "STEAD-P2-010"]
-    test_ids: ["T-OPS-004-ACCEPTANCE", "T-STEAD-P1-011-CONTRACT"]
+    issue_ids: ["STEAD-P0-013", "STEAD-P1-011", "STEAD-P1-017", "STEAD-P2-010"]
+    test_ids: ["T-OPS-004-ACCEPTANCE", "T-STEAD-P1-011-CONTRACT", "T-STEAD-P1-017-CONTRACT", "T-ADR-0007-BACKUP-RESTORE", "T-ADR-0007-FAILURE-INJECTION"]
     documentation: ["docs/architecture/observability-contract.md", "docs/operator/backup-restore.md", "docs/operator/reliability.md"]
     status: PHASE_GATED
     release: "phase-2"
@@ -879,7 +879,7 @@ requirements:
     title: "One composed, projection-backed request path"
     implementation_modules: ["apps/core", "modules", "providers/gitea", "packages/api-client", "tests/performance"]
     issue_ids: ["STEAD-P1-002", "STEAD-P1-003", "STEAD-P1-005", "STEAD-P1-007", "STEAD-P1-008", "STEAD-P1-015"]
-    test_ids: ["T-PERF-003-ACCEPTANCE", "T-ADR-0009-PROVIDER-OUTAGE", "T-ADR-0009-FULL-RECONCILIATION"]
+    test_ids: ["T-PERF-003-ACCEPTANCE", "T-ADR-0007-OUTBOX-ATOMICITY", "T-ADR-0007-CROSS-MODULE-READS", "T-ADR-0007-OBSERVABILITY-PERFORMANCE", "T-ADR-0009-PROVIDER-OUTAGE", "T-ADR-0009-FULL-RECONCILIATION"]
     documentation: ["docs/architecture/MASTER_BUILD_DIRECTIVE.md", "docs/architecture/constitution.md", "docs/architecture/provider-contracts/gitea.md"]
     status: DEPENDENCY_BLOCKED_PHASE_1
     release: "phase-1"
@@ -887,7 +887,7 @@ requirements:
     title: "Set-oriented authorization and bounded synchronous work"
     implementation_modules: ["apps/core", "modules/authorization", "modules/audit", "policies/openfga", "policies/policy-decision", "tests/performance"]
     issue_ids: ["STEAD-P1-006", "STEAD-P1-007", "STEAD-P1-008", "STEAD-P1-012", "STEAD-P1-015"]
-    test_ids: ["T-PERF-004-ACCEPTANCE"]
+    test_ids: ["T-PERF-004-ACCEPTANCE", "T-ADR-0007-CROSS-MODULE-READS", "T-ADR-0007-DURABLE-EFFECTS", "T-ADR-0007-OBSERVABILITY-PERFORMANCE"]
     documentation: ["docs/architecture/MASTER_BUILD_DIRECTIVE.md", "docs/architecture/authorization-contract.md", "docs/architecture/audit-model.md"]
     status: DEPENDENCY_BLOCKED_PHASE_1
     release: "phase-1"
@@ -991,7 +991,7 @@ requirements:
     title: "Event tests"
     implementation_modules: ["tests", "specs/traceability"]
     issue_ids: ["STEAD-P0-014", "STEAD-P1-007", "STEAD-P1-012"]
-    test_ids: ["T-TEST-005-ACCEPTANCE", "T-ADR-0001-COMPAT"]
+    test_ids: ["T-TEST-005-ACCEPTANCE", "T-ADR-0001-COMPAT", "T-ADR-0007-OUTBOX-ATOMICITY", "T-ADR-0007-FAILURE-INJECTION"]
     documentation: ["docs/testing/golden-vertical-slice.md", "docs/governance/release-gates.md"]
     status: DEPENDENCY_BLOCKED_PHASE_1
     release: "phase-1"
@@ -1006,8 +1006,8 @@ requirements:
   - requirement_id: "TEST-007"
     title: "Installation and upgrade tests"
     implementation_modules: ["tests", "specs/traceability"]
-    issue_ids: ["STEAD-P0-014", "STEAD-P1-011", "STEAD-P2-010", "STEAD-P3-007"]
-    test_ids: ["T-TEST-007-ACCEPTANCE"]
+    issue_ids: ["STEAD-P0-014", "STEAD-P1-011", "STEAD-P1-017", "STEAD-P2-010", "STEAD-P3-007"]
+    test_ids: ["T-TEST-007-ACCEPTANCE", "T-STEAD-P1-017-CONTRACT", "T-ADR-0007-NAMESPACE-ROLES", "T-ADR-0007-FOREIGN-WRITE-DENIAL", "T-ADR-0007-MIGRATION-ORDERING", "T-ADR-0007-UPGRADE-ROLLBACK", "T-ADR-0007-BACKUP-RESTORE", "T-ADR-0007-FAILURE-INJECTION"]
     documentation: ["docs/testing/golden-vertical-slice.md", "docs/governance/release-gates.md"]
     status: PHASE_GATED
     release: "phase-3"
