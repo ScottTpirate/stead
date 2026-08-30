@@ -25,6 +25,7 @@ EXPECTED_P1_006_ADR_CANDIDATES = %w[
   ADR-CAND-007
   ADR-CAND-021
 ].freeze
+ADR_CANDIDATE_TOKEN_PATTERN = /\bADR-CAND-\d{3}\b/.freeze
 
 ACCEPTED_RECORD_METADATA = {
   "0002" => {
@@ -254,18 +255,29 @@ end
 
 def p1_006_adr_gate_failures(adr_gates:, security_issue:)
   failures = []
-  missing_gate_dependencies = EXPECTED_P1_006_ADR_CANDIDATES.reject do |candidate|
-    Array(adr_gates[candidate]&.fetch("dependent_issues", nil)).include?("STEAD-P1-006")
+  expected_candidates = EXPECTED_P1_006_ADR_CANDIDATES.to_set
+  actual_gate_dependencies = adr_gates.each_with_object(Set.new) do |(candidate, gate), candidates|
+    candidates << candidate if Array(gate["dependent_issues"]).include?("STEAD-P1-006")
   end
+  missing_gate_dependencies = expected_candidates - actual_gate_dependencies
   unless missing_gate_dependencies.empty?
-    failures << "ADR gates omit STEAD-P1-006 dependencies: #{missing_gate_dependencies.join(', ')}"
+    failures << "ADR gates omit STEAD-P1-006 dependencies: #{missing_gate_dependencies.to_a.sort.join(', ')}"
+  end
+  unexpected_gate_dependencies = actual_gate_dependencies - expected_candidates
+  unless unexpected_gate_dependencies.empty?
+    failures << "ADR gates add unexpected STEAD-P1-006 dependencies: #{unexpected_gate_dependencies.to_a.sort.join(', ')}"
   end
 
   if security_issue
     criteria = Array(security_issue["acceptance_criteria"]).join(" ")
-    missing_acceptance_candidates = EXPECTED_P1_006_ADR_CANDIDATES.reject { |candidate| criteria.include?(candidate) }
+    acceptance_candidates = criteria.scan(ADR_CANDIDATE_TOKEN_PATTERN).to_set
+    missing_acceptance_candidates = expected_candidates - acceptance_candidates
     unless missing_acceptance_candidates.empty?
-      failures << "STEAD-P1-006 acceptance criteria omit ADR gates: #{missing_acceptance_candidates.join(', ')}"
+      failures << "STEAD-P1-006 acceptance criteria omit ADR gates: #{missing_acceptance_candidates.to_a.sort.join(', ')}"
+    end
+    unexpected_acceptance_candidates = acceptance_candidates - expected_candidates
+    unless unexpected_acceptance_candidates.empty?
+      failures << "STEAD-P1-006 acceptance criteria add unexpected ADR gates: #{unexpected_acceptance_candidates.to_a.sort.join(', ')}"
     end
   else
     failures << "implementation issue catalog: missing STEAD-P1-006"
@@ -465,6 +477,43 @@ if security_issue && adr_gates["ADR-CAND-002"]
   end
   unless missing_dependency_killed && missing_acceptance_killed
     failures << "STEAD-P1-006 paired ADR-CAND-002 deletion mutant survived one or both independent gate checks"
+  end
+
+  added_adr_gates = adr_gates.transform_values do |gate|
+    gate.merge("dependent_issues" => Array(gate["dependent_issues"]).dup)
+  end
+  added_adr_gates.fetch("ADR-CAND-001").fetch("dependent_issues") << "STEAD-P1-006"
+  added_security_issue = security_issue.merge(
+    "acceptance_criteria" => Array(security_issue["acceptance_criteria"]).dup << "Unexpected mutant ADR-CAND-001."
+  )
+  addition_failures = p1_006_adr_gate_failures(
+    adr_gates: added_adr_gates,
+    security_issue: added_security_issue
+  )
+  unexpected_dependency_killed = addition_failures.any? do |failure|
+    failure.start_with?("ADR gates add unexpected STEAD-P1-006 dependencies:") && failure.include?("ADR-CAND-001")
+  end
+  unexpected_acceptance_killed = addition_failures.any? do |failure|
+    failure.start_with?("STEAD-P1-006 acceptance criteria add unexpected ADR gates:") && failure.include?("ADR-CAND-001")
+  end
+  unless unexpected_dependency_killed && unexpected_acceptance_killed
+    failures << "STEAD-P1-006 paired ADR-CAND-001 addition mutant survived one or both exact-set checks"
+  end
+
+  nonexact_token_issue = security_issue.merge(
+    "acceptance_criteria" => Array(security_issue["acceptance_criteria"]).map do |criterion|
+      criterion.gsub("ADR-CAND-002", "ADR-CAND-0020")
+    end
+  )
+  nonexact_token_failures = p1_006_adr_gate_failures(
+    adr_gates: adr_gates,
+    security_issue: nonexact_token_issue
+  )
+  nonexact_token_killed = nonexact_token_failures.any? do |failure|
+    failure.start_with?("STEAD-P1-006 acceptance criteria omit ADR gates:") && failure.include?("ADR-CAND-002")
+  end
+  unless nonexact_token_killed
+    failures << "STEAD-P1-006 non-exact ADR-CAND-002 token mutant survived exact-token parsing"
   end
 end
 
