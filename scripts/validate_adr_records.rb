@@ -38,7 +38,7 @@ EXPECTED_P1_006_GATE_MUTATION_GROUPS = {
   named_noncanonical: 33,
   unicode_dash: 25,
   escaped_code_run: 32,
-  residual_fragment: 27,
+  residual_fragment: 30,
   acceptance_structure: 8,
   continuation_control: 4,
   cross_item: 5
@@ -288,13 +288,13 @@ def noncanonical_adr_candidate_fragments(criteria)
                 rescue RangeError
                   reference
                 end
-                .gsub(/&(?:hyphen|minus);?/i, "-")
+                .gsub(/&(?:dash|hyphen|minus|ndash|mdash|horbar);?/i, "-")
                 .gsub(/%([0-9A-F]{2})/i) { Regexp.last_match(1).to_i(16).chr }
                 .gsub(/<!--.*?-->/m, "")
                 .gsub(%r{</?[A-Za-z][^>\n]*>}, "")
                 .gsub("\\-", "-")
                 .tr("֊־᐀᠆‐‑‒–—―⸗⸚⸺⸻⹀⹝〜〰゠︱︲﹘﹣－𐺭−", "-")
-                .gsub(/[\p{Zs}\t\n\f\r*_`\[\](){}"']/u, "")
+                .gsub(/[\p{Zs}\p{M}\t\n\f\r*_`\[\](){}"']/u, "")
     next [] unless collapsed.include?("ADR-")
 
     exact_candidates = collapsed.scan(/ADR-CAND-\d{3}/)
@@ -885,7 +885,10 @@ if security_issue && adr_gates["ADR-CAND-002"]
     "residual tagged identifier letters" => "ADR-<span>CAND</span>-001",
     "residual Unicode candidate dashes" => "ADR‐CAND‐001",
     "residual fully numeric encoded identifier" => "&#65;&#68;&#82;&#45;&#67;&#65;&#78;&#68;&#45;001",
-    "residual fully percent encoded identifier" => "%41%44%52%2D%43%41%4E%44%2D001"
+    "residual fully percent encoded identifier" => "%41%44%52%2D%43%41%4E%44%2D001",
+    "residual named Unicode dash entities" => "ADR&ndash;CAND&mdash;001",
+    "residual combining-mark identifier" => "AD\u0301R-CAND-001",
+    "residual underscore-formatted identifier" => "A_D_R-CAND-001"
   }
   residual_fragment_mutations.each do |mutation_name, fragment|
     record_p1_006_mutation.call(:residual_fragment)
