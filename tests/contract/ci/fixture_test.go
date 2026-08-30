@@ -53,6 +53,15 @@ func fixtureBytes(t testing.TB, relative string) []byte {
 	return data
 }
 
+func repositoryBytes(t testing.TB, relative string) []byte {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(repositoryRoot(t), relative))
+	if err != nil {
+		t.Fatalf("read repository fixture %s: %v", relative, err)
+	}
+	return data
+}
+
 func testPublicKey(index int) (*ecdsa.PublicKey, string) {
 	curve := elliptic.P256()
 	d := big.NewInt(int64(index + 1))

@@ -141,6 +141,20 @@ func TestDSSECanonicalBase64AndUnknownEnvelopeFields(t *testing.T) {
 	if _, err := policyrelease.ParseDSSEEnvelope(unknown); err != nil {
 		t.Fatalf("bounded unknown envelope field: %v", err)
 	}
+	caseFoldedRoot := bytes.Replace(standard, []byte(`"payloadType"`), []byte(`"PayloadType"`), 1)
+	caseFoldedSignature := bytes.Replace(standard, []byte(`"keyid"`), []byte(`"KeyID"`), 1)
+	exactAndAlias := append(append([]byte(nil), standard[:len(standard)-1]...), []byte(`,"PayloadType":"ignored"}`)...)
+	for name, candidate := range map[string][]byte{
+		"case-folded root member":      caseFoldedRoot,
+		"case-folded signature member": caseFoldedSignature,
+		"exact plus folded alias":      exactAndAlias,
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := policyrelease.ParseDSSEEnvelope(candidate); policyrelease.ErrorCode(err) != "json_member_name_mismatch" {
+				t.Fatalf("error = %v (%s)", err, policyrelease.ErrorCode(err))
+			}
+		})
+	}
 
 	mixed, _ := json.Marshal(fixtureEnvelope{
 		PayloadType: policyrelease.ActivationManifestPayloadType,

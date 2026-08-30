@@ -201,7 +201,7 @@ func findBoundFile(files map[string]File, pathValue, digest, mediaType string) e
 	return nil
 }
 
-func validateAndSortBindings(input ManifestInput, payload map[string]File) ([]ContentBinding, []ProfileBinding, error) {
+func validateAndSortBindings(input ManifestInput, payload map[string]File, profileEvidenceRequirements map[string]string) ([]ContentBinding, []ProfileBinding, error) {
 	referenced := map[string]string{input.PolicyContentIndexPath: "policy_content_index"}
 	bindings := append([]ContentBinding(nil), input.ContractBindings...)
 	seenRoles := make(map[string]struct{}, len(bindings))
@@ -249,6 +249,7 @@ func validateAndSortBindings(input ManifestInput, payload map[string]File) ([]Co
 		return profiles[i].ProfileID+"\x00"+profiles[i].Version < profiles[j].ProfileID+"\x00"+profiles[j].Version
 	})
 	seenProfiles := make(map[string]struct{}, len(profiles))
+	profileSnapshotRequirements := make(map[string]string)
 	for _, profile := range profiles {
 		if err := validateIdentifier("profile.profile_id", profile.ProfileID); err != nil {
 			return nil, nil, err
@@ -282,6 +283,32 @@ func validateAndSortBindings(input ManifestInput, payload map[string]File) ([]Co
 		if err := validateSecurityProfileDocument(payload[profile.Path], profile); err != nil {
 			return nil, nil, err
 		}
+		snapshots, evidence, err := profileArtifactRequirements(payload[profile.Path])
+		if err != nil {
+			return nil, nil, err
+		}
+		for artifactPath, digest := range snapshots {
+			if prior, exists := profileSnapshotRequirements[artifactPath]; exists {
+				if prior != digest {
+					return nil, nil, contractError("security_profile_artifact_digest_conflict", "profile.authoritative_sources", nil)
+				}
+				continue
+			}
+			if _, exists := referenced[artifactPath]; exists {
+				return nil, nil, contractError("duplicate_content_binding", "profile.authoritative_sources", nil)
+			}
+			profileSnapshotRequirements[artifactPath] = digest
+			referenced[artifactPath] = "security_profile_authoritative_snapshot"
+			if err := findBoundFile(payload, artifactPath, digest, ""); err != nil {
+				return nil, nil, err
+			}
+		}
+		for artifactPath, digest := range evidence {
+			if prior, exists := profileEvidenceRequirements[artifactPath]; exists && prior != digest {
+				return nil, nil, contractError("security_profile_artifact_digest_conflict", "profile.semantics.registry_mappings", nil)
+			}
+			profileEvidenceRequirements[artifactPath] = digest
+		}
 	}
 	special := []struct {
 		path   string
@@ -304,6 +331,9 @@ func validateAndSortBindings(input ManifestInput, payload map[string]File) ([]Co
 		}
 	}
 	if err := validateDeploymentPolicyDocument(payload[input.DeploymentPolicy.Path], input.DeploymentPolicy, profiles); err != nil {
+		return nil, nil, err
+	}
+	if err := validateTrustSetDocument(payload[input.Trust.TrustSetPath], payload[input.Trust.TrustSetEnvelopePath], input.Trust, input.DeploymentPolicy); err != nil {
 		return nil, nil, err
 	}
 	var assurance PresentedAssuranceEvaluationV1
@@ -416,7 +446,8 @@ func PrepareUnsigned(input BuildInput) (UnsignedActivation, error) {
 			return UnsignedActivation{}, contractError("presented_build_waiver_not_approved", "evidence.waiver_receipts", nil)
 		}
 	}
-	bindings, profiles, err := validateAndSortBindings(input.Manifest, payload)
+	profileEvidenceRequirements := make(map[string]string)
+	bindings, profiles, err := validateAndSortBindings(input.Manifest, payload, profileEvidenceRequirements)
 	if err != nil {
 		return UnsignedActivation{}, err
 	}
@@ -441,9 +472,17 @@ func PrepareUnsigned(input BuildInput) (UnsignedActivation, error) {
 		if _, duplicate := seen[file.Path]; duplicate {
 			return UnsignedActivation{}, contractError("duplicate_archive_path", file.Path, nil)
 		}
-		claims, err := validateTypedEvidenceFile(file)
-		if err != nil {
-			return UnsignedActivation{}, err
+		var claims ConformanceClaims
+		if expectedDigest, profileEvidence := profileEvidenceRequirements[file.Path]; profileEvidence {
+			if SHA256Digest(file.Content) != expectedDigest {
+				return UnsignedActivation{}, contractError("security_profile_artifact_digest_mismatch", "profile.semantics.registry_mappings", nil)
+			}
+		} else {
+			var err error
+			claims, err = validateTypedEvidenceFile(file)
+			if err != nil {
+				return UnsignedActivation{}, err
+			}
 		}
 		seenEvidencePaths[file.Path] = struct{}{}
 		if file.Path == conformanceEvidencePath {
@@ -454,6 +493,11 @@ func PrepareUnsigned(input BuildInput) (UnsignedActivation, error) {
 		allFiles = append(allFiles, file)
 		totalContent += uint64(len(file.Content))
 		reports = append(reports, PresentedEvidenceReportV1{Treatment: PresentedMaterialTreatment, Path: file.Path, MediaType: file.MediaType, Size: int64(len(file.Content)), Digest: SHA256Digest(file.Content)})
+	}
+	for requiredPath := range profileEvidenceRequirements {
+		if _, present := seenEvidencePaths[requiredPath]; !present {
+			return UnsignedActivation{}, contractError("missing_security_profile_mapping_evidence", "profile.semantics.registry_mappings", nil)
+		}
 	}
 	for _, pathValue := range sortedEvidencePaths() {
 		if _, ok := seenEvidencePaths[pathValue]; !ok {
@@ -601,7 +645,7 @@ func requireDigestMatches(field, expected string, data []byte) error {
 	return nil
 }
 
-func validatePreparedEvidence(unsigned UnsignedActivation) error {
+func validatePreparedEvidence(unsigned UnsignedActivation, profileEvidenceRequirements map[string]string) error {
 	evidence := unsigned.EvidenceManifest
 	manifest := unsigned.Manifest
 	if evidence.SchemaVersion != "1.0.0" || evidence.Authority != NonAuthorizingHandoffAuthority {
@@ -646,9 +690,17 @@ func validatePreparedEvidence(unsigned UnsignedActivation) error {
 		if !strings.HasPrefix(file.Path, "evidence/") || file.Path == evidenceManifestPath {
 			continue
 		}
-		claims, err := validateTypedEvidenceFile(file)
-		if err != nil {
-			return err
+		var claims ConformanceClaims
+		if expectedDigest, profileEvidence := profileEvidenceRequirements[file.Path]; profileEvidence {
+			if SHA256Digest(file.Content) != expectedDigest {
+				return contractError("security_profile_artifact_digest_mismatch", "profile.semantics.registry_mappings", nil)
+			}
+		} else {
+			var err error
+			claims, err = validateTypedEvidenceFile(file)
+			if err != nil {
+				return err
+			}
 		}
 		seenPaths[file.Path] = struct{}{}
 		if file.Path == conformanceEvidencePath {
@@ -660,6 +712,11 @@ func validatePreparedEvidence(unsigned UnsignedActivation) error {
 	for _, requiredPath := range sortedEvidencePaths() {
 		if _, present := seenPaths[requiredPath]; !present {
 			return contractError("missing_required_evidence", requiredPath, nil)
+		}
+	}
+	for requiredPath := range profileEvidenceRequirements {
+		if _, present := seenPaths[requiredPath]; !present {
+			return contractError("missing_security_profile_mapping_evidence", "profile.semantics.registry_mappings", nil)
 		}
 	}
 	sort.Slice(reports, func(i, j int) bool { return reports[i].Path < reports[j].Path })
@@ -735,7 +792,8 @@ func validateUnsignedActivation(unsigned UnsignedActivation) error {
 			payload[file.Path] = file
 		}
 	}
-	bindings, profiles, err := validateAndSortBindings(manifestInput, payload)
+	profileEvidenceRequirements := make(map[string]string)
+	bindings, profiles, err := validateAndSortBindings(manifestInput, payload, profileEvidenceRequirements)
 	if err != nil {
 		return err
 	}
@@ -770,7 +828,7 @@ func validateUnsignedActivation(unsigned UnsignedActivation) error {
 	if !bytes.Equal(canonicalEvidence, unsigned.EvidenceManifestBytes) {
 		return contractError("noncanonical_evidence_manifest", "evidence_manifest", nil)
 	}
-	if err := validatePreparedEvidence(unsigned); err != nil {
+	if err := validatePreparedEvidence(unsigned, profileEvidenceRequirements); err != nil {
 		return err
 	}
 	actualFiles := manifestFileList(unsigned.Files)

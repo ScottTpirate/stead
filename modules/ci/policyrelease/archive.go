@@ -103,33 +103,29 @@ func parseUSTARString(field []byte) (string, error) {
 	return string(field[:end]), nil
 }
 
-func parseUSTAROctal(field []byte) (uint64, error) {
+func parseUSTAROctal(field []byte, checksum bool) (uint64, error) {
 	if len(field) == 0 || field[0]&0x80 != 0 {
 		return 0, contractError("unsupported_ustar_number", "archive", nil)
 	}
-	start := 0
-	for start < len(field) && field[start] == ' ' {
-		start++
-	}
-	end := start
-	for end < len(field) && field[end] >= '0' && field[end] <= '7' {
-		end++
-	}
-	if end == start {
-		for _, value := range field {
-			if value != 0 && value != ' ' {
-				return 0, contractError("malformed_ustar_number", "archive", nil)
-			}
+	digits := field
+	if checksum {
+		if len(field) != 8 || field[6] != 0 || field[7] != ' ' {
+			return 0, contractError("noncanonical_ustar_number", "archive", nil)
 		}
-		return 0, nil
+		digits = field[:6]
+	} else {
+		if field[len(field)-1] != 0 {
+			return 0, contractError("noncanonical_ustar_number", "archive", nil)
+		}
+		digits = field[:len(field)-1]
 	}
-	for _, value := range field[end:] {
-		if value != 0 && value != ' ' {
-			return 0, contractError("malformed_ustar_number", "archive", nil)
+	for _, value := range digits {
+		if value < '0' || value > '7' {
+			return 0, contractError("noncanonical_ustar_number", "archive", nil)
 		}
 	}
 	var result uint64
-	for _, value := range field[start:end] {
+	for _, value := range digits {
 		if result > (^uint64(0)-uint64(value-'0'))/8 {
 			return 0, contractError("ustar_number_overflow", "archive", nil)
 		}
@@ -148,7 +144,7 @@ func allZero(data []byte) bool {
 }
 
 func verifyUSTARChecksum(block []byte) error {
-	want, err := parseUSTAROctal(block[148:156])
+	want, err := parseUSTAROctal(block[148:156], true)
 	if err != nil {
 		return err
 	}
@@ -234,7 +230,7 @@ func InspectArchive(archive []byte) (ArchiveInspection, error) {
 		}
 		typeflag := block[156]
 		directory := typeflag == tar.TypeDir
-		if typeflag != tar.TypeReg && typeflag != 0 && !directory {
+		if typeflag != tar.TypeReg && !directory {
 			return ArchiveInspection{}, contractError("unsupported_ustar_entry_type", name, nil)
 		}
 		if err := validatePath(name, directory); err != nil {
@@ -254,23 +250,23 @@ func InspectArchive(archive []byte) (ArchiveInspection, error) {
 				return ArchiveInspection{}, contractError("archive_entries_not_sorted", name, nil)
 			}
 		}
-		mode, err := parseUSTAROctal(block[100:108])
+		mode, err := parseUSTAROctal(block[100:108], false)
 		if err != nil {
 			return ArchiveInspection{}, err
 		}
-		uid, err := parseUSTAROctal(block[108:116])
+		uid, err := parseUSTAROctal(block[108:116], false)
 		if err != nil {
 			return ArchiveInspection{}, err
 		}
-		gid, err := parseUSTAROctal(block[116:124])
+		gid, err := parseUSTAROctal(block[116:124], false)
 		if err != nil {
 			return ArchiveInspection{}, err
 		}
-		size, err := parseUSTAROctal(block[124:136])
+		size, err := parseUSTAROctal(block[124:136], false)
 		if err != nil {
 			return ArchiveInspection{}, err
 		}
-		mtime, err := parseUSTAROctal(block[136:148])
+		mtime, err := parseUSTAROctal(block[136:148], false)
 		if err != nil {
 			return ArchiveInspection{}, err
 		}
@@ -286,11 +282,11 @@ func InspectArchive(archive []byte) (ArchiveInspection, error) {
 		if err != nil {
 			return ArchiveInspection{}, err
 		}
-		devMajor, err := parseUSTAROctal(block[329:337])
+		devMajor, err := parseUSTAROctal(block[329:337], false)
 		if err != nil {
 			return ArchiveInspection{}, err
 		}
-		devMinor, err := parseUSTAROctal(block[337:345])
+		devMinor, err := parseUSTAROctal(block[337:345], false)
 		if err != nil {
 			return ArchiveInspection{}, err
 		}

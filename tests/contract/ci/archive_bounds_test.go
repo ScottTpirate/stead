@@ -304,6 +304,16 @@ func TestArchiveRejectsOverflowMalformedUTF8AndChecksum(t *testing.T) {
 		code   string
 	}{
 		{"base-256-size", func(data []byte) { data[124] = 0x80; rewriteUSTARChecksum(data[:512]) }, "unsupported_ustar_number"},
+		{"nul regular typeflag", func(data []byte) { data[156] = 0; rewriteUSTARChecksum(data[:512]) }, "unsupported_ustar_entry_type"},
+		{"space-prefixed octal", func(data []byte) { data[124] = ' '; rewriteUSTARChecksum(data[:512]) }, "noncanonical_ustar_number"},
+		{"space-terminated octal", func(data []byte) { data[135] = ' '; rewriteUSTARChecksum(data[:512]) }, "noncanonical_ustar_number"},
+		{"empty zero octal", func(data []byte) {
+			for index := 108; index < 116; index++ {
+				data[index] = 0
+			}
+			rewriteUSTARChecksum(data[:512])
+		}, "noncanonical_ustar_number"},
+		{"space-prefixed checksum", func(data []byte) { data[148] = ' ' }, "noncanonical_ustar_number"},
 		{"malformed-utf8", func(data []byte) { data[0] = 0xff; rewriteUSTARChecksum(data[:512]) }, "invalid_archive_path"},
 		{"checksum", func(data []byte) { data[0] ^= 1 }, "ustar_checksum_mismatch"},
 		{"header padding", func(data []byte) { data[500] = 1; rewriteUSTARChecksum(data[:512]) }, "noncanonical_ustar_header_padding"},

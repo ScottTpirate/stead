@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 
 	policyrelease "github.com/ScottTpirate/stead/modules/ci/policyrelease"
@@ -22,6 +23,100 @@ func TestContractErrorsExposeOnlyStableSafeCodes(t *testing.T) {
 	if policyrelease.ErrorCode(errors.New("ordinary error")) != "" {
 		t.Fatal("ordinary error was assigned a contract code")
 	}
+}
+
+func appendJSONMember(t testing.TB, data []byte, member string) []byte {
+	t.Helper()
+	data = bytes.TrimSpace(data)
+	if len(data) == 0 || data[len(data)-1] != '}' {
+		t.Fatal("fixture is not a JSON object")
+	}
+	result := append([]byte(nil), data[:len(data)-1]...)
+	result = append(result, ',')
+	result = append(result, member...)
+	result = append(result, '}')
+	return result
+}
+
+func assertParserErrorSanitized(t testing.TB, err error, secret string) {
+	t.Helper()
+	if err == nil {
+		t.Fatal("expected parser error")
+	}
+	var contract *policyrelease.ContractError
+	if !errors.As(err, &contract) {
+		t.Fatalf("not a contract error: %T", err)
+	}
+	if strings.Contains(err.Error(), secret) || strings.Contains(contract.Field, secret) || errors.Unwrap(err) != nil {
+		t.Fatalf("parser error leaked attacker-controlled key text: error=%q field=%q", err.Error(), contract.Field)
+	}
+}
+
+func TestDuplicateAndParserErrorsNeverExposeAttackerKeyText(t *testing.T) {
+	const secret = "attacker-secret-json-key"
+	_, err := policyrelease.ParseDSSEEnvelope([]byte(`{"` + secret + `":1,"` + secret + `":2}`))
+	if policyrelease.ErrorCode(err) != "duplicate_json_key" {
+		t.Fatalf("duplicate key error = %v (%s)", err, policyrelease.ErrorCode(err))
+	}
+	assertParserErrorSanitized(t, err, secret)
+
+	input := fixtureBuildInput(t, "commercial", 1, false)
+	input.EvidenceFiles[2].Content = appendJSONMember(t, input.EvidenceFiles[2].Content, `"`+secret+`":"x"`)
+	_, err = policyrelease.PrepareUnsigned(input)
+	if policyrelease.ErrorCode(err) != "signed_payload_contract_error" {
+		t.Fatalf("unknown key error = %v (%s)", err, policyrelease.ErrorCode(err))
+	}
+	assertParserErrorSanitized(t, err, secret)
+}
+
+func TestEveryDSSESignedPayloadRejectsCaseFoldedAliases(t *testing.T) {
+	t.Run("activation manifest", func(t *testing.T) {
+		unsigned, err := policyrelease.PrepareUnsigned(fixtureBuildInput(t, "commercial", 1, false))
+		if err != nil {
+			t.Fatal(err)
+		}
+		unsigned.ManifestPayload = appendJSONMember(t, unsigned.ManifestPayload, `"SCHEMA_VERSION":"1.0.0"`)
+		unsigned.ActivationSetID = policyrelease.SHA256Digest(unsigned.ManifestPayload)
+		envelope, signing := externallySign(t, policyrelease.ActivationManifestPayloadType, unsigned.ManifestPayload, 1, false)
+		_, err = policyrelease.FinalizeActivationArchive(unsigned, envelope, signing)
+		if policyrelease.ErrorCode(err) != "json_member_name_mismatch" {
+			t.Fatalf("error = %v (%s)", err, policyrelease.ErrorCode(err))
+		}
+	})
+
+	t.Run("trust set", func(t *testing.T) {
+		input := fixtureBuildInput(t, "commercial", 1, false)
+		var trustIndex, envelopeIndex int
+		for index := range input.PayloadFiles {
+			switch input.PayloadFiles[index].Path {
+			case input.Manifest.Trust.TrustSetPath:
+				trustIndex = index
+			case input.Manifest.Trust.TrustSetEnvelopePath:
+				envelopeIndex = index
+			}
+		}
+		trustPayload := appendJSONMember(t, input.PayloadFiles[trustIndex].Content, `"SCHEMA_VERSION":"1.0.0"`)
+		trustEnvelope, _ := externallySign(t, policyrelease.TrustSetPayloadType, trustPayload, 1, false)
+		input.PayloadFiles[trustIndex].Content = trustPayload
+		input.PayloadFiles[envelopeIndex].Content = trustEnvelope
+		input.Manifest.Trust.TrustSetID = policyrelease.SHA256Digest(trustPayload)
+		input.Manifest.Trust.TrustSetEnvelopeDigest = policyrelease.SHA256Digest(trustEnvelope)
+		_, err := policyrelease.PrepareUnsigned(input)
+		if policyrelease.ErrorCode(err) != "json_member_name_mismatch" {
+			t.Fatalf("error = %v (%s)", err, policyrelease.ErrorCode(err))
+		}
+	})
+
+	t.Run("release attestation", func(t *testing.T) {
+		activation, attestation, _ := completeFixtureRelease(t, "commercial", 1, false)
+		attestation.PayloadBytes = appendJSONMember(t, attestation.PayloadBytes, `"SCHEMA_VERSION":"1.0.0"`)
+		attestation.AttestationID = policyrelease.SHA256Digest(attestation.PayloadBytes)
+		envelope, signing := externallySign(t, policyrelease.ReleaseAttestationPayloadType, attestation.PayloadBytes, 1, false)
+		_, err := policyrelease.FinalizeReleaseHandoff(activation, attestation, envelope, signing)
+		if policyrelease.ErrorCode(err) != "json_member_name_mismatch" {
+			t.Fatalf("error = %v (%s)", err, policyrelease.ErrorCode(err))
+		}
+	})
 }
 
 func mutateEvidenceReport(t testing.TB, input *policyrelease.BuildInput, path string, mutate func(map[string]any)) {
@@ -43,6 +138,141 @@ func mutateEvidenceReport(t testing.TB, input *policyrelease.BuildInput, path st
 		return
 	}
 	t.Fatalf("evidence report %s missing", path)
+}
+
+func mutateSecurityProfile(t testing.TB, input *policyrelease.BuildInput, mutate func(map[string]any)) {
+	t.Helper()
+	for index := range input.PayloadFiles {
+		if input.PayloadFiles[index].Path != input.Manifest.Profiles[0].Path {
+			continue
+		}
+		var document map[string]any
+		if err := json.Unmarshal(input.PayloadFiles[index].Content, &document); err != nil {
+			t.Fatal(err)
+		}
+		mutate(document)
+		content, err := json.Marshal(document)
+		if err != nil {
+			t.Fatal(err)
+		}
+		input.PayloadFiles[index].Content = content
+		input.Manifest.Profiles[0].Digest = policyrelease.SHA256Digest(content)
+		return
+	}
+	t.Fatal("security profile payload missing")
+}
+
+func externalMappingBuildInput(t testing.TB) policyrelease.BuildInput {
+	t.Helper()
+	input := fixtureBuildInput(t, "commercial", 1, false)
+	const snapshotPath = "tests/contract/fixtures/security-label-profiles/regulated-example-registry.json"
+	const evidencePath = "tests/contract/fixtures/security-label-profiles/regulated-example-rule-evidence.json"
+	snapshot := repositoryBytes(t, snapshotPath)
+	evidence := repositoryBytes(t, evidencePath)
+	mutateSecurityProfile(t, &input, func(document map[string]any) {
+		document["profile_purpose"] = "external_regime_mapping"
+		document["authoritative_sources"] = []any{map[string]any{
+			"source_kind": "authoritative_snapshot", "source_id": "synthetic_registry",
+			"title": "Synthetic registry snapshot", "uri": "urn:stead:test:synthetic-registry",
+			"source_version_or_date": "fixture-v1", "retrieved_at": "2026-08-29T00:00:00Z",
+			"snapshot_digest": policyrelease.SHA256Digest(snapshot), "payload_path": snapshotPath,
+			"mapped_scope": "Synthetic category fixture only",
+		}}
+		semantics := document["semantics"].(map[string]any)
+		semantics["registry_mappings"] = []any{map[string]any{
+			"mapping_id": "fixture_mapping", "dimension": "sensitivity", "internal_id": "fixture",
+			"source_id": "synthetic_registry", "external_id": "SYN-001",
+			"mapping_provenance": map[string]any{
+				"mapping_version": "1.0.0", "source_revision": "fixture-v1",
+				"produced_by": "stead-contract-fixture", "reviewed_at": "2026-08-29T00:00:00Z",
+				"tested_coverage": []any{map[string]any{
+					"test_id": "T-ADR-0002-PROFILE-NEUTRALITY", "evidence_path": evidencePath,
+					"evidence_digest": policyrelease.SHA256Digest(evidence),
+				}},
+			},
+		}}
+	})
+	input.PayloadFiles = append(input.PayloadFiles, policyrelease.File{
+		Path: "payload/" + snapshotPath, MediaType: "application/json", Content: snapshot,
+	})
+	input.EvidenceFiles = append(input.EvidenceFiles, policyrelease.File{
+		Path: "evidence/" + evidencePath, MediaType: "application/json", Content: evidence,
+	})
+	return input
+}
+
+func TestExternalRegimeMappingBindsSnapshotAndMappingEvidence(t *testing.T) {
+	input := externalMappingBuildInput(t)
+	unsigned, err := policyrelease.PrepareUnsigned(input)
+	if err != nil {
+		t.Fatalf("valid external mapping rejected: %v (%s)", err, policyrelease.ErrorCode(err))
+	}
+	envelope, signing := externallySign(t, policyrelease.ActivationManifestPayloadType, unsigned.ManifestPayload, 1, false)
+	activation, err := policyrelease.FinalizeActivationArchive(unsigned, envelope, signing)
+	if err != nil {
+		t.Fatalf("valid external mapping archive rejected: %v (%s)", err, policyrelease.ErrorCode(err))
+	}
+	if _, err := policyrelease.ValidateArchive(activation.ArchiveBytes, envelope, unsigned.Manifest.Files); err != nil {
+		t.Fatalf("external mapping archive validation failed: %v (%s)", err, policyrelease.ErrorCode(err))
+	}
+	want := map[string]bool{
+		"payload/tests/contract/fixtures/security-label-profiles/regulated-example-registry.json":       false,
+		"evidence/tests/contract/fixtures/security-label-profiles/regulated-example-rule-evidence.json": false,
+	}
+	for _, file := range unsigned.Manifest.Files {
+		if _, tracked := want[file.Path]; tracked {
+			want[file.Path] = true
+		}
+	}
+	for path, found := range want {
+		if !found {
+			t.Fatalf("external mapping artifact not digest-listed: %s", path)
+		}
+	}
+
+	testCases := []struct {
+		name   string
+		mutate func(*policyrelease.BuildInput)
+		code   string
+	}{
+		{"reference source forbidden", func(input *policyrelease.BuildInput) {
+			mutateSecurityProfile(t, input, func(document map[string]any) {
+				source := document["authoritative_sources"].([]any)[0].(map[string]any)
+				source["source_kind"] = "reference"
+				delete(source, "retrieved_at")
+				delete(source, "snapshot_digest")
+				delete(source, "payload_path")
+			})
+		}, "security_profile_external_mapping_requires_snapshots"},
+		{"missing snapshot", func(input *policyrelease.BuildInput) {
+			input.PayloadFiles = input.PayloadFiles[:len(input.PayloadFiles)-1]
+		}, "missing_bound_file"},
+		{"snapshot digest mismatch", func(input *policyrelease.BuildInput) {
+			input.PayloadFiles[len(input.PayloadFiles)-1].Content = []byte(`{"changed":true}`)
+		}, "bound_digest_mismatch"},
+		{"missing mapping evidence", func(input *policyrelease.BuildInput) {
+			input.EvidenceFiles = input.EvidenceFiles[:len(input.EvidenceFiles)-1]
+		}, "missing_security_profile_mapping_evidence"},
+		{"mapping evidence digest mismatch", func(input *policyrelease.BuildInput) {
+			input.EvidenceFiles[len(input.EvidenceFiles)-1].Content = []byte(`{"changed":true}`)
+		}, "security_profile_artifact_digest_mismatch"},
+		{"stale mapping source revision", func(input *policyrelease.BuildInput) {
+			mutateSecurityProfile(t, input, func(document map[string]any) {
+				mapping := document["semantics"].(map[string]any)["registry_mappings"].([]any)[0].(map[string]any)
+				mapping["mapping_provenance"].(map[string]any)["source_revision"] = "stale"
+			})
+		}, "security_profile_registry_mapping_source_mismatch"},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			candidate := externalMappingBuildInput(t)
+			testCase.mutate(&candidate)
+			_, err := policyrelease.PrepareUnsigned(candidate)
+			if policyrelease.ErrorCode(err) != testCase.code {
+				t.Fatalf("error = %v (%s), want %s", err, policyrelease.ErrorCode(err), testCase.code)
+			}
+		})
+	}
 }
 
 func TestPreSigningEvidenceUsesClosedPathMediaAndSchemaAdmission(t *testing.T) {

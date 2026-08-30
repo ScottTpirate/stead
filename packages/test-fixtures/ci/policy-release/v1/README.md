@@ -23,9 +23,11 @@ transport descriptor and the WS-06 consumer inventory both declare no
 authority.
 
 `vectors/ws06-consumer-negative-cases.json` is a closed machine-readable set of
-targets, mutation operations, expected outcomes, and stable consumer codes for
-cryptographic trust, key status/purpose, exact-pair, offline, and canonical
-`r=1,s=1` false-receipt cases. Contract tests enforce the exact case inventory.
-These are explicitly nonauthorizing inputs for the independent WS-06 runtime
-verifier, not claims that build-time syntax checking grants activation
-authority.
+checked-in targets/replacements, a pinned verification time, mutation
+operations, expected outcomes, and stable consumer codes for cryptographic
+trust, key status/purpose, exact-pair, offline, and canonical `r=1,s=1`
+false-receipt cases. Contract tests resolve and apply every mutation and verify
+that the threshold-two alias/custodian cases exercise the intended state. This
+is a mutation-materialization contract only. It deliberately does not execute,
+simulate, or claim the independent WS-06 runtime verifier or its expected
+codes, and build-time syntax checking grants no activation authority.

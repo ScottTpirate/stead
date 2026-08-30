@@ -55,9 +55,13 @@ attestation identities.
 
 Typed structs and Go `encoding/json` emit UTF-8 JSON in fixed field order with
 no insignificant whitespace. Arrays without semantic order are sorted. Times
-must be second-precision UTC RFC 3339. Unknown v1 versions, media types,
-deployment modes, malformed/duplicate-key JSON, floating-point numbers in
-signed payloads, unbound payload files, and digest mismatches fail closed.
+must be second-precision UTC RFC 3339. JSON member admission is exact-case:
+case-folded aliases, including an exact member plus an alias, reject. Unknown
+v1 versions, media types, deployment modes, malformed/duplicate-key JSON,
+floating-point numbers in signed payloads, unbound payload files, and digest
+mismatches fail closed. Parser failures expose only stable fields and codes;
+attacker-controlled member text is never retained in an error or wrapped
+parser value.
 
 The four v1 contract roles are closed and mandatory: `decision_table`,
 `input_schema`, `output_schema`, and `registries`. The policy-content index has
@@ -67,12 +71,16 @@ OpenFGA compatibility/migration identifiers are required.
 Every `payload/` and `evidence/` regular file is listed once by path, media type,
 integer length, and SHA-256 digest. `manifest.dsse.json` is the only outer-file
 exception. Evidence admission is a closed typed contract rather than a text
-denylist: v1 accepts exactly the SBOM, provenance, conformance, license, and
+denylist: v1 accepts the SBOM, provenance, conformance, license, and
 vulnerability paths, their exact media types, and their strict JSON field
-schemas. Unknown paths, renamed files, extra fields, escaped field names,
-encoded blobs, malformed/duplicate-key JSON, and future archive/attestation
-identity fields reject. Free-form or protected evidence belongs in a separate
-authorized evidence system and cannot enter this archive writer.
+schemas. The only additional evidence paths are mapping-coverage artifacts
+named and SHA-256 bound by an admitted security profile. Authoritative
+snapshots are likewise required at `payload/<declared payload_path>`. An
+`external_regime_mapping` profile admits only authoritative-snapshot source
+objects, requires at least one mapping, and binds every snapshot and mapping
+evidence file into the signed manifest. Missing, conflicting, unbound, or
+digest-mismatched artifacts reject. Free-form or protected evidence belongs in
+a separate authorized evidence system and cannot enter this archive writer.
 
 The digest-listed conformance report must claim 100% decision-row coverage, at
 least 90% critical mutation score, and pass outcomes for deterministic replay,
@@ -87,8 +95,11 @@ claim to rerun source mutation analysis.
 The package implements DSSE v1.0.0 PAE and accepts the three non-interchangeable
 ADR-0006 payload types. Writers use canonically padded standard RFC 4648 Base64;
 bounded readers also accept canonically padded URL-safe Base64, but reject mixed
-alphabets, absent/excess padding, duplicate JSON keys, duplicate key IDs,
-non-minimal DER, high-S, and cross-type substitution.
+alphabets, absent/excess padding, duplicate JSON keys, case-folded known-member
+aliases, duplicate key IDs, non-minimal DER, high-S, and cross-type
+substitution. Genuine bounded unknown DSSE envelope extensions remain
+ignorable. Activation-manifest, trust-set, and release-attestation payloads all
+use exact-case, exact-member admission.
 
 | Limit | V1 maximum |
 |---|---:|
@@ -113,8 +124,12 @@ real threshold/custody rule, and grant activation authority.
 
 Archive entries are lexical, owner/group zero and unnamed, timestamp zero, and
 mode `0444` for files or `0555` for directories. The raw inspector accepts only
-POSIX ustar regular files/directories. It rejects PAX/global-PAX, GNU long-name
-or long-link, sparse and other extensions; absolute, traversal, backslash,
+POSIX ustar `0` regular-file and `5` directory typeflags; the historical NUL
+regular-file alias rejects. Every numeric field must use the writer's fixed
+zero-padded octal plus canonical terminator, including the checksum's distinct
+terminator. It rejects alternate space-padded or blank octal forms,
+PAX/global-PAX, GNU long-name or long-link, sparse and other extensions;
+absolute, traversal, backslash,
 duplicate or unsorted paths; links, devices, FIFO/socket entries; setuid/setgid;
 base-256 or overflowed sizes; malformed UTF-8; noncanonical metadata; bad
 checksums; missing end blocks; and non-zero bytes after the end marker. It never
@@ -176,9 +191,13 @@ owned.
 `packages/test-fixtures/ci/policy-release/v1` contains synthetic source/evidence,
 a full exact golden archive/attestation vector, WS-09 negative cases, and a
 closed machine-readable WS-06 consumer-verifier mutation inventory whose exact
-case set, operations, outcomes, and expected codes are contract-tested. The
-inventory is nonauthorizing handoff material, not evidence that WS-09 executed
-WS-06 verification. The vector uses a public,
+case set, operations, outcomes, and expected codes are contract-tested. Every
+target/replacement is checked in, verification time is pinned, and the suite
+mechanically resolves and applies every mutation. This execution contract is
+mutation materialization only: it does not implement or simulate WS-06's
+runtime verifier and does not assert the consumer codes. The inventory is
+nonauthorizing handoff material, not evidence that WS-09 executed WS-06
+verification. The vector uses a public,
 non-secret, nonproduction P-256 scalar solely to make independent verification
 repeatable. No private material exists in the fixture and its key has no Stead
 trust authority.

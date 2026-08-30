@@ -260,6 +260,28 @@ type deploymentPolicyDocumentV01 struct {
 	Assurance                   deploymentAssuranceV01                 `json:"assurance"`
 }
 
+type trustSetKeyV1 struct {
+	CustodianID   string `json:"custodian_id"`
+	KeyID         string `json:"key_id"`
+	NotAfter      string `json:"not_after"`
+	NotBefore     string `json:"not_before"`
+	Purpose       string `json:"purpose"`
+	SPKIDERBase64 string `json:"spki_der_base64"`
+	Status        string `json:"status"`
+}
+
+type trustSetDocumentV1 struct {
+	DeploymentPolicyDigest  string          `json:"deployment_policy_digest"`
+	DeploymentPolicyID      string          `json:"deployment_policy_id"`
+	DeploymentPolicyVersion string          `json:"deployment_policy_version"`
+	Epoch                   uint64          `json:"epoch"`
+	Keys                    []trustSetKeyV1 `json:"keys"`
+	PreviousTrustSetID      *string         `json:"previous_trust_set_id"`
+	RecoveryKeyReference    string          `json:"recovery_key_reference"`
+	SchemaVersion           string          `json:"schema_version"`
+	SignatureThreshold      int             `json:"signature_threshold"`
+}
+
 type conformanceEvidenceV01 struct {
 	AgentIntersection            string `json:"agent_intersection"`
 	CriticalMutationScorePercent int    `json:"critical_mutation_score_percent"`
@@ -436,7 +458,7 @@ func validateProfileRuleSemantics(document securityProfileDocumentV01, field str
 func requireObjectFields(raw json.RawMessage, field string, required ...string) (map[string]json.RawMessage, error) {
 	var object map[string]json.RawMessage
 	if err := json.Unmarshal(raw, &object); err != nil || object == nil {
-		return nil, contractError("schema_object_required", field, err)
+		return nil, contractError("schema_object_required", field, nil)
 	}
 	for _, name := range required {
 		if _, present := object[name]; !present {
@@ -449,7 +471,7 @@ func requireObjectFields(raw json.RawMessage, field string, required ...string) 
 func requireObjectArray(raw json.RawMessage, field string, required ...string) ([]map[string]json.RawMessage, error) {
 	var items []json.RawMessage
 	if err := json.Unmarshal(raw, &items); err != nil {
-		return nil, contractError("schema_array_required", field, err)
+		return nil, contractError("schema_array_required", field, nil)
 	}
 	objects := make([]map[string]json.RawMessage, len(items))
 	for index, item := range items {
@@ -505,12 +527,18 @@ func requireSecurityProfileSchemaFields(data []byte) error {
 	for _, source := range sources {
 		var kind string
 		if err := json.Unmarshal(source["source_kind"], &kind); err != nil {
-			return contractError("security_profile_source_mismatch", "security_profile.authoritative_sources", err)
+			return contractError("security_profile_source_mismatch", "security_profile.authoritative_sources", nil)
 		}
 		if kind == "authoritative_snapshot" {
 			for _, name := range []string{"retrieved_at", "snapshot_digest", "payload_path"} {
 				if _, present := source[name]; !present {
 					return contractError("schema_required_field_missing", "security_profile.authoritative_sources."+name, nil)
+				}
+			}
+		} else if kind == "reference" {
+			for _, name := range []string{"retrieved_at", "snapshot_digest", "payload_path"} {
+				if _, present := source[name]; present {
+					return contractError("security_profile_source_mismatch", "security_profile.authoritative_sources", nil)
 				}
 			}
 		}
@@ -602,12 +630,74 @@ func requireDeploymentPolicySchemaFields(data []byte) error {
 	}
 	var ceilings map[string]json.RawMessage
 	if err := json.Unmarshal(root["label_profile_ceilings"], &ceilings); err != nil || ceilings == nil {
-		return contractError("schema_object_required", "deployment_policy.label_profile_ceilings", err)
+		return contractError("schema_object_required", "deployment_policy.label_profile_ceilings", nil)
 	}
-	for profileID, ceiling := range ceilings {
-		if _, err := requireObjectFields(ceiling, "deployment_policy.label_profile_ceilings."+profileID, "profile_version", "classification_ceiling"); err != nil {
+	for _, ceiling := range ceilings {
+		if _, err := requireObjectFields(ceiling, "deployment_policy.label_profile_ceilings.entry", "profile_version", "classification_ceiling"); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+func requireTrustSetSchemaFields(data []byte) error {
+	root, err := requireObjectFields(data, "trust_set",
+		"deployment_policy_digest", "deployment_policy_id", "deployment_policy_version",
+		"epoch", "keys", "previous_trust_set_id", "recovery_key_reference",
+		"schema_version", "signature_threshold")
+	if err != nil {
+		return err
+	}
+	_, err = requireObjectArray(root["keys"], "trust_set.keys",
+		"custodian_id", "key_id", "not_after", "not_before", "purpose",
+		"spki_der_base64", "status")
+	return err
+}
+
+func validateTrustSetDocument(payloadFile, envelopeFile File, trust TrustBinding, policy DeploymentPolicyBinding) error {
+	if payloadFile.MediaType != "application/json" || envelopeFile.MediaType != "application/json" {
+		return contractError("bound_media_type_mismatch", "trust_set", nil)
+	}
+	var document trustSetDocumentV1
+	if err := decodeStrict(payloadFile.Content, &document); err != nil {
+		return err
+	}
+	if err := requireTrustSetSchemaFields(payloadFile.Content); err != nil {
+		return err
+	}
+	if document.SchemaVersion != "1.0.0" || document.DeploymentPolicyID != policy.PolicyID ||
+		document.DeploymentPolicyVersion != policy.Version || document.DeploymentPolicyDigest != policy.Digest ||
+		document.Epoch != trust.TrustEpoch || document.SignatureThreshold != policy.PolicySignatureThreshold ||
+		len(document.Keys) < document.SignatureThreshold || len(document.Keys) > MaxEnvelopeSignatures ||
+		!nonemptyText(document.RecoveryKeyReference) {
+		return contractError("trust_set_binding_mismatch", "trust_set", nil)
+	}
+	if document.PreviousTrustSetID != nil {
+		if err := validateDigest("trust_set.previous_trust_set_id", *document.PreviousTrustSetID); err != nil {
+			return err
+		}
+	}
+	seenKeyIDs := make(map[string]struct{}, len(document.Keys))
+	for _, key := range document.Keys {
+		if !digestPattern.MatchString(key.KeyID) || !identifierPattern.MatchString(key.CustodianID) ||
+			key.Purpose != ReleaseKeyPurpose || (key.Status != "active" && key.Status != "revoked" && key.Status != "retired") {
+			return contractError("trust_set_key_mismatch", "trust_set.keys", nil)
+		}
+		if _, duplicate := seenKeyIDs[key.KeyID]; duplicate {
+			return contractError("duplicate_trust_set_key_id", "trust_set.keys", nil)
+		}
+		seenKeyIDs[key.KeyID] = struct{}{}
+		notBefore, beforeErr := time.Parse(time.RFC3339, key.NotBefore)
+		notAfter, afterErr := time.Parse(time.RFC3339, key.NotAfter)
+		if beforeErr != nil || afterErr != nil || !notBefore.Before(notAfter) {
+			return contractError("trust_set_key_validity_mismatch", "trust_set.keys", nil)
+		}
+		if _, err := decodeCanonicalBase64("trust_set.keys.spki_der_base64", key.SPKIDERBase64, 2048); err != nil {
+			return err
+		}
+	}
+	if _, err := validateExpectedEnvelope(envelopeFile.Content, payloadFile.Content, TrustSetPayloadType); err != nil {
+		return err
 	}
 	return nil
 }
@@ -649,6 +739,7 @@ func validateSecurityProfileDocument(file File, binding ProfileBinding) error {
 			return err
 		}
 	}
+	sourcesByID := make(map[string]profileSourceV01, len(document.AuthoritativeSources))
 	for _, source := range document.AuthoritativeSources {
 		parsed, err := url.ParseRequestURI(source.URI)
 		if err != nil || parsed.Scheme == "" || !stableIDPattern.MatchString(source.SourceID) || !nonemptyText(source.Title) || !nonemptyText(source.SourceVersionOrDate) || !nonemptyText(source.MappedScope) {
@@ -657,6 +748,10 @@ func validateSecurityProfileDocument(file File, binding ProfileBinding) error {
 		if source.SourceKind != "reference" && source.SourceKind != "authoritative_snapshot" {
 			return contractError("security_profile_source_mismatch", binding.Path, nil)
 		}
+		if _, duplicate := sourcesByID[source.SourceID]; duplicate {
+			return contractError("schema_duplicate_value", "profile.authoritative_sources", nil)
+		}
+		sourcesByID[source.SourceID] = source
 		if source.SourceKind == "reference" && (source.RetrievedAt != "" || source.SnapshotDigest != "" || source.PayloadPath != "") {
 			return contractError("security_profile_source_mismatch", binding.Path, nil)
 		}
@@ -669,8 +764,15 @@ func validateSecurityProfileDocument(file File, binding ProfileBinding) error {
 			}
 		}
 	}
-	if document.ProfilePurpose == "external_regime_mapping" && (len(document.AuthoritativeSources) == 0 || len(document.Semantics.RegistryMappings) == 0) {
-		return contractError("security_profile_external_mapping_incomplete", binding.Path, nil)
+	if document.ProfilePurpose == "external_regime_mapping" {
+		if len(document.AuthoritativeSources) == 0 || len(document.Semantics.RegistryMappings) == 0 {
+			return contractError("security_profile_external_mapping_incomplete", binding.Path, nil)
+		}
+		for _, source := range document.AuthoritativeSources {
+			if source.SourceKind != "authoritative_snapshot" {
+				return contractError("security_profile_external_mapping_requires_snapshots", binding.Path, nil)
+			}
+		}
 	}
 	if document.Normalization != (profileNormalizationV01{IdentifierCase: "exact", SetOrder: "lexicographic", UnknownValue: "deny"}) ||
 		document.Dominance != "profile_partial_order_v1" || document.Join != "least_upper_bound_plus_union_of_handling_restrictions" ||
@@ -693,6 +795,25 @@ func validateSecurityProfileDocument(file File, binding ProfileBinding) error {
 	}
 	if err := validateProfileRuleSemantics(document, "profile.semantics"); err != nil {
 		return err
+	}
+	seenMappings := make(map[string]struct{}, len(document.Semantics.RegistryMappings))
+	for _, mapping := range document.Semantics.RegistryMappings {
+		if _, duplicate := seenMappings[mapping.MappingID]; duplicate {
+			return contractError("schema_duplicate_value", "profile.semantics.registry_mappings", nil)
+		}
+		seenMappings[mapping.MappingID] = struct{}{}
+		source, present := sourcesByID[mapping.SourceID]
+		if !present || source.SourceKind != "authoritative_snapshot" || mapping.MappingProvenance.SourceRevision != source.SourceVersionOrDate {
+			return contractError("security_profile_registry_mapping_source_mismatch", "profile.semantics.registry_mappings", nil)
+		}
+		seenCoverage := make(map[string]struct{}, len(mapping.MappingProvenance.TestedCoverage))
+		for _, coverage := range mapping.MappingProvenance.TestedCoverage {
+			key := coverage.TestID + "\x00" + coverage.EvidencePath
+			if _, duplicate := seenCoverage[key]; duplicate {
+				return contractError("schema_duplicate_value", "profile.semantics.registry_mappings.tested_coverage", nil)
+			}
+			seenCoverage[key] = struct{}{}
+		}
 	}
 	if !stableIDPattern.MatchString(document.Presentation.RendererID) || !semanticVersionPattern.MatchString(document.Presentation.RendererVersion) || !document.Presentation.TextAuthoritative || !document.Presentation.ColorSupplementalOnly || len(document.Presentation.SensitivityMarkings) == 0 {
 		return contractError("security_profile_presentation_mismatch", binding.Path, nil)
@@ -724,6 +845,41 @@ func validateSecurityProfileDocument(file File, binding ProfileBinding) error {
 		return contractError("unsupported_profile_signing_format", binding.Path, nil)
 	}
 	return nil
+}
+
+func profileArtifactRequirements(file File) (map[string]string, map[string]string, error) {
+	var document securityProfileDocumentV01
+	if err := decodeStrict(file.Content, &document); err != nil {
+		return nil, nil, err
+	}
+	snapshots := make(map[string]string)
+	evidence := make(map[string]string)
+	for _, source := range document.AuthoritativeSources {
+		if source.SourceKind != "authoritative_snapshot" {
+			continue
+		}
+		archivePath := "payload/" + source.PayloadPath
+		if err := validatePath(archivePath, false); err != nil {
+			return nil, nil, contractError("security_profile_artifact_path_mismatch", "profile.authoritative_sources", nil)
+		}
+		if prior, exists := snapshots[archivePath]; exists && prior != source.SnapshotDigest {
+			return nil, nil, contractError("security_profile_artifact_digest_conflict", "profile.authoritative_sources", nil)
+		}
+		snapshots[archivePath] = source.SnapshotDigest
+	}
+	for _, mapping := range document.Semantics.RegistryMappings {
+		for _, coverage := range mapping.MappingProvenance.TestedCoverage {
+			archivePath := "evidence/" + coverage.EvidencePath
+			if err := validatePath(archivePath, false); err != nil {
+				return nil, nil, contractError("security_profile_artifact_path_mismatch", "profile.semantics.registry_mappings", nil)
+			}
+			if prior, exists := evidence[archivePath]; exists && prior != coverage.EvidenceDigest {
+				return nil, nil, contractError("security_profile_artifact_digest_conflict", "profile.semantics.registry_mappings", nil)
+			}
+			evidence[archivePath] = coverage.EvidenceDigest
+		}
+	}
+	return snapshots, evidence, nil
 }
 
 func validateDeploymentPolicyDocument(file File, binding DeploymentPolicyBinding, profiles []ProfileBinding) error {

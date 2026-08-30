@@ -1,0 +1,4 @@
+{
+  "transformation": "decode_and_indented_reserialize_dsse_envelope",
+  "preserve_payload_and_signatures": true
+}

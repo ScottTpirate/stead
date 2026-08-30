@@ -122,8 +122,11 @@ func ParseDSSEEnvelope(envelope []byte) (ParsedEnvelope, error) {
 		return ParsedEnvelope{}, err
 	}
 	var raw dsseEnvelope
+	if err := validateJSONMembers(envelope, &raw, true); err != nil {
+		return ParsedEnvelope{}, err
+	}
 	if err := json.Unmarshal(envelope, &raw); err != nil {
-		return ParsedEnvelope{}, contractError("malformed_dsse_envelope", "envelope", err)
+		return ParsedEnvelope{}, contractError("malformed_dsse_envelope", "envelope", nil)
 	}
 	if raw.PayloadType != ActivationManifestPayloadType && raw.PayloadType != TrustSetPayloadType && raw.PayloadType != ReleaseAttestationPayloadType {
 		return ParsedEnvelope{}, contractError("unknown_dsse_payload_type", "payloadType", nil)
