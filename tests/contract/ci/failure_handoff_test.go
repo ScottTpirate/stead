@@ -14,8 +14,12 @@ func TestContractErrorsExposeOnlyStableSafeCodes(t *testing.T) {
 	input := fixtureBuildInput(t, "commercial", 1, false)
 	input.Manifest.DeploymentPolicy.PolicySignatureThreshold = 0
 	_, err := policyrelease.PrepareUnsigned(input)
-	if err == nil || err.Error() != "invalid_signature_threshold: deployment_policy.policy_signature_threshold" || policyrelease.ErrorCode(err) != "invalid_signature_threshold" {
+	if err == nil || err.Error() != "invalid_signature_threshold" || policyrelease.ErrorCode(err) != "invalid_signature_threshold" {
 		t.Fatalf("unsafe or unstable contract error: %v (%s)", err, policyrelease.ErrorCode(err))
+	}
+	var contract *policyrelease.ContractError
+	if !errors.As(err, &contract) || contract.Field != "" || contract.Err != nil {
+		t.Fatalf("package error retained field or cause: %#v", contract)
 	}
 	if errors.Unwrap(err) != nil {
 		t.Fatal("validation error unexpectedly exposed an underlying payload error")
@@ -198,6 +202,7 @@ func externalMappingBuildInput(t testing.TB) policyrelease.BuildInput {
 	input.EvidenceFiles = append(input.EvidenceFiles, policyrelease.File{
 		Path: "evidence/" + evidencePath, MediaType: "application/json", Content: evidence,
 	})
+	rebindPolicyContentIndex(t, &input)
 	return input
 }
 

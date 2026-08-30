@@ -78,7 +78,15 @@ func TestDSSEDepthSignatureAndKeyBoundaries(t *testing.T) {
 	if _, err := policyrelease.ParseDSSEEnvelope(sixteen); err != nil {
 		t.Fatalf("exact signature count rejected: %v (%s)", err, policyrelease.ErrorCode(err))
 	}
-	seventeen, _ := externallySign(t, policyrelease.ActivationManifestPayloadType, []byte("x"), policyrelease.MaxEnvelopeSignatures+1, false)
+	signatures := make([]fixtureSignature, 0, policyrelease.MaxEnvelopeSignatures+1)
+	for index := 0; index < policyrelease.MaxEnvelopeSignatures+1; index++ {
+		signature, keyID := fixtureSign(policyrelease.ActivationManifestPayloadType, []byte("x"), index)
+		signatures = append(signatures, fixtureSignature{KeyID: keyID, Sig: base64.StdEncoding.EncodeToString(signature)})
+	}
+	seventeen, err := json.Marshal(fixtureEnvelope{PayloadType: policyrelease.ActivationManifestPayloadType, Payload: base64.StdEncoding.EncodeToString([]byte("x")), Signatures: signatures})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if _, err := policyrelease.ParseDSSEEnvelope(seventeen); policyrelease.ErrorCode(err) != "signature_count_limit" {
 		t.Fatalf("one-over signatures error = %v (%s)", err, policyrelease.ErrorCode(err))
 	}

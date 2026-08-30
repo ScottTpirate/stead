@@ -59,21 +59,32 @@ must be second-precision UTC RFC 3339. JSON member admission is exact-case:
 case-folded aliases, including an exact member plus an alias, reject. Unknown
 v1 versions, media types, deployment modes, malformed/duplicate-key JSON,
 floating-point numbers in signed payloads, unbound payload files, and digest
-mismatches fail closed. Parser failures expose only stable fields and codes;
-attacker-controlled member text is never retained in an error or wrapped
-parser value.
+mismatches fail closed. Package-produced failures expose only a stable code;
+their compatibility `Field` and `Err` members remain empty, so
+attacker-controlled member/path/parser text is neither rendered nor retained.
 
 The four v1 contract roles are closed and mandatory: `decision_table`,
-`input_schema`, `output_schema`, and `registries`. The policy-content index has
-its fixed v1 media type. At least one digest-bound profile and both immutable
-OpenFGA compatibility/migration identifiers are required.
+`input_schema`, `output_schema`, and `registries`. The canonical v1
+policy-content index has its fixed media type and contains one sorted
+role/path/media-type/SHA-256 entry for every semantic `payload/` file other
+than itself. That includes contract files, every profile and authoritative
+snapshot, the OpenFGA source, deployment policy, presented assurance result,
+trust set, and trust-set envelope. Missing, extra, stale, reordered, duplicate,
+or noncanonical index material rejects. Because `policy_bundle_id` hashes these
+exact index bytes, any semantic payload update creates a new bundle identity
+and invalidates review/provenance subjects bound to the predecessor. At least
+one digest-bound profile and both immutable OpenFGA compatibility/migration
+identifiers are required.
 
 Every `payload/` and `evidence/` regular file is listed once by path, media type,
 integer length, and SHA-256 digest. `manifest.dsse.json` is the only outer-file
 exception. Evidence admission is a closed typed contract rather than a text
 denylist: v1 accepts the SBOM, provenance, conformance, license, and
 vulnerability paths, their exact media types, and their strict JSON field
-schemas. The only additional evidence paths are mapping-coverage artifacts
+schemas. SLSA provenance additionally binds the exact manifest source
+revision, dependency-lock digest, and sole `stead-policy-content-index`
+subject digest equal to `policy_bundle_id`; well-formed but unrelated evidence
+rejects. The only additional evidence paths are mapping-coverage artifacts
 named and SHA-256 bound by an admitted security profile. Authoritative
 snapshots are likewise required at `payload/<declared payload_path>`. An
 `external_regime_mapping` profile admits only authoritative-snapshot source
@@ -110,6 +121,15 @@ use exact-case, exact-member admission.
 | Encoded signature | 256 bytes |
 | Decoded signature | 128 bytes |
 | UTF-8 key ID | 80 bytes |
+| Presented signing receipts | 16 |
+| One metadata collection | 256 entries |
+| Review receipts | 256 |
+| Waiver receipts | 256 |
+
+Caller-controlled file, manifest-metadata, review, waiver, and signing-receipt
+cardinalities are checked before package allocation, copying, sorting, or map
+construction. Both activation-manifest and release-attestation payloads must
+fit the same 2 MiB decoded ceiling before any signing request is emitted.
 
 `keyid` remains an unauthenticated selection hint. The builder checks exact
 signature-byte receipt binding and counts distinct presented key-ID and
@@ -210,9 +230,10 @@ scripts/run_pinned_go.sh go test ./tests/contract/ci -run '^TestGoldenOfflineVec
 scripts/run_pinned_go.sh go test ./tests/contract/ci -bench . -benchmem -count=5
 ```
 
-`STEAD_PRINT_POLICY_GOLDEN=1` prints a candidate vector for reviewed fixture
-refresh. A changed hash is a contract/release review event; never overwrite the
-checked-in vector merely to make a test pass.
+`STEAD_PRINT_POLICY_GOLDEN=1` prints a candidate vector for review.
+`STEAD_UPDATE_POLICY_GOLDEN=1` rewrites both checked-in golden vectors through
+the deterministic fixture generator. A changed hash is a contract/release
+review event; never regenerate merely to make a test pass.
 
 The implementation uses only the Go standard library and the local module. It
 adds no runtime, signing, archive, canonicalization, TUF, OCI, or cryptographic

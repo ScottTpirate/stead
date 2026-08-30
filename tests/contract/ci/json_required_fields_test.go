@@ -254,6 +254,7 @@ func TestRequiredNullableTrustMemberAllowsNullButRejectsOmission(t *testing.T) {
 	mutateAndRebindTrustSet(t, &nonnull, func(document map[string]any) {
 		document["previous_trust_set_id"] = policyrelease.SHA256Digest([]byte("previous-trust-set"))
 	})
+	rebindPolicyContentIndex(t, &nonnull)
 	if _, err := policyrelease.PrepareUnsigned(nonnull); err != nil {
 		t.Fatalf("non-null previous_trust_set_id rejected: %v (%s)", err, policyrelease.ErrorCode(err))
 	}

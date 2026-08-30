@@ -61,6 +61,95 @@ func TestDeterministicUnsignedConstructionAndEvidence(t *testing.T) {
 	}
 }
 
+func TestPolicyBundleIdentityBindsEverySemanticPayload(t *testing.T) {
+	input := fixtureBuildInput(t, "commercial", 1, false)
+	var indexFile *policyrelease.File
+	semanticFiles := make(map[string]policyrelease.File)
+	for fileIndex := range input.PayloadFiles {
+		file := &input.PayloadFiles[fileIndex]
+		if file.Path == input.Manifest.PolicyContentIndexPath {
+			indexFile = file
+			continue
+		}
+		semanticFiles[file.Path] = *file
+	}
+	if indexFile == nil {
+		t.Fatal("fixture policy-content index missing")
+	}
+	var index policyrelease.PolicyContentIndexV1
+	if err := json.Unmarshal(indexFile.Content, &index); err != nil {
+		t.Fatal(err)
+	}
+	if index.SchemaVersion != "1.0.0" || len(index.Entries) != len(semanticFiles) {
+		t.Fatalf("index coverage = %d entries for %d semantic files", len(index.Entries), len(semanticFiles))
+	}
+	seen := make(map[string]struct{}, len(index.Entries))
+	for _, entry := range index.Entries {
+		file, present := semanticFiles[entry.Path]
+		if !present || entry.Role == "" || entry.MediaType != file.MediaType || entry.Digest != policyrelease.SHA256Digest(file.Content) {
+			t.Fatalf("index entry does not bind exact semantic file: %#v", entry)
+		}
+		if _, duplicate := seen[entry.Path]; duplicate {
+			t.Fatalf("duplicate index path %s", entry.Path)
+		}
+		seen[entry.Path] = struct{}{}
+	}
+	originalBundleID := policyrelease.SHA256Digest(indexFile.Content)
+
+	for fileIndex := range input.PayloadFiles {
+		if input.PayloadFiles[fileIndex].Path != "payload/decision-table.json" {
+			continue
+		}
+		var decision map[string]any
+		if err := json.Unmarshal(input.PayloadFiles[fileIndex].Content, &decision); err != nil {
+			t.Fatal(err)
+		}
+		decision["fixture_id"] = "deny-oriented-decision-table-v2"
+		mutated, err := json.Marshal(decision)
+		if err != nil {
+			t.Fatal(err)
+		}
+		input.PayloadFiles[fileIndex].Content = mutated
+		for bindingIndex := range input.Manifest.ContractBindings {
+			if input.Manifest.ContractBindings[bindingIndex].Path == input.PayloadFiles[fileIndex].Path {
+				input.Manifest.ContractBindings[bindingIndex].Digest = policyrelease.SHA256Digest(mutated)
+			}
+		}
+	}
+	if _, err := policyrelease.PrepareUnsigned(input); policyrelease.ErrorCode(err) != "policy_content_index_binding_mismatch" {
+		t.Fatalf("stale content index error = %v (%s)", err, policyrelease.ErrorCode(err))
+	}
+
+	for entryIndex := range index.Entries {
+		if index.Entries[entryIndex].Path == "payload/decision-table.json" {
+			for _, file := range input.PayloadFiles {
+				if file.Path == index.Entries[entryIndex].Path {
+					index.Entries[entryIndex].Digest = policyrelease.SHA256Digest(file.Content)
+				}
+			}
+		}
+	}
+	reboundIndex, err := json.Marshal(index)
+	if err != nil {
+		t.Fatal(err)
+	}
+	newBundleID := policyrelease.SHA256Digest(reboundIndex)
+	if newBundleID == originalBundleID {
+		t.Fatal("semantic policy update reused policy_bundle_id")
+	}
+	indexFile.Content = reboundIndex
+	if _, err := policyrelease.PrepareUnsigned(input); policyrelease.ErrorCode(err) != "presented_review_subject_mismatch" {
+		t.Fatalf("stale review error = %v (%s)", err, policyrelease.ErrorCode(err))
+	}
+	input.Evidence.ReviewReceipts[0].SubjectDigest = newBundleID
+	mutateEvidenceReport(t, &input, "evidence/provenance.json", func(document map[string]any) {
+		document["subject"].([]any)[0].(map[string]any)["digest"].(map[string]any)["sha256"] = newBundleID[len("sha256:"):]
+	})
+	if _, err := policyrelease.PrepareUnsigned(input); err != nil {
+		t.Fatalf("fully rebound semantic update rejected: %v (%s)", err, policyrelease.ErrorCode(err))
+	}
+}
+
 func TestFixedEnvelopeArchiveAndAttestationConstructionAreDeterministic(t *testing.T) {
 	firstUnsigned, err := policyrelease.PrepareUnsigned(fixtureBuildInput(t, "commercial", 1, false))
 	if err != nil {

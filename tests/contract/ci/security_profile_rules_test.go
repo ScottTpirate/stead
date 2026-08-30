@@ -42,6 +42,7 @@ func installValidProfileRuleFixture(t testing.TB, input *policyrelease.BuildInpu
 func TestSecurityProfileRuleFamiliesAndTerms(t *testing.T) {
 	valid := fixtureBuildInput(t, "commercial", 1, false)
 	installValidProfileRuleFixture(t, &valid)
+	rebindPolicyContentIndex(t, &valid)
 	if _, err := policyrelease.PrepareUnsigned(valid); err != nil {
 		t.Fatalf("valid profile rule fixture rejected: %v (%s)", err, policyrelease.ErrorCode(err))
 	}

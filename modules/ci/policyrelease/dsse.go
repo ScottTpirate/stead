@@ -245,6 +245,9 @@ func validatePresentedSigningResult(parsed ParsedEnvelope, result PresentedSigni
 // NewPresentedSigningResult canonicalizes syntax-checked, caller-presented
 // receipt material. It does not verify signatures, keys, trust, or custody.
 func NewPresentedSigningResult(workflowIdentity string, receipts []PresentedSignatureReceipt) (PresentedSigningResult, error) {
+	if len(receipts) > MaxEnvelopeSignatures {
+		return PresentedSigningResult{}, contractError("signing_receipt_count_limit", "presented_signing_result.presented_receipts", nil)
+	}
 	if err := validateIdentifier("presented_signing_result.workflow_identity", workflowIdentity); err != nil {
 		return PresentedSigningResult{}, err
 	}
@@ -275,6 +278,9 @@ func NewPresentedSigningResult(workflowIdentity string, receipts []PresentedSign
 }
 
 func makeSigningRequest(purpose, payloadType string, payload []byte, manifest ManifestInput) (SigningRequestV1, []byte, error) {
+	if len(payload) == 0 || len(payload) > MaxDecodedPayloadBytes {
+		return SigningRequestV1{}, nil, contractError("signing_payload_size_limit", "payload", nil)
+	}
 	request := SigningRequestV1{
 		SchemaVersion:              "1.0.0",
 		Purpose:                    purpose,

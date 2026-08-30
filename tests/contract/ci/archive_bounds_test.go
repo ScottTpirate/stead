@@ -3,6 +3,7 @@ package ci_test
 import (
 	"archive/tar"
 	"bytes"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -321,6 +322,19 @@ func TestArchiveRejectsUnsafeEntryKindsMetadataAndPaths(t *testing.T) {
 			}
 		}
 	})
+}
+
+func TestArchiveErrorsDoNotRetainAttackerControlledEntryNames(t *testing.T) {
+	const attackerName = "payload/safe\nFORGED_AUDIT outcome=success"
+	archive := makeUSTARFixture(t, []tarFixtureEntry{{name: attackerName, typeflag: tar.TypeSymlink, linkname: "target"}})
+	_, err := policyrelease.InspectArchive(archive)
+	if policyrelease.ErrorCode(err) != "unsupported_ustar_entry_type" {
+		t.Fatalf("error = %v (%s)", err, policyrelease.ErrorCode(err))
+	}
+	var contract *policyrelease.ContractError
+	if !errors.As(err, &contract) || strings.Contains(err.Error(), attackerName) || strings.Contains(contract.Field, attackerName) || contract.Field != "" || errors.Unwrap(err) != nil {
+		t.Fatalf("archive error retained attacker text: error=%q field=%q", err.Error(), contract.Field)
+	}
 }
 
 // T-ADR-0006-CONTENT-INTEGRITY.

@@ -115,4 +115,32 @@ func TestSLSAProvenanceV1AdmissionIsClosed(t *testing.T) {
 			}
 		})
 	}
+
+	bindingCases := []struct {
+		name   string
+		mutate func(map[string]any)
+	}{
+		{"unrelated source revision", func(document map[string]any) {
+			document["predicate"].(map[string]any)["buildDefinition"].(map[string]any)["externalParameters"].(map[string]any)["sourceRevision"] = "ffffffffffffffffffffffffffffffffffffffff"
+		}},
+		{"unrelated dependency lock", func(document map[string]any) {
+			document["predicate"].(map[string]any)["buildDefinition"].(map[string]any)["externalParameters"].(map[string]any)["dependencyLockDigest"] = "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+		}},
+		{"unrelated subject digest", func(document map[string]any) {
+			document["subject"].([]any)[0].(map[string]any)["digest"].(map[string]any)["sha256"] = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+		}},
+		{"unrelated subject name", func(document map[string]any) {
+			document["subject"].([]any)[0].(map[string]any)["name"] = "other-policy-content"
+		}},
+	}
+	for _, testCase := range bindingCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			input := fixtureBuildInput(t, "commercial", 1, false)
+			mutateEvidenceReport(t, &input, "evidence/provenance.json", testCase.mutate)
+			_, err := policyrelease.PrepareUnsigned(input)
+			if policyrelease.ErrorCode(err) != "provenance_evidence_binding_mismatch" {
+				t.Fatalf("error = %v (%s)", err, policyrelease.ErrorCode(err))
+			}
+		})
+	}
 }

@@ -45,6 +45,39 @@ func preflightBuildFiles(payloadFiles, evidenceFiles []File) error {
 	return nil
 }
 
+func preflightReviewAndWaiverCounts(reviews []ReviewReceipt, waivers []WaiverReceipt) error {
+	if len(reviews) > MaxReviewReceipts {
+		return contractError("review_receipt_count_limit", "reviews", nil)
+	}
+	if len(waivers) > MaxWaiverReceipts {
+		return contractError("waiver_receipt_count_limit", "waivers", nil)
+	}
+	return nil
+}
+
+func preflightManifestCollections(input ManifestInput) error {
+	collections := []struct {
+		name  string
+		count int
+	}{
+		{"manifest.contract_bindings", len(input.ContractBindings)},
+		{"manifest.profiles", len(input.Profiles)},
+		{"manifest.supported_stead_versions", len(input.SupportedSteadVersions)},
+		{"manifest.required_context_ids", len(input.RequiredContextIDs)},
+		{"manifest.reason_code_ids", len(input.ReasonCodeIDs)},
+		{"manifest.obligation_ids", len(input.ObligationIDs)},
+		{"manifest.explicit_deny_ids", len(input.ExplicitDenyIDs)},
+		{"manifest.compatible_predecessor_activation_set_ids", len(input.CompatiblePredecessorActivationSetIDs)},
+		{"manifest.rollback_constraints", len(input.RollbackConstraints)},
+	}
+	for _, collection := range collections {
+		if collection.count > MaxMetadataEntries {
+			return contractError("metadata_cardinality_limit", collection.name, nil)
+		}
+	}
+	return nil
+}
+
 // cloneSlice preserves the distinction between nil and a non-nil empty slice.
 // That distinction is material for the canonical JSON structures in this
 // package: collection fields are encoded as arrays, never null.
@@ -111,6 +144,9 @@ func waiverReceiptInputs(waivers []PresentedWaiverReceiptV1) []WaiverReceipt {
 }
 
 func validateReviewsAndWaivers(reviews []ReviewReceipt, waivers []WaiverReceipt, subjectDigest string) error {
+	if err := preflightReviewAndWaiverCounts(reviews, waivers); err != nil {
+		return err
+	}
 	seenReviews := make(map[string]struct{}, len(reviews))
 	for _, review := range reviews {
 		if err := validateReview(review, subjectDigest); err != nil {
@@ -136,6 +172,9 @@ func validateReviewsAndWaivers(reviews []ReviewReceipt, waivers []WaiverReceipt,
 }
 
 func validateManifestInput(input ManifestInput) error {
+	if err := preflightManifestCollections(input); err != nil {
+		return err
+	}
 	if err := validateDeploymentPolicy(input.DeploymentPolicy); err != nil {
 		return err
 	}
@@ -224,7 +263,7 @@ func findBoundFile(files map[string]File, pathValue, digest, mediaType string) e
 	return nil
 }
 
-func validateAndSortBindings(input ManifestInput, payload map[string]File, profileEvidenceRequirements map[string]string) ([]ContentBinding, []ProfileBinding, error) {
+func validateAndSortBindings(input ManifestInput, payload map[string]File, profileEvidenceRequirements map[string]string, policyIndexEntries *[]PolicyContentIndexEntryV1) ([]ContentBinding, []ProfileBinding, error) {
 	referenced := map[string]string{input.PolicyContentIndexPath: "policy_content_index"}
 	bindings := append([]ContentBinding(nil), input.ContractBindings...)
 	seenRoles := make(map[string]struct{}, len(bindings))
@@ -401,13 +440,49 @@ func validateAndSortBindings(input ManifestInput, payload map[string]File, profi
 			return nil, nil, contractError("unbound_payload_file", pathValue, nil)
 		}
 	}
+	entries := make([]PolicyContentIndexEntryV1, 0, len(referenced)-1)
+	for pathValue, role := range referenced {
+		if pathValue == input.PolicyContentIndexPath {
+			continue
+		}
+		file := payload[pathValue]
+		entries = append(entries, PolicyContentIndexEntryV1{
+			Role: role, Path: pathValue, MediaType: file.MediaType, Digest: SHA256Digest(file.Content),
+		})
+	}
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].Path+"\x00"+entries[i].Role < entries[j].Path+"\x00"+entries[j].Role
+	})
+	*policyIndexEntries = entries
 	return bindings, profiles, nil
+}
+
+func validatePolicyContentIndex(file File, expectedEntries []PolicyContentIndexEntryV1) error {
+	var index PolicyContentIndexV1
+	if err := decodeStrict(file.Content, &index); err != nil {
+		return err
+	}
+	expected := PolicyContentIndexV1{SchemaVersion: "1.0.0", Entries: expectedEntries}
+	if !reflect.DeepEqual(index, expected) {
+		return contractError("policy_content_index_binding_mismatch", "policy_content_index", nil)
+	}
+	canonical, err := marshalCanonical(index)
+	if err != nil {
+		return err
+	}
+	if !bytes.Equal(canonical, file.Content) {
+		return contractError("noncanonical_policy_content_index", "policy_content_index", nil)
+	}
+	return nil
 }
 
 // PrepareUnsigned constructs deterministic pre-signing content and an external
 // signing request. Calling it twice with byte-identical inputs yields identical
 // output bytes and identities.
 func PrepareUnsigned(input BuildInput) (UnsignedActivation, error) {
+	if err := preflightReviewAndWaiverCounts(input.Evidence.ReviewReceipts, input.Evidence.WaiverReceipts); err != nil {
+		return UnsignedActivation{}, err
+	}
 	if err := preflightBuildFiles(input.PayloadFiles, input.EvidenceFiles); err != nil {
 		return UnsignedActivation{}, err
 	}
@@ -449,7 +524,22 @@ func PrepareUnsigned(input BuildInput) (UnsignedActivation, error) {
 	if policyIndex.MediaType != "application/vnd.stead.policy-content-index.v1+json" {
 		return UnsignedActivation{}, contractError("bound_media_type_mismatch", input.Manifest.PolicyContentIndexPath, nil)
 	}
+	profileEvidenceRequirements := make(map[string]string)
+	var policyIndexEntries []PolicyContentIndexEntryV1
+	bindings, profiles, err := validateAndSortBindings(input.Manifest, payload, profileEvidenceRequirements, &policyIndexEntries)
+	if err != nil {
+		return UnsignedActivation{}, err
+	}
+	if err := validatePolicyContentIndex(policyIndex, policyIndexEntries); err != nil {
+		return UnsignedActivation{}, err
+	}
 	policyBundleID := SHA256Digest(policyIndex.Content)
+	provenance := provenanceBinding{
+		SourceRevision:       input.Manifest.SourceRevision,
+		DependencyLockDigest: input.Manifest.DependencyLockDigest,
+		SubjectName:          PolicyIndexSubjectName,
+		SubjectDigest:        policyBundleID,
+	}
 	if err := validateReviewsAndWaivers(input.Evidence.ReviewReceipts, input.Evidence.WaiverReceipts, policyBundleID); err != nil {
 		return UnsignedActivation{}, err
 	}
@@ -468,11 +558,6 @@ func PrepareUnsigned(input BuildInput) (UnsignedActivation, error) {
 		if waiver.ClaimedDisposition != "approved" {
 			return UnsignedActivation{}, contractError("presented_build_waiver_not_approved", "evidence.waiver_receipts", nil)
 		}
-	}
-	profileEvidenceRequirements := make(map[string]string)
-	bindings, profiles, err := validateAndSortBindings(input.Manifest, payload, profileEvidenceRequirements)
-	if err != nil {
-		return UnsignedActivation{}, err
 	}
 
 	reports := make([]PresentedEvidenceReportV1, 0, len(input.EvidenceFiles))
@@ -502,7 +587,7 @@ func PrepareUnsigned(input BuildInput) (UnsignedActivation, error) {
 			}
 		} else {
 			var err error
-			claims, err = validateTypedEvidenceFile(file)
+			claims, err = validateTypedEvidenceFile(file, provenance)
 			if err != nil {
 				return UnsignedActivation{}, err
 			}
@@ -671,6 +756,15 @@ func requireDigestMatches(field, expected string, data []byte) error {
 func validatePreparedEvidence(unsigned UnsignedActivation, profileEvidenceRequirements map[string]string) error {
 	evidence := unsigned.EvidenceManifest
 	manifest := unsigned.Manifest
+	if len(evidence.Reports) > MaxArchiveFiles || len(evidence.ReviewReceipts) > MaxReviewReceipts || len(evidence.WaiverReceipts) > MaxWaiverReceipts {
+		return contractError("metadata_cardinality_limit", "evidence_manifest", nil)
+	}
+	provenance := provenanceBinding{
+		SourceRevision:       manifest.SourceRevision,
+		DependencyLockDigest: manifest.DependencyLockDigest,
+		SubjectName:          PolicyIndexSubjectName,
+		SubjectDigest:        manifest.PolicyBundleID,
+	}
 	if evidence.SchemaVersion != "1.0.0" || evidence.Authority != NonAuthorizingHandoffAuthority {
 		return contractError("evidence_manifest_authority_mismatch", "evidence_manifest", nil)
 	}
@@ -720,7 +814,7 @@ func validatePreparedEvidence(unsigned UnsignedActivation, profileEvidenceRequir
 			}
 		} else {
 			var err error
-			claims, err = validateTypedEvidenceFile(file)
+			claims, err = validateTypedEvidenceFile(file, provenance)
 			if err != nil {
 				return err
 			}
@@ -754,6 +848,36 @@ func validatePreparedEvidence(unsigned UnsignedActivation, profileEvidenceRequir
 }
 
 func validateUnsignedActivation(unsigned UnsignedActivation) error {
+	if len(unsigned.Files) > MaxArchiveFiles || len(unsigned.Manifest.Files) > MaxArchiveFiles || len(unsigned.EvidenceManifest.Reports) > MaxArchiveFiles || len(unsigned.EvidenceManifest.ReviewReceipts) > MaxReviewReceipts || len(unsigned.EvidenceManifest.WaiverReceipts) > MaxWaiverReceipts {
+		return contractError("metadata_cardinality_limit", "unsigned_activation", nil)
+	}
+	if err := preflightManifestCollections(ManifestInput{
+		ContractBindings:                      unsigned.Manifest.ContractBindings,
+		Profiles:                              unsigned.Manifest.Profiles,
+		SupportedSteadVersions:                unsigned.Manifest.SupportedSteadVersions,
+		RequiredContextIDs:                    unsigned.Manifest.RequiredContextIDs,
+		ReasonCodeIDs:                         unsigned.Manifest.ReasonCodeIDs,
+		ObligationIDs:                         unsigned.Manifest.ObligationIDs,
+		ExplicitDenyIDs:                       unsigned.Manifest.ExplicitDenyIDs,
+		CompatiblePredecessorActivationSetIDs: unsigned.Manifest.CompatiblePredecessorActivationSetIDs,
+		RollbackConstraints:                   unsigned.Manifest.RollbackConstraints,
+	}); err != nil {
+		return err
+	}
+	if len(unsigned.ManifestPayload) > MaxDecodedPayloadBytes || len(unsigned.EvidenceManifestBytes) > MaxArchiveFileBytes || len(unsigned.SigningRequestBytes) > MaxEnvelopeBytes {
+		return contractError("prepared_artifact_size_limit", "unsigned_activation", nil)
+	}
+	var total uint64
+	for _, file := range unsigned.Files {
+		size := uint64(len(file.Content))
+		if size > MaxArchiveFileBytes {
+			return contractError("archive_file_size_limit", "unsigned_activation.files", nil)
+		}
+		if total > MaxArchiveContent-size {
+			return contractError("archive_content_limit", "unsigned_activation.files", nil)
+		}
+		total += size
+	}
 	if SHA256Digest(unsigned.ManifestPayload) != unsigned.ActivationSetID {
 		return contractError("activation_set_identity_mismatch", "activation_set_id", nil)
 	}
@@ -816,7 +940,8 @@ func validateUnsignedActivation(unsigned UnsignedActivation) error {
 		}
 	}
 	profileEvidenceRequirements := make(map[string]string)
-	bindings, profiles, err := validateAndSortBindings(manifestInput, payload, profileEvidenceRequirements)
+	var policyIndexEntries []PolicyContentIndexEntryV1
+	bindings, profiles, err := validateAndSortBindings(manifestInput, payload, profileEvidenceRequirements, &policyIndexEntries)
 	if err != nil {
 		return err
 	}
@@ -826,6 +951,9 @@ func validateUnsignedActivation(unsigned UnsignedActivation) error {
 	policyIndex, present := payload[unsigned.Manifest.PolicyContentIndexPath]
 	if !present || SHA256Digest(policyIndex.Content) != unsigned.Manifest.PolicyBundleID {
 		return contractError("policy_bundle_identity_mismatch", "policy_bundle_id", nil)
+	}
+	if err := validatePolicyContentIndex(policyIndex, policyIndexEntries); err != nil {
+		return err
 	}
 	wantSigningRequest, wantSigningRequestBytes, err := makeSigningRequest("policy_activation_manifest", ActivationManifestPayloadType, unsigned.ManifestPayload, manifestInput)
 	if err != nil {

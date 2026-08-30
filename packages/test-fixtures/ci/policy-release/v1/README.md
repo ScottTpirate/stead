@@ -8,7 +8,10 @@ P-256 verification vectors; that key is never accepted by a Stead trust store.
 
 `source/` exercises deterministic unsigned construction, exact v0.1
 security-profile/deployment-policy JSON materializations, and closed typed
-embedded evidence. All caller-provided evidence, review, waiver, assurance,
+embedded evidence. The test fixture generator replaces the empty source
+policy-index template with the canonical sorted digest index for the selected
+profile/assurance/trust inputs, then binds its identity into the build review
+and exact SLSA source/lock/subject fields. All caller-provided evidence, review, waiver, assurance,
 offline-check, signature, key-ID, and custodian material is digest-bound and
 explicitly labeled unverified; the fixture claims no authority.
 `vectors/negative-cases.json` is the stable inventory of fail-closed parser,

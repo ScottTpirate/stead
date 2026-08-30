@@ -9,6 +9,7 @@ const (
 
 	ActivationFormatV1       = "stead-policy-activation-set-dsse-v1"
 	ReleaseKeyPurpose        = "release-policy"
+	PolicyIndexSubjectName   = "stead-policy-content-index"
 	SecurityProfileSchemaID  = "https://stead.example/policies/security-label-profiles/profile-v0.1.schema.json"
 	DeploymentPolicySchemaID = "https://stead.example/policies/deployment-domains/domain-profile-v0.1.schema.json"
 
@@ -25,6 +26,9 @@ const (
 	MaxEncodedSignatureBytes = 256
 	MaxDecodedSignatureBytes = 128
 	MaxKeyIDBytes            = 80
+	MaxMetadataEntries       = 256
+	MaxReviewReceipts        = 256
+	MaxWaiverReceipts        = 256
 
 	MaxArchiveBytes      = 64 << 20
 	MaxArchiveEntries    = 512
@@ -46,6 +50,22 @@ type File struct {
 
 // ContentBinding binds a role in the activation manifest to one listed file.
 type ContentBinding struct {
+	Role      string `json:"role"`
+	Path      string `json:"path"`
+	MediaType string `json:"media_type"`
+	Digest    string `json:"digest"`
+}
+
+// PolicyContentIndexV1 is the content identity root for one policy bundle.
+// Every semantic payload file other than the index itself appears exactly once
+// so changing policy, model, profile, deployment, assurance, or trust material
+// necessarily changes policy_bundle_id.
+type PolicyContentIndexV1 struct {
+	SchemaVersion string                      `json:"schema_version"`
+	Entries       []PolicyContentIndexEntryV1 `json:"entries"`
+}
+
+type PolicyContentIndexEntryV1 struct {
 	Role      string `json:"role"`
 	Path      string `json:"path"`
 	MediaType string `json:"media_type"`

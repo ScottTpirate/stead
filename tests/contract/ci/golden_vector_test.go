@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 
@@ -119,10 +120,27 @@ func makeGoldenVectorForPolicy(t testing.TB, threshold int, distinctCustodians b
 	}
 }
 
+func updateGoldenFixture(t testing.TB, relative string, vector goldenVector) {
+	t.Helper()
+	encoded, err := json.MarshalIndent(vector, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded = append(encoded, '\n')
+	path := filepath.Join(repositoryRoot(t), "packages/test-fixtures/ci/policy-release/v1", relative)
+	if err := os.WriteFile(path, encoded, 0o644); err != nil {
+		t.Fatalf("write golden fixture %s: %v", relative, err)
+	}
+}
+
 // T-ADR-0006-DETERMINISTIC-BUILD, T-ADR-0006-TRANSPORT-IDENTITY, and the
 // independent offline fixed-vector handoff.
 func TestGoldenOfflineVector(t *testing.T) {
 	actual := makeGoldenVector(t)
+	if os.Getenv("STEAD_UPDATE_POLICY_GOLDEN") == "1" {
+		updateGoldenFixture(t, "vectors/golden-vector.json", actual)
+		return
+	}
 	if os.Getenv("STEAD_PRINT_POLICY_GOLDEN") == "1" {
 		encoded, err := json.MarshalIndent(actual, "", "  ")
 		if err != nil {
@@ -144,6 +162,10 @@ func TestGoldenOfflineVector(t *testing.T) {
 
 func TestWS06CanonicalThresholdTwoVector(t *testing.T) {
 	actual := makeGoldenVectorForPolicy(t, 2, true)
+	if os.Getenv("STEAD_UPDATE_POLICY_GOLDEN") == "1" {
+		updateGoldenFixture(t, "vectors/ws06/canonical-threshold-two-vector.json", actual)
+		return
+	}
 	if os.Getenv("STEAD_PRINT_WS06_CANONICAL") == "1" {
 		encoded, err := json.MarshalIndent(actual, "", "  ")
 		if err != nil {

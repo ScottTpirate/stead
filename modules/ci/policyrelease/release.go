@@ -28,6 +28,9 @@ func validateFinalReviewState(reviews []ReviewReceipt, waivers []WaiverReceipt, 
 // PrepareReleaseAttestation constructs the post-signing payload only after the
 // exact activation envelope and archive identities exist.
 func PrepareReleaseAttestation(activation ActivationArchive, input ReleaseAttestationInput) (UnsignedReleaseAttestation, error) {
+	if err := preflightReviewAndWaiverCounts(input.ReviewReceipts, input.WaiverReceipts); err != nil {
+		return UnsignedReleaseAttestation{}, err
+	}
 	if err := validateUnsignedActivation(activation.Unsigned); err != nil {
 		return UnsignedReleaseAttestation{}, err
 	}
@@ -103,6 +106,9 @@ func PrepareReleaseAttestation(activation ActivationArchive, input ReleaseAttest
 	}
 	if bytes.Contains(encoded, []byte("release_attestation_id")) || bytes.Contains(encoded, []byte("release_attestation_envelope_digest")) {
 		return UnsignedReleaseAttestation{}, contractError("self_referential_attestation", "release_attestation", nil)
+	}
+	if len(encoded) > MaxDecodedPayloadBytes {
+		return UnsignedReleaseAttestation{}, contractError("release_attestation_payload_size_limit", "release_attestation", nil)
 	}
 	request, requestBytes, err := makeSigningRequest("policy_release_attestation", ReleaseAttestationPayloadType, encoded, manifestInputFromActivation(activation))
 	if err != nil {

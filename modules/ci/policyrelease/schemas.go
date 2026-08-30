@@ -1189,6 +1189,27 @@ func validateProvenanceEvidence(data []byte) (ConformanceClaims, error) {
 	return ConformanceClaims{}, nil
 }
 
+type provenanceBinding struct {
+	SourceRevision       string
+	DependencyLockDigest string
+	SubjectName          string
+	SubjectDigest        string
+}
+
+func validateProvenanceBinding(data []byte, expected provenanceBinding) error {
+	var report slsaProvenanceEvidenceV1
+	if err := decodeStrict(data, &report); err != nil {
+		return err
+	}
+	if report.Predicate.BuildDefinition.ExternalParameters.SourceRevision != expected.SourceRevision ||
+		report.Predicate.BuildDefinition.ExternalParameters.DependencyLockDigest != expected.DependencyLockDigest ||
+		len(report.Subject) != 1 || report.Subject[0].Name != expected.SubjectName ||
+		"sha256:"+report.Subject[0].Digest["sha256"] != expected.SubjectDigest {
+		return contractError("provenance_evidence_binding_mismatch", "evidence.provenance", nil)
+	}
+	return nil
+}
+
 func validateLicenseEvidence(data []byte) (ConformanceClaims, error) {
 	var report licenseEvidenceV01
 	if err := decodeStrict(data, &report); err != nil {
@@ -1216,7 +1237,7 @@ func validateVulnerabilityEvidence(data []byte) (ConformanceClaims, error) {
 	return ConformanceClaims{}, nil
 }
 
-func validateTypedEvidenceFile(file File) (ConformanceClaims, error) {
+func validateTypedEvidenceFile(file File, provenance provenanceBinding) (ConformanceClaims, error) {
 	spec, ok := evidenceSpecs[file.Path]
 	if !ok {
 		return ConformanceClaims{}, contractError("unknown_evidence_path", file.Path, nil)
@@ -1224,7 +1245,16 @@ func validateTypedEvidenceFile(file File) (ConformanceClaims, error) {
 	if file.MediaType != spec.mediaType {
 		return ConformanceClaims{}, contractError("evidence_media_type_mismatch", file.Path, nil)
 	}
-	return spec.validate(file.Content)
+	claims, err := spec.validate(file.Content)
+	if err != nil {
+		return ConformanceClaims{}, err
+	}
+	if file.Path == "evidence/provenance.json" {
+		if err := validateProvenanceBinding(file.Content, provenance); err != nil {
+			return ConformanceClaims{}, err
+		}
+	}
+	return claims, nil
 }
 
 func sortedEvidencePaths() []string {

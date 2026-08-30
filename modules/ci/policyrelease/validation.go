@@ -39,7 +39,9 @@ var allowedMediaTypes = map[string]struct{}{
 }
 
 // ContractError supplies a stable, safe failure code without embedding input
-// payloads or signature bytes in logs.
+// paths, payloads, parser text, or signature bytes in logs. Field and Err are
+// retained for source compatibility but package-produced errors intentionally
+// leave both empty; callers branch on ErrorCode rather than rendering input.
 type ContractError struct {
 	Code  string
 	Field string
@@ -47,16 +49,13 @@ type ContractError struct {
 }
 
 func (e *ContractError) Error() string {
-	if e.Field == "" {
-		return e.Code
-	}
-	return e.Code + ": " + e.Field
+	return e.Code
 }
 
-func (e *ContractError) Unwrap() error { return e.Err }
+func (e *ContractError) Unwrap() error { return nil }
 
-func contractError(code, field string, err error) error {
-	return &ContractError{Code: code, Field: field, Err: err}
+func contractError(code, _ string, _ error) error {
+	return &ContractError{Code: code}
 }
 
 func ErrorCode(err error) string {
@@ -159,6 +158,9 @@ func validateArtifactFile(file File, root string) error {
 func sortedUniqueStrings(field string, values []string, allowEmpty bool) ([]string, error) {
 	if len(values) == 0 && !allowEmpty {
 		return nil, contractError("missing_required_list", field, nil)
+	}
+	if len(values) > MaxMetadataEntries {
+		return nil, contractError("metadata_cardinality_limit", field, nil)
 	}
 	result := append([]string(nil), values...)
 	sort.Strings(result)

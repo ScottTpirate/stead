@@ -145,6 +145,8 @@ func fixtureFile(t testing.TB, path, relative, mediaType string) policyrelease.F
 
 func fixtureBuildInput(t testing.TB, profile string, threshold int, distinctCustodians bool) policyrelease.BuildInput {
 	t.Helper()
+	sourceRevision := "0123456789abcdef0123456789abcdef01234567"
+	dependencyLockDigest := policyrelease.SHA256Digest([]byte("fixture-lock"))
 	payloadFiles := []policyrelease.File{
 		fixtureFile(t, "payload/policy-content-index.json", "source/payload/policy-content-index.json", "application/vnd.stead.policy-content-index.v1+json"),
 		fixtureFile(t, "payload/input-schema.json", "source/payload/input-schema.json", "application/schema+json"),
@@ -257,14 +259,6 @@ func fixtureBuildInput(t testing.TB, profile string, threshold int, distinctCust
 	payloadFiles[7].Content = trustPayload
 	trustEnvelope, _ := externallySign(t, policyrelease.TrustSetPayloadType, trustPayload, threshold, false)
 	payloadFiles = append(payloadFiles, policyrelease.File{Path: "payload/trust-set-envelope.json", MediaType: "application/json", Content: trustEnvelope})
-
-	evidenceFiles := []policyrelease.File{
-		fixtureFile(t, "evidence/sbom.spdx.json", "source/evidence/sbom.spdx.json", "application/spdx+json"),
-		fixtureFile(t, "evidence/license-result.json", "source/evidence/license-result.json", "application/vnd.stead.policy-license-result.v1+json"),
-		fixtureFile(t, "evidence/conformance-result.json", "source/evidence/conformance-result.json", "application/vnd.stead.policy-conformance.v1+json"),
-		fixtureFile(t, "evidence/provenance.json", "source/evidence/provenance.json", "application/vnd.in-toto+json"),
-		fixtureFile(t, "evidence/vulnerability-result.json", "source/evidence/vulnerability-result.json", "application/vnd.stead.policy-vulnerability.v1+json"),
-	}
 	byPath := make(map[string]policyrelease.File, len(payloadFiles))
 	for _, file := range payloadFiles {
 		byPath[file.Path] = file
@@ -280,6 +274,60 @@ func fixtureBuildInput(t testing.TB, profile string, threshold int, distinctCust
 		binding("registries", "payload/registries.json"),
 	}
 	sort.Slice(contractBindings, func(i, j int) bool { return contractBindings[i].Role < contractBindings[j].Role })
+	indexRoles := map[string]string{
+		"payload/decision-table.json":             "decision_table",
+		"payload/input-schema.json":               "input_schema",
+		"payload/output-schema.json":              "output_schema",
+		"payload/registries.json":                 "registries",
+		"payload/security-profile.json":           "security_profile",
+		"payload/openfga-model-source.txt":        "openfga_model",
+		"payload/deployment-policy.json":          "deployment_policy",
+		"payload/presented-assurance-result.json": "presented_assurance_result",
+		"payload/trust-set.json":                  "trust_set",
+		"payload/trust-set-envelope.json":         "trust_set_envelope",
+	}
+	indexEntries := make([]policyrelease.PolicyContentIndexEntryV1, 0, len(indexRoles))
+	for pathValue, role := range indexRoles {
+		file := byPath[pathValue]
+		indexEntries = append(indexEntries, policyrelease.PolicyContentIndexEntryV1{
+			Role: role, Path: pathValue, MediaType: file.MediaType, Digest: policyrelease.SHA256Digest(file.Content),
+		})
+	}
+	sort.Slice(indexEntries, func(i, j int) bool {
+		return indexEntries[i].Path+"\x00"+indexEntries[i].Role < indexEntries[j].Path+"\x00"+indexEntries[j].Role
+	})
+	indexBytes, err := json.Marshal(policyrelease.PolicyContentIndexV1{SchemaVersion: "1.0.0", Entries: indexEntries})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for index := range payloadFiles {
+		if payloadFiles[index].Path == "payload/policy-content-index.json" {
+			payloadFiles[index].Content = indexBytes
+			byPath[payloadFiles[index].Path] = payloadFiles[index]
+		}
+	}
+	policyBundleID := policyrelease.SHA256Digest(indexBytes)
+	provenanceFile := fixtureFile(t, "evidence/provenance.json", "source/evidence/provenance.json", "application/vnd.in-toto+json")
+	var provenanceDocument map[string]any
+	if err := json.Unmarshal(provenanceFile.Content, &provenanceDocument); err != nil {
+		t.Fatal(err)
+	}
+	externalParameters := provenanceDocument["predicate"].(map[string]any)["buildDefinition"].(map[string]any)["externalParameters"].(map[string]any)
+	externalParameters["sourceRevision"] = sourceRevision
+	externalParameters["dependencyLockDigest"] = dependencyLockDigest
+	provenanceDocument["subject"].([]any)[0].(map[string]any)["name"] = policyrelease.PolicyIndexSubjectName
+	provenanceDocument["subject"].([]any)[0].(map[string]any)["digest"].(map[string]any)["sha256"] = policyBundleID[len("sha256:"):]
+	provenanceFile.Content, err = json.Marshal(provenanceDocument)
+	if err != nil {
+		t.Fatal(err)
+	}
+	evidenceFiles := []policyrelease.File{
+		fixtureFile(t, "evidence/sbom.spdx.json", "source/evidence/sbom.spdx.json", "application/spdx+json"),
+		fixtureFile(t, "evidence/license-result.json", "source/evidence/license-result.json", "application/vnd.stead.policy-license-result.v1+json"),
+		fixtureFile(t, "evidence/conformance-result.json", "source/evidence/conformance-result.json", "application/vnd.stead.policy-conformance.v1+json"),
+		provenanceFile,
+		fixtureFile(t, "evidence/vulnerability-result.json", "source/evidence/vulnerability-result.json", "application/vnd.stead.policy-vulnerability.v1+json"),
+	}
 	return policyrelease.BuildInput{
 		PayloadFiles:  payloadFiles,
 		EvidenceFiles: evidenceFiles,
@@ -288,7 +336,7 @@ func fixtureBuildInput(t testing.TB, profile string, threshold int, distinctCust
 			BuildWorkflowIdentity: "stead-ci-policy-build-workflow-v1",
 			ReviewReceipts: []policyrelease.ReviewReceipt{{
 				ReviewerID: "fixture-independent-reviewer", Role: "independent-security",
-				SubjectDigest: policyrelease.SHA256Digest(byPath["payload/policy-content-index.json"].Content),
+				SubjectDigest: policyBundleID,
 				RecordDigest:  policyrelease.SHA256Digest([]byte("fixture-build-review-record")), ClaimedDisposition: "accept",
 			}},
 			WaiverReceipts: []policyrelease.WaiverReceipt{},
@@ -318,8 +366,8 @@ func fixtureBuildInput(t testing.TB, profile string, threshold int, distinctCust
 			ReasonCodeIDs:            []string{"denied-by-default"},
 			ObligationIDs:            []string{"audit-required"},
 			ExplicitDenyIDs:          []string{"explicit-deny-default"},
-			SourceRevision:           "0123456789abcdef0123456789abcdef01234567",
-			DependencyLockDigest:     policyrelease.SHA256Digest([]byte("fixture-lock")),
+			SourceRevision:           sourceRevision,
+			DependencyLockDigest:     dependencyLockDigest,
 			BuildRecipeVersion:       "policy-release-builder-v1",
 			IssuedAt:                 time.Date(2026, 8, 30, 12, 0, 0, 0, time.UTC),
 			ExpiresAt:                time.Date(2026, 9, 30, 12, 0, 0, 0, time.UTC),
@@ -334,6 +382,80 @@ func fixtureBuildInput(t testing.TB, profile string, threshold int, distinctCust
 			RollbackConstraints:                   []string{"forward-audited-release-only", "no-revoked-evidence-reuse"},
 		},
 	}
+}
+
+// rebindPolicyContentIndex is test-only fixture construction. It models the
+// upstream producer updating the canonical content index, review subject, and
+// provenance subject after a deliberate semantic payload mutation.
+func rebindPolicyContentIndex(t testing.TB, input *policyrelease.BuildInput) {
+	t.Helper()
+	roles := make(map[string]string)
+	for _, binding := range input.Manifest.ContractBindings {
+		roles[binding.Path] = binding.Role
+	}
+	for _, profile := range input.Manifest.Profiles {
+		roles[profile.Path] = "security_profile"
+		for _, file := range input.PayloadFiles {
+			if file.Path != profile.Path {
+				continue
+			}
+			var document map[string]any
+			if err := json.Unmarshal(file.Content, &document); err != nil {
+				t.Fatal(err)
+			}
+			for _, rawSource := range document["authoritative_sources"].([]any) {
+				source := rawSource.(map[string]any)
+				if pathValue, ok := source["payload_path"].(string); ok && pathValue != "" {
+					roles["payload/"+pathValue] = "security_profile_authoritative_snapshot"
+				}
+			}
+		}
+	}
+	roles[input.Manifest.OpenFGAModel.SourcePath] = "openfga_model"
+	roles[input.Manifest.DeploymentPolicy.Path] = "deployment_policy"
+	roles[input.Manifest.DeploymentPolicy.PresentedAssuranceResultPath] = "presented_assurance_result"
+	roles[input.Manifest.Trust.TrustSetPath] = "trust_set"
+	roles[input.Manifest.Trust.TrustSetEnvelopePath] = "trust_set_envelope"
+	files := make(map[string]policyrelease.File, len(input.PayloadFiles))
+	for _, file := range input.PayloadFiles {
+		files[file.Path] = file
+	}
+	entries := make([]policyrelease.PolicyContentIndexEntryV1, 0, len(roles))
+	for pathValue, role := range roles {
+		file, present := files[pathValue]
+		if !present {
+			t.Fatalf("cannot rebind missing policy payload %s", pathValue)
+		}
+		entries = append(entries, policyrelease.PolicyContentIndexEntryV1{
+			Role: role, Path: pathValue, MediaType: file.MediaType, Digest: policyrelease.SHA256Digest(file.Content),
+		})
+	}
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].Path+"\x00"+entries[i].Role < entries[j].Path+"\x00"+entries[j].Role
+	})
+	indexBytes, err := json.Marshal(policyrelease.PolicyContentIndexV1{SchemaVersion: "1.0.0", Entries: entries})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for fileIndex := range input.PayloadFiles {
+		if input.PayloadFiles[fileIndex].Path == input.Manifest.PolicyContentIndexPath {
+			input.PayloadFiles[fileIndex].Content = indexBytes
+		}
+	}
+	bundleID := policyrelease.SHA256Digest(indexBytes)
+	for reviewIndex := range input.Evidence.ReviewReceipts {
+		input.Evidence.ReviewReceipts[reviewIndex].SubjectDigest = bundleID
+	}
+	for waiverIndex := range input.Evidence.WaiverReceipts {
+		input.Evidence.WaiverReceipts[waiverIndex].SubjectDigest = bundleID
+	}
+	mutateEvidenceReport(t, input, "evidence/provenance.json", func(document map[string]any) {
+		external := document["predicate"].(map[string]any)["buildDefinition"].(map[string]any)["externalParameters"].(map[string]any)
+		external["sourceRevision"] = input.Manifest.SourceRevision
+		external["dependencyLockDigest"] = input.Manifest.DependencyLockDigest
+		document["subject"].([]any)[0].(map[string]any)["name"] = policyrelease.PolicyIndexSubjectName
+		document["subject"].([]any)[0].(map[string]any)["digest"].(map[string]any)["sha256"] = bundleID[len("sha256:"):]
+	})
 }
 
 func completeFixtureRelease(t testing.TB, profile string, threshold int, distinct bool) (policyrelease.ActivationArchive, policyrelease.UnsignedReleaseAttestation, policyrelease.ImmutableReleaseHandoff) {
