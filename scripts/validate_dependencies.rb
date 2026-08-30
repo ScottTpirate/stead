@@ -240,6 +240,7 @@ def strict_yaml_node_errors(node, path = "$")
       end
 
       key = key_node.value
+      errors << "#{path}: YAML merge keys are prohibited" if key == "<<"
       errors << "#{path}: duplicate mapping key #{key.inspect}" unless seen_keys.add?(key)
       errors.concat(strict_yaml_node_errors(value_node, "#{path}.#{key}"))
     end
@@ -900,6 +901,18 @@ def run_validator_self_tests
   provenance_fixture = load_yaml(PROVENANCE_PATH)
   provenance_source = File.read(PROVENANCE_PATH)
   registry_source = File.read(REGISTRY_PATH)
+  provenance_inline_merge = provenance_source.sub(
+    "proposed_import:\n",
+    "proposed_import:\n  <<: {status: APPROVED, approved_source_distribution: true, approvers: [attacker-one, attacker-two], approved_at: \"2026-08-30T23:59:59Z\", scope_version: attacker-expanded}\n"
+  )
+  provenance_sequence_merge = provenance_source.sub(
+    "proposed_import:\n",
+    "proposed_import:\n  <<: [{status: APPROVED}, {scope_version: attacker-expanded}]\n"
+  )
+  registry_inline_merge = registry_source.sub(
+    "    decision: { category: ALLOW-PERMISSIVE, status: REVIEWED_PENDING_INDEPENDENT_APPROVAL, independent_approval_required: true, approvers: [], approved_at: null }\n",
+    "    decision:\n      <<: {status: APPROVED, approvers: [attacker-one, attacker-two], approved_at: \"2026-08-30T23:59:59Z\"}\n      category: ALLOW-PERMISSIVE\n      status: REVIEWED_PENDING_INDEPENDENT_APPROVAL\n      independent_approval_required: true\n      approvers: []\n      approved_at: null\n"
+  )
   raw_yaml_mutations = {
     "provenance duplicate approval status" => provenance_source.sub(
       "  status: REVIEWED_PENDING_INDEPENDENT_APPROVAL\n",
@@ -914,7 +927,10 @@ def run_validator_self_tests
       "  - approval_id: DEP-APP-MALICIOUS\n    approval_id: DEP-APP-DEVLANE-STEAD-PRIMITIVES-7719DCAD\n"
     ),
     "provenance trailing document" => "#{provenance_source}\n---\nstatus: APPROVED\napproved_source_distribution: true\n",
-    "registry trailing document" => "#{registry_source}\n---\ndecision:\n  status: APPROVED\n  approvers: [arbitrary-one, arbitrary-two]\n"
+    "registry trailing document" => "#{registry_source}\n---\ndecision:\n  status: APPROVED\n  approvers: [arbitrary-one, arbitrary-two]\n",
+    "provenance inline mapping merge" => provenance_inline_merge,
+    "provenance inline sequence merge" => provenance_sequence_merge,
+    "registry inline mapping merge" => registry_inline_merge
   }
   raw_yaml_mutation_survivors = raw_yaml_mutations.filter_map do |label, mutated_source|
     guard_count += 1
@@ -923,6 +939,12 @@ def run_validator_self_tests
   unless raw_yaml_mutation_survivors.empty?
     failures << "strict YAML parser mutation survivors: #{raw_yaml_mutation_survivors.join(', ')}"
   end
+
+  coupled_merge_survives =
+    strict_yaml_structure_errors(provenance_inline_merge, filename: "coupled provenance merge.yaml").empty? &&
+    strict_yaml_structure_errors(registry_inline_merge, filename: "coupled registry merge.yaml").empty?
+  failures << "coupled provenance and registry YAML merge-key mutation survived" if coupled_merge_survives
+  guard_count += 1
 
   reordered_mapping_a = { "second" => { "beta" => 2, "alpha" => 1 }, "first" => true }
   reordered_mapping_b = { "first" => true, "second" => { "alpha" => 1, "beta" => 2 } }
