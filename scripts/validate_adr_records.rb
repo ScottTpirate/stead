@@ -27,6 +27,7 @@ EXPECTED_P1_006_ADR_CANDIDATES = %w[
 ].freeze
 ADR_CANDIDATE_MENTION_PATTERN = /[A-Za-z0-9_-]*ADR-CAND-[A-Za-z0-9_-]+/.freeze
 ADR_CANDIDATE_TOKEN_PATTERN = /\AADR-CAND-\d{3}\z/.freeze
+ADR_CANDIDATE_MARKDOWN_UNDERSCORE_PATTERN = /(?<![A-Za-z0-9_-])(?<delimiter>_{1,3})(?<candidate>ADR-CAND-\d{3})\k<delimiter>(?![A-Za-z0-9_-])/.freeze
 
 ACCEPTED_RECORD_METADATA = {
   "0002" => {
@@ -271,6 +272,9 @@ def p1_006_adr_gate_failures(adr_gates:, security_issue:)
 
   if security_issue
     criteria = Array(security_issue["acceptance_criteria"]).join(" ")
+    criteria = criteria.gsub(ADR_CANDIDATE_MARKDOWN_UNDERSCORE_PATTERN) do
+      Regexp.last_match[:candidate]
+    end
     candidate_mentions = criteria.scan(ADR_CANDIDATE_MENTION_PATTERN)
     malformed_candidate_mentions = candidate_mentions.reject { |candidate| candidate.match?(ADR_CANDIDATE_TOKEN_PATTERN) }
     unless malformed_candidate_mentions.empty?
@@ -529,6 +533,25 @@ if security_issue && adr_gates["ADR-CAND-002"]
     end
     unless malformed_token_killed && missing_token_killed
       failures << "STEAD-P1-006 #{mutation_name} ADR-CAND-002 mutant survived exact-token parsing"
+    end
+  end
+
+  {
+    "single underscore emphasis" => "_ADR-CAND-002_",
+    "double underscore emphasis" => "__ADR-CAND-002__",
+    "triple underscore emphasis" => "___ADR-CAND-002___"
+  }.each do |format_name, replacement|
+    formatted_security_issue = security_issue.merge(
+      "acceptance_criteria" => Array(security_issue["acceptance_criteria"]).map do |criterion|
+        criterion.gsub("ADR-CAND-002", replacement)
+      end
+    )
+    format_failures = p1_006_adr_gate_failures(
+      adr_gates: adr_gates,
+      security_issue: formatted_security_issue
+    )
+    unless format_failures.empty?
+      failures << "STEAD-P1-006 valid #{format_name} failed exact-token parsing: #{format_failures.join('; ')}"
     end
   end
 end
