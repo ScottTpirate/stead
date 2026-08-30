@@ -1,0 +1,6 @@
+profile_id: synthetic_regulated
+version: "1.0.0"
+bundle_signing:
+  required: true
+  format: stead-policy-activation-set-dsse-v1
+  materialization_gate: RG-08-SECURITY

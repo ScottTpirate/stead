@@ -1,0 +1,1 @@
+{"schema_version":"1.0.0","fixture_id":"stead-p1-016-deny-oriented","content_roles":["decision_table","explicit_deny_registry","input_schema","obligation_registry","openfga_model_source","output_schema","reason_code_registry"]}

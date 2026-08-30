@@ -1,0 +1,1 @@
+{"SPDXID":"SPDXRef-DOCUMENT","dataLicense":"CC0-1.0","name":"stead-policy-fixture","packages":[{"SPDXID":"SPDXRef-Package-GoStdlib","licenseConcluded":"BSD-3-Clause","name":"go-standard-library"}],"spdxVersion":"SPDX-2.3"}

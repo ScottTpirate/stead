@@ -1,0 +1,1 @@
+{"explicit_deny_ids":["explicit-deny-default"],"obligation_ids":["audit-required"],"reason_code_ids":["denied-by-default"],"required_context_ids":["trusted-principal"],"schema_version":"1.0.0"}
