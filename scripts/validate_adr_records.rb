@@ -364,6 +364,31 @@ def exact_adr_requirement_mapping_failures(requirements:, adr_number:, expected_
   failures
 end
 
+def adr_0009_review_structure_failures(source)
+  review_roles = source.lines.filter_map do |line|
+    next unless line.start_with?("|")
+
+    cells = line.split("|", -1).map(&:strip)
+    next if cells.length < 6
+
+    cells[1]
+  end
+  qa_role = "Independent QA and C-QA traceability owner (distinct WS-13 identity)"
+  security_role = "Independent security (distinct WS-13 identity)"
+  failures = []
+
+  failures << "ADR-0009 must contain exactly one independent QA review row" unless review_roles.count(qa_role) == 1
+  failures << "ADR-0009 must contain exactly one independent security review row" unless review_roles.count(security_role) == 1
+  combined_roles = review_roles.select do |role|
+    role.match?(/independent/i) && role.match?(/\bqa\b/i) && role.match?(/security/i)
+  end
+  unless combined_roles.empty?
+    failures << "ADR-0009 must not combine independent QA and security in one review row"
+  end
+
+  failures
+end
+
 # The P1-006 approval prerequisite is intentionally a strict raw-source clause,
 # not rendered Markdown. Escapes, entities, formatting delimiters, links, HTML,
 # and cross-item composition cannot stand in for the machine-reviewed wording.
@@ -654,6 +679,8 @@ failures << "ADR record set mismatch: expected #{expected_numbers.join(', ')}, f
 all_test_owners = Hash.new { |hash, key| hash[key] = [] }
 tests_by_number = {}
 requirements_by_number = {}
+adr_0009_review_mutation_survivors = []
+adr_0009_review_mutation_count = 0
 
 paths.each do |path|
   basename = path.basename.to_s
@@ -694,6 +721,27 @@ paths.each do |path|
   failures << "#{relative}: must declare at least one exact ADR test ID" if test_ids.empty?
   tests_by_number[number] = test_ids
   test_ids.each { |test_id| all_test_owners[test_id] << relative }
+
+  if number == "0009"
+    failures.concat(adr_0009_review_structure_failures(source))
+    qa_line = source.lines.find { |line| line.start_with?("| Independent QA and C-QA traceability owner (distinct WS-13 identity) |") }
+    security_line = source.lines.find { |line| line.start_with?("| Independent security (distinct WS-13 identity) |") }
+    if qa_line && security_line
+      combined_line = "| Independent QA/security (WS-13) | pending distinct reviewer | pending | pending |\n"
+      review_mutations = {
+        "missing independent QA row" => source.sub(qa_line, ""),
+        "missing independent security row" => source.sub(security_line, ""),
+        "combined QA/security row" => source.sub(qa_line, combined_line).sub(security_line, ""),
+        "duplicate independent QA row" => source.sub(qa_line, qa_line * 2)
+      }
+      review_mutations.each do |label, mutated_source|
+        adr_0009_review_mutation_count += 1
+        if adr_0009_review_structure_failures(mutated_source).empty?
+          adr_0009_review_mutation_survivors << label
+        end
+      end
+    end
+  end
 
   if expected.fetch(:state) == "ACCEPTED"
     failures << "docs/adr/INDEX.md: missing #{basename}" unless adr_index.include?("./#{basename}")
@@ -851,6 +899,12 @@ adr_0009_expected_edges.to_a.sort.each do |requirement_id, test_id|
 end
 unless adr_0009_mutation_survivors.empty?
   failures << "ADR-0009 exact-mapping mutation survivors: #{adr_0009_mutation_survivors.join(', ')}"
+end
+unless adr_0009_review_mutation_count == 4
+  failures << "ADR-0009 review-separation mutation inventory must contain exactly 4 cases, found #{adr_0009_review_mutation_count}"
+end
+unless adr_0009_review_mutation_survivors.empty?
+  failures << "ADR-0009 review-separation mutation survivors: #{adr_0009_review_mutation_survivors.join(', ')}"
 end
 
 security_issue = issues["STEAD-P1-006"]
@@ -1749,6 +1803,7 @@ if failures.empty?
   puts "STEAD-P1-006 strict raw gate mutation guard: PASS (#{p1_006_gate_mutation_count}/#{EXPECTED_P1_006_GATE_MUTATION_COUNT} mutations killed)"
   puts "ADR-0007 exact-mapping mutation guard: PASS (#{adr_0007_killed_mutations}/#{adr_0007_expected_edges.length} required edge deletions killed)"
   puts "ADR-0009 exact-mapping mutation guard: PASS (#{adr_0009_killed_mutations}/#{adr_0009_expected_edges.length} required edge deletions killed)"
+  puts "ADR-0009 review-separation mutation guard: PASS (#{adr_0009_review_mutation_count}/4 mutations killed)"
   puts "ADR traceability validation: PASS (records=#{paths.length}, requirements=#{known_requirement_ids.length}, tests=#{all_test_owners.length})"
 else
   warn "ADR traceability validation: FAIL (#{failures.length} issue#{failures.length == 1 ? '' : 's'})"

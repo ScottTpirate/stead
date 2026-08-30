@@ -217,7 +217,8 @@ A future ADR may add a provider or stronger native concurrency token by adding a
 | Authorization/classification owner (WS-06) | pending | pending | pending |
 | Event/audit owner (WS-07) | pending | pending | pending |
 | Deployment/operations owner (WS-12) | pending | pending | pending |
-| Independent QA/security (WS-13) | pending distinct reviewer | pending | pending |
+| Independent QA and C-QA traceability owner (distinct WS-13 identity) | pending non-author reviewer | pending | pending |
+| Independent security (distinct WS-13 identity) | pending non-author reviewer | pending | pending |
 | Project owner | not required | conforming implementation decision | pending governance confirmation |
 
 [^gitea-webhooks]: Gitea, [Webhooks: delivery headers, HMAC validation, events, recent deliveries, and redelivery](https://docs.gitea.com/usage/repository/webhooks/).
