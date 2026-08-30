@@ -13,7 +13,8 @@ EXPECTED_RECORDS = {
   "0003" => { candidate: "ADR-CAND-005", state: "ACCEPTED", owner_approval: true },
   "0004" => { candidate: "ADR-CAND-021", state: "ACCEPTED", owner_approval: true },
   "0005" => { candidate: "ADR-CAND-003", state: "ACCEPTED", owner_approval: false },
-  "0006" => { candidate: "ADR-CAND-007", state: "ACCEPTED", owner_approval: true }
+  "0006" => { candidate: "ADR-CAND-007", state: "ACCEPTED", owner_approval: true },
+  "0007" => { candidate: "ADR-CAND-002", state: "PROPOSED", owner_approval: false }
 }.freeze
 
 DECISION_REVISION = "24c74d52ef0a78840ab147da48c3d66589e49e3e"
@@ -315,6 +316,30 @@ implementation_assignments = {
     "STEAD-P3-007" => %w[
       T-ADR-0006-AIRGAP-EVIDENCE
     ]
+  },
+  "0007" => {
+    "STEAD-P1-002" => %w[
+      T-ADR-0007-CROSS-MODULE-READS
+    ],
+    "STEAD-P1-006" => %w[
+      T-ADR-0007-DURABLE-EFFECTS
+    ],
+    "STEAD-P1-007" => %w[
+      T-ADR-0007-OUTBOX-ATOMICITY
+    ],
+    "STEAD-P1-011" => %w[
+      T-ADR-0007-MIGRATION-ORDERING
+      T-ADR-0007-UPGRADE-ROLLBACK
+      T-ADR-0007-BACKUP-RESTORE
+      T-ADR-0007-FAILURE-INJECTION
+    ],
+    "STEAD-P1-015" => %w[
+      T-ADR-0007-NAMESPACE-ROLES
+      T-ADR-0007-FOREIGN-WRITE-DENIAL
+      T-ADR-0007-TRANSACTION-PORTS
+      T-ADR-0007-OUTBOX-ATOMICITY
+      T-ADR-0007-OBSERVABILITY-PERFORMANCE
+    ]
   }
 }.freeze
 
@@ -347,6 +372,7 @@ phase_one_independent_tests.merge(
 phase_one_independent_tests.merge(
   tests_by_number.fetch("0006", []).reject { |test_id| test_id == "T-ADR-0006-AIRGAP-EVIDENCE" }
 )
+phase_one_independent_tests.merge(tests_by_number.fetch("0007", []))
 phase_three_independent_tests = Set[
   "T-ADR-0002-CUI-PROFILE",
   "T-ADR-0005-COMMIT-BOUNDARY",
