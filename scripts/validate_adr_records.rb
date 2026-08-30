@@ -19,6 +19,81 @@ EXPECTED_RECORDS = {
   "0008" => { candidate: "ADR-CAND-006", state: "PROPOSED", owner_approval: false }
 }.freeze
 
+ADR_0008_REQUIREMENT_TEST_MAPPING = {
+  "EVT-001" => %w[
+    T-ADR-0008-SUBJECT-PARTITION
+    T-ADR-0008-SUBSCRIBER-ISOLATION
+    T-ADR-0008-RETENTION
+  ],
+  "EVT-002" => %w[
+    T-ADR-0008-SUBJECT-PARTITION
+    T-ADR-0008-RETENTION
+    T-ADR-0008-IDEMPOTENCY
+    T-ADR-0008-PROJECTION-REBUILD
+  ],
+  "EVT-003" => %w[
+    T-ADR-0008-RESOURCE-ORDERING
+    T-ADR-0008-SCHEMA-COMPATIBILITY
+    T-ADR-0008-PAYLOAD-MINIMIZATION
+  ],
+  "EVT-004" => %w[
+    T-ADR-0008-RESOURCE-ORDERING
+    T-ADR-0008-RETENTION
+    T-ADR-0008-IDEMPOTENCY
+    T-ADR-0008-DLQ
+    T-ADR-0008-AUTHORIZED-REPLAY
+    T-ADR-0008-SCHEMA-COMPATIBILITY
+    T-ADR-0008-PROJECTION-REBUILD
+  ],
+  "ACT-001" => %w[
+    T-ADR-0008-RESOURCE-ORDERING
+    T-ADR-0008-IDEMPOTENCY
+    T-ADR-0008-PAYLOAD-MINIMIZATION
+    T-ADR-0008-PROJECTION-REBUILD
+  ],
+  "NOTIF-001" => %w[
+    T-ADR-0008-RESOURCE-ORDERING
+    T-ADR-0008-IDEMPOTENCY
+    T-ADR-0008-PAYLOAD-MINIMIZATION
+    T-ADR-0008-PROJECTION-REBUILD
+  ],
+  "AUD-001" => %w[
+    T-ADR-0008-AUTHORIZED-REPLAY
+    T-ADR-0008-PAYLOAD-MINIMIZATION
+  ],
+  "AUD-002" => %w[
+    T-ADR-0008-AUTHORIZED-REPLAY
+    T-ADR-0008-PAYLOAD-MINIMIZATION
+  ],
+  "CLS-006" => %w[
+    T-ADR-0008-SUBJECT-PARTITION
+    T-ADR-0008-SUBSCRIBER-ISOLATION
+    T-ADR-0008-AUTHORIZED-REPLAY
+    T-ADR-0008-PAYLOAD-MINIMIZATION
+    T-ADR-0008-PROJECTION-REBUILD
+  ],
+  "TEST-005" => %w[
+    T-ADR-0008-SUBJECT-PARTITION
+    T-ADR-0008-SUBSCRIBER-ISOLATION
+    T-ADR-0008-RESOURCE-ORDERING
+    T-ADR-0008-RETENTION
+    T-ADR-0008-IDEMPOTENCY
+    T-ADR-0008-DLQ
+    T-ADR-0008-AUTHORIZED-REPLAY
+    T-ADR-0008-SCHEMA-COMPATIBILITY
+    T-ADR-0008-PAYLOAD-MINIMIZATION
+    T-ADR-0008-PROJECTION-REBUILD
+  ],
+  "PERF-003" => %w[
+    T-ADR-0008-RESOURCE-ORDERING
+    T-ADR-0008-PROJECTION-REBUILD
+  ],
+  "PERF-004" => %w[
+    T-ADR-0008-SUBJECT-PARTITION
+    T-ADR-0008-RETENTION
+  ]
+}.freeze
+
 EXPECTED_P1_006_ADR_CANDIDATES = %w[
   ADR-CAND-002
   ADR-CAND-003
@@ -718,6 +793,51 @@ adr_0007_expected_edges.to_a.sort.each do |requirement_id, test_id|
 end
 unless adr_0007_mutation_survivors.empty?
   failures << "ADR-0007 exact-mapping mutation survivors: #{adr_0007_mutation_survivors.join(', ')}"
+end
+
+adr_0008_traceability_failures = adr_requirement_traceability_failures(
+  requirements: requirements,
+  adr_number: "0008",
+  claimed_requirement_ids: requirements_by_number.fetch("0008", []),
+  declared_test_ids: tests_by_number.fetch("0008", [])
+)
+failures.concat(adr_0008_traceability_failures)
+
+adr_0008_expected_edges = expected_adr_requirement_test_edges(ADR_0008_REQUIREMENT_TEST_MAPPING).freeze
+unless adr_0008_expected_edges.length == 48
+  failures << "ADR-0008 closed requirement mapping must contain exactly 48 edges, found #{adr_0008_expected_edges.length}"
+end
+failures.concat(
+  exact_adr_requirement_mapping_failures(
+    requirements: requirements,
+    adr_number: "0008",
+    expected_edges: adr_0008_expected_edges
+  )
+)
+
+# Prove the closed mapping is enforced at each individual reciprocal edge, not
+# merely that every requirement and test name appears somewhere in the registry.
+adr_0008_mutation_survivors = []
+adr_0008_expected_edges.to_a.sort.each do |requirement_id, test_id|
+  mutated_requirements = requirements.map do |registered_requirement|
+    registered_requirement.merge("test_ids" => Array(registered_requirement["test_ids"]).dup)
+  end
+  mutated_record = mutated_requirements.find { |record| record.fetch("requirement_id") == requirement_id }
+  removed_test = mutated_record&.fetch("test_ids", [])&.delete(test_id)
+  if removed_test.nil?
+    adr_0008_mutation_survivors << "#{requirement_id} -> #{test_id} (edge absent before mutation)"
+    next
+  end
+
+  mutation_failures = exact_adr_requirement_mapping_failures(
+    requirements: mutated_requirements,
+    adr_number: "0008",
+    expected_edges: adr_0008_expected_edges
+  )
+  adr_0008_mutation_survivors << "#{requirement_id} -> #{test_id}" if mutation_failures.empty?
+end
+unless adr_0008_mutation_survivors.empty?
+  failures << "ADR-0008 exact-mapping mutation survivors: #{adr_0008_mutation_survivors.join(', ')}"
 end
 
 security_issue = issues["STEAD-P1-006"]
@@ -1534,9 +1654,11 @@ unless p1_006_gate_mutation_count == EXPECTED_P1_006_GATE_MUTATION_COUNT
 end
 
 if failures.empty?
-  killed_mutations = adr_0007_expected_edges.length - adr_0007_mutation_survivors.length
+  adr_0007_killed_mutations = adr_0007_expected_edges.length - adr_0007_mutation_survivors.length
+  adr_0008_killed_mutations = adr_0008_expected_edges.length - adr_0008_mutation_survivors.length
   puts "STEAD-P1-006 strict raw gate mutation guard: PASS (#{p1_006_gate_mutation_count}/#{EXPECTED_P1_006_GATE_MUTATION_COUNT} mutations killed)"
-  puts "ADR-0007 exact-mapping mutation guard: PASS (#{killed_mutations}/#{adr_0007_expected_edges.length} required edge deletions killed)"
+  puts "ADR-0007 exact-mapping mutation guard: PASS (#{adr_0007_killed_mutations}/#{adr_0007_expected_edges.length} required edge deletions killed)"
+  puts "ADR-0008 exact-mapping mutation guard: PASS (#{adr_0008_killed_mutations}/#{adr_0008_expected_edges.length} required edge deletions killed)"
   puts "ADR traceability validation: PASS (records=#{paths.length}, requirements=#{known_requirement_ids.length}, tests=#{all_test_owners.length})"
 else
   warn "ADR traceability validation: FAIL (#{failures.length} issue#{failures.length == 1 ? '' : 's'})"
