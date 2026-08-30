@@ -6,6 +6,7 @@ import (
 	"io"
 	"reflect"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -107,11 +108,13 @@ func decodeJSONShape(data []byte) (any, error) {
 	return shape, nil
 }
 
-func jsonMemberTypes(kind reflect.Type) map[string]reflect.Type {
-	for kind.Kind() == reflect.Pointer {
-		kind = kind.Elem()
-	}
-	members := make(map[string]reflect.Type)
+type jsonMemberDefinition struct {
+	kind     reflect.Type
+	optional bool
+}
+
+func jsonMemberDefinitions(kind reflect.Type) map[string]jsonMemberDefinition {
+	members := make(map[string]jsonMemberDefinition)
 	if kind.Kind() != reflect.Struct {
 		return members
 	}
@@ -120,14 +123,21 @@ func jsonMemberTypes(kind reflect.Type) map[string]reflect.Type {
 		if !field.IsExported() {
 			continue
 		}
-		name := strings.Split(field.Tag.Get("json"), ",")[0]
+		tag := strings.Split(field.Tag.Get("json"), ",")
+		name := tag[0]
 		if name == "-" {
 			continue
 		}
 		if name == "" {
 			name = field.Name
 		}
-		members[name] = field.Type
+		optional := false
+		for _, option := range tag[1:] {
+			if option == "omitempty" {
+				optional = true
+			}
+		}
+		members[name] = jsonMemberDefinition{kind: field.Type, optional: optional}
 	}
 	return members
 }
@@ -137,8 +147,14 @@ func jsonMemberTypes(kind reflect.Type) map[string]reflect.Type {
 // extensions remain ignorable, but a case-folded alias of a known member is
 // never an extension and is rejected.
 func validateExactJSONMembers(shape any, kind reflect.Type, allowUnknown bool) error {
-	for kind.Kind() == reflect.Pointer {
-		kind = kind.Elem()
+	if kind.Kind() == reflect.Pointer {
+		if shape == nil {
+			return nil
+		}
+		return validateExactJSONMembers(shape, kind.Elem(), allowUnknown)
+	}
+	if shape == nil {
+		return contractError("signed_payload_contract_error", "json", nil)
 	}
 	switch kind.Kind() {
 	case reflect.Struct:
@@ -146,9 +162,9 @@ func validateExactJSONMembers(shape any, kind reflect.Type, allowUnknown bool) e
 		if !ok {
 			return contractError("signed_payload_contract_error", "json", nil)
 		}
-		members := jsonMemberTypes(kind)
+		members := jsonMemberDefinitions(kind)
 		for name, value := range object {
-			memberType, exact := members[name]
+			member, exact := members[name]
 			if !exact {
 				for known := range members {
 					if strings.EqualFold(name, known) {
@@ -160,13 +176,21 @@ func validateExactJSONMembers(shape any, kind reflect.Type, allowUnknown bool) e
 				}
 				return contractError("signed_payload_contract_error", "json", nil)
 			}
-			if err := validateExactJSONMembers(value, memberType, allowUnknown); err != nil {
+			if err := validateExactJSONMembers(value, member.kind, allowUnknown); err != nil {
 				return err
+			}
+		}
+		for name, member := range members {
+			if _, present := object[name]; !present && !member.optional {
+				return contractError("schema_required_field_missing", "json", nil)
 			}
 		}
 	case reflect.Slice, reflect.Array:
 		items, ok := shape.([]any)
 		if !ok {
+			return contractError("signed_payload_contract_error", "json", nil)
+		}
+		if kind.Kind() == reflect.Array && len(items) != kind.Len() {
 			return contractError("signed_payload_contract_error", "json", nil)
 		}
 		for _, item := range items {
@@ -184,8 +208,42 @@ func validateExactJSONMembers(shape any, kind reflect.Type, allowUnknown bool) e
 				return err
 			}
 		}
+	case reflect.Bool:
+		if _, ok := shape.(bool); !ok {
+			return contractError("signed_payload_contract_error", "json", nil)
+		}
+	case reflect.String:
+		if _, ok := shape.(string); !ok {
+			return contractError("signed_payload_contract_error", "json", nil)
+		}
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		number, ok := shape.(json.Number)
+		if !ok || !integerJSONNumber.MatchString(string(number)) {
+			return contractError("signed_payload_contract_error", "json", nil)
+		}
+		if _, err := strconv.ParseInt(string(number), 10, kind.Bits()); err != nil {
+			return contractError("signed_payload_contract_error", "json", nil)
+		}
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+		number, ok := shape.(json.Number)
+		if !ok || !integerJSONNumber.MatchString(string(number)) {
+			return contractError("signed_payload_contract_error", "json", nil)
+		}
+		if _, err := strconv.ParseUint(string(number), 10, kind.Bits()); err != nil {
+			return contractError("signed_payload_contract_error", "json", nil)
+		}
+	case reflect.Float32, reflect.Float64:
+		number, ok := shape.(json.Number)
+		if !ok {
+			return contractError("signed_payload_contract_error", "json", nil)
+		}
+		if _, err := strconv.ParseFloat(string(number), kind.Bits()); err != nil {
+			return contractError("signed_payload_contract_error", "json", nil)
+		}
 	case reflect.Interface:
 		return nil
+	default:
+		return contractError("signed_payload_contract_error", "json", nil)
 	}
 	return nil
 }
@@ -195,7 +253,16 @@ func validateJSONMembers(data []byte, value any, allowUnknown bool) error {
 	if err != nil {
 		return err
 	}
-	return validateExactJSONMembers(shape, reflect.TypeOf(value), allowUnknown)
+	kind := reflect.TypeOf(value)
+	if kind == nil {
+		return contractError("signed_payload_contract_error", "json", nil)
+	}
+	// The outer pointer is the decoder destination, not a nullable member of the
+	// signed contract. Nullable pointers inside that destination remain explicit.
+	for kind.Kind() == reflect.Pointer {
+		kind = kind.Elem()
+	}
+	return validateExactJSONMembers(shape, kind, allowUnknown)
 }
 
 func decodeStrict(data []byte, value any) error {
