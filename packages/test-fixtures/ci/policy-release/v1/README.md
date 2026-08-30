@@ -6,7 +6,11 @@ or private signing key. The Go contract test uses a publicly documented,
 non-secret scalar only to emulate an external signer and to produce stable
 P-256 verification vectors; that key is never accepted by a Stead trust store.
 
-`source/` exercises deterministic unsigned construction and embedded evidence.
+`source/` exercises deterministic unsigned construction, exact v0.1
+security-profile/deployment-policy JSON materializations, and closed typed
+embedded evidence. All caller-provided evidence, review, waiver, assurance,
+offline-check, signature, key-ID, and custodian material is digest-bound and
+explicitly labeled unverified; the fixture claims no authority.
 `vectors/negative-cases.json` is the stable inventory of fail-closed parser,
 archive, assurance, identity, custody, offline, and TUF non-authority cases.
 The test records every vector by its catalog/ADR obligation.
@@ -18,7 +22,10 @@ change requires deliberate vector regeneration plus independent review; the
 transport descriptor and the WS-06 consumer inventory both declare no
 authority.
 
-`vectors/ws06-consumer-negative-cases.json` names cryptographic trust, key
-status/purpose, exact-pair, and offline mutations that this WS-09 builder must
-not absorb. Those vectors are the handoff to the independent runtime verifier,
-not claims that build-time shape checking grants activation authority.
+`vectors/ws06-consumer-negative-cases.json` is a closed machine-readable set of
+targets, mutation operations, expected outcomes, and stable consumer codes for
+cryptographic trust, key status/purpose, exact-pair, offline, and canonical
+`r=1,s=1` false-receipt cases. Contract tests enforce the exact case inventory.
+These are explicitly nonauthorizing inputs for the independent WS-06 runtime
+verifier, not claims that build-time syntax checking grants activation
+authority.

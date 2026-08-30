@@ -11,7 +11,7 @@ import (
 func mutateAssuranceResult(t testing.TB, input *policyrelease.BuildInput, mutate func(map[string]any)) {
 	t.Helper()
 	for index := range input.PayloadFiles {
-		if input.PayloadFiles[index].Path != input.Manifest.DeploymentPolicy.EvaluatedAssuranceResultPath {
+		if input.PayloadFiles[index].Path != input.Manifest.DeploymentPolicy.PresentedAssuranceResultPath {
 			continue
 		}
 		var document map[string]any
@@ -24,7 +24,7 @@ func mutateAssuranceResult(t testing.TB, input *policyrelease.BuildInput, mutate
 			t.Fatal(err)
 		}
 		input.PayloadFiles[index].Content = content
-		input.Manifest.DeploymentPolicy.EvaluatedAssuranceResultDigest = policyrelease.SHA256Digest(content)
+		input.Manifest.DeploymentPolicy.PresentedAssuranceResultDigest = policyrelease.SHA256Digest(content)
 		return
 	}
 	t.Fatal("evaluated assurance result fixture missing")
@@ -44,11 +44,11 @@ func TestDeploymentPolicySelectsThresholdAndCustodianSeparation(t *testing.T) {
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			activation, _, handoff := completeFixtureRelease(t, testCase.profile, testCase.threshold, testCase.distinct)
-			if activation.Threshold.RequiredSignatures != testCase.threshold || activation.Threshold.VerifiedDistinctKeys != testCase.threshold || !activation.Threshold.Satisfied {
-				t.Fatalf("activation threshold = %#v", activation.Threshold)
+			if activation.PresentedActivationSignatures.RequestedSignatureThreshold != testCase.threshold || activation.PresentedActivationSignatures.PresentedDistinctKeyIDHints != testCase.threshold || activation.PresentedActivationSignatures.Treatment != policyrelease.PresentedMaterialTreatment {
+				t.Fatalf("presented activation signatures = %#v", activation.PresentedActivationSignatures)
 			}
-			if handoff.ReleaseThreshold.RequiredSignatures != testCase.threshold || handoff.ReleaseThreshold.VerifiedDistinctKeys != testCase.threshold || !handoff.ReleaseThreshold.Satisfied {
-				t.Fatalf("release threshold = %#v", handoff.ReleaseThreshold)
+			if handoff.PresentedReleaseSignatures.RequestedSignatureThreshold != testCase.threshold || handoff.PresentedReleaseSignatures.PresentedDistinctKeyIDHints != testCase.threshold || handoff.Authority != policyrelease.NonAuthorizingHandoffAuthority {
+				t.Fatalf("presented release signatures = %#v", handoff.PresentedReleaseSignatures)
 			}
 		})
 	}
@@ -81,7 +81,7 @@ func TestDistinctCustodianThresholdFailsClosed(t *testing.T) {
 	}
 	envelope, signing := externallySign(t, policyrelease.ActivationManifestPayloadType, unsigned.ManifestPayload, 2, true)
 	_, err = policyrelease.FinalizeActivationArchive(unsigned, envelope, signing)
-	if policyrelease.ErrorCode(err) != "deployment_signature_threshold_unsatisfied" {
+	if policyrelease.ErrorCode(err) != "presented_custodian_claim_count_below_policy_request" {
 		t.Fatalf("same-custodian error = %v (%s)", err, policyrelease.ErrorCode(err))
 	}
 }
@@ -97,16 +97,16 @@ func TestActivationAndReleaseThresholdsAreIndependent(t *testing.T) {
 		t.Fatal(err)
 	}
 	attestation, err := policyrelease.PrepareReleaseAttestation(activation, policyrelease.ReleaseAttestationInput{
-		ReleaseWorkflowIdentity:     "release-workflow-v1",
-		FinalApprovals:              []policyrelease.ReviewerDisposition{{ReviewerID: "reviewer-a", Role: "independent-release", Revision: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", Disposition: "accept"}},
-		NetworkDisabledVerification: policyrelease.NetworkDisabledVerification{Outcome: "pass", VerifiedArchiveDigest: activation.ArchiveDigest, ResultDigest: policyrelease.SHA256Digest([]byte("offline"))},
+		ReleaseWorkflowIdentity: "release-workflow-v1",
+		ReviewReceipts:          []policyrelease.ReviewReceipt{{ReviewerID: "reviewer-a", Role: "independent-release", SubjectDigest: activation.ArchiveDigest, RecordDigest: policyrelease.SHA256Digest([]byte("review")), ClaimedDisposition: "accept"}},
+		OfflineCheckReceipt:     policyrelease.OfflineCheckReceipt{ClaimedOutcome: "pass", SubjectArchiveDigest: activation.ArchiveDigest, ReportDigest: policyrelease.SHA256Digest([]byte("offline"))},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	releaseEnvelope, releaseSigning := externallySign(t, policyrelease.ReleaseAttestationPayloadType, attestation.PayloadBytes, 1, false)
 	_, err = policyrelease.FinalizeReleaseHandoff(activation, attestation, releaseEnvelope, releaseSigning)
-	if policyrelease.ErrorCode(err) != "deployment_signature_threshold_unsatisfied" {
+	if policyrelease.ErrorCode(err) != "presented_signature_count_below_policy_request" {
 		t.Fatalf("independent release threshold error = %v (%s)", err, policyrelease.ErrorCode(err))
 	}
 }
@@ -126,22 +126,25 @@ func TestUnknownMismatchedAndWeakerAssuranceReject(t *testing.T) {
 			input.Manifest.DeploymentPolicy.DisclosureRevocationMode = "profile_selected"
 		}, "unsupported_disclosure_mode"},
 		{"missing-assurance-result", func(input *policyrelease.BuildInput) {
-			input.Manifest.DeploymentPolicy.EvaluatedAssuranceResultDigest = ""
+			input.Manifest.DeploymentPolicy.PresentedAssuranceResultDigest = ""
 		}, "invalid_digest"},
 		{"missing-crypto-boundary", func(input *policyrelease.BuildInput) {
 			input.Manifest.DeploymentPolicy.ApprovedCryptographicBoundary = ""
 		}, "invalid_identifier"},
-		{"typed-threshold-does-not-match-evaluated-result", func(input *policyrelease.BuildInput) {
+		{"typed-threshold-does-not-match-deployment-policy", func(input *policyrelease.BuildInput) {
 			input.Manifest.DeploymentPolicy.PolicySignatureThreshold = 2
-		}, "evaluated_assurance_mismatch"},
+		}, "deployment_policy_assurance_binding_mismatch"},
 		{"failed-evaluated-result", func(input *policyrelease.BuildInput) {
-			mutateAssuranceResult(t, input, func(document map[string]any) { document["result"] = "fail" })
-		}, "evaluated_assurance_mismatch"},
+			mutateAssuranceResult(t, input, func(document map[string]any) { document["claimed_result"] = "fail" })
+		}, "presented_assurance_mismatch"},
+		{"self-certified-assurance-treatment", func(input *policyrelease.BuildInput) {
+			mutateAssuranceResult(t, input, func(document map[string]any) { document["treatment"] = "self-certified" })
+		}, "presented_assurance_mismatch"},
 		{"unknown-evaluated-result-field", func(input *policyrelease.BuildInput) {
 			mutateAssuranceResult(t, input, func(document map[string]any) { document["self_authorized_threshold"] = 1 })
 		}, "signed_payload_contract_error"},
 		{"stale-evaluated-result-digest", func(input *policyrelease.BuildInput) {
-			input.Manifest.DeploymentPolicy.EvaluatedAssuranceResultDigest = policyrelease.SHA256Digest([]byte("stale"))
+			input.Manifest.DeploymentPolicy.PresentedAssuranceResultDigest = policyrelease.SHA256Digest([]byte("stale"))
 		}, "bound_digest_mismatch"},
 	}
 	for _, testCase := range testCases {
@@ -156,16 +159,135 @@ func TestUnknownMismatchedAndWeakerAssuranceReject(t *testing.T) {
 	}
 }
 
-func TestEvaluatedAssuranceResultMustBeExactCanonicalHandoff(t *testing.T) {
+func mutateBoundJSON(t testing.TB, input *policyrelease.BuildInput, path string, mutate func(map[string]any)) {
+	t.Helper()
+	for index := range input.PayloadFiles {
+		if input.PayloadFiles[index].Path != path {
+			continue
+		}
+		var document map[string]any
+		if err := json.Unmarshal(input.PayloadFiles[index].Content, &document); err != nil {
+			t.Fatal(err)
+		}
+		mutate(document)
+		content, err := json.Marshal(document)
+		if err != nil {
+			t.Fatal(err)
+		}
+		input.PayloadFiles[index].Content = content
+		switch path {
+		case "payload/security-profile.json":
+			input.Manifest.Profiles[0].Digest = policyrelease.SHA256Digest(content)
+		case "payload/deployment-policy.json":
+			input.Manifest.DeploymentPolicy.Digest = policyrelease.SHA256Digest(content)
+		}
+		return
+	}
+	t.Fatalf("bound JSON fixture %s missing", path)
+}
+
+func TestExactSecurityProfileSchemaIdentityAndVersionReject(t *testing.T) {
+	testCases := []struct {
+		name   string
+		mutate func(*policyrelease.BuildInput)
+		code   string
+	}{
+		{"unknown schema id", func(input *policyrelease.BuildInput) {
+			input.Manifest.Profiles[0].SchemaID = "https://example.invalid/profile.schema.json"
+		}, "unsupported_security_profile_schema"},
+		{"document profile id mismatch", func(input *policyrelease.BuildInput) {
+			mutateBoundJSON(t, input, "payload/security-profile.json", func(document map[string]any) { document["profile_id"] = "other_profile" })
+		}, "security_profile_identity_mismatch"},
+		{"document profile version mismatch", func(input *policyrelease.BuildInput) {
+			mutateBoundJSON(t, input, "payload/security-profile.json", func(document map[string]any) { document["version"] = "2.0.0" })
+		}, "security_profile_identity_mismatch"},
+		{"unsupported exact profile version", func(input *policyrelease.BuildInput) {
+			input.Manifest.Profiles[0].Version = "2.0.0"
+			mutateBoundJSON(t, input, "payload/security-profile.json", func(document map[string]any) { document["version"] = "2.0.0" })
+		}, "unsupported_version"},
+		{"unknown profile schema field", func(input *policyrelease.BuildInput) {
+			mutateBoundJSON(t, input, "payload/security-profile.json", func(document map[string]any) { document["self_certified"] = true })
+		}, "signed_payload_contract_error"},
+		{"missing required nested profile field", func(input *policyrelease.BuildInput) {
+			mutateBoundJSON(t, input, "payload/security-profile.json", func(document map[string]any) {
+				delete(document["presentation"].(map[string]any), "action_warnings")
+			})
+		}, "schema_required_field_missing"},
+		{"invalid nested profile vocabulary", func(input *policyrelease.BuildInput) {
+			mutateBoundJSON(t, input, "payload/security-profile.json", func(document map[string]any) {
+				document["allowed_categories"] = []any{map[string]any{"id": "bad id", "subcategories": []any{}}}
+			})
+		}, "security_profile_vocabulary_mismatch"},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			input := fixtureBuildInput(t, "commercial", 1, false)
+			testCase.mutate(&input)
+			_, err := policyrelease.PrepareUnsigned(input)
+			if policyrelease.ErrorCode(err) != testCase.code {
+				t.Fatalf("error = %v (%s), want %s", err, policyrelease.ErrorCode(err), testCase.code)
+			}
+		})
+	}
+}
+
+func TestExactDeploymentPolicySchemaIdentityVersionAndCeilingsReject(t *testing.T) {
+	testCases := []struct {
+		name   string
+		mutate func(*policyrelease.BuildInput)
+		code   string
+	}{
+		{"unknown schema id", func(input *policyrelease.BuildInput) {
+			input.Manifest.DeploymentPolicy.SchemaID = "https://example.invalid/deployment.schema.json"
+		}, "unsupported_deployment_policy_schema"},
+		{"document domain id mismatch", func(input *policyrelease.BuildInput) {
+			mutateBoundJSON(t, input, "payload/deployment-policy.json", func(document map[string]any) { document["domain_id"] = "other-domain" })
+		}, "deployment_policy_identity_mismatch"},
+		{"document domain version mismatch", func(input *policyrelease.BuildInput) {
+			mutateBoundJSON(t, input, "payload/deployment-policy.json", func(document map[string]any) { document["version"] = "2.0.0" })
+		}, "deployment_policy_identity_mismatch"},
+		{"unsupported exact deployment version", func(input *policyrelease.BuildInput) {
+			input.Manifest.DeploymentPolicy.Version = "2.0.0"
+			mutateBoundJSON(t, input, "payload/deployment-policy.json", func(document map[string]any) { document["version"] = "2.0.0" })
+		}, "unsupported_version"},
+		{"profile ceiling version mismatch", func(input *policyrelease.BuildInput) {
+			mutateBoundJSON(t, input, "payload/deployment-policy.json", func(document map[string]any) {
+				ceilings := document["label_profile_ceilings"].(map[string]any)
+				ceilings["commercial"].(map[string]any)["profile_version"] = "2.0.0"
+			})
+		}, "deployment_policy_profile_binding_mismatch"},
+		{"unknown deployment schema field", func(input *policyrelease.BuildInput) {
+			mutateBoundJSON(t, input, "payload/deployment-policy.json", func(document map[string]any) { document["self_certified"] = true })
+		}, "signed_payload_contract_error"},
+		{"missing required deployment field", func(input *policyrelease.BuildInput) {
+			mutateBoundJSON(t, input, "payload/deployment-policy.json", func(document map[string]any) { delete(document, "allowed_integrations") })
+		}, "schema_required_field_missing"},
+		{"duplicate deployment array item", func(input *policyrelease.BuildInput) {
+			mutateBoundJSON(t, input, "payload/deployment-policy.json", func(document map[string]any) { document["allowed_integrations"] = []any{"duplicate", "duplicate"} })
+		}, "schema_duplicate_value"},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			input := fixtureBuildInput(t, "commercial", 1, false)
+			testCase.mutate(&input)
+			_, err := policyrelease.PrepareUnsigned(input)
+			if policyrelease.ErrorCode(err) != testCase.code {
+				t.Fatalf("error = %v (%s), want %s", err, policyrelease.ErrorCode(err), testCase.code)
+			}
+		})
+	}
+}
+
+func TestPresentedAssuranceResultMustBeExactCanonicalHandoff(t *testing.T) {
 	input := fixtureBuildInput(t, "commercial", 2, true)
 	for index := range input.PayloadFiles {
-		if input.PayloadFiles[index].Path != input.Manifest.DeploymentPolicy.EvaluatedAssuranceResultPath {
+		if input.PayloadFiles[index].Path != input.Manifest.DeploymentPolicy.PresentedAssuranceResultPath {
 			continue
 		}
 		input.PayloadFiles[index].Content = append(input.PayloadFiles[index].Content, '\n')
-		input.Manifest.DeploymentPolicy.EvaluatedAssuranceResultDigest = policyrelease.SHA256Digest(input.PayloadFiles[index].Content)
+		input.Manifest.DeploymentPolicy.PresentedAssuranceResultDigest = policyrelease.SHA256Digest(input.PayloadFiles[index].Content)
 		_, err := policyrelease.PrepareUnsigned(input)
-		if policyrelease.ErrorCode(err) != "noncanonical_evaluated_assurance" {
+		if policyrelease.ErrorCode(err) != "noncanonical_presented_assurance" {
 			t.Fatalf("noncanonical result error = %v (%s)", err, policyrelease.ErrorCode(err))
 		}
 		return
@@ -178,7 +300,7 @@ func TestProvisionalSigstoreProfileRejectsWithoutProfileBranch(t *testing.T) {
 		t.Run(profile, func(t *testing.T) {
 			input := fixtureBuildInput(t, profile, 1, false)
 			for index := range input.PayloadFiles {
-				if input.PayloadFiles[index].Path == "payload/security-profile.yaml" {
+				if input.PayloadFiles[index].Path == "payload/security-profile.json" {
 					input.PayloadFiles[index].Content = bytes.ReplaceAll(input.PayloadFiles[index].Content, []byte(policyrelease.ActivationFormatV1), []byte("sigstore-bundle"))
 					input.Manifest.Profiles[0].Digest = policyrelease.SHA256Digest(input.PayloadFiles[index].Content)
 				}

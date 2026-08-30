@@ -19,33 +19,78 @@ var requiredContractRoles = map[string]struct{}{
 }
 
 func copyFile(file File) File {
-	return File{Path: file.Path, MediaType: file.MediaType, Content: append([]byte(nil), file.Content...)}
+	return File{Path: file.Path, MediaType: file.MediaType, Content: cloneSlice(file.Content)}
 }
 
-func sortReviews(reviews []ReviewerDisposition) []ReviewerDisposition {
-	result := make([]ReviewerDisposition, len(reviews))
-	copy(result, reviews)
+// cloneSlice preserves the distinction between nil and a non-nil empty slice.
+// That distinction is material for the canonical JSON structures in this
+// package: collection fields are encoded as arrays, never null.
+func cloneSlice[T any](values []T) []T {
+	if values == nil {
+		return nil
+	}
+	result := make([]T, len(values))
+	copy(result, values)
+	return result
+}
+
+func presentReviews(reviews []ReviewReceipt) []PresentedReviewReceiptV1 {
+	result := make([]PresentedReviewReceiptV1, 0, len(reviews))
+	for _, review := range reviews {
+		result = append(result, PresentedReviewReceiptV1{
+			Treatment:          PresentedMaterialTreatment,
+			ReviewerID:         review.ReviewerID,
+			Role:               review.Role,
+			SubjectDigest:      review.SubjectDigest,
+			RecordDigest:       review.RecordDigest,
+			ClaimedDisposition: review.ClaimedDisposition,
+		})
+	}
 	sort.Slice(result, func(i, j int) bool {
-		left := result[i].Role + "\x00" + result[i].ReviewerID + "\x00" + result[i].Revision + "\x00" + result[i].Disposition
-		right := result[j].Role + "\x00" + result[j].ReviewerID + "\x00" + result[j].Revision + "\x00" + result[j].Disposition
+		left := result[i].Role + "\x00" + result[i].ReviewerID + "\x00" + result[i].SubjectDigest + "\x00" + result[i].RecordDigest + "\x00" + result[i].ClaimedDisposition
+		right := result[j].Role + "\x00" + result[j].ReviewerID + "\x00" + result[j].SubjectDigest + "\x00" + result[j].RecordDigest + "\x00" + result[j].ClaimedDisposition
 		return left < right
 	})
 	return result
 }
 
-func sortWaivers(waivers []Waiver) []Waiver {
-	result := make([]Waiver, len(waivers))
-	copy(result, waivers)
+func presentWaivers(waivers []WaiverReceipt) []PresentedWaiverReceiptV1 {
+	result := make([]PresentedWaiverReceiptV1, 0, len(waivers))
+	for _, waiver := range waivers {
+		result = append(result, PresentedWaiverReceiptV1{
+			Treatment:          PresentedMaterialTreatment,
+			WaiverID:           waiver.WaiverID,
+			SubjectDigest:      waiver.SubjectDigest,
+			RecordDigest:       waiver.RecordDigest,
+			ClaimedDisposition: waiver.ClaimedDisposition,
+		})
+	}
 	sort.Slice(result, func(i, j int) bool {
-		return result[i].WaiverID+"\x00"+result[i].Revision < result[j].WaiverID+"\x00"+result[j].Revision
+		return result[i].WaiverID+"\x00"+result[i].SubjectDigest+"\x00"+result[i].RecordDigest < result[j].WaiverID+"\x00"+result[j].SubjectDigest+"\x00"+result[j].RecordDigest
 	})
 	return result
 }
 
-func validateReviewsAndWaivers(reviews []ReviewerDisposition, waivers []Waiver) error {
+func reviewReceiptInputs(reviews []PresentedReviewReceiptV1) []ReviewReceipt {
+	result := make([]ReviewReceipt, 0, len(reviews))
+	for _, review := range reviews {
+		result = append(result, ReviewReceipt{ReviewerID: review.ReviewerID, Role: review.Role, SubjectDigest: review.SubjectDigest, RecordDigest: review.RecordDigest, ClaimedDisposition: review.ClaimedDisposition})
+	}
+	return result
+}
+
+func waiverReceiptInputs(waivers []PresentedWaiverReceiptV1) []WaiverReceipt {
+	result := make([]WaiverReceipt, 0, len(waivers))
+	for _, waiver := range waivers {
+		result = append(result, WaiverReceipt{WaiverID: waiver.WaiverID, SubjectDigest: waiver.SubjectDigest, RecordDigest: waiver.RecordDigest, ClaimedDisposition: waiver.ClaimedDisposition})
+	}
+	return result
+}
+
+func validateReviewsAndWaivers(reviews []ReviewReceipt, waivers []WaiverReceipt, subjectDigest string) error {
 	seenReviews := make(map[string]struct{}, len(reviews))
 	for _, review := range reviews {
-		if err := validateReview(review); err != nil {
+		if err := validateReview(review, subjectDigest); err != nil {
 			return err
 		}
 		key := review.Role + "\x00" + review.ReviewerID
@@ -56,7 +101,7 @@ func validateReviewsAndWaivers(reviews []ReviewerDisposition, waivers []Waiver) 
 	}
 	seenWaivers := make(map[string]struct{}, len(waivers))
 	for _, waiver := range waivers {
-		if err := validateWaiver(waiver); err != nil {
+		if err := validateWaiver(waiver, subjectDigest); err != nil {
 			return err
 		}
 		if _, exists := seenWaivers[waiver.WaiverID]; exists {
@@ -98,7 +143,7 @@ func validateManifestInput(input ManifestInput) error {
 	if input.Trust.TrustEpoch == 0 {
 		return contractError("invalid_trust_epoch", "manifest.trust.trust_epoch", nil)
 	}
-	for _, pathValue := range []string{input.OpenFGAModel.SourcePath, input.DeploymentPolicy.Path, input.DeploymentPolicy.EvaluatedAssuranceResultPath, input.Trust.TrustSetPath, input.Trust.TrustSetEnvelopePath} {
+	for _, pathValue := range []string{input.OpenFGAModel.SourcePath, input.DeploymentPolicy.Path, input.DeploymentPolicy.PresentedAssuranceResultPath, input.Trust.TrustSetPath, input.Trust.TrustSetEnvelopePath} {
 		if err := validatePath(pathValue, false); err != nil {
 			return err
 		}
@@ -211,6 +256,9 @@ func validateAndSortBindings(input ManifestInput, payload map[string]File) ([]Co
 		if err := validateVersion("profile.version", profile.Version); err != nil {
 			return nil, nil, err
 		}
+		if profile.SchemaID != SecurityProfileSchemaID {
+			return nil, nil, contractError("unsupported_security_profile_schema", profile.Path, nil)
+		}
 		if err := validatePath(profile.Path, false); err != nil {
 			return nil, nil, err
 		}
@@ -231,9 +279,8 @@ func validateAndSortBindings(input ManifestInput, payload map[string]File) ([]Co
 		if err := findBoundFile(payload, profile.Path, profile.Digest, ""); err != nil {
 			return nil, nil, err
 		}
-		profileBytes := bytes.ToLower(payload[profile.Path].Content)
-		if !bytes.Contains(profileBytes, []byte(ActivationFormatV1)) || bytes.Contains(profileBytes, []byte("sigstore-bundle")) {
-			return nil, nil, contractError("unsupported_profile_signing_format", profile.Path, nil)
+		if err := validateSecurityProfileDocument(payload[profile.Path], profile); err != nil {
+			return nil, nil, err
 		}
 	}
 	special := []struct {
@@ -243,7 +290,7 @@ func validateAndSortBindings(input ManifestInput, payload map[string]File) ([]Co
 	}{
 		{input.OpenFGAModel.SourcePath, input.OpenFGAModel.SourceDigest, "openfga_model"},
 		{input.DeploymentPolicy.Path, input.DeploymentPolicy.Digest, "deployment_policy"},
-		{input.DeploymentPolicy.EvaluatedAssuranceResultPath, input.DeploymentPolicy.EvaluatedAssuranceResultDigest, "evaluated_assurance_result"},
+		{input.DeploymentPolicy.PresentedAssuranceResultPath, input.DeploymentPolicy.PresentedAssuranceResultDigest, "presented_assurance_result"},
 		{input.Trust.TrustSetPath, input.Trust.TrustSetID, "trust_set"},
 		{input.Trust.TrustSetEnvelopePath, input.Trust.TrustSetEnvelopeDigest, "trust_set_envelope"},
 	}
@@ -256,16 +303,20 @@ func validateAndSortBindings(input ManifestInput, payload map[string]File) ([]Co
 			return nil, nil, err
 		}
 	}
-	var assurance EvaluatedAssuranceResultV1
-	assuranceFile := payload[input.DeploymentPolicy.EvaluatedAssuranceResultPath]
+	if err := validateDeploymentPolicyDocument(payload[input.DeploymentPolicy.Path], input.DeploymentPolicy, profiles); err != nil {
+		return nil, nil, err
+	}
+	var assurance PresentedAssuranceEvaluationV1
+	assuranceFile := payload[input.DeploymentPolicy.PresentedAssuranceResultPath]
 	if assuranceFile.MediaType != "application/json" {
-		return nil, nil, contractError("bound_media_type_mismatch", input.DeploymentPolicy.EvaluatedAssuranceResultPath, nil)
+		return nil, nil, contractError("bound_media_type_mismatch", input.DeploymentPolicy.PresentedAssuranceResultPath, nil)
 	}
 	if err := decodeStrict(assuranceFile.Content, &assurance); err != nil {
 		return nil, nil, err
 	}
-	expectedAssurance := EvaluatedAssuranceResultV1{
+	expectedAssurance := PresentedAssuranceEvaluationV1{
 		SchemaVersion:                  "1.0.0",
+		Treatment:                      PresentedMaterialTreatment,
 		DeploymentPolicyID:             input.DeploymentPolicy.PolicyID,
 		DeploymentPolicyVersion:        input.DeploymentPolicy.Version,
 		DeploymentPolicyDigest:         input.DeploymentPolicy.Digest,
@@ -280,17 +331,17 @@ func validateAndSortBindings(input ManifestInput, payload map[string]File) ([]Co
 		ApprovedCryptographicBoundary:  input.DeploymentPolicy.ApprovedCryptographicBoundary,
 		ValidatedCryptoModuleRequired:  input.DeploymentPolicy.ValidatedCryptoModuleRequired,
 		EvidenceProfile:                input.DeploymentPolicy.EvidenceProfile,
-		Result:                         "pass",
+		ClaimedResult:                  "pass",
 	}
 	if !reflect.DeepEqual(assurance, expectedAssurance) {
-		return nil, nil, contractError("evaluated_assurance_mismatch", input.DeploymentPolicy.EvaluatedAssuranceResultPath, nil)
+		return nil, nil, contractError("presented_assurance_mismatch", input.DeploymentPolicy.PresentedAssuranceResultPath, nil)
 	}
 	canonicalAssurance, err := marshalCanonical(assurance)
 	if err != nil {
 		return nil, nil, err
 	}
 	if !bytes.Equal(canonicalAssurance, assuranceFile.Content) {
-		return nil, nil, contractError("noncanonical_evaluated_assurance", input.DeploymentPolicy.EvaluatedAssuranceResultPath, nil)
+		return nil, nil, contractError("noncanonical_presented_assurance", input.DeploymentPolicy.PresentedAssuranceResultPath, nil)
 	}
 	for pathValue := range payload {
 		if _, ok := referenced[pathValue]; !ok {
@@ -316,29 +367,6 @@ func PrepareUnsigned(input BuildInput) (UnsignedActivation, error) {
 	if err := validateIdentifier("evidence.build_workflow_identity", input.Evidence.BuildWorkflowIdentity); err != nil {
 		return UnsignedActivation{}, err
 	}
-	if err := validateConformance(input.Evidence.Conformance); err != nil {
-		return UnsignedActivation{}, err
-	}
-	if err := validateReviewsAndWaivers(input.Evidence.Reviews, input.Evidence.Waivers); err != nil {
-		return UnsignedActivation{}, err
-	}
-	for _, review := range input.Evidence.Reviews {
-		if review.Disposition != "accept" {
-			return UnsignedActivation{}, contractError("build_review_not_accepted", "evidence.reviews", nil)
-		}
-		if review.ReviewerID == input.Evidence.BuilderIdentity || review.ReviewerID == input.Evidence.BuildWorkflowIdentity {
-			return UnsignedActivation{}, contractError("self_approved_build_evidence", "evidence.reviews", nil)
-		}
-	}
-	if len(input.Evidence.Reviews) == 0 {
-		return UnsignedActivation{}, contractError("missing_build_review", "evidence.reviews", nil)
-	}
-	for _, waiver := range input.Evidence.Waivers {
-		if waiver.Disposition != "approved" {
-			return UnsignedActivation{}, contractError("build_waiver_not_approved", "evidence.waivers", nil)
-		}
-	}
-
 	allFiles := make([]File, 0, len(input.PayloadFiles)+len(input.EvidenceFiles)+1)
 	payload := make(map[string]File, len(input.PayloadFiles))
 	seen := make(map[string]struct{}, cap(allFiles))
@@ -369,32 +397,40 @@ func PrepareUnsigned(input BuildInput) (UnsignedActivation, error) {
 		return UnsignedActivation{}, contractError("bound_media_type_mismatch", input.Manifest.PolicyContentIndexPath, nil)
 	}
 	policyBundleID := SHA256Digest(policyIndex.Content)
+	if err := validateReviewsAndWaivers(input.Evidence.ReviewReceipts, input.Evidence.WaiverReceipts, policyBundleID); err != nil {
+		return UnsignedActivation{}, err
+	}
+	for _, review := range input.Evidence.ReviewReceipts {
+		if review.ClaimedDisposition != "accept" {
+			return UnsignedActivation{}, contractError("presented_build_review_not_accept", "evidence.review_receipts", nil)
+		}
+		if review.ReviewerID == input.Evidence.BuilderIdentity || review.ReviewerID == input.Evidence.BuildWorkflowIdentity {
+			return UnsignedActivation{}, contractError("self_presented_build_review", "evidence.review_receipts", nil)
+		}
+	}
+	if len(input.Evidence.ReviewReceipts) == 0 {
+		return UnsignedActivation{}, contractError("missing_presented_build_review", "evidence.review_receipts", nil)
+	}
+	for _, waiver := range input.Evidence.WaiverReceipts {
+		if waiver.ClaimedDisposition != "approved" {
+			return UnsignedActivation{}, contractError("presented_build_waiver_not_approved", "evidence.waiver_receipts", nil)
+		}
+	}
 	bindings, profiles, err := validateAndSortBindings(input.Manifest, payload)
 	if err != nil {
 		return UnsignedActivation{}, err
 	}
 
-	reports := make([]EvidenceReport, 0, len(input.EvidenceFiles))
-	requiredEvidenceMediaTypes := []string{
-		"application/spdx+json",
-		"application/vnd.in-toto+json",
-		"application/vnd.stead.policy-conformance.v1+json",
-		"application/vnd.stead.policy-license-result.v1+json",
-		"application/vnd.stead.policy-vulnerability.v1+json",
-	}
-	requiredEvidenceTypes := make(map[string]bool, len(requiredEvidenceMediaTypes))
-	for _, mediaType := range requiredEvidenceMediaTypes {
-		requiredEvidenceTypes[mediaType] = false
-	}
+	reports := make([]PresentedEvidenceReportV1, 0, len(input.EvidenceFiles))
+	seenEvidencePaths := make(map[string]struct{}, len(input.EvidenceFiles))
+	var conformance ConformanceClaims
+	var conformanceDigest string
 	for _, original := range input.EvidenceFiles {
 		file := copyFile(original)
 		if file.Path == evidenceManifestPath {
 			return UnsignedActivation{}, contractError("reserved_evidence_path", file.Path, nil)
 		}
 		if err := validateArtifactFile(file, "evidence"); err != nil {
-			return UnsignedActivation{}, err
-		}
-		if err := validatePreSigningEvidence(file); err != nil {
 			return UnsignedActivation{}, err
 		}
 		if strings.Contains(file.MediaType, "json") {
@@ -405,23 +441,30 @@ func PrepareUnsigned(input BuildInput) (UnsignedActivation, error) {
 		if _, duplicate := seen[file.Path]; duplicate {
 			return UnsignedActivation{}, contractError("duplicate_archive_path", file.Path, nil)
 		}
+		claims, err := validateTypedEvidenceFile(file)
+		if err != nil {
+			return UnsignedActivation{}, err
+		}
+		seenEvidencePaths[file.Path] = struct{}{}
+		if file.Path == conformanceEvidencePath {
+			conformance = claims
+			conformanceDigest = SHA256Digest(file.Content)
+		}
 		seen[file.Path] = struct{}{}
 		allFiles = append(allFiles, file)
 		totalContent += uint64(len(file.Content))
-		reports = append(reports, EvidenceReport{Path: file.Path, MediaType: file.MediaType, Size: int64(len(file.Content)), Digest: SHA256Digest(file.Content)})
-		if _, required := requiredEvidenceTypes[file.MediaType]; required {
-			requiredEvidenceTypes[file.MediaType] = true
-		}
+		reports = append(reports, PresentedEvidenceReportV1{Treatment: PresentedMaterialTreatment, Path: file.Path, MediaType: file.MediaType, Size: int64(len(file.Content)), Digest: SHA256Digest(file.Content)})
 	}
-	for _, mediaType := range requiredEvidenceMediaTypes {
-		if !requiredEvidenceTypes[mediaType] {
-			return UnsignedActivation{}, contractError("missing_required_evidence", mediaType, nil)
+	for _, pathValue := range sortedEvidencePaths() {
+		if _, ok := seenEvidencePaths[pathValue]; !ok {
+			return UnsignedActivation{}, contractError("missing_required_evidence", pathValue, nil)
 		}
 	}
 	sort.Slice(reports, func(i, j int) bool { return reports[i].Path < reports[j].Path })
 
 	evidenceManifest := PreSigningEvidenceManifestV1{
 		SchemaVersion:            "1.0.0",
+		Authority:                NonAuthorizingHandoffAuthority,
 		BuilderIdentity:          input.Evidence.BuilderIdentity,
 		BuildWorkflowIdentity:    input.Evidence.BuildWorkflowIdentity,
 		SourceRevision:           input.Manifest.SourceRevision,
@@ -433,9 +476,14 @@ func PrepareUnsigned(input BuildInput) (UnsignedActivation, error) {
 		DeploymentPolicyVersion:  input.Manifest.DeploymentPolicy.Version,
 		DeploymentPolicyDigest:   input.Manifest.DeploymentPolicy.Digest,
 		Reports:                  reports,
-		Conformance:              input.Evidence.Conformance,
-		Reviews:                  sortReviews(input.Evidence.Reviews),
-		Waivers:                  sortWaivers(input.Evidence.Waivers),
+		Conformance: PresentedConformanceEvidenceV1{
+			Treatment:    PresentedMaterialTreatment,
+			ReportPath:   conformanceEvidencePath,
+			ReportDigest: conformanceDigest,
+			Claims:       conformance,
+		},
+		ReviewReceipts: presentReviews(input.Evidence.ReviewReceipts),
+		WaiverReceipts: presentWaivers(input.Evidence.WaiverReceipts),
 	}
 	evidenceBytes, err := marshalCanonical(evidenceManifest)
 	if err != nil {
@@ -521,9 +569,106 @@ func sortedDigests(values []string) []string {
 	return result
 }
 
+func copyUnsignedActivation(unsigned UnsignedActivation) UnsignedActivation {
+	result := unsigned
+	result.ManifestPayload = cloneSlice(unsigned.ManifestPayload)
+	result.EvidenceManifestBytes = cloneSlice(unsigned.EvidenceManifestBytes)
+	result.SigningRequestBytes = cloneSlice(unsigned.SigningRequestBytes)
+	result.Files = make([]File, len(unsigned.Files))
+	for index, file := range unsigned.Files {
+		result.Files[index] = copyFile(file)
+	}
+	result.Manifest.ContractBindings = cloneSlice(unsigned.Manifest.ContractBindings)
+	result.Manifest.Profiles = cloneSlice(unsigned.Manifest.Profiles)
+	result.Manifest.SupportedSteadVersions = cloneSlice(unsigned.Manifest.SupportedSteadVersions)
+	result.Manifest.RequiredContextIDs = cloneSlice(unsigned.Manifest.RequiredContextIDs)
+	result.Manifest.ReasonCodeIDs = cloneSlice(unsigned.Manifest.ReasonCodeIDs)
+	result.Manifest.ObligationIDs = cloneSlice(unsigned.Manifest.ObligationIDs)
+	result.Manifest.ExplicitDenyIDs = cloneSlice(unsigned.Manifest.ExplicitDenyIDs)
+	result.Manifest.Files = cloneSlice(unsigned.Manifest.Files)
+	result.Manifest.CompatiblePredecessorActivationSetIDs = cloneSlice(unsigned.Manifest.CompatiblePredecessorActivationSetIDs)
+	result.Manifest.RollbackConstraints = cloneSlice(unsigned.Manifest.RollbackConstraints)
+	result.EvidenceManifest.Reports = cloneSlice(unsigned.EvidenceManifest.Reports)
+	result.EvidenceManifest.ReviewReceipts = cloneSlice(unsigned.EvidenceManifest.ReviewReceipts)
+	result.EvidenceManifest.WaiverReceipts = cloneSlice(unsigned.EvidenceManifest.WaiverReceipts)
+	return result
+}
+
 func requireDigestMatches(field, expected string, data []byte) error {
 	if got := SHA256Digest(data); got != expected {
 		return contractError("digest_mismatch", field, fmt.Errorf("digest mismatch"))
+	}
+	return nil
+}
+
+func validatePreparedEvidence(unsigned UnsignedActivation) error {
+	evidence := unsigned.EvidenceManifest
+	manifest := unsigned.Manifest
+	if evidence.SchemaVersion != "1.0.0" || evidence.Authority != NonAuthorizingHandoffAuthority {
+		return contractError("evidence_manifest_authority_mismatch", "evidence_manifest", nil)
+	}
+	if err := validateIdentifier("evidence.builder_identity", evidence.BuilderIdentity); err != nil {
+		return err
+	}
+	if err := validateIdentifier("evidence.build_workflow_identity", evidence.BuildWorkflowIdentity); err != nil {
+		return err
+	}
+	if evidence.SourceRevision != manifest.SourceRevision || evidence.DependencyLockDigest != manifest.DependencyLockDigest || evidence.PolicyContentIndexDigest != manifest.PolicyBundleID || evidence.OpenFGAModelSourceDigest != manifest.OpenFGAModel.SourceDigest || evidence.Trust != manifest.Trust || evidence.DeploymentPolicyID != manifest.DeploymentPolicy.PolicyID || evidence.DeploymentPolicyVersion != manifest.DeploymentPolicy.Version || evidence.DeploymentPolicyDigest != manifest.DeploymentPolicy.Digest {
+		return contractError("evidence_manifest_binding_mismatch", "evidence_manifest", nil)
+	}
+	reviewInputs := reviewReceiptInputs(evidence.ReviewReceipts)
+	waiverInputs := waiverReceiptInputs(evidence.WaiverReceipts)
+	if !reflect.DeepEqual(evidence.ReviewReceipts, presentReviews(reviewInputs)) || !reflect.DeepEqual(evidence.WaiverReceipts, presentWaivers(waiverInputs)) {
+		return contractError("presented_evidence_treatment_mismatch", "evidence_manifest", nil)
+	}
+	if err := validateReviewsAndWaivers(reviewInputs, waiverInputs, manifest.PolicyBundleID); err != nil {
+		return err
+	}
+	if len(reviewInputs) == 0 {
+		return contractError("missing_presented_build_review", "evidence_manifest.presented_review_receipts", nil)
+	}
+	for _, review := range reviewInputs {
+		if review.ClaimedDisposition != "accept" || review.ReviewerID == evidence.BuilderIdentity || review.ReviewerID == evidence.BuildWorkflowIdentity {
+			return contractError("presented_build_review_mismatch", "evidence_manifest.presented_review_receipts", nil)
+		}
+	}
+	for _, waiver := range waiverInputs {
+		if waiver.ClaimedDisposition != "approved" {
+			return contractError("presented_build_waiver_mismatch", "evidence_manifest.presented_waiver_receipts", nil)
+		}
+	}
+
+	reports := make([]PresentedEvidenceReportV1, 0, len(evidence.Reports))
+	seenPaths := make(map[string]struct{}, len(evidence.Reports))
+	var conformance ConformanceClaims
+	var conformanceDigest string
+	for _, file := range unsigned.Files {
+		if !strings.HasPrefix(file.Path, "evidence/") || file.Path == evidenceManifestPath {
+			continue
+		}
+		claims, err := validateTypedEvidenceFile(file)
+		if err != nil {
+			return err
+		}
+		seenPaths[file.Path] = struct{}{}
+		if file.Path == conformanceEvidencePath {
+			conformance = claims
+			conformanceDigest = SHA256Digest(file.Content)
+		}
+		reports = append(reports, PresentedEvidenceReportV1{Treatment: PresentedMaterialTreatment, Path: file.Path, MediaType: file.MediaType, Size: int64(len(file.Content)), Digest: SHA256Digest(file.Content)})
+	}
+	for _, requiredPath := range sortedEvidencePaths() {
+		if _, present := seenPaths[requiredPath]; !present {
+			return contractError("missing_required_evidence", requiredPath, nil)
+		}
+	}
+	sort.Slice(reports, func(i, j int) bool { return reports[i].Path < reports[j].Path })
+	if !reflect.DeepEqual(reports, evidence.Reports) {
+		return contractError("presented_evidence_report_mismatch", "evidence_manifest.presented_reports", nil)
+	}
+	wantConformance := PresentedConformanceEvidenceV1{Treatment: PresentedMaterialTreatment, ReportPath: conformanceEvidencePath, ReportDigest: conformanceDigest, Claims: conformance}
+	if !reflect.DeepEqual(evidence.Conformance, wantConformance) {
+		return contractError("presented_conformance_mismatch", "evidence_manifest.presented_conformance", nil)
 	}
 	return nil
 }
@@ -549,6 +694,65 @@ func validateUnsignedActivation(unsigned UnsignedActivation) error {
 	if !bytes.Equal(canonical, unsigned.ManifestPayload) {
 		return contractError("noncanonical_manifest_payload", "manifest", nil)
 	}
+	issuedAt, err := time.Parse(time.RFC3339, unsigned.Manifest.IssuedAt)
+	if err != nil {
+		return contractError("invalid_activation_validity", "manifest.issued_at", nil)
+	}
+	expiresAt, err := time.Parse(time.RFC3339, unsigned.Manifest.ExpiresAt)
+	if err != nil {
+		return contractError("invalid_activation_validity", "manifest.expires_at", nil)
+	}
+	manifestInput := ManifestInput{
+		PolicyContentIndexPath:                unsigned.Manifest.PolicyContentIndexPath,
+		ContractBindings:                      cloneSlice(unsigned.Manifest.ContractBindings),
+		Profiles:                              cloneSlice(unsigned.Manifest.Profiles),
+		OpenFGAModel:                          unsigned.Manifest.OpenFGAModel,
+		DeploymentPolicy:                      unsigned.Manifest.DeploymentPolicy,
+		EvaluatorContractVersion:              unsigned.Manifest.EvaluatorContractVersion,
+		SupportedSteadVersions:                cloneSlice(unsigned.Manifest.SupportedSteadVersions),
+		RequiredContextIDs:                    cloneSlice(unsigned.Manifest.RequiredContextIDs),
+		ReasonCodeIDs:                         cloneSlice(unsigned.Manifest.ReasonCodeIDs),
+		ObligationIDs:                         cloneSlice(unsigned.Manifest.ObligationIDs),
+		ExplicitDenyIDs:                       cloneSlice(unsigned.Manifest.ExplicitDenyIDs),
+		SourceRevision:                        unsigned.Manifest.SourceRevision,
+		DependencyLockDigest:                  unsigned.Manifest.DependencyLockDigest,
+		BuildRecipeVersion:                    unsigned.Manifest.BuildRecipeVersion,
+		IssuedAt:                              issuedAt,
+		ExpiresAt:                             expiresAt,
+		Trust:                                 unsigned.Manifest.Trust,
+		CompatiblePredecessorActivationSetIDs: cloneSlice(unsigned.Manifest.CompatiblePredecessorActivationSetIDs),
+		RollbackConstraints:                   cloneSlice(unsigned.Manifest.RollbackConstraints),
+	}
+	if unsigned.Manifest.SchemaVersion != "1.0.0" || unsigned.Manifest.ArtifactFormat != ActivationFormatV1 {
+		return contractError("unsupported_activation_manifest", "manifest", nil)
+	}
+	if err := validateManifestInput(manifestInput); err != nil {
+		return err
+	}
+	payload := make(map[string]File)
+	for _, file := range unsigned.Files {
+		if strings.HasPrefix(file.Path, "payload/") {
+			payload[file.Path] = file
+		}
+	}
+	bindings, profiles, err := validateAndSortBindings(manifestInput, payload)
+	if err != nil {
+		return err
+	}
+	if !reflect.DeepEqual(bindings, unsigned.Manifest.ContractBindings) || !reflect.DeepEqual(profiles, unsigned.Manifest.Profiles) {
+		return contractError("manifest_binding_order_mismatch", "manifest", nil)
+	}
+	policyIndex, present := payload[unsigned.Manifest.PolicyContentIndexPath]
+	if !present || SHA256Digest(policyIndex.Content) != unsigned.Manifest.PolicyBundleID {
+		return contractError("policy_bundle_identity_mismatch", "policy_bundle_id", nil)
+	}
+	wantSigningRequest, wantSigningRequestBytes, err := makeSigningRequest("policy_activation_manifest", ActivationManifestPayloadType, unsigned.ManifestPayload, manifestInput)
+	if err != nil {
+		return err
+	}
+	if !reflect.DeepEqual(unsigned.SigningRequest, wantSigningRequest) || !bytes.Equal(unsigned.SigningRequestBytes, wantSigningRequestBytes) {
+		return contractError("signing_request_binding_mismatch", "signing_request", nil)
+	}
 	if SHA256Digest(unsigned.EvidenceManifestBytes) != unsigned.EvidenceManifestDigest || unsigned.Manifest.EvidenceManifestDigest != unsigned.EvidenceManifestDigest {
 		return contractError("evidence_manifest_identity_mismatch", "evidence_manifest", nil)
 	}
@@ -565,6 +769,9 @@ func validateUnsignedActivation(unsigned UnsignedActivation) error {
 	}
 	if !bytes.Equal(canonicalEvidence, unsigned.EvidenceManifestBytes) {
 		return contractError("noncanonical_evidence_manifest", "evidence_manifest", nil)
+	}
+	if err := validatePreparedEvidence(unsigned); err != nil {
+		return err
 	}
 	actualFiles := manifestFileList(unsigned.Files)
 	if !reflect.DeepEqual(actualFiles, unsigned.Manifest.Files) {

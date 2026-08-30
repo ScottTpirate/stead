@@ -47,9 +47,9 @@ func BenchmarkInspectArchive(b *testing.B) {
 func BenchmarkPrepareReleaseAttestation(b *testing.B) {
 	activation, _, _ := completeFixtureRelease(b, "commercial", 1, false)
 	input := policyrelease.ReleaseAttestationInput{
-		ReleaseWorkflowIdentity:     "release-workflow-v1",
-		FinalApprovals:              []policyrelease.ReviewerDisposition{{ReviewerID: "reviewer-a", Role: "independent-release", Revision: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", Disposition: "accept"}},
-		NetworkDisabledVerification: policyrelease.NetworkDisabledVerification{Outcome: "pass", VerifiedArchiveDigest: activation.ArchiveDigest, ResultDigest: policyrelease.SHA256Digest([]byte("offline"))},
+		ReleaseWorkflowIdentity: "release-workflow-v1",
+		ReviewReceipts:          []policyrelease.ReviewReceipt{{ReviewerID: "reviewer-a", Role: "independent-release", SubjectDigest: activation.ArchiveDigest, RecordDigest: policyrelease.SHA256Digest([]byte("review")), ClaimedDisposition: "accept"}},
+		OfflineCheckReceipt:     policyrelease.OfflineCheckReceipt{ClaimedOutcome: "pass", SubjectArchiveDigest: activation.ArchiveDigest, ReportDigest: policyrelease.SHA256Digest([]byte("offline"))},
 	}
 	b.ReportAllocs()
 	b.ResetTimer()

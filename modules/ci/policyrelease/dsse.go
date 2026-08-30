@@ -42,9 +42,10 @@ type ecdsaSignature struct {
 }
 
 type signingResultRecordV1 struct {
-	SchemaVersion    string             `json:"schema_version"`
-	WorkflowIdentity string             `json:"workflow_identity"`
-	Receipts         []SignatureReceipt `json:"receipts"`
+	SchemaVersion     string                      `json:"schema_version"`
+	Treatment         string                      `json:"treatment"`
+	WorkflowIdentity  string                      `json:"workflow_identity"`
+	PresentedReceipts []PresentedSignatureReceipt `json:"presented_receipts"`
 }
 
 // PAE implements DSSE v1.0.0 pre-authentication encoding over exact bytes.
@@ -174,45 +175,45 @@ func validateExpectedEnvelope(envelope, expectedPayload []byte, expectedType str
 	return parsed, nil
 }
 
-func validateSigningResult(parsed ParsedEnvelope, result SigningResult, policy DeploymentPolicyBinding) (ThresholdResult, error) {
-	expectedResult, err := NewSigningResult(result.WorkflowIdentity, result.Receipts)
+func validatePresentedSigningResult(parsed ParsedEnvelope, result PresentedSigningResult, policy DeploymentPolicyBinding) (PresentedSignatureSummary, error) {
+	expectedResult, err := NewPresentedSigningResult(result.WorkflowIdentity, result.Receipts)
 	if err != nil {
-		return ThresholdResult{}, err
+		return PresentedSignatureSummary{}, err
 	}
-	if result.ResultDigest != expectedResult.ResultDigest {
-		return ThresholdResult{}, contractError("signing_result_digest_mismatch", "signing_result.result_digest", nil)
+	if result.Treatment != PresentedMaterialTreatment || result.ReceiptSetDigest != expectedResult.ReceiptSetDigest {
+		return PresentedSignatureSummary{}, contractError("signing_receipt_set_digest_mismatch", "presented_signing_result.receipt_set_digest", nil)
 	}
 	if len(result.Receipts) != len(parsed.Signatures) {
-		return ThresholdResult{}, contractError("signing_receipt_count_mismatch", "signing_result.receipts", nil)
+		return PresentedSignatureSummary{}, contractError("signing_receipt_count_mismatch", "presented_signing_result.presented_receipts", nil)
 	}
-	receipts := make(map[string]SignatureReceipt, len(result.Receipts))
+	receipts := make(map[string]PresentedSignatureReceipt, len(result.Receipts))
 	for _, receipt := range result.Receipts {
-		if !digestPattern.MatchString(receipt.KeyID) {
-			return ThresholdResult{}, contractError("invalid_key_id", "signing_result.receipts.key_id", nil)
+		if !digestPattern.MatchString(receipt.KeyIDHint) {
+			return PresentedSignatureSummary{}, contractError("invalid_key_id", "presented_signing_result.presented_receipts.key_id_hint", nil)
 		}
-		if _, duplicate := receipts[receipt.KeyID]; duplicate {
-			return ThresholdResult{}, contractError("duplicate_signing_receipt", "signing_result.receipts.key_id", nil)
+		if _, duplicate := receipts[receipt.KeyIDHint]; duplicate {
+			return PresentedSignatureSummary{}, contractError("duplicate_signing_receipt", "presented_signing_result.presented_receipts.key_id_hint", nil)
 		}
-		if err := validateIdentifier("signing_result.receipts.custodian_id", receipt.CustodianID); err != nil {
-			return ThresholdResult{}, err
+		if err := validateIdentifier("presented_signing_result.presented_receipts.claimed_custodian_id", receipt.ClaimedCustodianID); err != nil {
+			return PresentedSignatureSummary{}, err
 		}
-		if receipt.KeyPurpose != ReleaseKeyPurpose {
-			return ThresholdResult{}, contractError("wrong_key_purpose", "signing_result.receipts.key_purpose", nil)
+		if receipt.ClaimedKeyPurpose != ReleaseKeyPurpose {
+			return PresentedSignatureSummary{}, contractError("wrong_claimed_key_purpose", "presented_signing_result.presented_receipts.claimed_key_purpose", nil)
 		}
-		if err := validateDigest("signing_result.receipts.signature_digest", receipt.SignatureDigest); err != nil {
-			return ThresholdResult{}, err
+		if err := validateDigest("presented_signing_result.presented_receipts.signature_digest", receipt.SignatureDigest); err != nil {
+			return PresentedSignatureSummary{}, err
 		}
-		receipts[receipt.KeyID] = receipt
+		receipts[receipt.KeyIDHint] = receipt
 	}
 	keyIDs := make([]string, 0, len(parsed.Signatures))
 	custodians := make(map[string]struct{}, len(parsed.Signatures))
 	for _, signature := range parsed.Signatures {
 		receipt, ok := receipts[signature.KeyID]
 		if !ok || receipt.SignatureDigest != signature.Digest {
-			return ThresholdResult{}, contractError("signing_receipt_mismatch", "signing_result.receipts", nil)
+			return PresentedSignatureSummary{}, contractError("signing_receipt_mismatch", "presented_signing_result.presented_receipts", nil)
 		}
 		keyIDs = append(keyIDs, signature.KeyID)
-		custodians[receipt.CustodianID] = struct{}{}
+		custodians[receipt.ClaimedCustodianID] = struct{}{}
 	}
 	sort.Strings(keyIDs)
 	custodianIDs := make([]string, 0, len(custodians))
@@ -220,51 +221,54 @@ func validateSigningResult(parsed ParsedEnvelope, result SigningResult, policy D
 		custodianIDs = append(custodianIDs, custodian)
 	}
 	sort.Strings(custodianIDs)
-	threshold := ThresholdResult{
-		RequiredSignatures:         policy.PolicySignatureThreshold,
-		VerifiedDistinctKeys:       len(keyIDs),
-		DistinctCustodiansRequired: policy.DistinctSigningCustodians,
-		VerifiedDistinctCustodians: len(custodianIDs),
-		KeyIDs:                     keyIDs,
-		CustodianIDs:               custodianIDs,
+	summary := PresentedSignatureSummary{
+		Treatment:                        PresentedMaterialTreatment,
+		RequestedSignatureThreshold:      policy.PolicySignatureThreshold,
+		PresentedDistinctKeyIDHints:      len(keyIDs),
+		DistinctCustodianClaimsRequested: policy.DistinctSigningCustodians,
+		PresentedDistinctCustodianClaims: len(custodianIDs),
+		KeyIDHints:                       keyIDs,
+		ClaimedCustodianIDs:              custodianIDs,
 	}
-	threshold.Satisfied = threshold.VerifiedDistinctKeys >= threshold.RequiredSignatures && (!threshold.DistinctCustodiansRequired || threshold.VerifiedDistinctCustodians >= threshold.RequiredSignatures)
-	if !threshold.Satisfied {
-		return ThresholdResult{}, contractError("deployment_signature_threshold_unsatisfied", "signing_result", nil)
+	if summary.PresentedDistinctKeyIDHints < summary.RequestedSignatureThreshold {
+		return PresentedSignatureSummary{}, contractError("presented_signature_count_below_policy_request", "presented_signing_result", nil)
 	}
-	return threshold, nil
+	if summary.DistinctCustodianClaimsRequested && summary.PresentedDistinctCustodianClaims < summary.RequestedSignatureThreshold {
+		return PresentedSignatureSummary{}, contractError("presented_custodian_claim_count_below_policy_request", "presented_signing_result", nil)
+	}
+	return summary, nil
 }
 
-// NewSigningResult canonicalizes the safe external-signing receipt record and
-// computes the digest later bound by release evidence. It signs nothing.
-func NewSigningResult(workflowIdentity string, receipts []SignatureReceipt) (SigningResult, error) {
-	if err := validateIdentifier("signing_result.workflow_identity", workflowIdentity); err != nil {
-		return SigningResult{}, err
+// NewPresentedSigningResult canonicalizes syntax-checked, caller-presented
+// receipt material. It does not verify signatures, keys, trust, or custody.
+func NewPresentedSigningResult(workflowIdentity string, receipts []PresentedSignatureReceipt) (PresentedSigningResult, error) {
+	if err := validateIdentifier("presented_signing_result.workflow_identity", workflowIdentity); err != nil {
+		return PresentedSigningResult{}, err
 	}
-	resultReceipts := append([]SignatureReceipt(nil), receipts...)
-	sort.Slice(resultReceipts, func(i, j int) bool { return resultReceipts[i].KeyID < resultReceipts[j].KeyID })
+	resultReceipts := cloneSlice(receipts)
+	sort.Slice(resultReceipts, func(i, j int) bool { return resultReceipts[i].KeyIDHint < resultReceipts[j].KeyIDHint })
 	for index, receipt := range resultReceipts {
-		if !digestPattern.MatchString(receipt.KeyID) {
-			return SigningResult{}, contractError("invalid_key_id", "signing_result.receipts.key_id", nil)
+		if !digestPattern.MatchString(receipt.KeyIDHint) {
+			return PresentedSigningResult{}, contractError("invalid_key_id", "presented_signing_result.presented_receipts.key_id_hint", nil)
 		}
-		if index > 0 && receipt.KeyID == resultReceipts[index-1].KeyID {
-			return SigningResult{}, contractError("duplicate_signing_receipt", "signing_result.receipts.key_id", nil)
+		if index > 0 && receipt.KeyIDHint == resultReceipts[index-1].KeyIDHint {
+			return PresentedSigningResult{}, contractError("duplicate_signing_receipt", "presented_signing_result.presented_receipts.key_id_hint", nil)
 		}
-		if err := validateIdentifier("signing_result.receipts.custodian_id", receipt.CustodianID); err != nil {
-			return SigningResult{}, err
+		if err := validateIdentifier("presented_signing_result.presented_receipts.claimed_custodian_id", receipt.ClaimedCustodianID); err != nil {
+			return PresentedSigningResult{}, err
 		}
-		if receipt.KeyPurpose != ReleaseKeyPurpose {
-			return SigningResult{}, contractError("wrong_key_purpose", "signing_result.receipts.key_purpose", nil)
+		if receipt.ClaimedKeyPurpose != ReleaseKeyPurpose {
+			return PresentedSigningResult{}, contractError("wrong_claimed_key_purpose", "presented_signing_result.presented_receipts.claimed_key_purpose", nil)
 		}
-		if err := validateDigest("signing_result.receipts.signature_digest", receipt.SignatureDigest); err != nil {
-			return SigningResult{}, err
+		if err := validateDigest("presented_signing_result.presented_receipts.signature_digest", receipt.SignatureDigest); err != nil {
+			return PresentedSigningResult{}, err
 		}
 	}
-	recordBytes, err := marshalCanonical(signingResultRecordV1{SchemaVersion: "1.0.0", WorkflowIdentity: workflowIdentity, Receipts: resultReceipts})
+	recordBytes, err := marshalCanonical(signingResultRecordV1{SchemaVersion: "1.0.0", Treatment: PresentedMaterialTreatment, WorkflowIdentity: workflowIdentity, PresentedReceipts: resultReceipts})
 	if err != nil {
-		return SigningResult{}, err
+		return PresentedSigningResult{}, err
 	}
-	return SigningResult{WorkflowIdentity: workflowIdentity, ResultDigest: SHA256Digest(recordBytes), Receipts: resultReceipts}, nil
+	return PresentedSigningResult{Treatment: PresentedMaterialTreatment, WorkflowIdentity: workflowIdentity, ReceiptSetDigest: SHA256Digest(recordBytes), Receipts: resultReceipts}, nil
 }
 
 func makeSigningRequest(purpose, payloadType string, payload []byte, manifest ManifestInput) (SigningRequestV1, []byte, error) {

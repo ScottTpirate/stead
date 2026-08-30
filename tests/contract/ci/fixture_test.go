@@ -96,10 +96,10 @@ func fixtureSign(payloadType string, payload []byte, index int) ([]byte, string)
 	return encoded, keyID
 }
 
-func externallySign(t testing.TB, payloadType string, payload []byte, signers int, oneCustodian bool) ([]byte, policyrelease.SigningResult) {
+func externallySign(t testing.TB, payloadType string, payload []byte, signers int, oneCustodian bool) ([]byte, policyrelease.PresentedSigningResult) {
 	t.Helper()
 	signatures := make([]fixtureSignature, 0, signers)
-	receipts := make([]policyrelease.SignatureReceipt, 0, signers)
+	receipts := make([]policyrelease.PresentedSignatureReceipt, 0, signers)
 	for index := 0; index < signers; index++ {
 		signature, keyID := fixtureSign(payloadType, payload, index)
 		custodian := "fixture-custodian-" + string(rune('a'+index))
@@ -107,11 +107,11 @@ func externallySign(t testing.TB, payloadType string, payload []byte, signers in
 			custodian = "fixture-custodian-shared"
 		}
 		signatures = append(signatures, fixtureSignature{KeyID: keyID, Sig: base64.StdEncoding.EncodeToString(signature)})
-		receipts = append(receipts, policyrelease.SignatureReceipt{
-			KeyID:           keyID,
-			CustodianID:     custodian,
-			KeyPurpose:      policyrelease.ReleaseKeyPurpose,
-			SignatureDigest: policyrelease.SHA256Digest(signature),
+		receipts = append(receipts, policyrelease.PresentedSignatureReceipt{
+			KeyIDHint:          keyID,
+			ClaimedCustodianID: custodian,
+			ClaimedKeyPurpose:  policyrelease.ReleaseKeyPurpose,
+			SignatureDigest:    policyrelease.SHA256Digest(signature),
 		})
 	}
 	envelope, err := json.Marshal(fixtureEnvelope{
@@ -122,7 +122,7 @@ func externallySign(t testing.TB, payloadType string, payload []byte, signers in
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := policyrelease.NewSigningResult("external-fixture-signing-workflow-v1", receipts)
+	result, err := policyrelease.NewPresentedSigningResult("external-fixture-signing-workflow-v1", receipts)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -146,11 +146,11 @@ func fixtureBuildInput(t testing.TB, profile string, threshold int, distinctCust
 		fixtureFile(t, "payload/deployment-policy.json", "source/payload/deployment-policy.json", "application/json"),
 		fixtureFile(t, "payload/trust-set.json", "source/payload/trust-set.json", "application/json"),
 	}
-	profileRelative := "source/payload/profile-commercial.yaml"
+	profileRelative := "source/payload/profile-commercial.json"
 	if profile == "synthetic_regulated" {
-		profileRelative = "source/payload/profile-synthetic.yaml"
+		profileRelative = "source/payload/profile-synthetic.json"
 	}
-	payloadFiles = append(payloadFiles, fixtureFile(t, "payload/security-profile.yaml", profileRelative, "application/yaml"))
+	payloadFiles = append(payloadFiles, fixtureFile(t, "payload/security-profile.json", profileRelative, "application/vnd.stead.security-profile.v0.1+json"))
 	var deploymentDocument map[string]any
 	if err := json.Unmarshal(payloadFiles[6].Content, &deploymentDocument); err != nil {
 		t.Fatal(err)
@@ -175,6 +175,7 @@ func fixtureBuildInput(t testing.TB, profile string, threshold int, distinctCust
 	deploymentPolicy := policyrelease.DeploymentPolicyBinding{
 		PolicyID:                       "fixture-domain",
 		Version:                        "1.0.0",
+		SchemaID:                       policyrelease.DeploymentPolicySchemaID,
 		Path:                           "payload/deployment-policy.json",
 		Digest:                         policyrelease.SHA256Digest(deploymentBytes),
 		DisclosureRevocationMode:       "request_boundary",
@@ -188,10 +189,11 @@ func fixtureBuildInput(t testing.TB, profile string, threshold int, distinctCust
 		ApprovedCryptographicBoundary:  "fixture-boundary",
 		ValidatedCryptoModuleRequired:  threshold > 1,
 		EvidenceProfile:                "fixture-baseline",
-		EvaluatedAssuranceResultPath:   "payload/evaluated-assurance-result.json",
+		PresentedAssuranceResultPath:   "payload/presented-assurance-result.json",
 	}
-	assuranceResult := policyrelease.EvaluatedAssuranceResultV1{
+	assuranceResult := policyrelease.PresentedAssuranceEvaluationV1{
 		SchemaVersion:                  "1.0.0",
+		Treatment:                      policyrelease.PresentedMaterialTreatment,
 		DeploymentPolicyID:             deploymentPolicy.PolicyID,
 		DeploymentPolicyVersion:        deploymentPolicy.Version,
 		DeploymentPolicyDigest:         deploymentPolicy.Digest,
@@ -206,14 +208,14 @@ func fixtureBuildInput(t testing.TB, profile string, threshold int, distinctCust
 		ApprovedCryptographicBoundary:  deploymentPolicy.ApprovedCryptographicBoundary,
 		ValidatedCryptoModuleRequired:  deploymentPolicy.ValidatedCryptoModuleRequired,
 		EvidenceProfile:                deploymentPolicy.EvidenceProfile,
-		Result:                         "pass",
+		ClaimedResult:                  "pass",
 	}
 	assuranceBytes, err := json.Marshal(assuranceResult)
 	if err != nil {
 		t.Fatal(err)
 	}
-	deploymentPolicy.EvaluatedAssuranceResultDigest = policyrelease.SHA256Digest(assuranceBytes)
-	payloadFiles = append(payloadFiles, policyrelease.File{Path: deploymentPolicy.EvaluatedAssuranceResultPath, MediaType: "application/json", Content: assuranceBytes})
+	deploymentPolicy.PresentedAssuranceResultDigest = policyrelease.SHA256Digest(assuranceBytes)
+	payloadFiles = append(payloadFiles, policyrelease.File{Path: deploymentPolicy.PresentedAssuranceResultPath, MediaType: "application/json", Content: assuranceBytes})
 
 	var trustDocument map[string]any
 	if err := json.Unmarshal(payloadFiles[7].Content, &trustDocument); err != nil {
@@ -275,17 +277,12 @@ func fixtureBuildInput(t testing.TB, profile string, threshold int, distinctCust
 		Evidence: policyrelease.EvidenceInput{
 			BuilderIdentity:       "stead-ci-policy-builder-v1",
 			BuildWorkflowIdentity: "stead-ci-policy-build-workflow-v1",
-			Conformance: policyrelease.ConformanceSummary{
-				DecisionRowsCoveredPercent:   100,
-				CriticalMutationScorePercent: 93,
-				DeterministicReplayPassed:    true,
-				LabelLatticePassed:           true,
-				ExplicitDenyPassed:           true,
-				AgentIntersectionPassed:      true,
-				ProviderBypassPassed:         true,
-			},
-			Reviews: []policyrelease.ReviewerDisposition{{ReviewerID: "fixture-independent-reviewer", Role: "independent-security", Revision: "24c74d52ef0a78840ab147da48c3d66589e49e3e", Disposition: "accept"}},
-			Waivers: []policyrelease.Waiver{},
+			ReviewReceipts: []policyrelease.ReviewReceipt{{
+				ReviewerID: "fixture-independent-reviewer", Role: "independent-security",
+				SubjectDigest: policyrelease.SHA256Digest(byPath["payload/policy-content-index.json"].Content),
+				RecordDigest:  policyrelease.SHA256Digest([]byte("fixture-build-review-record")), ClaimedDisposition: "accept",
+			}},
+			WaiverReceipts: []policyrelease.WaiverReceipt{},
 		},
 		Manifest: policyrelease.ManifestInput{
 			PolicyContentIndexPath: "payload/policy-content-index.json",
@@ -293,8 +290,9 @@ func fixtureBuildInput(t testing.TB, profile string, threshold int, distinctCust
 			Profiles: []policyrelease.ProfileBinding{{
 				ProfileID:     profile,
 				Version:       "1.0.0",
-				Path:          "payload/security-profile.yaml",
-				Digest:        policyrelease.SHA256Digest(byPath["payload/security-profile.yaml"].Content),
+				SchemaID:      policyrelease.SecurityProfileSchemaID,
+				Path:          "payload/security-profile.json",
+				Digest:        policyrelease.SHA256Digest(byPath["payload/security-profile.json"].Content),
 				SigningFormat: policyrelease.ActivationFormatV1,
 			}},
 			OpenFGAModel: policyrelease.OpenFGAModelBinding{
@@ -342,16 +340,17 @@ func completeFixtureRelease(t testing.TB, profile string, threshold int, distinc
 	}
 	attestation, err := policyrelease.PrepareReleaseAttestation(activation, policyrelease.ReleaseAttestationInput{
 		ReleaseWorkflowIdentity: "stead-ci-policy-release-workflow-v1",
-		FinalApprovals: []policyrelease.ReviewerDisposition{{
-			ReviewerID:  "fixture-final-reviewer",
-			Role:        "independent-release",
-			Revision:    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-			Disposition: "accept",
+		ReviewReceipts: []policyrelease.ReviewReceipt{{
+			ReviewerID:         "fixture-final-reviewer",
+			Role:               "independent-release",
+			SubjectDigest:      activation.ArchiveDigest,
+			RecordDigest:       policyrelease.SHA256Digest([]byte("fixture-final-review-record")),
+			ClaimedDisposition: "accept",
 		}},
-		NetworkDisabledVerification: policyrelease.NetworkDisabledVerification{
-			Outcome:               "pass",
-			VerifiedArchiveDigest: activation.ArchiveDigest,
-			ResultDigest:          policyrelease.SHA256Digest([]byte("offline-verification-result")),
+		OfflineCheckReceipt: policyrelease.OfflineCheckReceipt{
+			ClaimedOutcome:       "pass",
+			SubjectArchiveDigest: activation.ArchiveDigest,
+			ReportDigest:         policyrelease.SHA256Digest([]byte("offline-check-report")),
 		},
 	})
 	if err != nil {

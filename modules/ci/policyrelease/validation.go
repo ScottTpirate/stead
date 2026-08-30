@@ -1,11 +1,9 @@
 package policyrelease
 
 import (
-	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"path"
 	"regexp"
 	"sort"
@@ -32,6 +30,7 @@ var allowedMediaTypes = map[string]struct{}{
 	"application/vnd.stead.policy-evidence.v1+json":       {},
 	"application/vnd.stead.policy-license-result.v1+json": {},
 	"application/vnd.stead.policy-review-result.v1+json":  {},
+	"application/vnd.stead.security-profile.v0.1+json":    {},
 	"application/vnd.stead.policy-sbom.v1+json":           {},
 	"application/vnd.stead.policy-test-result.v1+json":    {},
 	"application/vnd.stead.policy-vulnerability.v1+json":  {},
@@ -181,6 +180,9 @@ func validateDeploymentPolicy(policy DeploymentPolicyBinding) error {
 	if err := validateVersion("deployment_policy.version", policy.Version); err != nil {
 		return err
 	}
+	if policy.SchemaID != DeploymentPolicySchemaID {
+		return contractError("unsupported_deployment_policy_schema", "deployment_policy.schema_id", nil)
+	}
 	if err := validateDigest("deployment_policy.digest", policy.Digest); err != nil {
 		return err
 	}
@@ -199,72 +201,66 @@ func validateDeploymentPolicy(policy DeploymentPolicyBinding) error {
 	if err := validateIdentifier("deployment_policy.evidence_profile", policy.EvidenceProfile); err != nil {
 		return err
 	}
-	if err := validateDigest("deployment_policy.evaluated_assurance_result_digest", policy.EvaluatedAssuranceResultDigest); err != nil {
+	if err := validateDigest("deployment_policy.presented_assurance_result_digest", policy.PresentedAssuranceResultDigest); err != nil {
 		return err
 	}
-	if err := validatePath(policy.EvaluatedAssuranceResultPath, false); err != nil {
+	if err := validatePath(policy.PresentedAssuranceResultPath, false); err != nil {
 		return err
 	}
 	return nil
 }
 
-func validateReview(review ReviewerDisposition) error {
+func validateReview(review ReviewReceipt, subjectDigest string) error {
 	if err := validateIdentifier("review.reviewer_id", review.ReviewerID); err != nil {
 		return err
 	}
 	if err := validateIdentifier("review.role", review.Role); err != nil {
 		return err
 	}
-	if err := validateImmutableRevision("review.revision", review.Revision); err != nil {
+	if err := validateDigest("review.subject_digest", review.SubjectDigest); err != nil {
 		return err
 	}
-	if review.Disposition != "accept" && review.Disposition != "reject" && review.Disposition != "pending" {
-		return contractError("invalid_review_disposition", "review.disposition", nil)
+	if review.SubjectDigest != subjectDigest {
+		return contractError("presented_review_subject_mismatch", "review.subject_digest", nil)
+	}
+	if err := validateDigest("review.record_digest", review.RecordDigest); err != nil {
+		return err
+	}
+	if review.ClaimedDisposition != "accept" && review.ClaimedDisposition != "reject" && review.ClaimedDisposition != "pending" {
+		return contractError("invalid_claimed_review_disposition", "review.claimed_disposition", nil)
 	}
 	return nil
 }
 
-func validateWaiver(waiver Waiver) error {
+func validateWaiver(waiver WaiverReceipt, subjectDigest string) error {
 	if err := validateIdentifier("waiver.waiver_id", waiver.WaiverID); err != nil {
 		return err
 	}
-	if err := validateImmutableRevision("waiver.revision", waiver.Revision); err != nil {
+	if err := validateDigest("waiver.subject_digest", waiver.SubjectDigest); err != nil {
 		return err
 	}
-	if waiver.Disposition != "approved" && waiver.Disposition != "rejected" {
-		return contractError("invalid_waiver_disposition", "waiver.disposition", nil)
+	if waiver.SubjectDigest != subjectDigest {
+		return contractError("presented_waiver_subject_mismatch", "waiver.subject_digest", nil)
+	}
+	if err := validateDigest("waiver.record_digest", waiver.RecordDigest); err != nil {
+		return err
+	}
+	if waiver.ClaimedDisposition != "approved" && waiver.ClaimedDisposition != "rejected" {
+		return contractError("invalid_claimed_waiver_disposition", "waiver.claimed_disposition", nil)
 	}
 	return nil
 }
 
-func validateConformance(summary ConformanceSummary) error {
+func validateConformance(summary ConformanceClaims) error {
 	if summary.DecisionRowsCoveredPercent != 100 {
 		return contractError("decision_coverage_below_floor", "evidence.conformance", nil)
 	}
 	if summary.CriticalMutationScorePercent < 90 || summary.CriticalMutationScorePercent > 100 {
 		return contractError("mutation_score_below_floor", "evidence.conformance", nil)
 	}
-	if !summary.DeterministicReplayPassed || !summary.LabelLatticePassed || !summary.ExplicitDenyPassed || !summary.AgentIntersectionPassed || !summary.ProviderBypassPassed {
-		return contractError("required_conformance_failed", "evidence.conformance", nil)
-	}
-	return nil
-}
-
-var prohibitedPreSigningMarkers = [][]byte{
-	[]byte("activation_set_id"),
-	[]byte("signed_envelope_digest"),
-	[]byte("archive_digest"),
-	[]byte("release_attestation_id"),
-	[]byte("release_attestation_envelope_digest"),
-	[]byte("-----begin private key-----"),
-	[]byte("private key-----"),
-}
-
-func validatePreSigningEvidence(file File) error {
-	lower := bytes.ToLower(file.Content)
-	for _, marker := range prohibitedPreSigningMarkers {
-		if bytes.Contains(lower, marker) {
-			return contractError("circular_or_private_evidence", file.Path, fmt.Errorf("prohibited marker"))
+	for _, claim := range []string{summary.ClaimedDeterministicReplay, summary.ClaimedLabelLattice, summary.ClaimedExplicitDeny, summary.ClaimedAgentIntersection, summary.ClaimedProviderBypass} {
+		if claim != "pass" {
+			return contractError("presented_conformance_claim_not_pass", "evidence.presented_conformance", nil)
 		}
 	}
 	return nil

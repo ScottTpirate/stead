@@ -37,8 +37,16 @@ func TestDeterministicUnsignedConstructionAndEvidence(t *testing.T) {
 	if first.Manifest.ArtifactFormat != policyrelease.ActivationFormatV1 {
 		t.Fatalf("artifact format = %q", first.Manifest.ArtifactFormat)
 	}
-	if first.EvidenceManifest.Conformance.DecisionRowsCoveredPercent != 100 || first.EvidenceManifest.Conformance.CriticalMutationScorePercent < 90 {
+	if first.EvidenceManifest.Conformance.Claims.DecisionRowsCoveredPercent != 100 || first.EvidenceManifest.Conformance.Claims.CriticalMutationScorePercent < 90 || first.EvidenceManifest.Conformance.Treatment != policyrelease.PresentedMaterialTreatment {
 		t.Fatal("embedded evidence omitted policy coverage floor")
+	}
+	if first.EvidenceManifest.Authority != policyrelease.NonAuthorizingHandoffAuthority || len(first.EvidenceManifest.ReviewReceipts) == 0 || first.EvidenceManifest.ReviewReceipts[0].Treatment != policyrelease.PresentedMaterialTreatment {
+		t.Fatal("embedded evidence or review material was not explicitly nonauthorizing and unverified")
+	}
+	for _, report := range first.EvidenceManifest.Reports {
+		if report.Treatment != policyrelease.PresentedMaterialTreatment {
+			t.Fatalf("evidence report %s was not labeled unverified", report.Path)
+		}
 	}
 	for _, forbidden := range []string{"activation_set_id", "signed_envelope_digest", "archive_digest", "release_attestation_id", "release_attestation_envelope_digest"} {
 		if bytes.Contains(bytes.ToLower(first.EvidenceManifestBytes), []byte(forbidden)) {
@@ -75,9 +83,9 @@ func TestFixedEnvelopeArchiveAndAttestationConstructionAreDeterministic(t *testi
 		t.Fatal("one fixed activation envelope produced different archive bytes")
 	}
 	releaseInput := policyrelease.ReleaseAttestationInput{
-		ReleaseWorkflowIdentity:     "stead-ci-policy-release-workflow-v1",
-		FinalApprovals:              []policyrelease.ReviewerDisposition{{ReviewerID: "fixture-final-reviewer", Role: "independent-release", Revision: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", Disposition: "accept"}},
-		NetworkDisabledVerification: policyrelease.NetworkDisabledVerification{Outcome: "pass", VerifiedArchiveDigest: firstArchive.ArchiveDigest, ResultDigest: policyrelease.SHA256Digest([]byte("offline-verification-result"))},
+		ReleaseWorkflowIdentity: "stead-ci-policy-release-workflow-v1",
+		ReviewReceipts:          []policyrelease.ReviewReceipt{{ReviewerID: "fixture-final-reviewer", Role: "independent-release", SubjectDigest: firstArchive.ArchiveDigest, RecordDigest: policyrelease.SHA256Digest([]byte("review")), ClaimedDisposition: "accept"}},
+		OfflineCheckReceipt:     policyrelease.OfflineCheckReceipt{ClaimedOutcome: "pass", SubjectArchiveDigest: firstArchive.ArchiveDigest, ReportDigest: policyrelease.SHA256Digest([]byte("offline-check-report"))},
 	}
 	firstAttestation, err := policyrelease.PrepareReleaseAttestation(firstArchive, releaseInput)
 	if err != nil {
@@ -111,14 +119,17 @@ func TestOneWayReleaseCeremonyAndImmutableTransportIdentity(t *testing.T) {
 	if attestation.Payload.ActivationSetID != handoff.ActivationSetID || attestation.Payload.SignedEnvelopeDigest != handoff.SignedEnvelopeDigest || attestation.Payload.ArchiveDigest != handoff.ArchiveDigest {
 		t.Fatal("release attestation does not bind activation ceremony")
 	}
-	if attestation.Payload.EvidenceManifestDigest != activation.Unsigned.EvidenceManifestDigest || attestation.Payload.NetworkDisabledVerification.VerifiedArchiveDigest != handoff.ArchiveDigest {
+	if attestation.Payload.EvidenceManifestDigest != activation.Unsigned.EvidenceManifestDigest || attestation.Payload.PresentedOfflineCheck.SubjectArchiveDigest != handoff.ArchiveDigest || attestation.Payload.Authority != policyrelease.NonAuthorizingHandoffAuthority {
 		t.Fatal("release attestation does not bind evidence and offline verification")
+	}
+	if attestation.Payload.PresentedOfflineCheck.Treatment != policyrelease.PresentedMaterialTreatment || len(attestation.Payload.PresentedReviewReceipts) == 0 || attestation.Payload.PresentedReviewReceipts[0].Treatment != policyrelease.PresentedMaterialTreatment {
+		t.Fatal("release review or offline claims were not labeled unverified")
 	}
 	if handoff.PolicyBundleID != activation.Unsigned.PolicyBundleID || handoff.OpenFGAModelSourceDigest != activation.Unsigned.Manifest.OpenFGAModel.SourceDigest || handoff.EvidenceManifestDigest != activation.Unsigned.EvidenceManifestDigest || handoff.Trust != activation.Unsigned.Manifest.Trust || handoff.SourceRevision != activation.Unsigned.Manifest.SourceRevision {
 		t.Fatal("typed handoff omitted immutable policy/model/evidence/trust/source identity")
 	}
-	if handoff.ActivationSigningResultDigest != activation.ActivationSigning.ResultDigest || !handoff.ActivationThreshold.Satisfied {
-		t.Fatal("typed handoff omitted activation signing result")
+	if handoff.PresentedActivationReceiptSetDigest != activation.PresentedActivationSigning.ReceiptSetDigest || handoff.PresentedActivationSignatures.Treatment != policyrelease.PresentedMaterialTreatment || handoff.Authority != policyrelease.NonAuthorizingHandoffAuthority {
+		t.Fatal("typed handoff omitted or overstated presented activation material")
 	}
 	inspection, err := policyrelease.ValidateArchive(handoff.ArchiveBytes, activation.EnvelopeBytes, activation.Unsigned.Manifest.Files)
 	if err != nil {

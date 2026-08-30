@@ -19,26 +19,32 @@ The public API makes the non-circular order explicit:
    `evidence/pre-signing-evidence-manifest.json`, emits canonical manifest bytes,
    computes the policy/evidence/activation identities, and emits an activation
    `SigningRequestV1`.
-2. A separately authorized release signing service or offline ceremony signs
-   the exact request payload. It returns exact DSSE envelope bytes and a
-   separately digest-bound `SigningResult` constructed with
-   `NewSigningResult`; the builder never receives its key. Signing-workflow
-   identities may not be the builder or release-workflow identity.
-3. `FinalizeActivationArchive` checks the returned envelope's bounded DSSE
-   shape, exact payload, DER/low-S shape, result receipts, deployment-policy
-   threshold, and distinct custodians. It then writes and re-inspects one
-   deterministic ustar archive for those exact envelope bytes.
-4. A network-disabled verifier records a safe result digest for that exact
-   archive. This result is evidence, not activation authority.
+2. A signing service or offline ceremony operating under separately owned
+   custody signs the exact request payload. It returns exact DSSE envelope
+   bytes and digest-bound, caller-presented receipts canonicalized with
+   `NewPresentedSigningResult`; the builder never receives a key. These
+   receipts remain `unverified_presented_material` and do not establish signer
+   identity, custody, trust, threshold satisfaction, or authority.
+3. `FinalizeActivationArchive` checks only bounded DSSE syntax, exact payload,
+   canonical DER/low-S shape, exact signature-byte receipt binding, and that
+   enough distinct key-ID/custodian claims were presented for the deployment
+   policy's requested counts. It does not verify ECDSA or trust. It writes and
+   re-inspects one deterministic ustar archive for those exact envelope bytes.
+4. A network-disabled workflow may present a digest-addressed check receipt for
+   that exact archive. Its claimed outcome is labeled unverified and is not
+   activation authority.
 5. `PrepareReleaseAttestation` binds the final activation-set, envelope,
    archive, embedded evidence, policy/model/trust/deployment-policy, exact
-   disclosure mode, evaluated assurance, signer/custodian threshold, source,
-   reviews, waivers, builder/workflow, and offline-result identities. Its
-   payload contains neither its own ID nor its future envelope digest.
+   disclosure mode, presented assurance, signature/custodian claims, source,
+   digest-addressed review and waiver receipts, builder/workflow, and offline
+   check identities. Every caller assertion remains explicitly presented and
+   unverified. Its payload contains neither its own ID nor its future envelope
+   digest and declares `authority: none`.
 6. The separate release ceremony signs that exact attestation request.
-   `FinalizeReleaseHandoff` independently enforces the attestation threshold and
-   returns exact archive and attestation-envelope bytes plus every immutable
-   identity needed by WS-06.
+   `FinalizeReleaseHandoff` repeats the syntax, binding, and presented-count
+   checks and returns exact archive and attestation-envelope bytes plus every
+   immutable identity needed by WS-06. The handoff declares `authority: none`
+   and a typed `required_not_performed_by_ws09` WS-06 verification checklist.
 
 ECDSA ceremonies are not assumed deterministic. Unsigned bytes are
 reproducible; an archive is reproducible once one exact returned activation
@@ -60,17 +66,20 @@ OpenFGA compatibility/migration identifiers are required.
 
 Every `payload/` and `evidence/` regular file is listed once by path, media type,
 integer length, and SHA-256 digest. `manifest.dsse.json` is the only outer-file
-exception. Pre-signing evidence can bind source, lock, policy/model/trust,
-SBOM, provenance, test/property/mutation, vulnerability, license, review, and
-waiver results. Admission rejects evidence that names a not-yet-existing
-activation, envelope, archive, or attestation identity, and rejects PEM private
-key markers. Callers remain responsible for supplying only safe evidence
-summaries with no protected content.
+exception. Evidence admission is a closed typed contract rather than a text
+denylist: v1 accepts exactly the SBOM, provenance, conformance, license, and
+vulnerability paths, their exact media types, and their strict JSON field
+schemas. Unknown paths, renamed files, extra fields, escaped field names,
+encoded blobs, malformed/duplicate-key JSON, and future archive/attestation
+identity fields reject. Free-form or protected evidence belongs in a separate
+authorized evidence system and cannot enter this archive writer.
 
-Policy conformance admission requires 100% decision-row coverage, at least 90%
-critical mutation score, and passing deterministic replay, label-lattice,
-explicit-deny, Agent-intersection, and provider-bypass results. Runtime staging
-must verify this immutable evidence and rerun deployable fixtures; it must not
+The digest-listed conformance report must claim 100% decision-row coverage, at
+least 90% critical mutation score, and pass outcomes for deterministic replay,
+label-lattice, explicit-deny, Agent-intersection, and provider bypass. The
+embedded summary is labeled `unverified_presented_material`; WS-09 does not
+authenticate the report producer or self-certify those claims. Runtime staging
+must verify the immutable evidence and rerun deployable fixtures; it must not
 claim to rerun source mutation analysis.
 
 ## DSSE profile and parser limits
@@ -92,10 +101,13 @@ non-minimal DER, high-S, and cross-type substitution.
 | UTF-8 key ID | 80 bytes |
 
 `keyid` remains an unauthenticated selection hint. The builder checks exact
-receipt binding and counts distinct keys/custodians from the externally supplied
-workflow result, but only WS-06 may recompute SPKI identity, establish trust,
-verify P-256/SHA-256 signatures, key purpose/status/validity/revocation, and
-grant activation authority.
+signature-byte receipt binding and counts distinct presented key-ID and
+custodian claims. A canonical DER `r=1,s=1` plus arbitrary matching receipts is
+therefore deliberately represented only as unverified syntax; the contract
+regression proves it can never produce a verified/satisfied/authorizing WS-09
+result. Only WS-06 may recompute SPKI identity, establish trust, verify
+P-256/SHA-256 signatures, key purpose/status/validity/revocation, evaluate the
+real threshold/custody rule, and grant activation authority.
 
 ## Strict ustar profile
 
@@ -133,10 +145,16 @@ typed deployment-policy binding. Profile IDs cannot select these values. The
 starter threshold-one, threshold-two, and synthetic non-government
 threshold-three fixtures prove the data-driven path.
 
-The builder does not parse deployment-policy YAML or invent its semantics. It
-requires a canonical, exact-digest `EvaluatedAssuranceResultV1` produced by the
-separately owned WS-06/WS-12 validator and rejects unknown fields, stale bytes,
-failed results, or any mismatch between that result and the typed binding.
+The signed fixture/materialization inputs are strict JSON instances of the
+repository's exact v0.1 contracts. Security profiles name
+`https://stead.example/policies/security-label-profiles/profile-v0.1.schema.json`;
+deployment policies name
+`https://stead.example/policies/deployment-domains/domain-profile-v0.1.schema.json`.
+Closed typed validators enforce required and unknown fields, nested shapes,
+IDs, supported versions, semantic constants, profile-version ceilings, empty
+v0.1 bridges, and exact assurance binding. The digest-bound
+`PresentedAssuranceEvaluationV1` is also labeled unverified; its claimed result
+does not replace downstream WS-06/WS-12 authentication or activation checks.
 
 `BuildTransportDescriptor` names only exact archive and attestation-envelope
 digests and always states `non_authorizing_transport_only`. TUF metadata, OCI
@@ -156,8 +174,11 @@ owned.
 ## Fixtures and tests
 
 `packages/test-fixtures/ci/policy-release/v1` contains synthetic source/evidence,
-a full exact golden archive/attestation vector, WS-09 negative cases, and
-explicit WS-06 consumer-verifier mutations. The vector uses a public,
+a full exact golden archive/attestation vector, WS-09 negative cases, and a
+closed machine-readable WS-06 consumer-verifier mutation inventory whose exact
+case set, operations, outcomes, and expected codes are contract-tested. The
+inventory is nonauthorizing handoff material, not evidence that WS-09 executed
+WS-06 verification. The vector uses a public,
 non-secret, nonproduction P-256 scalar solely to make independent verification
 repeatable. No private material exists in the fixture and its key has no Stead
 trust authority.

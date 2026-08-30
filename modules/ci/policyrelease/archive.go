@@ -403,7 +403,7 @@ func manifestFileList(files []File) []ManifestFile {
 
 // FinalizeActivationArchive accepts externally signed bytes and constructs the
 // deterministic archive for that exact envelope.
-func FinalizeActivationArchive(unsigned UnsignedActivation, envelope []byte, signing SigningResult) (ActivationArchive, error) {
+func FinalizeActivationArchive(unsigned UnsignedActivation, envelope []byte, signing PresentedSigningResult) (ActivationArchive, error) {
 	if err := validateUnsignedActivation(unsigned); err != nil {
 		return ActivationArchive{}, err
 	}
@@ -411,12 +411,12 @@ func FinalizeActivationArchive(unsigned UnsignedActivation, envelope []byte, sig
 	if err != nil {
 		return ActivationArchive{}, err
 	}
-	threshold, err := validateSigningResult(parsed, signing, unsigned.Manifest.DeploymentPolicy)
+	presentedSignatures, err := validatePresentedSigningResult(parsed, signing, unsigned.Manifest.DeploymentPolicy)
 	if err != nil {
 		return ActivationArchive{}, err
 	}
 	if signing.WorkflowIdentity == unsigned.EvidenceManifest.BuilderIdentity || signing.WorkflowIdentity == unsigned.EvidenceManifest.BuildWorkflowIdentity {
-		return ActivationArchive{}, contractError("builder_signing_workflow_not_separated", "signing_result.workflow_identity", nil)
+		return ActivationArchive{}, contractError("builder_signing_workflow_not_separated", "presented_signing_result.workflow_identity", nil)
 	}
 	archive, err := writeArchive(envelope, unsigned.Files)
 	if err != nil {
@@ -426,12 +426,12 @@ func FinalizeActivationArchive(unsigned UnsignedActivation, envelope []byte, sig
 		return ActivationArchive{}, err
 	}
 	return ActivationArchive{
-		Unsigned:             unsigned,
-		EnvelopeBytes:        append([]byte(nil), envelope...),
-		SignedEnvelopeDigest: SHA256Digest(envelope),
-		ArchiveBytes:         append([]byte(nil), archive...),
-		ArchiveDigest:        SHA256Digest(archive),
-		ActivationSigning:    copySigningResult(signing),
-		Threshold:            threshold,
+		Unsigned:                      copyUnsignedActivation(unsigned),
+		EnvelopeBytes:                 cloneSlice(envelope),
+		SignedEnvelopeDigest:          SHA256Digest(envelope),
+		ArchiveBytes:                  cloneSlice(archive),
+		ArchiveDigest:                 SHA256Digest(archive),
+		PresentedActivationSigning:    copyPresentedSigningResult(signing),
+		PresentedActivationSignatures: copyPresentedSignatureSummary(presentedSignatures),
 	}, nil
 }

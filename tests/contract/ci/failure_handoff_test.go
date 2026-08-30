@@ -24,24 +24,63 @@ func TestContractErrorsExposeOnlyStableSafeCodes(t *testing.T) {
 	}
 }
 
-func TestPreSigningEvidenceRejectsCircularPrivateAndMalformedInputs(t *testing.T) {
+func mutateEvidenceReport(t testing.TB, input *policyrelease.BuildInput, path string, mutate func(map[string]any)) {
+	t.Helper()
+	for index := range input.EvidenceFiles {
+		if input.EvidenceFiles[index].Path != path {
+			continue
+		}
+		var document map[string]any
+		if err := json.Unmarshal(input.EvidenceFiles[index].Content, &document); err != nil {
+			t.Fatal(err)
+		}
+		mutate(document)
+		content, err := json.Marshal(document)
+		if err != nil {
+			t.Fatal(err)
+		}
+		input.EvidenceFiles[index].Content = content
+		return
+	}
+	t.Fatalf("evidence report %s missing", path)
+}
+
+func TestPreSigningEvidenceUsesClosedPathMediaAndSchemaAdmission(t *testing.T) {
 	testCases := []struct {
-		name    string
-		content []byte
-		media   string
-		code    string
+		name   string
+		mutate func(*policyrelease.BuildInput)
+		code   string
 	}{
-		{"future activation identity", []byte(`{"activation_set_id":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}`), "application/json", "circular_or_private_evidence"},
-		{"archive identity", []byte(`{"archive_digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}`), "application/json", "circular_or_private_evidence"},
-		{"private key", []byte("-----BEGIN PRIVATE KEY-----\nnot-a-key"), "text/plain; charset=utf-8", "circular_or_private_evidence"},
-		{"algorithm-specific private key", []byte("-----BEGIN RSA PRIVATE KEY-----\nnot-a-key"), "text/plain; charset=utf-8", "circular_or_private_evidence"},
-		{"malformed JSON", []byte(`{"result":`), "application/json", "malformed_json"},
-		{"duplicate JSON", []byte(`{"result":"pass","result":"pass"}`), "application/json", "duplicate_json_key"},
+		{"renamed private material", func(input *policyrelease.BuildInput) {
+			input.EvidenceFiles = append(input.EvidenceFiles, policyrelease.File{Path: "evidence/scan.json", MediaType: "application/json", Content: []byte(`{"data":"LS0tLS1CRUdJTiBQUklWQVRFIEtFWS0tLS0t"}`)})
+		}, "unknown_evidence_path"},
+		{"encoded private material in typed report", func(input *policyrelease.BuildInput) {
+			mutateEvidenceReport(t, input, "evidence/conformance-result.json", func(document map[string]any) { document["encoded_material"] = "LS0tLS1CRUdJTiBQUklWQVRFIEtFWS0tLS0t" })
+		}, "signed_payload_contract_error"},
+		{"encoded material in nominal SPDX identifier", func(input *policyrelease.BuildInput) {
+			mutateEvidenceReport(t, input, "evidence/sbom.spdx.json", func(document map[string]any) {
+				packages := document["packages"].([]any)
+				packages[0].(map[string]any)["SPDXID"] = "SPDXRef-LS0tLS1CRUdJTiBQUklWQVRFIEtFWS0tLS0t="
+			})
+		}, "spdx_evidence_schema_mismatch"},
+		{"escaped private field", func(input *policyrelease.BuildInput) {
+			input.EvidenceFiles[2].Content = []byte(`{"agent_intersection":"pass","critical_mutation_score_percent":93,"decision_rows_covered_percent":100,"deterministic_replay":"pass","explicit_deny":"pass","label_lattice":"pass","provider_bypass":"pass","private\u005fkey":"x"}`)
+		}, "signed_payload_contract_error"},
+		{"future identity field", func(input *policyrelease.BuildInput) {
+			mutateEvidenceReport(t, input, "evidence/license-result.json", func(document map[string]any) {
+				document["archive_digest"] = policyrelease.SHA256Digest([]byte("future"))
+			})
+		}, "signed_payload_contract_error"},
+		{"wrong media on closed path", func(input *policyrelease.BuildInput) { input.EvidenceFiles[2].MediaType = "application/json" }, "evidence_media_type_mismatch"},
+		{"malformed typed JSON", func(input *policyrelease.BuildInput) { input.EvidenceFiles[2].Content = []byte(`{"result":`) }, "malformed_json"},
+		{"duplicate typed JSON", func(input *policyrelease.BuildInput) {
+			input.EvidenceFiles[2].Content = []byte(`{"agent_intersection":"pass","agent_intersection":"pass"}`)
+		}, "duplicate_json_key"},
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			input := fixtureBuildInput(t, "commercial", 1, false)
-			input.EvidenceFiles = append(input.EvidenceFiles, policyrelease.File{Path: "evidence/adversarial.json", MediaType: testCase.media, Content: testCase.content})
+			testCase.mutate(&input)
 			_, err := policyrelease.PrepareUnsigned(input)
 			if policyrelease.ErrorCode(err) != testCase.code {
 				t.Fatalf("error = %v (%s), want %s", err, policyrelease.ErrorCode(err), testCase.code)
@@ -57,9 +96,15 @@ func TestBuildAdmissionRejectsUnknownMediaCoverageAndUnboundContent(t *testing.T
 		code   string
 	}{
 		{"unknown media", func(input *policyrelease.BuildInput) { input.EvidenceFiles[0].MediaType = "application/x-unknown" }, "unknown_media_type"},
-		{"decision coverage", func(input *policyrelease.BuildInput) { input.Evidence.Conformance.DecisionRowsCoveredPercent = 99 }, "decision_coverage_below_floor"},
-		{"mutation floor", func(input *policyrelease.BuildInput) { input.Evidence.Conformance.CriticalMutationScorePercent = 89 }, "mutation_score_below_floor"},
-		{"provider bypass", func(input *policyrelease.BuildInput) { input.Evidence.Conformance.ProviderBypassPassed = false }, "required_conformance_failed"},
+		{"decision coverage", func(input *policyrelease.BuildInput) {
+			mutateEvidenceReport(t, input, "evidence/conformance-result.json", func(document map[string]any) { document["decision_rows_covered_percent"] = 99 })
+		}, "decision_coverage_below_floor"},
+		{"mutation floor", func(input *policyrelease.BuildInput) {
+			mutateEvidenceReport(t, input, "evidence/conformance-result.json", func(document map[string]any) { document["critical_mutation_score_percent"] = 89 })
+		}, "mutation_score_below_floor"},
+		{"provider bypass", func(input *policyrelease.BuildInput) {
+			mutateEvidenceReport(t, input, "evidence/conformance-result.json", func(document map[string]any) { document["provider_bypass"] = "fail" })
+		}, "presented_conformance_claim_not_pass"},
 		{"unbound payload", func(input *policyrelease.BuildInput) {
 			input.PayloadFiles = append(input.PayloadFiles, policyrelease.File{Path: "payload/unbound", MediaType: "text/plain; charset=utf-8", Content: []byte("x")})
 		}, "unbound_payload_file"},
@@ -102,29 +147,29 @@ func TestBuildAdmissionRejectsUnknownMediaCoverageAndUnboundContent(t *testing.T
 			input.EvidenceFiles = input.EvidenceFiles[1:]
 		}, "missing_required_evidence"},
 		{"missing build review", func(input *policyrelease.BuildInput) {
-			input.Evidence.Reviews = nil
-		}, "missing_build_review"},
+			input.Evidence.ReviewReceipts = nil
+		}, "missing_presented_build_review"},
 		{"pending build review", func(input *policyrelease.BuildInput) {
-			input.Evidence.Reviews[0].Disposition = "pending"
-		}, "build_review_not_accepted"},
+			input.Evidence.ReviewReceipts[0].ClaimedDisposition = "pending"
+		}, "presented_build_review_not_accept"},
 		{"builder self review", func(input *policyrelease.BuildInput) {
-			input.Evidence.Reviews[0].ReviewerID = input.Evidence.BuilderIdentity
-		}, "self_approved_build_evidence"},
+			input.Evidence.ReviewReceipts[0].ReviewerID = input.Evidence.BuilderIdentity
+		}, "self_presented_build_review"},
 		{"duplicate build review", func(input *policyrelease.BuildInput) {
-			input.Evidence.Reviews = append(input.Evidence.Reviews, input.Evidence.Reviews[0])
+			input.Evidence.ReviewReceipts = append(input.Evidence.ReviewReceipts, input.Evidence.ReviewReceipts[0])
 		}, "duplicate_review"},
-		{"nonimmutable review revision", func(input *policyrelease.BuildInput) {
-			input.Evidence.Reviews[0].Revision = "main"
-		}, "nonimmutable_revision"},
+		{"review subject mismatch", func(input *policyrelease.BuildInput) {
+			input.Evidence.ReviewReceipts[0].SubjectDigest = policyrelease.SHA256Digest([]byte("other"))
+		}, "presented_review_subject_mismatch"},
 		{"rejected build waiver", func(input *policyrelease.BuildInput) {
-			input.Evidence.Waivers = []policyrelease.Waiver{{WaiverID: "fixture-waiver", Revision: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", Disposition: "rejected"}}
-		}, "build_waiver_not_approved"},
+			input.Evidence.WaiverReceipts = []policyrelease.WaiverReceipt{{WaiverID: "fixture-waiver", SubjectDigest: input.Evidence.ReviewReceipts[0].SubjectDigest, RecordDigest: policyrelease.SHA256Digest([]byte("waiver")), ClaimedDisposition: "rejected"}}
+		}, "presented_build_waiver_not_approved"},
 		{"invalid build waiver disposition", func(input *policyrelease.BuildInput) {
-			input.Evidence.Waivers = []policyrelease.Waiver{{WaiverID: "fixture-waiver", Revision: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", Disposition: "pending"}}
-		}, "invalid_waiver_disposition"},
+			input.Evidence.WaiverReceipts = []policyrelease.WaiverReceipt{{WaiverID: "fixture-waiver", SubjectDigest: input.Evidence.ReviewReceipts[0].SubjectDigest, RecordDigest: policyrelease.SHA256Digest([]byte("waiver")), ClaimedDisposition: "pending"}}
+		}, "invalid_claimed_waiver_disposition"},
 		{"duplicate build waiver", func(input *policyrelease.BuildInput) {
-			waiver := policyrelease.Waiver{WaiverID: "fixture-waiver", Revision: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", Disposition: "approved"}
-			input.Evidence.Waivers = []policyrelease.Waiver{waiver, waiver}
+			waiver := policyrelease.WaiverReceipt{WaiverID: "fixture-waiver", SubjectDigest: input.Evidence.ReviewReceipts[0].SubjectDigest, RecordDigest: policyrelease.SHA256Digest([]byte("waiver")), ClaimedDisposition: "approved"}
+			input.Evidence.WaiverReceipts = []policyrelease.WaiverReceipt{waiver, waiver}
 		}, "duplicate_waiver"},
 	}
 	for _, testCase := range testCases {
@@ -145,7 +190,7 @@ func TestSigningAndReleaseWorkflowsRemainSeparatedFromBuilder(t *testing.T) {
 		t.Fatal(err)
 	}
 	envelope, signing := externallySign(t, policyrelease.ActivationManifestPayloadType, unsigned.ManifestPayload, 1, false)
-	signing, err = policyrelease.NewSigningResult(unsigned.EvidenceManifest.BuilderIdentity, signing.Receipts)
+	signing, err = policyrelease.NewPresentedSigningResult(unsigned.EvidenceManifest.BuilderIdentity, signing.Receipts)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -155,7 +200,7 @@ func TestSigningAndReleaseWorkflowsRemainSeparatedFromBuilder(t *testing.T) {
 
 	activation, attestation, _ := completeFixtureRelease(t, "commercial", 1, false)
 	releaseEnvelope, releaseSigning := externallySign(t, policyrelease.ReleaseAttestationPayloadType, attestation.PayloadBytes, 1, false)
-	releaseSigning, err = policyrelease.NewSigningResult(attestation.Payload.ReleaseWorkflowIdentity, releaseSigning.Receipts)
+	releaseSigning, err = policyrelease.NewPresentedSigningResult(attestation.Payload.ReleaseWorkflowIdentity, releaseSigning.Receipts)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -166,6 +211,16 @@ func TestSigningAndReleaseWorkflowsRemainSeparatedFromBuilder(t *testing.T) {
 
 func TestReleaseAttestationRejectsSelfReferenceSwapsAndIncompleteEvidence(t *testing.T) {
 	activation, attestation, _ := completeFixtureRelease(t, "commercial", 1, false)
+	releaseInput := func(reviewer, disposition string) policyrelease.ReleaseAttestationInput {
+		return policyrelease.ReleaseAttestationInput{
+			ReleaseWorkflowIdentity: "release-workflow-v1",
+			ReviewReceipts: []policyrelease.ReviewReceipt{{
+				ReviewerID: reviewer, Role: "independent-release", SubjectDigest: activation.ArchiveDigest,
+				RecordDigest: policyrelease.SHA256Digest([]byte("review-record")), ClaimedDisposition: disposition,
+			}},
+			OfflineCheckReceipt: policyrelease.OfflineCheckReceipt{ClaimedOutcome: "pass", SubjectArchiveDigest: activation.ArchiveDigest, ReportDigest: policyrelease.SHA256Digest([]byte("offline-report"))},
+		}
+	}
 
 	t.Run("unknown self identity", func(t *testing.T) {
 		var payload map[string]any
@@ -211,55 +266,42 @@ func TestReleaseAttestationRejectsSelfReferenceSwapsAndIncompleteEvidence(t *tes
 	})
 
 	t.Run("offline result for other archive", func(t *testing.T) {
-		_, err := policyrelease.PrepareReleaseAttestation(activation, policyrelease.ReleaseAttestationInput{
-			ReleaseWorkflowIdentity:     "release-workflow-v1",
-			FinalApprovals:              []policyrelease.ReviewerDisposition{{ReviewerID: "reviewer-a", Role: "independent-release", Revision: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", Disposition: "accept"}},
-			NetworkDisabledVerification: policyrelease.NetworkDisabledVerification{Outcome: "pass", VerifiedArchiveDigest: policyrelease.SHA256Digest([]byte("other")), ResultDigest: policyrelease.SHA256Digest([]byte("result"))},
-		})
-		if policyrelease.ErrorCode(err) != "offline_verification_not_bound" {
+		input := releaseInput("reviewer-a", "accept")
+		input.OfflineCheckReceipt.SubjectArchiveDigest = policyrelease.SHA256Digest([]byte("other"))
+		_, err := policyrelease.PrepareReleaseAttestation(activation, input)
+		if policyrelease.ErrorCode(err) != "presented_offline_check_not_bound" {
 			t.Fatalf("offline binding error = %v (%s)", err, policyrelease.ErrorCode(err))
 		}
 	})
 
 	t.Run("pending approval", func(t *testing.T) {
-		_, err := policyrelease.PrepareReleaseAttestation(activation, policyrelease.ReleaseAttestationInput{
-			ReleaseWorkflowIdentity:     "release-workflow-v1",
-			FinalApprovals:              []policyrelease.ReviewerDisposition{{ReviewerID: "reviewer-a", Role: "independent-release", Revision: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", Disposition: "pending"}},
-			NetworkDisabledVerification: policyrelease.NetworkDisabledVerification{Outcome: "pass", VerifiedArchiveDigest: activation.ArchiveDigest, ResultDigest: policyrelease.SHA256Digest([]byte("result"))},
-		})
-		if policyrelease.ErrorCode(err) != "release_review_not_accepted" {
+		_, err := policyrelease.PrepareReleaseAttestation(activation, releaseInput("reviewer-a", "pending"))
+		if policyrelease.ErrorCode(err) != "presented_release_review_not_accept" {
 			t.Fatalf("pending approval error = %v (%s)", err, policyrelease.ErrorCode(err))
 		}
 	})
 
 	t.Run("missing approval", func(t *testing.T) {
-		_, err := policyrelease.PrepareReleaseAttestation(activation, policyrelease.ReleaseAttestationInput{
-			ReleaseWorkflowIdentity:     "release-workflow-v1",
-			NetworkDisabledVerification: policyrelease.NetworkDisabledVerification{Outcome: "pass", VerifiedArchiveDigest: activation.ArchiveDigest, ResultDigest: policyrelease.SHA256Digest([]byte("result"))},
-		})
-		if policyrelease.ErrorCode(err) != "missing_final_approval" {
+		input := releaseInput("reviewer-a", "accept")
+		input.ReviewReceipts = nil
+		_, err := policyrelease.PrepareReleaseAttestation(activation, input)
+		if policyrelease.ErrorCode(err) != "missing_presented_final_review" {
 			t.Fatalf("missing approval error = %v (%s)", err, policyrelease.ErrorCode(err))
 		}
 	})
 
 	t.Run("release workflow is builder", func(t *testing.T) {
-		_, err := policyrelease.PrepareReleaseAttestation(activation, policyrelease.ReleaseAttestationInput{
-			ReleaseWorkflowIdentity:     activation.Unsigned.EvidenceManifest.BuilderIdentity,
-			FinalApprovals:              []policyrelease.ReviewerDisposition{{ReviewerID: "reviewer-a", Role: "independent-release", Revision: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", Disposition: "accept"}},
-			NetworkDisabledVerification: policyrelease.NetworkDisabledVerification{Outcome: "pass", VerifiedArchiveDigest: activation.ArchiveDigest, ResultDigest: policyrelease.SHA256Digest([]byte("result"))},
-		})
+		input := releaseInput("reviewer-a", "accept")
+		input.ReleaseWorkflowIdentity = activation.Unsigned.EvidenceManifest.BuilderIdentity
+		_, err := policyrelease.PrepareReleaseAttestation(activation, input)
 		if policyrelease.ErrorCode(err) != "builder_release_workflow_not_separated" {
 			t.Fatalf("builder release workflow error = %v (%s)", err, policyrelease.ErrorCode(err))
 		}
 	})
 
 	t.Run("release self approval", func(t *testing.T) {
-		_, err := policyrelease.PrepareReleaseAttestation(activation, policyrelease.ReleaseAttestationInput{
-			ReleaseWorkflowIdentity:     "release-workflow-v1",
-			FinalApprovals:              []policyrelease.ReviewerDisposition{{ReviewerID: "release-workflow-v1", Role: "independent-release", Revision: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", Disposition: "accept"}},
-			NetworkDisabledVerification: policyrelease.NetworkDisabledVerification{Outcome: "pass", VerifiedArchiveDigest: activation.ArchiveDigest, ResultDigest: policyrelease.SHA256Digest([]byte("result"))},
-		})
-		if policyrelease.ErrorCode(err) != "self_approved_release" {
+		_, err := policyrelease.PrepareReleaseAttestation(activation, releaseInput("release-workflow-v1", "accept"))
+		if policyrelease.ErrorCode(err) != "self_presented_release_review" {
 			t.Fatalf("release self approval error = %v (%s)", err, policyrelease.ErrorCode(err))
 		}
 	})
@@ -272,7 +314,7 @@ func TestSigningReceiptMustBindExactReturnedSignature(t *testing.T) {
 	}
 	envelope, signing := externallySign(t, policyrelease.ActivationManifestPayloadType, unsigned.ManifestPayload, 1, false)
 	signing.Receipts[0].SignatureDigest = policyrelease.SHA256Digest([]byte("other-signature"))
-	signing, err = policyrelease.NewSigningResult(signing.WorkflowIdentity, signing.Receipts)
+	signing, err = policyrelease.NewPresentedSigningResult(signing.WorkflowIdentity, signing.Receipts)
 	if err != nil {
 		t.Fatal(err)
 	}

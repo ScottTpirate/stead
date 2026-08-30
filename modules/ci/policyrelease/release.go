@@ -5,21 +5,21 @@ import (
 	"reflect"
 )
 
-func validateFinalReviewState(reviews []ReviewerDisposition, waivers []Waiver) error {
+func validateFinalReviewState(reviews []ReviewReceipt, waivers []WaiverReceipt, subjectDigest string) error {
 	if len(reviews) == 0 {
-		return contractError("missing_final_approval", "final_approvals", nil)
+		return contractError("missing_presented_final_review", "review_receipts", nil)
 	}
-	if err := validateReviewsAndWaivers(reviews, waivers); err != nil {
+	if err := validateReviewsAndWaivers(reviews, waivers, subjectDigest); err != nil {
 		return err
 	}
 	for _, review := range reviews {
-		if review.Disposition != "accept" {
-			return contractError("release_review_not_accepted", "final_approvals", nil)
+		if review.ClaimedDisposition != "accept" {
+			return contractError("presented_release_review_not_accept", "review_receipts", nil)
 		}
 	}
 	for _, waiver := range waivers {
-		if waiver.Disposition != "approved" {
-			return contractError("release_waiver_not_approved", "waivers", nil)
+		if waiver.ClaimedDisposition != "approved" {
+			return contractError("presented_release_waiver_not_approved", "waiver_receipts", nil)
 		}
 	}
 	return nil
@@ -44,52 +44,58 @@ func PrepareReleaseAttestation(activation ActivationArchive, input ReleaseAttest
 	if err != nil {
 		return UnsignedReleaseAttestation{}, err
 	}
-	activationThreshold, err := validateSigningResult(parsedActivation, activation.ActivationSigning, activation.Unsigned.Manifest.DeploymentPolicy)
+	presentedActivationSignatures, err := validatePresentedSigningResult(parsedActivation, activation.PresentedActivationSigning, activation.Unsigned.Manifest.DeploymentPolicy)
 	if err != nil {
 		return UnsignedReleaseAttestation{}, err
 	}
-	if !reflect.DeepEqual(activationThreshold, activation.Threshold) {
-		return UnsignedReleaseAttestation{}, contractError("activation_threshold_result_mismatch", "activation.threshold", nil)
+	if !reflect.DeepEqual(presentedActivationSignatures, activation.PresentedActivationSignatures) {
+		return UnsignedReleaseAttestation{}, contractError("presented_activation_signature_summary_mismatch", "activation.presented_signatures", nil)
 	}
 	if err := validateIdentifier("release_workflow_identity", input.ReleaseWorkflowIdentity); err != nil {
 		return UnsignedReleaseAttestation{}, err
 	}
-	if err := validateFinalReviewState(input.FinalApprovals, input.Waivers); err != nil {
+	if err := validateFinalReviewState(input.ReviewReceipts, input.WaiverReceipts, activation.ArchiveDigest); err != nil {
 		return UnsignedReleaseAttestation{}, err
 	}
 	if input.ReleaseWorkflowIdentity == activation.Unsigned.EvidenceManifest.BuilderIdentity || input.ReleaseWorkflowIdentity == activation.Unsigned.EvidenceManifest.BuildWorkflowIdentity {
 		return UnsignedReleaseAttestation{}, contractError("builder_release_workflow_not_separated", "release_workflow_identity", nil)
 	}
-	for _, review := range input.FinalApprovals {
-		if review.ReviewerID == activation.Unsigned.EvidenceManifest.BuilderIdentity || review.ReviewerID == activation.Unsigned.EvidenceManifest.BuildWorkflowIdentity || review.ReviewerID == input.ReleaseWorkflowIdentity || review.ReviewerID == activation.ActivationSigning.WorkflowIdentity {
-			return UnsignedReleaseAttestation{}, contractError("self_approved_release", "final_approvals", nil)
+	for _, review := range input.ReviewReceipts {
+		if review.ReviewerID == activation.Unsigned.EvidenceManifest.BuilderIdentity || review.ReviewerID == activation.Unsigned.EvidenceManifest.BuildWorkflowIdentity || review.ReviewerID == input.ReleaseWorkflowIdentity || review.ReviewerID == activation.PresentedActivationSigning.WorkflowIdentity {
+			return UnsignedReleaseAttestation{}, contractError("self_presented_release_review", "review_receipts", nil)
 		}
 	}
-	if input.NetworkDisabledVerification.Outcome != "pass" || input.NetworkDisabledVerification.VerifiedArchiveDigest != activation.ArchiveDigest {
-		return UnsignedReleaseAttestation{}, contractError("offline_verification_not_bound", "network_disabled_verification", nil)
+	if input.OfflineCheckReceipt.ClaimedOutcome != "pass" || input.OfflineCheckReceipt.SubjectArchiveDigest != activation.ArchiveDigest {
+		return UnsignedReleaseAttestation{}, contractError("presented_offline_check_not_bound", "offline_check_receipt", nil)
 	}
-	if err := validateDigest("network_disabled_verification.result_digest", input.NetworkDisabledVerification.ResultDigest); err != nil {
+	if err := validateDigest("offline_check_receipt.report_digest", input.OfflineCheckReceipt.ReportDigest); err != nil {
 		return UnsignedReleaseAttestation{}, err
 	}
 	payload := ReleaseAttestationV1{
-		SchemaVersion:                     "1.0.0",
-		ActivationSetID:                   activation.Unsigned.ActivationSetID,
-		SignedEnvelopeDigest:              activation.SignedEnvelopeDigest,
-		ArchiveDigest:                     activation.ArchiveDigest,
-		EvidenceManifestDigest:            activation.Unsigned.EvidenceManifestDigest,
-		PolicyBundleID:                    activation.Unsigned.PolicyBundleID,
-		OpenFGAModelSourceDigest:          activation.Unsigned.Manifest.OpenFGAModel.SourceDigest,
-		Trust:                             activation.Unsigned.Manifest.Trust,
-		DeploymentPolicy:                  activation.Unsigned.Manifest.DeploymentPolicy,
-		ActivationSigningWorkflowIdentity: activation.ActivationSigning.WorkflowIdentity,
-		ActivationSigningResultDigest:     activation.ActivationSigning.ResultDigest,
-		ActivationThreshold:               activation.Threshold,
-		SourceRevision:                    activation.Unsigned.Manifest.SourceRevision,
-		BuilderIdentity:                   activation.Unsigned.EvidenceManifest.BuilderIdentity,
-		ReleaseWorkflowIdentity:           input.ReleaseWorkflowIdentity,
-		FinalApprovals:                    sortReviews(input.FinalApprovals),
-		Waivers:                           sortWaivers(input.Waivers),
-		NetworkDisabledVerification:       input.NetworkDisabledVerification,
+		SchemaVersion:                       "1.0.0",
+		Authority:                           NonAuthorizingHandoffAuthority,
+		ActivationSetID:                     activation.Unsigned.ActivationSetID,
+		SignedEnvelopeDigest:                activation.SignedEnvelopeDigest,
+		ArchiveDigest:                       activation.ArchiveDigest,
+		EvidenceManifestDigest:              activation.Unsigned.EvidenceManifestDigest,
+		PolicyBundleID:                      activation.Unsigned.PolicyBundleID,
+		OpenFGAModelSourceDigest:            activation.Unsigned.Manifest.OpenFGAModel.SourceDigest,
+		Trust:                               activation.Unsigned.Manifest.Trust,
+		DeploymentPolicy:                    activation.Unsigned.Manifest.DeploymentPolicy,
+		PresentedActivationWorkflowIdentity: activation.PresentedActivationSigning.WorkflowIdentity,
+		PresentedActivationReceiptSetDigest: activation.PresentedActivationSigning.ReceiptSetDigest,
+		PresentedActivationSignatures:       copyPresentedSignatureSummary(activation.PresentedActivationSignatures),
+		SourceRevision:                      activation.Unsigned.Manifest.SourceRevision,
+		BuilderIdentity:                     activation.Unsigned.EvidenceManifest.BuilderIdentity,
+		ReleaseWorkflowIdentity:             input.ReleaseWorkflowIdentity,
+		PresentedReviewReceipts:             presentReviews(input.ReviewReceipts),
+		PresentedWaiverReceipts:             presentWaivers(input.WaiverReceipts),
+		PresentedOfflineCheck: PresentedOfflineCheckEvidenceV1{
+			Treatment:            PresentedMaterialTreatment,
+			ClaimedOutcome:       input.OfflineCheckReceipt.ClaimedOutcome,
+			SubjectArchiveDigest: input.OfflineCheckReceipt.SubjectArchiveDigest,
+			ReportDigest:         input.OfflineCheckReceipt.ReportDigest,
+		},
 	}
 	encoded, err := marshalCanonical(payload)
 	if err != nil {
@@ -137,10 +143,14 @@ func validateUnsignedAttestation(activation ActivationArchive, unsigned Unsigned
 		return contractError("noncanonical_release_attestation", "release_attestation", nil)
 	}
 	want, err := PrepareReleaseAttestation(activation, ReleaseAttestationInput{
-		ReleaseWorkflowIdentity:     unsigned.Payload.ReleaseWorkflowIdentity,
-		FinalApprovals:              unsigned.Payload.FinalApprovals,
-		Waivers:                     unsigned.Payload.Waivers,
-		NetworkDisabledVerification: unsigned.Payload.NetworkDisabledVerification,
+		ReleaseWorkflowIdentity: unsigned.Payload.ReleaseWorkflowIdentity,
+		ReviewReceipts:          reviewReceiptInputs(unsigned.Payload.PresentedReviewReceipts),
+		WaiverReceipts:          waiverReceiptInputs(unsigned.Payload.PresentedWaiverReceipts),
+		OfflineCheckReceipt: OfflineCheckReceipt{
+			ClaimedOutcome:       unsigned.Payload.PresentedOfflineCheck.ClaimedOutcome,
+			SubjectArchiveDigest: unsigned.Payload.PresentedOfflineCheck.SubjectArchiveDigest,
+			ReportDigest:         unsigned.Payload.PresentedOfflineCheck.ReportDigest,
+		},
 	})
 	if err != nil {
 		return err
@@ -153,7 +163,7 @@ func validateUnsignedAttestation(activation ActivationArchive, unsigned Unsigned
 
 // FinalizeReleaseHandoff accepts the separately signed release attestation and
 // returns the exact immutable pair for independent WS-06 verification.
-func FinalizeReleaseHandoff(activation ActivationArchive, unsigned UnsignedReleaseAttestation, envelope []byte, signing SigningResult) (ImmutableReleaseHandoff, error) {
+func FinalizeReleaseHandoff(activation ActivationArchive, unsigned UnsignedReleaseAttestation, envelope []byte, signing PresentedSigningResult) (ImmutableReleaseHandoff, error) {
 	if err := validateUnsignedAttestation(activation, unsigned); err != nil {
 		return ImmutableReleaseHandoff{}, err
 	}
@@ -161,45 +171,67 @@ func FinalizeReleaseHandoff(activation ActivationArchive, unsigned UnsignedRelea
 	if err != nil {
 		return ImmutableReleaseHandoff{}, err
 	}
-	threshold, err := validateSigningResult(parsed, signing, activation.Unsigned.Manifest.DeploymentPolicy)
+	presentedReleaseSignatures, err := validatePresentedSigningResult(parsed, signing, activation.Unsigned.Manifest.DeploymentPolicy)
 	if err != nil {
 		return ImmutableReleaseHandoff{}, err
 	}
 	if signing.WorkflowIdentity == activation.Unsigned.EvidenceManifest.BuilderIdentity || signing.WorkflowIdentity == activation.Unsigned.EvidenceManifest.BuildWorkflowIdentity || signing.WorkflowIdentity == unsigned.Payload.ReleaseWorkflowIdentity {
-		return ImmutableReleaseHandoff{}, contractError("release_signing_workflow_not_separated", "signing_result.workflow_identity", nil)
+		return ImmutableReleaseHandoff{}, contractError("release_signing_workflow_not_separated", "presented_signing_result.workflow_identity", nil)
 	}
 	policy := activation.Unsigned.Manifest.DeploymentPolicy
 	return ImmutableReleaseHandoff{
-		ActivationSetID:                  activation.Unsigned.ActivationSetID,
-		SignedEnvelopeDigest:             activation.SignedEnvelopeDigest,
-		ArchiveDigest:                    activation.ArchiveDigest,
-		ReleaseAttestationID:             unsigned.AttestationID,
-		ReleaseAttestationEnvelopeDigest: SHA256Digest(envelope),
-		PolicyBundleID:                   activation.Unsigned.PolicyBundleID,
-		OpenFGAModelSourceDigest:         activation.Unsigned.Manifest.OpenFGAModel.SourceDigest,
-		EvidenceManifestDigest:           activation.Unsigned.EvidenceManifestDigest,
-		Trust:                            activation.Unsigned.Manifest.Trust,
-		DeploymentPolicyID:               policy.PolicyID,
-		DeploymentPolicyVersion:          policy.Version,
-		DeploymentPolicyDigest:           policy.Digest,
-		DisclosureRevocationMode:         policy.DisclosureRevocationMode,
-		EvaluatedAssuranceResultDigest:   policy.EvaluatedAssuranceResultDigest,
-		SourceRevision:                   activation.Unsigned.Manifest.SourceRevision,
-		ActivationSigningResultDigest:    activation.ActivationSigning.ResultDigest,
-		ActivationThreshold:              activation.Threshold,
-		ArchiveBytes:                     append([]byte(nil), activation.ArchiveBytes...),
-		ReleaseAttestationEnvelopeBytes:  append([]byte(nil), envelope...),
-		ReleaseSigning:                   copySigningResult(signing),
-		ReleaseThreshold:                 threshold,
+		Authority:                           NonAuthorizingHandoffAuthority,
+		ActivationSetID:                     activation.Unsigned.ActivationSetID,
+		SignedEnvelopeDigest:                activation.SignedEnvelopeDigest,
+		ArchiveDigest:                       activation.ArchiveDigest,
+		ReleaseAttestationID:                unsigned.AttestationID,
+		ReleaseAttestationEnvelopeDigest:    SHA256Digest(envelope),
+		PolicyBundleID:                      activation.Unsigned.PolicyBundleID,
+		OpenFGAModelSourceDigest:            activation.Unsigned.Manifest.OpenFGAModel.SourceDigest,
+		EvidenceManifestDigest:              activation.Unsigned.EvidenceManifestDigest,
+		Trust:                               activation.Unsigned.Manifest.Trust,
+		DeploymentPolicyID:                  policy.PolicyID,
+		DeploymentPolicyVersion:             policy.Version,
+		DeploymentPolicyDigest:              policy.Digest,
+		DisclosureRevocationMode:            policy.DisclosureRevocationMode,
+		PresentedAssuranceResultDigest:      policy.PresentedAssuranceResultDigest,
+		SourceRevision:                      activation.Unsigned.Manifest.SourceRevision,
+		PresentedActivationReceiptSetDigest: activation.PresentedActivationSigning.ReceiptSetDigest,
+		PresentedActivationSignatures:       copyPresentedSignatureSummary(activation.PresentedActivationSignatures),
+		ArchiveBytes:                        cloneSlice(activation.ArchiveBytes),
+		ReleaseAttestationEnvelopeBytes:     cloneSlice(envelope),
+		PresentedReleaseSigning:             copyPresentedSigningResult(signing),
+		PresentedReleaseSignatures:          copyPresentedSignatureSummary(presentedReleaseSignatures),
+		RequiredConsumerVerification: ConsumerVerificationRequirementV1{
+			Owner:  RequiredConsumerVerificationOwner,
+			Status: "required_not_performed_by_ws09",
+			Checks: []string{
+				"exact_archive_and_attestation_pair",
+				"dsse_cryptographic_signatures",
+				"spki_identity_and_trust_state",
+				"key_purpose_status_validity_and_revocation",
+				"signature_threshold_and_distinct_custodians",
+				"evidence_review_waiver_and_offline_claims",
+				"deployment_assurance_and_activation_prerequisites",
+			},
+		},
 	}, nil
 }
 
-func copySigningResult(signing SigningResult) SigningResult {
-	return SigningResult{
+func copyPresentedSigningResult(signing PresentedSigningResult) PresentedSigningResult {
+	return PresentedSigningResult{
+		Treatment:        signing.Treatment,
 		WorkflowIdentity: signing.WorkflowIdentity,
-		ResultDigest:     signing.ResultDigest,
-		Receipts:         append([]SignatureReceipt(nil), signing.Receipts...),
+		ReceiptSetDigest: signing.ReceiptSetDigest,
+		Receipts:         cloneSlice(signing.Receipts),
 	}
+}
+
+func copyPresentedSignatureSummary(summary PresentedSignatureSummary) PresentedSignatureSummary {
+	result := summary
+	result.KeyIDHints = cloneSlice(summary.KeyIDHints)
+	result.ClaimedCustodianIDs = cloneSlice(summary.ClaimedCustodianIDs)
+	return result
 }
 
 // BuildTransportDescriptor names exact completed bytes but is explicitly

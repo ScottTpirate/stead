@@ -1,1 +1,114 @@
-{"schema_version":"1.0.0","base_vector":"golden-vector.json","authority":"none","consumer_owner":"WS-06","cases":[{"id":"activation-signature-bit-flip","mutation":"Flip one bit in the activation signature while preserving DER shape.","expected":"reject cryptographic verification"},{"id":"release-signature-bit-flip","mutation":"Flip one bit in the release-attestation signature while preserving DER shape.","expected":"reject cryptographic verification"},{"id":"activation-payload-bit-flip","mutation":"Flip one byte in the decoded activation payload without changing the signature.","expected":"reject exact-payload verification"},{"id":"release-payload-bit-flip","mutation":"Flip one byte in the decoded release-attestation payload without changing the signature.","expected":"reject exact-payload verification"},{"id":"misleading-keyid","mutation":"Replace keyid with another syntactically valid SHA-256 identity.","expected":"reject key-selection hint mismatch"},{"id":"wrong-curve-spki","mutation":"Present a non-P-256 SPKI under a syntactically valid key identity.","expected":"reject curve/profile mismatch"},{"id":"wrong-purpose","mutation":"Change the trusted key purpose away from release-policy.","expected":"reject key purpose"},{"id":"duplicate-spki-alias","mutation":"Add a second trust entry that aliases the same SPKI under another key ID.","expected":"reject alias and do not count twice"},{"id":"duplicate-custodian-alias","mutation":"Bind threshold keys to one custodian through aliases.","expected":"reject distinct-custodian threshold"},{"id":"expired-trust-key","mutation":"Move trusted time past the fixture key validity interval.","expected":"reject expired signer"},{"id":"revoked-trust-key","mutation":"Mark the fixture release key revoked.","expected":"reject revoked signer"},{"id":"archive-attestation-swap","mutation":"Pair the valid archive with an attestation envelope from another exact ceremony.","expected":"reject immutable pair mismatch"},{"id":"tuf-only-substitution","mutation":"Remove both DSSE envelopes and provide only TUF-like root/targets/snapshot/timestamp metadata.","expected":"reject because transport metadata is non-authorizing"},{"id":"offline-egress-attempt","mutation":"Run verification with DNS HTTP registry transparency time and vendor endpoints unavailable.","expected":"verification succeeds for the unmodified pair and any outbound attempt fails the test"}]}
+{
+  "schema_version": "1.0.0",
+  "fixture_status": "nonauthorizing_consumer_mutation_instructions",
+  "base_vector": "golden-vector.json",
+  "authority": "none",
+  "consumer_owner": "WS-06",
+  "cases": [
+    {
+      "id": "activation-signature-bit-flip",
+      "obligation": "T-ADR-0006-DSSE",
+      "mutation": {"operation": "flip_bit", "target": "activation.signature_base64", "byte_offset": 7, "bit_mask": 1},
+      "expected_outcome": "reject",
+      "expected_consumer_code": "crypto_signature_invalid"
+    },
+    {
+      "id": "release-signature-bit-flip",
+      "obligation": "T-ADR-0006-DSSE",
+      "mutation": {"operation": "flip_bit", "target": "attestation.signature_base64", "byte_offset": 7, "bit_mask": 1},
+      "expected_outcome": "reject",
+      "expected_consumer_code": "crypto_signature_invalid"
+    },
+    {
+      "id": "activation-payload-bit-flip",
+      "obligation": "T-ADR-0006-CONTENT-INTEGRITY",
+      "mutation": {"operation": "flip_bit", "target": "activation.manifest_payload_base64", "byte_offset": 0, "bit_mask": 1},
+      "expected_outcome": "reject",
+      "expected_consumer_code": "signed_payload_mismatch"
+    },
+    {
+      "id": "release-payload-bit-flip",
+      "obligation": "T-ADR-0006-CONTENT-INTEGRITY",
+      "mutation": {"operation": "flip_bit", "target": "attestation.payload_base64", "byte_offset": 0, "bit_mask": 1},
+      "expected_outcome": "reject",
+      "expected_consumer_code": "signed_payload_mismatch"
+    },
+    {
+      "id": "misleading-keyid",
+      "obligation": "T-ADR-0006-DSSE",
+      "mutation": {"operation": "replace_string", "target": "activation.envelope.signatures[0].keyid", "replacement": "sha256:0000000000000000000000000000000000000000000000000000000000000000"},
+      "expected_outcome": "reject",
+      "expected_consumer_code": "spki_identity_mismatch"
+    },
+    {
+      "id": "wrong-curve-spki",
+      "obligation": "T-ADR-0006-DSSE",
+      "mutation": {"operation": "replace_fixture", "target": "trust.keys[0].spki_der_base64", "replacement_fixture": "public-p384-spki"},
+      "expected_outcome": "reject",
+      "expected_consumer_code": "unsupported_key_profile"
+    },
+    {
+      "id": "wrong-purpose",
+      "obligation": "T-ADR-0006-ASSURANCE-POLICY",
+      "mutation": {"operation": "replace_string", "target": "trust.keys[0].purpose", "replacement": "non-release-purpose"},
+      "expected_outcome": "reject",
+      "expected_consumer_code": "key_purpose_mismatch"
+    },
+    {
+      "id": "duplicate-spki-alias",
+      "obligation": "T-ADR-0006-DSSE",
+      "mutation": {"operation": "duplicate_with_alias", "target": "trust.keys[0]", "replacement": "sha256:1111111111111111111111111111111111111111111111111111111111111111"},
+      "expected_outcome": "reject",
+      "expected_consumer_code": "duplicate_key_identity"
+    },
+    {
+      "id": "duplicate-custodian-alias",
+      "obligation": "T-ADR-0006-CUSTODIAN-SEPARATION",
+      "mutation": {"operation": "replace_string", "target": "trust.keys[1].custodian_id", "replacement": "fixture-custodian-a"},
+      "expected_outcome": "reject",
+      "expected_consumer_code": "distinct_custodian_threshold_not_met"
+    },
+    {
+      "id": "expired-trust-key",
+      "obligation": "T-ADR-0006-ASSURANCE-POLICY",
+      "mutation": {"operation": "set_verification_time", "target": "consumer.verification_time", "replacement": "2031-01-01T00:00:00Z"},
+      "expected_outcome": "reject",
+      "expected_consumer_code": "key_outside_validity"
+    },
+    {
+      "id": "revoked-trust-key",
+      "obligation": "T-ADR-0006-ASSURANCE-POLICY",
+      "mutation": {"operation": "replace_string", "target": "trust.keys[0].status", "replacement": "revoked"},
+      "expected_outcome": "reject",
+      "expected_consumer_code": "key_revoked"
+    },
+    {
+      "id": "archive-attestation-swap",
+      "obligation": "T-ADR-0006-TRANSPORT-IDENTITY",
+      "mutation": {"operation": "replace_fixture", "target": "attestation.envelope_base64", "replacement_fixture": "different-exact-ceremony"},
+      "expected_outcome": "reject",
+      "expected_consumer_code": "immutable_pair_mismatch"
+    },
+    {
+      "id": "tuf-only-substitution",
+      "obligation": "T-ADR-0006-TUF-NONAUTHORITY",
+      "mutation": {"operation": "remove_dsse_envelopes", "target": "activation-and-attestation", "replacement_fixture": "tuf-like-metadata-only"},
+      "expected_outcome": "reject",
+      "expected_consumer_code": "authoritative_dsse_missing"
+    },
+    {
+      "id": "offline-egress-denied",
+      "obligation": "T-ADR-0006-TRANSPORT-IDENTITY",
+      "mutation": {"operation": "deny_network", "target": "consumer.environment"},
+      "expected_outcome": "accept",
+      "expected_consumer_code": "offline_verification_complete"
+    },
+    {
+      "id": "syntactic-r1-s1-arbitrary-receipt",
+      "obligation": "T-ADR-0006-DSSE",
+      "mutation": {"operation": "replace_with_r1_s1_and_arbitrary_receipt", "target": "activation.envelope_and_presented_receipt", "replacement": "sha256:2222222222222222222222222222222222222222222222222222222222222222"},
+      "expected_outcome": "reject",
+      "expected_consumer_code": "crypto_signature_invalid"
+    }
+  ]
+}
