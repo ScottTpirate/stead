@@ -60,7 +60,12 @@ type goldenVector struct {
 
 func makeGoldenVector(t testing.TB) goldenVector {
 	t.Helper()
-	activation, attestation, handoff := completeFixtureRelease(t, "commercial", 1, false)
+	return makeGoldenVectorForPolicy(t, 1, false)
+}
+
+func makeGoldenVectorForPolicy(t testing.TB, threshold int, distinctCustodians bool) goldenVector {
+	t.Helper()
+	activation, attestation, handoff := completeFixtureRelease(t, "commercial", threshold, distinctCustodians)
 	activationEnvelope, err := policyrelease.ParseDSSEEnvelope(activation.EnvelopeBytes)
 	if err != nil {
 		t.Fatal(err)
@@ -69,16 +74,25 @@ func makeGoldenVector(t testing.TB) goldenVector {
 	if err != nil {
 		t.Fatal(err)
 	}
-	publicKey, keyID := testPublicKey(0)
-	spki, err := x509.MarshalPKIXPublicKey(publicKey)
-	if err != nil {
-		t.Fatal(err)
+	keys := make([]goldenKey, 0, threshold)
+	for index := 0; index < threshold; index++ {
+		publicKey, keyID := testPublicKey(index)
+		spki, err := x509.MarshalPKIXPublicKey(publicKey)
+		if err != nil {
+			t.Fatal(err)
+		}
+		keys = append(keys, goldenKey{
+			KeyID:       keyID,
+			SPKIBase64:  base64.StdEncoding.EncodeToString(spki),
+			CustodianID: "fixture-custodian-" + string(rune('a'+index)),
+			Purpose:     policyrelease.ReleaseKeyPurpose,
+		})
 	}
 	return goldenVector{
 		SchemaVersion:         "1.0.0",
 		FixtureClassification: "public-nonproduction-nonauthorizing-test-vector",
 		Authority:             "none",
-		Keys:                  []goldenKey{{KeyID: keyID, SPKIBase64: base64.StdEncoding.EncodeToString(spki), CustodianID: "fixture-custodian-a", Purpose: policyrelease.ReleaseKeyPurpose}},
+		Keys:                  keys,
 		Activation: goldenActivation{
 			ManifestPayloadBase64:  base64.StdEncoding.EncodeToString(activation.Unsigned.ManifestPayload),
 			ActivationSetID:        activation.Unsigned.ActivationSetID,
@@ -126,6 +140,26 @@ func TestGoldenOfflineVector(t *testing.T) {
 		t.Fatalf("golden policy release vector drifted: activation=%s archive=%s attestation=%s envelope=%s", actual.Activation.ActivationSetID, actual.Activation.ArchiveDigest, actual.Attestation.AttestationID, actual.Attestation.EnvelopeDigest)
 	}
 	verifyGoldenVector(t, expected)
+}
+
+func TestWS06CanonicalThresholdTwoVector(t *testing.T) {
+	actual := makeGoldenVectorForPolicy(t, 2, true)
+	if os.Getenv("STEAD_PRINT_WS06_CANONICAL") == "1" {
+		encoded, err := json.MarshalIndent(actual, "", "  ")
+		if err != nil {
+			t.Fatal(err)
+		}
+		fmt.Println(string(encoded))
+		return
+	}
+	fixture := fixtureBytes(t, "vectors/ws06/canonical-threshold-two-vector.json")
+	var expected goldenVector
+	if err := json.Unmarshal(fixture, &expected); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(actual, expected) {
+		t.Fatalf("canonical WS-06 threshold-two vector drifted: activation=%s archive=%s attestation=%s envelope=%s", actual.Activation.ActivationSetID, actual.Activation.ArchiveDigest, actual.Attestation.AttestationID, actual.Attestation.EnvelopeDigest)
+	}
 }
 
 func verifyGoldenVector(t *testing.T, vector goldenVector) {

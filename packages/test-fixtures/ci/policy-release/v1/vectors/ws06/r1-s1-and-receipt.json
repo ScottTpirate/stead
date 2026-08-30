@@ -1,5 +1,4 @@
 {
-  "key_id": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
   "signature_base64": "MAYCAQECAQE=",
   "signature_digest": "sha256:57093944c2f730f5d554173cb3555795c1a4f68c647be0ff8e3adb840b757675",
   "presented_receipt": {
