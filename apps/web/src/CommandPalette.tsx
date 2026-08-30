@@ -29,6 +29,8 @@ export function CommandPalette({ navigate }: CommandPaletteProps) {
   const [query, setQuery] = useState("");
 
   const openPalette = () => {
+    if (dialogReference.current?.open) return;
+
     returnFocusReference.current =
       document.activeElement instanceof HTMLElement &&
       document.activeElement !== document.body

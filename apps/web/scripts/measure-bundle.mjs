@@ -84,8 +84,18 @@ const evidence = {
 };
 
 const evidencePath = resolve(webRoot, "evidence/frontend-foundation-bundle.json");
-await mkdir(resolve(webRoot, "evidence"), { recursive: true });
-await writeFile(evidencePath, `${JSON.stringify(evidence, null, 2)}\n`, "utf8");
+const renderedEvidence = `${JSON.stringify(evidence, null, 2)}\n`;
+if (process.argv.includes("--check")) {
+  const recordedEvidence = await readFile(evidencePath, "utf8");
+  if (recordedEvidence !== renderedEvidence) {
+    throw new Error(
+      "frontend bundle evidence is stale; run npm run measure:bundle --workspace=@stead/web",
+    );
+  }
+} else {
+  await mkdir(resolve(webRoot, "evidence"), { recursive: true });
+  await writeFile(evidencePath, renderedEvidence, "utf8");
+}
 process.stdout.write(`${JSON.stringify(evidence, null, 2)}\n`);
 if (eagerBytes > budget) {
   throw new Error(`eager JavaScript is ${eagerBytes} bytes gzip, over ${budget}`);

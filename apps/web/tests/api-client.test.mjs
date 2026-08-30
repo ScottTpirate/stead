@@ -143,6 +143,26 @@ test("an aborted prior-context request cannot overwrite cleared state", async ()
   assert.equal(store.getSnapshot("protected").status, "idle");
 });
 
+test("logout clears both presentation state and authority to load", async () => {
+  const store = new QueryStore();
+  store.setAuthorizationContext({
+    principal: "principal-a",
+    session: "session-a",
+    securityDomain: "domain-a",
+  });
+  store.optimisticallySet("protected", { title: "synthetic" });
+  store.clearAuthorizationContext();
+  assert.equal(store.getSnapshot("protected").status, "idle");
+  await assert.rejects(
+    store.load("protected", async () => ({ title: "must not load" })),
+    /authorization context must be set/u,
+  );
+  assert.throws(
+    () => store.optimisticallySet("protected", { title: "must not present" }),
+    /authorization context must be set/u,
+  );
+});
+
 test("optimistic presentation exposes a bounded rollback", () => {
   const store = new QueryStore();
   store.setAuthorizationContext({

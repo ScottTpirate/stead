@@ -68,6 +68,12 @@ export class QueryStore {
     this.clear();
   }
 
+  clearAuthorizationContext(): void {
+    this.context = undefined;
+    this.contextRevision += 1;
+    this.clear();
+  }
+
   clear(): void {
     for (const entry of this.entries.values()) {
       entry.controller?.abort();

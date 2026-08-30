@@ -18,5 +18,5 @@ export function replaceAuthorizationContext(context: AuthorizationContext): void
 }
 
 export function clearAuthorizedPresentationState(): void {
-  platformQueryStore.clear();
+  platformQueryStore.clearAuthorizationContext();
 }
