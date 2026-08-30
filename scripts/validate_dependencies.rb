@@ -11,8 +11,11 @@ ROOT = File.expand_path("..", __dir__)
 REGISTRY_PATH = File.join(ROOT, "docs/governance/dependency-approvals.yaml")
 SCHEMA_PATH = File.join(ROOT, "docs/governance/dependency-approvals.schema.json")
 PROVENANCE_PATH = File.join(ROOT, "docs/governance/devlane-provenance.yaml")
+POSTGRESQL_EVIDENCE_PATH = File.join(ROOT, "docs/governance/dependency-evidence/stead-p1-015-postgresql.yaml")
 NOTICES_PATH = File.join(ROOT, "THIRD_PARTY_NOTICES.md")
 LOCK_PATH = File.join(ROOT, "package-lock.json")
+GO_MOD_PATH = File.join(ROOT, "go.mod")
+GO_SUM_PATH = File.join(ROOT, "go.sum")
 
 REQUIRED_PINS = {
   "devlane-source" => ["7719dcadf91f881b5aefe8b74012ffcfbba0bc17", "7719dcadf91f881b5aefe8b74012ffcfbba0bc17"],
@@ -26,6 +29,8 @@ DEFAULT_PERMISSIVE_NPM_LICENSES = Set.new(%w[0BSD Apache-2.0 BSD-2-Clause BSD-3-
 PROHIBITED_DIRECT_PACKAGES = Set.new(["@asyncapi/cli", "ajv-cli"]).freeze
 PROHIBITED_SETUP_ACTIONS = Set.new(["actions/setup-node", "actions/setup-go", "ruby/setup-ruby"]).freeze
 FOUNDATION_ROLLBACK_TARGET = "git:e24a4d9d05ad6df19c5bcaa9c385ee74fd5d8c31"
+EXACT_GO_VERSION = /\Av\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?\z/
+GO_H1_DIGEST = /\Ah1:[A-Za-z0-9+\/=]+\z/
 
 def allowed_lock_license?(license)
   license.is_a?(String) && DEFAULT_PERMISSIVE_NPM_LICENSES.include?(license)
@@ -177,6 +182,199 @@ rescue JSON::ParserError => e
   []
 end
 
+def direct_go_dependencies(source, errors, label = "go.mod")
+  dependencies = []
+  require_block = false
+
+  source.each_line.with_index(1) do |raw_line, line_number|
+    line = raw_line.strip
+    next if line.empty? || line.start_with?("//")
+
+    if line.match?(/\Arequire\s*\(\s*\z/)
+      require_block = true
+      next
+    end
+    if require_block && line == ")"
+      require_block = false
+      next
+    end
+
+    declaration = if require_block
+                    line
+                  elsif (match = line.match(/\Arequire\s+(.+)\z/))
+                    match[1]
+                  end
+    next unless declaration
+
+    requirement, comment = declaration.split(%r{\s+//\s*}, 2)
+    next if comment&.strip == "indirect"
+
+    module_name, version, extra = requirement.split(/\s+/, 3)
+    if module_name.nil? || version.nil? || extra
+      errors << "#{label}:#{line_number}: malformed direct require declaration"
+      next
+    end
+    unless version.match?(EXACT_GO_VERSION)
+      errors << "#{label}:#{line_number}: #{module_name} must use an exact Go module version, got #{version.inspect}"
+    end
+    dependencies << { "name" => module_name, "version" => version }
+  end
+
+  names = dependencies.map { |entry| entry["name"] }
+  errors << "#{label}: direct module paths must be unique" unless names.uniq.length == names.length
+  dependencies
+end
+
+def go_sum_entries(source, errors, label = "go.sum")
+  entries = {}
+  source.each_line.with_index(1) do |raw_line, line_number|
+    line = raw_line.strip
+    next if line.empty?
+
+    module_name, version, digest, extra = line.split(/\s+/, 4)
+    if module_name.nil? || version.nil? || digest.nil? || extra
+      errors << "#{label}:#{line_number}: malformed checksum entry"
+      next
+    end
+    errors << "#{label}:#{line_number}: checksum must use Go h1 format" unless digest.match?(GO_H1_DIGEST)
+    key = [module_name, version]
+    errors << "#{label}:#{line_number}: duplicate checksum entry for #{module_name} #{version}" if entries.key?(key)
+    entries[key] = digest
+  end
+  entries
+end
+
+def validate_go_dependencies(mod_source, sum_source, components, errors, mod_label: "go.mod", sum_label: "go.sum")
+  dependencies = direct_go_dependencies(mod_source, errors, mod_label)
+  sums = go_sum_entries(sum_source, errors, sum_label)
+
+  dependencies.each do |entry|
+    name = entry["name"]
+    version = entry["version"]
+    record = components[name]
+    if record.nil? || record.dig("component", "kind") != "go_module" || record.dig("component", "ecosystem") != "go"
+      errors << "dependency registry: direct Go module #{name}@#{version} has no go_module candidate record"
+      next
+    end
+
+    errors << "#{name}: registry version differs from go.mod" unless record.dig("component", "version") == version
+    module_sum = sums[[name, version]]
+    go_mod_sum = sums[[name, "#{version}/go.mod"]]
+    errors << "#{sum_label}: missing module checksum for #{name} #{version}" if module_sum.nil?
+    errors << "#{sum_label}: missing go.mod checksum for #{name} #{version}" if go_mod_sum.nil?
+    if module_sum && record.dig("component", "digest", "value") != module_sum
+      errors << "#{name}: registry module checksum differs from #{sum_label}"
+    end
+    if go_mod_sum && record.dig("component", "module_file_digest", "value") != go_mod_sum
+      errors << "#{name}: registry go.mod checksum differs from #{sum_label}"
+    end
+  end
+  dependencies
+end
+
+def oci_workflow_references(source, errors, label)
+  references = []
+  source.each_line.with_index(1) do |raw_line, line_number|
+    value = if (match = raw_line.match(/^\s*image:\s*["']?([^\s"'#]+)["']?/))
+              match[1]
+            elsif (match = raw_line.match(/^\s*container:\s*["']?([^\s"'#]+)["']?/))
+              match[1]
+            elsif (match = raw_line.match(/^\s*uses:\s*["']?docker:\/\/([^\s"'#]+)["']?/))
+              match[1]
+            end
+    next unless value
+
+    match = value.match(/\A(.+?)(?::([^\/@]+))?@(sha256:[0-9a-f]{64})\z/)
+    unless match
+      errors << "#{label}:#{line_number}: OCI image #{value.inspect} is not pinned to an immutable SHA-256 digest"
+      next
+    end
+    references << { "name" => match[1], "version" => match[2], "digest" => match[3], "line" => line_number }
+  end
+  references
+end
+
+def validate_oci_workflow_images(workflow_sources, components, errors)
+  references = workflow_sources.flat_map do |label, source|
+    oci_workflow_references(source, errors, label)
+  end
+  references.each do |reference|
+    name = reference["name"]
+    record = components[name]
+    unless record && record.dig("component", "kind") == "oci_image" && record.dig("component", "ecosystem") == "oci"
+      errors << "dependency registry: workflow OCI image #{name} has no oci_image candidate record"
+      next
+    end
+    if reference["version"] && record.dig("component", "version") != reference["version"]
+      errors << "#{name}: registry version differs from workflow image tag"
+    end
+    errors << "#{name}: workflow image digest differs from approval registry" unless record.dig("component", "digest", "value") == reference["digest"]
+  end
+  references
+end
+
+def release_approval_errors(active_names, components, release_eligible_statuses)
+  active_names.filter_map do |name|
+    record = components[name]
+    next unless record
+    next if release_eligible_statuses.include?(record.dig("decision", "status"))
+
+    "#{name}: active dependency is not independently approved for release"
+  end
+end
+
+def run_validator_self_tests
+  pending_go = {
+    "component" => {
+      "name" => "example.com/db", "kind" => "go_module", "ecosystem" => "go", "version" => "v1.2.3",
+      "digest" => { "algorithm" => "go-h1", "value" => "h1:correct=" },
+      "module_file_digest" => { "algorithm" => "go-h1", "value" => "h1:modcorrect=" }
+    },
+    "decision" => { "status" => "REVIEWED_PENDING_INDEPENDENT_APPROVAL" }
+  }
+  pending_oci = {
+    "component" => {
+      "name" => "postgres", "kind" => "oci_image", "ecosystem" => "oci", "version" => "16-bookworm",
+      "digest" => { "algorithm" => "sha256", "value" => "sha256:#{'a' * 64}" }
+    },
+    "decision" => { "status" => "REVIEWED_PENDING_INDEPENDENT_APPROVAL" }
+  }
+  components = { "example.com/db" => pending_go, "postgres" => pending_oci }
+  failures = []
+
+  missing_errors = []
+  validate_go_dependencies("module fixture\nrequire example.com/db v1.2.3\n", "", components, missing_errors, mod_label: "missing.mod", sum_label: "missing.sum")
+  failures << "missing Go sum mutation was accepted" unless missing_errors.any? { |error| error.include?("missing module checksum") } && missing_errors.any? { |error| error.include?("missing go.mod checksum") }
+
+  wrong_errors = []
+  wrong_sum = "example.com/db v1.2.3 h1:wrong=\nexample.com/db v1.2.3/go.mod h1:modwrong=\n"
+  validate_go_dependencies("module fixture\nrequire example.com/db v1.2.3\n", wrong_sum, components, wrong_errors, mod_label: "wrong.mod", sum_label: "wrong.sum")
+  failures << "wrong Go sum mutation was accepted" unless wrong_errors.any? { |error| error.include?("registry module checksum differs") } && wrong_errors.any? { |error| error.include?("registry go.mod checksum differs") }
+
+  approval_errors = release_approval_errors(Set.new(["example.com/db"]), components, ["APPROVED"])
+  failures << "unapproved active Go module mutation was accepted" unless approval_errors.any? { |error| error.include?("not independently approved") }
+
+  unpinned_errors = []
+  validate_oci_workflow_images({ "unpinned.yml" => "services:\n  db:\n    image: postgres:16-bookworm\n" }, components, unpinned_errors)
+  failures << "unpinned OCI image mutation was accepted" unless unpinned_errors.any? { |error| error.include?("not pinned") }
+
+  wrong_oci_errors = []
+  validate_oci_workflow_images({ "wrong.yml" => "container:\n  image: postgres:16-bookworm@sha256:#{'b' * 64}\n" }, components, wrong_oci_errors)
+  failures << "wrong OCI digest mutation was accepted" unless wrong_oci_errors.any? { |error| error.include?("digest differs") }
+
+  unless failures.empty?
+    warn "dependency validator self-tests failed:"
+    failures.each { |failure| warn "- #{failure}" }
+    exit 1
+  end
+  puts "dependency validator self-tests passed: 5/5 mutation guards"
+end
+
+if ARGV.first == "--self-test"
+  run_validator_self_tests
+  exit 0
+end
+
 registry = load_yaml(REGISTRY_PATH)
 schema = JSON.parse(File.read(SCHEMA_PATH))
 errors = schema_errors(registry, schema, schema)
@@ -204,6 +402,28 @@ records.each do |record|
     errors << "#{name}: invalid SHA-256" unless digest&.match?(/\A(?:sha256:)?[0-9a-f]{64}\z/)
   when "sha512-sri"
     errors << "#{name}: invalid SHA-512 SRI" unless digest&.match?(/\Asha512-[A-Za-z0-9+\/=]+\z/)
+  when "go-h1"
+    errors << "#{name}: invalid Go h1 checksum" unless digest&.match?(GO_H1_DIGEST)
+  end
+
+  kind = record.dig("component", "kind")
+  ecosystem = record.dig("component", "ecosystem")
+  if kind == "go_module"
+    errors << "#{name}: go_module must use the go ecosystem" unless ecosystem == "go"
+    errors << "#{name}: go_module artifact checksum must use go-h1" unless algorithm == "go-h1"
+    errors << "#{name}: go_module requires an exact Go version" unless record.dig("component", "version")&.match?(EXACT_GO_VERSION)
+    module_file_digest = record.dig("component", "module_file_digest")
+    unless module_file_digest&.dig("algorithm") == "go-h1" && module_file_digest&.dig("value")&.match?(GO_H1_DIGEST)
+      errors << "#{name}: go_module requires an exact go-h1 module_file_digest"
+    end
+  elsif ecosystem == "go"
+    errors << "#{name}: go ecosystem record must use go_module kind"
+  end
+  if kind == "oci_image"
+    errors << "#{name}: oci_image must use the oci ecosystem" unless ecosystem == "oci"
+    errors << "#{name}: oci_image digest must use sha256" unless algorithm == "sha256"
+  elsif ecosystem == "oci"
+    errors << "#{name}: oci ecosystem record must use oci_image kind"
   end
 
   if status == "REVIEWED_PENDING_INDEPENDENT_APPROVAL"
@@ -244,6 +464,58 @@ end
 errors << "devlane-provenance.yaml: imported_paths must be empty before import" unless provenance.dig("import", "imported_paths") == []
 errors << "devlane-provenance.yaml: destination_paths must be empty before import" unless provenance.dig("import", "destination_paths") == []
 
+postgresql_evidence = load_yaml(POSTGRESQL_EVIDENCE_PATH)
+expected_postgresql_evidence = {
+  ["issue_id"] => "STEAD-P1-015",
+  ["candidate_state"] => "GOVERNANCE_ONLY_NOT_INTEGRATED",
+  ["go_candidate", "approval_id"] => "DEP-APP-GO-PGX-V5-5-10-0",
+  ["go_candidate", "module"] => "github.com/jackc/pgx/v5",
+  ["go_candidate", "version"] => "v5.10.0",
+  ["go_candidate", "module_sum"] => "h1:VhSvgU2jSli8o3AqIEOTJr7rZwAEUVo4E4XhR94Zfr0=",
+  ["go_candidate", "go_mod_sum"] => "h1:mal1tBGAFfLHvZzaYh77YS/eC6IX9OWbRV1QIIM0Jn4=",
+  ["go_candidate", "upstream", "tag_commit"] => "7293fb11125be0373a92f716683f2d494f6fd4b0",
+  ["oci_candidate", "approval_id"] => "DEP-APP-OCI-POSTGRES-16-BOOKWORM-BB3E1A57",
+  ["oci_candidate", "reference"] => "postgres:16-bookworm",
+  ["oci_candidate", "index_digest"] => "sha256:bb3e1a57e5407e0a5280b4211980a5e537f4abd234a87014ac979849a78dd825",
+  ["oci_candidate", "selected_platform", "manifest_digest"] => "sha256:1938c16e9d2f10a6a3623b344b64ae8d45f407f2c5f34f0979468bb689b9227a",
+  ["oci_candidate", "selected_platform", "config_digest"] => "sha256:5f71c21b69a7977b82247582e2e731ed76bdebaadb7dd7945ed76bcc9ed06632",
+  ["oci_candidate", "postgres_package_version"] => "16.15-1.pgdg12+2",
+  ["oci_candidate", "created"] => "2026-08-25"
+}
+expected_postgresql_evidence.each do |path, expected|
+  actual = path.reduce(postgresql_evidence) { |cursor, key| cursor.is_a?(Hash) ? cursor[key] : nil }
+  errors << "dependency-evidence/stead-p1-015-postgresql.yaml: #{path.join(".")} must equal #{expected.inspect}" unless actual == expected
+end
+
+expected_pgxpool_closure = {
+  "github.com/jackc/pgpassfile" => ["v1.0.0", "h1:/6Hmqy13Ss2zCq62VdNG8tM1wchn8zjSGOBJ6icpsIM=", "99d8e8e28945ffceaf75b0299fcb2bb656b8a683", "MIT"],
+  "github.com/jackc/pgservicefile" => ["v0.0.0-20240606120523-5a60cdf6a761", "h1:iCEnooe7UlwOQYpKFhBabPMi4aNAfoODPEFNiAnClxo=", "5a60cdf6a76120dc3d5152b95f3b5fd8aa7cc9eb", "MIT"],
+  "github.com/jackc/puddle/v2" => ["v2.2.2", "h1:PR8nw+E/1w0GLuRFSmiioY6UooMp6KJv0/61nB7icHo=", "bd09d14bd4018b6d65a9d7770e2f3ddf8b00af1c", "MIT"],
+  "golang.org/x/sync" => ["v0.17.0", "h1:l60nONMj9l5drqw6jlhIELNv9I0A4OFgRsG9k2oT9Ug=", "04914c200cb38d4ea960ee6a4c314a028c632991", "BSD-3-Clause"],
+  "golang.org/x/text" => ["v0.29.0", "h1:1neNs90w9YzJ9BocxfsQNHKuAT4pkghyXc4nhZ6sJvk=", "e69f31bf9cf2f46bd3325bc9bad37fe9001731c2", "BSD-3-Clause"]
+}
+actual_closure = Array(postgresql_evidence.dig("go_candidate", "pgxpool_module_closure")).to_h do |entry|
+  [entry["module"], [entry["version"], entry["module_sum"], entry["upstream_commit"], entry["license_expression"]]]
+end
+errors << "dependency-evidence/stead-p1-015-postgresql.yaml: pgxpool module closure differs from the reviewed intake" unless actual_closure == expected_pgxpool_closure
+
+pgx_record = components["github.com/jackc/pgx/v5"]
+if pgx_record
+  errors << "github.com/jackc/pgx/v5: registry artifact checksum differs from intake evidence" unless pgx_record.dig("component", "digest", "value") == postgresql_evidence.dig("go_candidate", "module_sum")
+  errors << "github.com/jackc/pgx/v5: registry go.mod checksum differs from intake evidence" unless pgx_record.dig("component", "module_file_digest", "value") == postgresql_evidence.dig("go_candidate", "go_mod_sum")
+end
+postgres_record = components["postgres"]
+if postgres_record
+  errors << "postgres: registry index digest differs from intake evidence" unless postgres_record.dig("component", "digest", "value") == postgresql_evidence.dig("oci_candidate", "index_digest")
+end
+unless postgresql_evidence.dig("go_candidate", "vulnerability_scan") == { "status" => "PENDING_INDEPENDENT_SCAN", "result" => nil }
+  errors << "dependency-evidence/stead-p1-015-postgresql.yaml: Go vulnerability evidence must remain honestly pending until an independent result is recorded"
+end
+unless postgresql_evidence.dig("oci_candidate", "vulnerability_scan") == { "status" => "PENDING_IMAGE_SCAN", "result" => nil } &&
+       postgresql_evidence.dig("oci_candidate", "package_license_inventory") == { "status" => "PENDING_IMAGE_SCAN", "result" => nil }
+  errors << "dependency-evidence/stead-p1-015-postgresql.yaml: image vulnerability/license evidence must remain honestly pending until scan results are recorded"
+end
+
 lockfile = JSON.parse(File.read(LOCK_PATH))
 errors << "package-lock.json: lockfileVersion must be 3" unless lockfile["lockfileVersion"] == 3
 direct_dependencies = direct_npm_dependencies(lockfile, errors)
@@ -266,6 +538,11 @@ end
 registered_npm = records.select { |record| record.dig("component", "kind") == "npm_package" }.map { |record| record.dig("component", "name") }.to_set
 (registered_npm - direct_names).each { |name| errors << "dependency registry: stale/non-direct npm candidate #{name}" }
 
+go_mod_source = File.read(GO_MOD_PATH)
+go_sum_source = File.file?(GO_SUM_PATH) ? File.read(GO_SUM_PATH) : ""
+direct_go = validate_go_dependencies(go_mod_source, go_sum_source, components, errors)
+direct_go_names = direct_go.map { |entry| entry["name"] }.to_set
+
 review_licenses = Set.new
 lockfile.fetch("packages", {}).each do |path, package|
   next unless path.include?("node_modules/")
@@ -282,7 +559,7 @@ lockfile.fetch("packages", {}).each do |path, package|
   end
 end
 
-active_record_names = direct_names.dup
+active_record_names = direct_names | direct_go_names
 workflow_paths = Dir.glob(File.join(ROOT, ".github/workflows/*.{yml,yaml}"))
 workflow_paths.each do |workflow_path|
   File.read(workflow_path).scan(/\buses:\s*["']?([^\s"'#]+)/).flatten.each do |reference|
@@ -299,6 +576,10 @@ workflow_paths.each do |workflow_path|
     end
   end
 end
+
+workflow_sources = workflow_paths.to_h { |path| [path.delete_prefix(ROOT + "/"), File.read(path)] }
+oci_references = validate_oci_workflow_images(workflow_sources, components, errors)
+active_record_names.merge(oci_references.map { |reference| reference["name"] })
 
 ci_path = File.join(ROOT, ".github/workflows/ci.yml")
 if !File.file?(ci_path)
@@ -365,11 +646,7 @@ if release_mode
   if makefile_source.include?("scripts/run_pinned_node.sh")
     active_record_names << "node-v26.8.1-linux-x64.tar.xz"
   end
-  active_record_names.each do |name|
-    record = components[name]
-    next unless record
-    errors << "#{name}: active dependency is not independently approved for release" unless registry["release_eligible_statuses"].include?(record.dig("decision", "status"))
-  end
+  errors.concat(release_approval_errors(active_record_names, components, registry["release_eligible_statuses"]))
 end
 
 unless errors.empty?
@@ -379,6 +656,6 @@ unless errors.empty?
 end
 
 pending = records.count { |record| record.dig("decision", "status") == "REVIEWED_PENDING_INDEPENDENT_APPROVAL" }
-puts "dependency registry valid: #{records.length} exact candidate records; #{direct_dependencies.length} direct npm dependencies; #{pending} pending independent approval"
+puts "dependency registry valid: #{records.length} exact candidate records; #{direct_dependencies.length} direct npm dependencies; #{direct_go.length} direct Go modules; #{oci_references.length} workflow OCI images; #{pending} pending independent approval"
 puts "transitive license review required before approval: #{review_licenses.to_a.sort.join(", ")}" unless review_licenses.empty?
 puts "release eligibility verified for #{active_record_names.length} active dependencies" if release_mode

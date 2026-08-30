@@ -1,0 +1,84 @@
+schema_version: "1.0"
+issue_id: STEAD-P1-015
+issue_number: 38
+candidate_state: GOVERNANCE_ONLY_NOT_INTEGRATED
+recorded_at: "2026-08-30"
+evidence_scope:
+  - exact Go module identity and pgxpool closure proposed for stead-api
+  - exact OCI index and Linux amd64 platform identity proposed for CI-only PostgreSQL tests
+limitations:
+  - The values below are requester-supplied intake evidence and have not received independent approval.
+  - No Go module has been added to go.mod or go.sum and no application source imports pgx.
+  - No workflow references or activates the PostgreSQL image.
+  - Vulnerability, image-package, signature, attestation, and complete image-license scan results are pending; this file claims no PASS result.
+
+go_candidate:
+  approval_id: DEP-APP-GO-PGX-V5-5-10-0
+  module: github.com/jackc/pgx/v5
+  version: v5.10.0
+  module_sum: "h1:VhSvgU2jSli8o3AqIEOTJr7rZwAEUVo4E4XhR94Zfr0="
+  go_mod_sum: "h1:mal1tBGAFfLHvZzaYh77YS/eC6IX9OWbRV1QIIM0Jn4="
+  upstream:
+    repository: https://github.com/jackc/pgx
+    tag: v5.10.0
+    tag_commit: 7293fb11125be0373a92f716683f2d494f6fd4b0
+    license_expression: MIT
+  proposed_relationship: runtime
+  proposed_distribution: [stead-api]
+  vulnerability_scan: { status: PENDING_INDEPENDENT_SCAN, result: null }
+  provenance_review: { status: PENDING_INDEPENDENT_RECOMPUTATION, result: null }
+  pgxpool_module_closure:
+    - module: github.com/jackc/pgpassfile
+      version: v1.0.0
+      module_sum: "h1:/6Hmqy13Ss2zCq62VdNG8tM1wchn8zjSGOBJ6icpsIM="
+      upstream_repository: https://github.com/jackc/pgpassfile
+      upstream_commit: 99d8e8e28945ffceaf75b0299fcb2bb656b8a683
+      license_expression: MIT
+      notice_id: NOTICE-PGPASSFILE-MIT
+    - module: github.com/jackc/pgservicefile
+      version: v0.0.0-20240606120523-5a60cdf6a761
+      module_sum: "h1:iCEnooe7UlwOQYpKFhBabPMi4aNAfoODPEFNiAnClxo="
+      upstream_repository: https://github.com/jackc/pgservicefile
+      upstream_commit: 5a60cdf6a76120dc3d5152b95f3b5fd8aa7cc9eb
+      license_expression: MIT
+      notice_id: NOTICE-PGSERVICEFILE-MIT
+    - module: github.com/jackc/puddle/v2
+      version: v2.2.2
+      module_sum: "h1:PR8nw+E/1w0GLuRFSmiioY6UooMp6KJv0/61nB7icHo="
+      upstream_repository: https://github.com/jackc/puddle
+      upstream_commit: bd09d14bd4018b6d65a9d7770e2f3ddf8b00af1c
+      license_expression: MIT
+      notice_id: NOTICE-PUDDLE-MIT
+    - module: golang.org/x/sync
+      version: v0.17.0
+      module_sum: "h1:l60nONMj9l5drqw6jlhIELNv9I0A4OFgRsG9k2oT9Ug="
+      upstream_repository: https://github.com/golang/sync
+      upstream_commit: 04914c200cb38d4ea960ee6a4c314a028c632991
+      license_expression: BSD-3-Clause
+      notice_id: NOTICE-GO-X-SYNC-BSD-3-CLAUSE
+    - module: golang.org/x/text
+      version: v0.29.0
+      module_sum: "h1:1neNs90w9YzJ9BocxfsQNHKuAT4pkghyXc4nhZ6sJvk="
+      upstream_repository: https://github.com/golang/text
+      upstream_commit: e69f31bf9cf2f46bd3325bc9bad37fe9001731c2
+      license_expression: BSD-3-Clause
+      notice_id: NOTICE-GO-X-TEXT-BSD-3-CLAUSE
+
+oci_candidate:
+  approval_id: DEP-APP-OCI-POSTGRES-16-BOOKWORM-BB3E1A57
+  reference: postgres:16-bookworm
+  registry_repository: docker.io/library/postgres
+  source: https://hub.docker.com/_/postgres
+  index_digest: "sha256:bb3e1a57e5407e0a5280b4211980a5e537f4abd234a87014ac979849a78dd825"
+  selected_platform:
+    os: linux
+    architecture: amd64
+    manifest_digest: "sha256:1938c16e9d2f10a6a3623b344b64ae8d45f407f2c5f34f0979468bb689b9227a"
+    config_digest: "sha256:5f71c21b69a7977b82247582e2e731ed76bdebaadb7dd7945ed76bcc9ed06632"
+  postgres_package_version: 16.15-1.pgdg12+2
+  created: "2026-08-25"
+  proposed_relationship: ci_test_service
+  proposed_distribution: []
+  vulnerability_scan: { status: PENDING_IMAGE_SCAN, result: null }
+  package_license_inventory: { status: PENDING_IMAGE_SCAN, result: null }
+  signature_attestation_review: { status: PENDING_INDEPENDENT_VERIFICATION, result: null }

@@ -487,3 +487,70 @@ records:
     change: { update_policy: "Review exact version, SRI, Node compatibility, DOM behavior, transitive graph, resource use, bundle exclusion, and lock diff on every change.", rollback_version: "git:e24a4d9d05ad6df19c5bcaa9c385ee74fd5d8c31", rollback_constraints: "Scoped rollback restores the pre-test parent manifests and lock and removes the unit-test harness; no product state changes." }
     adr: null
     legal_approval: null
+
+  - approval_id: DEP-APP-GO-PGX-V5-5-10-0
+    component:
+      name: github.com/jackc/pgx/v5
+      kind: go_module
+      ecosystem: go
+      source_url: https://github.com/jackc/pgx
+      version: v5.10.0
+      digest: { algorithm: go-h1, value: "h1:VhSvgU2jSli8o3AqIEOTJr7rZwAEUVo4E4XhR94Zfr0=" }
+      module_file_digest: { algorithm: go-h1, value: "h1:mal1tBGAFfLHvZzaYh77YS/eC6IX9OWbRV1QIIM0Jn4=" }
+      license_expression: MIT
+    usage:
+      owner: WS-02 stead-api core and transactional-outbox composition
+      directories: [apps/core, go.mod, go.sum]
+      purpose: Proposed PostgreSQL driver and pgxpool runtime boundary for STEAD-P1-015; this record does not authorize adding the module to go.mod or product code.
+      relationship: runtime
+      distributed_in: [stead-api]
+      linkage_or_interface: Proposed in-process Go module used only behind WS-02-owned PostgreSQL repositories and transaction ports; the exact pgxpool module closure is recorded in dependency-evidence/stead-p1-015-postgresql.yaml.
+    decision: { category: ALLOW-PERMISSIVE, status: REVIEWED_PENDING_INDEPENDENT_APPROVAL, independent_approval_required: true, approvers: [], approved_at: null }
+    obligations:
+      notices: [NOTICE-PGX-MIT, NOTICE-PGPASSFILE-MIT, NOTICE-PGSERVICEFILE-MIT, NOTICE-PUDDLE-MIT, NOTICE-GO-X-SYNC-BSD-3-CLAUSE, NOTICE-GO-X-TEXT-BSD-3-CLAUSE]
+      source_or_offer: Preserve the complete MIT and BSD-3-Clause notices for pgx and every distributed transitive module in stead-api notices and release evidence.
+      modifications: Candidate modules are not vendored or modified; any later patch, fork, vendoring, or closure change requires fresh review and updated notices.
+    security:
+      vulnerability_result: PENDING_INDEPENDENT_SCAN; no vulnerability-clean result is claimed, and the candidate may not enter go.mod or a release until exact-module and transitive scans are reviewed.
+      provenance_result: Requester-supplied Go sums, upstream tag commit, transitive commits, and license expressions are recorded in dependency-evidence/stead-p1-015-postgresql.yaml; independent checksum/provenance review remains pending.
+      maintenance_risk: Major-version API is pinned, but pool, protocol, authentication, cancellation, and transitive changes require compatibility, failure-injection, and supply-chain review on every update.
+      permissions_and_network: Proposed stead-api runtime opens PostgreSQL network connections using deployment-scoped credentials; no provider, browser, telemetry, or arbitrary outbound authority is authorized.
+    change:
+      update_policy: Every pgx version, Go sum, upstream commit, module-closure, license, runtime permission, distribution, or linkage change requires a new independently reviewed candidate.
+      rollback_version: git:e24a4d9d05ad6df19c5bcaa9c385ee74fd5d8c31
+      rollback_constraints: Candidate is not integrated. After integration, rollback requires a previously approved driver version compatible with persisted PostgreSQL state and passing migration, transaction, and failure-injection tests; otherwise recover forward while protected operations deny.
+    adr: ADR-0007
+    legal_approval: null
+
+  - approval_id: DEP-APP-OCI-POSTGRES-16-BOOKWORM-BB3E1A57
+    component:
+      name: postgres
+      kind: oci_image
+      ecosystem: oci
+      source_url: https://hub.docker.com/_/postgres
+      version: 16-bookworm
+      digest: { algorithm: sha256, value: "sha256:bb3e1a57e5407e0a5280b4211980a5e537f4abd234a87014ac979849a78dd825" }
+      license_expression: NOASSERTION-PENDING-IMAGE-INVENTORY
+    usage:
+      owner: WS-02 integration fixtures; WS-13 supply-chain gate
+      directories: [.github/workflows, tests/integration/core]
+      purpose: Proposed Linux amd64 PostgreSQL 16 service for CI-only STEAD-P1-015 integration tests; no workflow or service references this candidate yet.
+      relationship: test
+      distributed_in: []
+      linkage_or_interface: Proposed ephemeral CI service only, pinned by multi-platform index digest with the reviewed Linux amd64 manifest and config recorded separately; it is excluded from Stead release artifacts.
+    decision: { category: REVIEW-NONRUNTIME, status: REVIEWED_PENDING_INDEPENDENT_APPROVAL, independent_approval_required: true, approvers: [], approved_at: null }
+    obligations:
+      notices: []
+      source_or_offer: CI-only candidate is not distributed; its complete package/license inventory still must be reviewed before approval or activation.
+      modifications: Official image candidate would be used unmodified and ephemerally if independently approved.
+    security:
+      vulnerability_result: PENDING_IMAGE_SCAN; no vulnerability or base-image PASS is claimed, and no workflow activation or release use is authorized.
+      provenance_result: Requester-supplied index, Linux amd64 manifest, config digest, image creation time, and PG_VERSION are recorded in dependency-evidence/stead-p1-015-postgresql.yaml; independent registry/provenance verification remains pending.
+      maintenance_risk: Mutable tag metadata, Debian package churn, platform divergence, image entrypoint behavior, and database lifecycle require digest-specific review and periodic replacement.
+      permissions_and_network: Proposed use is an ephemeral loopback-accessible CI service with synthetic data and disposable credentials; privileged mode, host mounts, external publication, protected data, and release distribution are prohibited.
+    change:
+      update_policy: Every index, platform manifest, config, tag, PostgreSQL package version, platform, package inventory, CI permission, or distribution change requires a new independently reviewed candidate.
+      rollback_version: git:e24a4d9d05ad6df19c5bcaa9c385ee74fd5d8c31
+      rollback_constraints: Candidate is not activated. If later approved and activated, remove the digest-pinned workflow service and return integration tests to the approved non-service baseline; no product state may be retained.
+    adr: ADR-0007
+    legal_approval: null

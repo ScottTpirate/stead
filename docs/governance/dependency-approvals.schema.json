@@ -74,11 +74,12 @@
                 "oci_image",
                 "binary_toolchain",
                 "cli_binary",
-                "npm_package"
+                "npm_package",
+                "go_module"
               ]
             },
             "ecosystem": {
-              "enum": ["git", "github-actions", "oci", "go-toolchain", "binary", "npm"]
+              "enum": ["git", "github-actions", "oci", "go-toolchain", "binary", "npm", "go"]
             },
             "source_url": { "type": "string", "format": "uri" },
             "version": { "$ref": "#/$defs/nonEmptyString" },
@@ -87,7 +88,16 @@
               "additionalProperties": false,
               "required": ["algorithm", "value"],
               "properties": {
-                "algorithm": { "enum": ["git-sha1", "sha256", "sha512-sri"] },
+                "algorithm": { "enum": ["git-sha1", "sha256", "sha512-sri", "go-h1"] },
+                "value": { "$ref": "#/$defs/nonEmptyString" }
+              }
+            },
+            "module_file_digest": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["algorithm", "value"],
+              "properties": {
+                "algorithm": { "const": "go-h1" },
                 "value": { "$ref": "#/$defs/nonEmptyString" }
               }
             },
@@ -110,7 +120,7 @@
             "directories": { "$ref": "#/$defs/stringArray" },
             "purpose": { "$ref": "#/$defs/nonEmptyString" },
             "relationship": {
-              "enum": ["source-reference", "build", "test", "ci-action", "clean-room-build"]
+              "enum": ["source-reference", "build", "test", "ci-action", "clean-room-build", "runtime"]
             },
             "distributed_in": { "$ref": "#/$defs/stringArray" },
             "linkage_or_interface": { "$ref": "#/$defs/nonEmptyString" }
