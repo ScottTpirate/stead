@@ -564,7 +564,7 @@ Dir.mktmpdir("performance-adversarial-", artifacts_parent.to_s) do |directory|
     "T-P1-012-PERF-CANDIDATE-COVERAGE",
     suite_result["candidate_eligible"] == false &&
       suite_result["errors"].any? { |error| error.include?("does not resolve to a Git commit") } &&
-      suite_result["errors"].any? { |error| error.include?("only inside GitHub Actions") } &&
+      suite_result["errors"].include?("candidate CI run_id is not bound to the trusted release workflow") &&
       suite_result["errors"].any? { |error| error.include?("candidate requires controlled tracked infrastructure") } &&
       suite_result["errors"].any? { |error| error.include?("digest mismatch") } &&
       suite_result["errors"].any? { |error| error.include?("could not execute digest-bound artifact") } &&
