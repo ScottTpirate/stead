@@ -29,6 +29,18 @@ go_candidate:
     tag: v5.10.0
     tag_commit: 7293fb11125be0373a92f716683f2d494f6fd4b0
     license_expression: MIT
+  notice_id: NOTICE-PGX-MIT
+  notice_quarantine:
+    marker: "STEAD-NOTICE-QUARANTINE:DEP-APP-GO-PGX-V5-5-10-0:REJECTED-NOT-RELEASE-INPUT"
+    status: REJECTED_EVIDENCE_ONLY
+    release_notice_input: false
+    begin_marker: "<!-- BEGIN STEAD-NOTICE-QUARANTINE:DEP-APP-GO-PGX-V5-5-10-0:REJECTED-NOT-RELEASE-INPUT -->"
+    section_heading: "## REJECTED / QUARANTINED — pgx v5.10.0 closure notices (not release input)"
+    framing: |-
+      These exact six notices are rejected intake evidence only; this block is not approved,
+      distributed, or a release-notice input. Any reuse requires a new approval ID and independent approval.
+    end_marker: "<!-- END STEAD-NOTICE-QUARANTINE:DEP-APP-GO-PGX-V5-5-10-0:REJECTED-NOT-RELEASE-INPUT -->"
+    notice_ids: [NOTICE-PGX-MIT, NOTICE-PGPASSFILE-MIT, NOTICE-PGSERVICEFILE-MIT, NOTICE-PUDDLE-MIT, NOTICE-GO-X-SYNC-BSD-3-CLAUSE, NOTICE-GO-X-TEXT-BSD-3-CLAUSE]
   proposed_relationship: runtime
   proposed_distribution: [stead-api]
   vulnerability_scan:

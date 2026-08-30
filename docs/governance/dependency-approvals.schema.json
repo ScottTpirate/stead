@@ -34,6 +34,30 @@
       "items": { "$ref": "#/$defs/nonEmptyString" },
       "uniqueItems": true
     },
+    "noticeQuarantine": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "marker",
+        "status",
+        "release_notice_input",
+        "begin_marker",
+        "section_heading",
+        "framing",
+        "end_marker",
+        "notice_ids"
+      ],
+      "properties": {
+        "marker": { "$ref": "#/$defs/nonEmptyString" },
+        "status": { "const": "REJECTED_EVIDENCE_ONLY" },
+        "release_notice_input": { "const": false },
+        "begin_marker": { "$ref": "#/$defs/nonEmptyString" },
+        "section_heading": { "$ref": "#/$defs/nonEmptyString" },
+        "framing": { "$ref": "#/$defs/nonEmptyString" },
+        "end_marker": { "$ref": "#/$defs/nonEmptyString" },
+        "notice_ids": { "$ref": "#/$defs/stringArray" }
+      }
+    },
     "approvalRecord": {
       "type": "object",
       "additionalProperties": false,
@@ -157,6 +181,7 @@
           "required": ["notices", "source_or_offer", "modifications"],
           "properties": {
             "notices": { "$ref": "#/$defs/stringArray" },
+            "notice_quarantine": { "$ref": "#/$defs/noticeQuarantine" },
             "source_or_offer": { "$ref": "#/$defs/nonEmptyString" },
             "modifications": { "$ref": "#/$defs/nonEmptyString" }
           }

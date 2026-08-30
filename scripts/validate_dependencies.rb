@@ -32,6 +32,39 @@ FOUNDATION_ROLLBACK_TARGET = "git:e24a4d9d05ad6df19c5bcaa9c385ee74fd5d8c31"
 EXACT_GO_VERSION = /\Av\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?\z/
 GO_H1_DIGEST = /\Ah1:[A-Za-z0-9+\/]{43}=\z/
 PROHIBITED_GO_DIRECTIVES = Set.new(%w[exclude godebug replace retract tool toolchain]).freeze
+REJECTED_PGX_NOTICE_IDS = %w[
+  NOTICE-PGX-MIT
+  NOTICE-PGPASSFILE-MIT
+  NOTICE-PGSERVICEFILE-MIT
+  NOTICE-PUDDLE-MIT
+  NOTICE-GO-X-SYNC-BSD-3-CLAUSE
+  NOTICE-GO-X-TEXT-BSD-3-CLAUSE
+].freeze
+PGX_NOTICE_QUARANTINE_MARKER = "STEAD-NOTICE-QUARANTINE:DEP-APP-GO-PGX-V5-5-10-0:REJECTED-NOT-RELEASE-INPUT"
+PGX_NOTICE_QUARANTINE_BEGIN = "<!-- BEGIN #{PGX_NOTICE_QUARANTINE_MARKER} -->"
+PGX_NOTICE_QUARANTINE_END = "<!-- END #{PGX_NOTICE_QUARANTINE_MARKER} -->"
+PGX_NOTICE_QUARANTINE_HEADING = "## REJECTED / QUARANTINED — pgx v5.10.0 closure notices (not release input)"
+PGX_NOTICE_QUARANTINE_FRAMING = <<~MARKDOWN.chomp.freeze
+  These exact six notices are rejected intake evidence only; this block is not approved,
+  distributed, or a release-notice input. Any reuse requires a new approval ID and independent approval.
+MARKDOWN
+PGX_NOTICE_QUARANTINE_BINDING = {
+  "marker" => PGX_NOTICE_QUARANTINE_MARKER,
+  "status" => "REJECTED_EVIDENCE_ONLY",
+  "release_notice_input" => false,
+  "begin_marker" => PGX_NOTICE_QUARANTINE_BEGIN,
+  "section_heading" => PGX_NOTICE_QUARANTINE_HEADING,
+  "framing" => PGX_NOTICE_QUARANTINE_FRAMING,
+  "end_marker" => PGX_NOTICE_QUARANTINE_END,
+  "notice_ids" => REJECTED_PGX_NOTICE_IDS
+}.freeze
+EXPECTED_PGXPOOL_CLOSURE = {
+  "github.com/jackc/pgpassfile" => ["v1.0.0", "h1:/6Hmqy13Ss2zCq62VdNG8tM1wchn8zjSGOBJ6icpsIM=", "h1:CEx0iS5ambNFdcRtxPj5JhEz+xB6uRky5eyVu/W2HEg=", "99d8e8e28945ffceaf75b0299fcb2bb656b8a683", "MIT", "NOTICE-PGPASSFILE-MIT"],
+  "github.com/jackc/pgservicefile" => ["v0.0.0-20240606120523-5a60cdf6a761", "h1:iCEnooe7UlwOQYpKFhBabPMi4aNAfoODPEFNiAnClxo=", "h1:5TJZWKEWniPve33vlWYSoGYefn3gLQRzjfDlhSJ9ZKM=", "5a60cdf6a76120dc3d5152b95f3b5fd8aa7cc9eb", "MIT", "NOTICE-PGSERVICEFILE-MIT"],
+  "github.com/jackc/puddle/v2" => ["v2.2.2", "h1:PR8nw+E/1w0GLuRFSmiioY6UooMp6KJv0/61nB7icHo=", "h1:vriiEXHvEE654aYKXXjOvZM39qJ0q+azkZFrfEOc3H4=", "bd09d14bd4018b6d65a9d7770e2f3ddf8b00af1c", "MIT", "NOTICE-PUDDLE-MIT"],
+  "golang.org/x/sync" => ["v0.17.0", "h1:l60nONMj9l5drqw6jlhIELNv9I0A4OFgRsG9k2oT9Ug=", "h1:9KTHXmSnoGruLpwFjVSX0lNNA75CykiMECbovNTZqGI=", "04914c200cb38d4ea960ee6a4c314a028c632991", "BSD-3-Clause", "NOTICE-GO-X-SYNC-BSD-3-CLAUSE"],
+  "golang.org/x/text" => ["v0.29.0", "h1:1neNs90w9YzJ9BocxfsQNHKuAT4pkghyXc4nhZ6sJvk=", "h1:7MhJOA9CD2qZyOKYazxdYMF85OwPdEr9jTtBpO7ydH4=", "e69f31bf9cf2f46bd3325bc9bad37fe9001731c2", "BSD-3-Clause", "NOTICE-GO-X-TEXT-BSD-3-CLAUSE"]
+}.freeze
 EXPECTED_REJECTED_DECISIONS = {
   "github.com/jackc/pgx/v5" => {
     "category" => "ALLOW-PERMISSIVE",
@@ -72,6 +105,8 @@ EXPECTED_POSTGRESQL_REJECTION_EVIDENCE = {
   ["independent_review", "disposition"] => "REVISE_HOLD",
   ["independent_review", "release_eligible"] => false,
   ["independent_review", "evidence_references"] => ["github-pr-39-comment-5471438314", "github-issue-38-comment-5471438378"],
+  ["go_candidate", "notice_id"] => "NOTICE-PGX-MIT",
+  ["go_candidate", "notice_quarantine"] => PGX_NOTICE_QUARANTINE_BINDING,
   ["go_candidate", "vulnerability_scan", "status"] => "REJECTED_REACHABLE_VULNERABILITY",
   ["go_candidate", "vulnerability_scan", "completed_at"] => "2026-08-30T21:35:54Z",
   ["go_candidate", "vulnerability_scan", "tool"] => {
@@ -538,6 +573,16 @@ def exact_rejected_candidate_errors(components)
   if postgres_record && postgres_record.dig("component", "license_expression") != "NOASSERTION"
     errors << "postgres: rejected image license must remain NOASSERTION"
   end
+  pgx_record = components["github.com/jackc/pgx/v5"]
+  if pgx_record
+    obligations = pgx_record.fetch("obligations", {})
+    unless obligations["notices"] == REJECTED_PGX_NOTICE_IDS
+      errors << "github.com/jackc/pgx/v5: rejected notice obligations must remain the exact six reviewed IDs"
+    end
+    unless obligations["notice_quarantine"] == PGX_NOTICE_QUARANTINE_BINDING
+      errors << "github.com/jackc/pgx/v5: rejected notice quarantine binding differs from the reviewed fail-closed framing"
+    end
+  end
   errors
 end
 
@@ -545,13 +590,79 @@ def nested_value(value, path)
   path.reduce(value) { |cursor, key| cursor.is_a?(Hash) ? cursor[key] : nil }
 end
 
+def pgxpool_closure_errors(evidence)
+  closure = Array(evidence.dig("go_candidate", "pgxpool_module_closure"))
+  actual = closure.to_h do |entry|
+    [
+      entry["module"],
+      [entry["version"], entry["module_sum"], entry["go_mod_sum"], entry["upstream_commit"], entry["license_expression"], entry["notice_id"]]
+    ]
+  end
+  return [] if closure.length == EXPECTED_PGXPOOL_CLOSURE.length && actual == EXPECTED_PGXPOOL_CLOSURE
+
+  ["dependency-evidence/stead-p1-015-postgresql.yaml: pgxpool module closure and notice linkage differ from the reviewed intake"]
+end
+
 def postgresql_rejection_evidence_errors(evidence)
-  EXPECTED_POSTGRESQL_REJECTION_EVIDENCE.filter_map do |path, expected|
+  errors = EXPECTED_POSTGRESQL_REJECTION_EVIDENCE.filter_map do |path, expected|
     actual = nested_value(evidence, path)
     next if actual == expected
 
     "dependency-evidence/stead-p1-015-postgresql.yaml: #{path.join('.')} must preserve rejected finding #{expected.inspect}"
   end
+  errors.concat(pgxpool_closure_errors(evidence))
+end
+
+def notice_quarantine_errors(source)
+  errors = []
+  begin_count = source.scan(Regexp.new(Regexp.escape(PGX_NOTICE_QUARANTINE_BEGIN))).length
+  end_count = source.scan(Regexp.new(Regexp.escape(PGX_NOTICE_QUARANTINE_END))).length
+  errors << "THIRD_PARTY_NOTICES.md: rejected notice quarantine begin marker must occur exactly once" unless begin_count == 1
+  errors << "THIRD_PARTY_NOTICES.md: rejected notice quarantine end marker must occur exactly once" unless end_count == 1
+  return errors unless begin_count == 1 && end_count == 1
+
+  begin_index = source.index(PGX_NOTICE_QUARANTINE_BEGIN)
+  end_index = source.index(PGX_NOTICE_QUARANTINE_END)
+  unless begin_index < end_index
+    errors << "THIRD_PARTY_NOTICES.md: rejected notice quarantine markers are reversed"
+    return errors
+  end
+
+  section = source[(begin_index + PGX_NOTICE_QUARANTINE_BEGIN.length)...end_index]
+  expected_opening = "\n\n#{PGX_NOTICE_QUARANTINE_HEADING}\n\n#{PGX_NOTICE_QUARANTINE_FRAMING}\n\n"
+  unless section.start_with?(expected_opening)
+    errors << "THIRD_PARTY_NOTICES.md: rejected notice quarantine heading/framing differs from the exact evidence-only contract"
+  end
+
+  section_notice_ids = section.scan(/^## (NOTICE-[A-Z0-9-]+)(?:[ \t]|$)/).flatten
+  unless section_notice_ids == REJECTED_PGX_NOTICE_IDS
+    errors << "THIRD_PARTY_NOTICES.md: rejected quarantine must contain exactly the six reviewed notice IDs in closure order"
+  end
+  REJECTED_PGX_NOTICE_IDS.each do |notice_id|
+    occurrence_count = source.scan(/^## #{Regexp.escape(notice_id)}(?:[ \t]|$)/).length
+    unless occurrence_count == 1
+      errors << "THIRD_PARTY_NOTICES.md: #{notice_id} must occur exactly once inside the rejected quarantine"
+    end
+  end
+
+  outside = source[0...begin_index] + source[(end_index + PGX_NOTICE_QUARANTINE_END.length)..]
+  REJECTED_PGX_NOTICE_IDS.each do |notice_id|
+    if outside.match?(/^## #{Regexp.escape(notice_id)}(?:[ \t]|$)/)
+      errors << "THIRD_PARTY_NOTICES.md: #{notice_id} appears outside the rejected quarantine"
+    end
+  end
+  errors
+end
+
+def notice_entry_range(source, notice_id)
+  heading = /^## #{Regexp.escape(notice_id)}(?:[ \t].*)?$/
+  start_index = source.index(heading)
+  return nil unless start_index
+
+  next_notice = source.index(/^## NOTICE-[A-Z0-9-]+(?:[ \t].*)?$/, start_index + 1)
+  quarantine_end = source.index(PGX_NOTICE_QUARANTINE_END, start_index + 1)
+  end_index = [next_notice, quarantine_end].compact.min
+  end_index ? (start_index...end_index) : nil
 end
 
 def delete_nested_key!(value, path)
@@ -691,6 +802,26 @@ def run_validator_self_tests
   end
   failures << "rejected decision softening mutation survivors: #{softened_decision_survivors.join(', ')}" unless softened_decision_survivors.empty?
 
+  notice_obligation_mutations = {
+    "notices empty" => lambda { |record| record.fetch("obligations")["notices"] = [] },
+    "notices removed" => lambda { |record| record.fetch("obligations").delete("notices") },
+    "notice ID changed" => lambda { |record| record.fetch("obligations").fetch("notices")[0] = "NOTICE-APPROVED-STYLE" },
+    "quarantine binding removed" => lambda { |record| record.fetch("obligations").delete("notice_quarantine") },
+    "quarantine marker changed" => lambda do |record|
+      record.fetch("obligations").fetch("notice_quarantine")["marker"] = "APPROVED-NOTICE-INPUT"
+    end
+  }
+  notice_obligation_survivors = []
+  notice_obligation_mutations.each do |label, mutation|
+    mutated_components = Marshal.load(Marshal.dump(registry_components))
+    mutation.call(mutated_components.fetch("github.com/jackc/pgx/v5"))
+    notice_obligation_survivors << label if exact_rejected_candidate_errors(mutated_components).empty?
+    guard_count += 1
+  end
+  unless notice_obligation_survivors.empty?
+    failures << "rejected notice-obligation mutation survivors: #{notice_obligation_survivors.join(', ')}"
+  end
+
   softened_license_components = Marshal.load(Marshal.dump(registry_components))
   softened_license_components.fetch("postgres").fetch("component")["license_expression"] = "MIT"
   if exact_rejected_candidate_errors(softened_license_components).empty?
@@ -710,6 +841,7 @@ def run_validator_self_tests
 
   softened_evidence_mutations = {
     ["independent_review", "release_eligible"] => true,
+    ["go_candidate", "notice_id"] => "NOTICE-PGPASSFILE-MIT",
     ["go_candidate", "vulnerability_scan", "status"] => "PASS",
     ["go_candidate", "possible_successor", "status"] => "APPROVED",
     ["oci_candidate", "vulnerability_scan", "status"] => "PASS",
@@ -724,6 +856,101 @@ def run_validator_self_tests
     guard_count += 1
   end
   failures << "rejected evidence softening mutation survivors: #{softened_evidence_survivors.join(', ')}" unless softened_evidence_survivors.empty?
+
+  closure_notice_survivors = []
+  closure = evidence_fixture.fetch("go_candidate").fetch("pgxpool_module_closure")
+  closure.each_index do |index|
+    module_name = closure.fetch(index).fetch("module")
+
+    removed = Marshal.load(Marshal.dump(evidence_fixture))
+    removed.dig("go_candidate", "pgxpool_module_closure", index).delete("notice_id")
+    if postgresql_rejection_evidence_errors(removed).empty?
+      closure_notice_survivors << "#{module_name}.notice_id removed"
+    end
+    guard_count += 1
+
+    changed = Marshal.load(Marshal.dump(evidence_fixture))
+    changed.dig("go_candidate", "pgxpool_module_closure", index)["notice_id"] = "NOTICE-APPROVED-STYLE"
+    if postgresql_rejection_evidence_errors(changed).empty?
+      closure_notice_survivors << "#{module_name}.notice_id changed"
+    end
+    guard_count += 1
+
+    relinked = Marshal.load(Marshal.dump(evidence_fixture))
+    next_index = (index + 1) % closure.length
+    relinked.dig("go_candidate", "pgxpool_module_closure", index)["notice_id"] = closure.fetch(next_index).fetch("notice_id")
+    if postgresql_rejection_evidence_errors(relinked).empty?
+      closure_notice_survivors << "#{module_name}.notice_id relinked"
+    end
+    guard_count += 1
+  end
+  unless closure_notice_survivors.empty?
+    failures << "pgxpool closure notice-link mutation survivors: #{closure_notice_survivors.join(', ')}"
+  end
+
+  evidence_quarantine_mutations = {
+    "marker removed" => lambda { |binding| binding.delete("marker") },
+    "marker approved-style relabel" => lambda { |binding| binding["marker"] = "APPROVED-NOTICE-INPUT" },
+    "section heading removed" => lambda { |binding| binding.delete("section_heading") },
+    "framing removed" => lambda { |binding| binding.delete("framing") },
+    "release input softened" => lambda { |binding| binding["release_notice_input"] = true }
+  }
+  evidence_quarantine_survivors = []
+  evidence_quarantine_mutations.each do |label, mutation|
+    mutated_evidence = Marshal.load(Marshal.dump(evidence_fixture))
+    mutation.call(mutated_evidence.dig("go_candidate", "notice_quarantine"))
+    if postgresql_rejection_evidence_errors(mutated_evidence).empty?
+      evidence_quarantine_survivors << label
+    end
+    guard_count += 1
+  end
+  unless evidence_quarantine_survivors.empty?
+    failures << "evidence notice-quarantine mutation survivors: #{evidence_quarantine_survivors.join(', ')}"
+  end
+
+  notices_fixture = File.read(NOTICES_PATH)
+  source_mutations = {
+    "begin marker removed" => notices_fixture.sub(PGX_NOTICE_QUARANTINE_BEGIN, ""),
+    "end marker removed" => notices_fixture.sub(PGX_NOTICE_QUARANTINE_END, ""),
+    "section heading removed" => notices_fixture.sub(PGX_NOTICE_QUARANTINE_HEADING, ""),
+    "framing removed" => notices_fixture.sub(PGX_NOTICE_QUARANTINE_FRAMING, ""),
+    "approved-style section relabel" => notices_fixture.sub(PGX_NOTICE_QUARANTINE_HEADING, "## APPROVED — pgx v5.10.0 closure notices")
+  }
+  section_removed = notices_fixture.dup
+  section_start = section_removed.index(PGX_NOTICE_QUARANTINE_BEGIN)
+  section_end = section_removed.index(PGX_NOTICE_QUARANTINE_END) + PGX_NOTICE_QUARANTINE_END.length
+  section_removed.slice!(section_start...section_end)
+  source_mutations["quarantine section removed"] = section_removed
+
+  REJECTED_PGX_NOTICE_IDS.each do |notice_id|
+    range = notice_entry_range(notices_fixture, notice_id)
+    if range.nil?
+      failures << "self-test fixture cannot locate #{notice_id}"
+      next
+    end
+    entry = notices_fixture[range]
+
+    missing = notices_fixture.dup
+    missing.slice!(range)
+    source_mutations["#{notice_id} missing"] = missing
+
+    duplicate = notices_fixture.dup
+    duplicate.insert(range.end, entry)
+    source_mutations["#{notice_id} duplicated"] = duplicate
+
+    moved = notices_fixture.dup
+    moved.slice!(range)
+    moved.insert(moved.index(PGX_NOTICE_QUARANTINE_BEGIN), "#{entry}\n")
+    source_mutations["#{notice_id} moved outside quarantine"] = moved
+  end
+
+  notice_source_survivors = source_mutations.filter_map do |label, mutated_source|
+    guard_count += 1
+    label if notice_quarantine_errors(mutated_source).empty?
+  end
+  unless notice_source_survivors.empty?
+    failures << "THIRD_PARTY_NOTICES quarantine mutation survivors: #{notice_source_survivors.join(', ')}"
+  end
 
   unless failures.empty?
     warn "dependency validator self-tests failed:"
@@ -847,17 +1074,6 @@ expected_postgresql_evidence.each do |path, expected|
   errors << "dependency-evidence/stead-p1-015-postgresql.yaml: #{path.join(".")} must equal #{expected.inspect}" unless actual == expected
 end
 
-expected_pgxpool_closure = {
-  "github.com/jackc/pgpassfile" => ["v1.0.0", "h1:/6Hmqy13Ss2zCq62VdNG8tM1wchn8zjSGOBJ6icpsIM=", "h1:CEx0iS5ambNFdcRtxPj5JhEz+xB6uRky5eyVu/W2HEg=", "99d8e8e28945ffceaf75b0299fcb2bb656b8a683", "MIT"],
-  "github.com/jackc/pgservicefile" => ["v0.0.0-20240606120523-5a60cdf6a761", "h1:iCEnooe7UlwOQYpKFhBabPMi4aNAfoODPEFNiAnClxo=", "h1:5TJZWKEWniPve33vlWYSoGYefn3gLQRzjfDlhSJ9ZKM=", "5a60cdf6a76120dc3d5152b95f3b5fd8aa7cc9eb", "MIT"],
-  "github.com/jackc/puddle/v2" => ["v2.2.2", "h1:PR8nw+E/1w0GLuRFSmiioY6UooMp6KJv0/61nB7icHo=", "h1:vriiEXHvEE654aYKXXjOvZM39qJ0q+azkZFrfEOc3H4=", "bd09d14bd4018b6d65a9d7770e2f3ddf8b00af1c", "MIT"],
-  "golang.org/x/sync" => ["v0.17.0", "h1:l60nONMj9l5drqw6jlhIELNv9I0A4OFgRsG9k2oT9Ug=", "h1:9KTHXmSnoGruLpwFjVSX0lNNA75CykiMECbovNTZqGI=", "04914c200cb38d4ea960ee6a4c314a028c632991", "BSD-3-Clause"],
-  "golang.org/x/text" => ["v0.29.0", "h1:1neNs90w9YzJ9BocxfsQNHKuAT4pkghyXc4nhZ6sJvk=", "h1:7MhJOA9CD2qZyOKYazxdYMF85OwPdEr9jTtBpO7ydH4=", "e69f31bf9cf2f46bd3325bc9bad37fe9001731c2", "BSD-3-Clause"]
-}
-actual_closure = Array(postgresql_evidence.dig("go_candidate", "pgxpool_module_closure")).to_h do |entry|
-  [entry["module"], [entry["version"], entry["module_sum"], entry["go_mod_sum"], entry["upstream_commit"], entry["license_expression"]]]
-end
-errors << "dependency-evidence/stead-p1-015-postgresql.yaml: pgxpool module closure differs from the reviewed intake" unless actual_closure == expected_pgxpool_closure
 errors.concat(postgresql_rejection_evidence_errors(postgresql_evidence))
 
 pgx_record = components["github.com/jackc/pgx/v5"]
@@ -895,7 +1111,7 @@ go_mod_source = File.read(GO_MOD_PATH)
 go_sum_source = File.file?(GO_SUM_PATH) ? File.read(GO_SUM_PATH) : ""
 errors << "go.work: workspace overrides are prohibited in release input" if File.file?(File.join(ROOT, "go.work"))
 errors << "vendor: vendored Go source requires separate provenance and approval" if File.directory?(File.join(ROOT, "vendor"))
-allowed_pgxpool_indirect = expected_pgxpool_closure.transform_values { |values| values.first(3) }
+allowed_pgxpool_indirect = EXPECTED_PGXPOOL_CLOSURE.transform_values { |values| values.first(3) }
 go_validation = validate_go_dependencies(
   go_mod_source,
   go_sum_source,
@@ -989,6 +1205,7 @@ errors << "scripts/validate_openfga.sh: repository-owned model evaluator is miss
 errors << "scripts/validate_openfga.sh: external OpenFGA CLI execution is prohibited until a vulnerability-clean exact release is approved" if openfga_runner.match?(/\bfga\s+model\s+test\b|openfga\/cli\/releases/)
 
 notices = File.read(NOTICES_PATH)
+errors.concat(notice_quarantine_errors(notices))
 required_notices = records.select { |record| record.dig("decision", "status") == "APPROVED" }
                           .flat_map { |record| Array(record.dig("obligations", "notices")) }
                           .uniq

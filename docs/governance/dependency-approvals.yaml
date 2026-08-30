@@ -515,6 +515,17 @@ records:
       evidence_refs: [dependency-evidence/stead-p1-015-postgresql.yaml#go_candidate, github-pr-39-comment-5471438314, github-issue-38-comment-5471438378]
     obligations:
       notices: [NOTICE-PGX-MIT, NOTICE-PGPASSFILE-MIT, NOTICE-PGSERVICEFILE-MIT, NOTICE-PUDDLE-MIT, NOTICE-GO-X-SYNC-BSD-3-CLAUSE, NOTICE-GO-X-TEXT-BSD-3-CLAUSE]
+      notice_quarantine:
+        marker: "STEAD-NOTICE-QUARANTINE:DEP-APP-GO-PGX-V5-5-10-0:REJECTED-NOT-RELEASE-INPUT"
+        status: REJECTED_EVIDENCE_ONLY
+        release_notice_input: false
+        begin_marker: "<!-- BEGIN STEAD-NOTICE-QUARANTINE:DEP-APP-GO-PGX-V5-5-10-0:REJECTED-NOT-RELEASE-INPUT -->"
+        section_heading: "## REJECTED / QUARANTINED — pgx v5.10.0 closure notices (not release input)"
+        framing: |-
+          These exact six notices are rejected intake evidence only; this block is not approved,
+          distributed, or a release-notice input. Any reuse requires a new approval ID and independent approval.
+        end_marker: "<!-- END STEAD-NOTICE-QUARANTINE:DEP-APP-GO-PGX-V5-5-10-0:REJECTED-NOT-RELEASE-INPUT -->"
+        notice_ids: [NOTICE-PGX-MIT, NOTICE-PGPASSFILE-MIT, NOTICE-PGSERVICEFILE-MIT, NOTICE-PUDDLE-MIT, NOTICE-GO-X-SYNC-BSD-3-CLAUSE, NOTICE-GO-X-TEXT-BSD-3-CLAUSE]
       source_or_offer: These quarantined notice IDs preserve intake evidence only. If a distinct successor is approved, preserve the complete MIT and BSD-3-Clause notices for every module actually distributed in stead-api.
       modifications: Rejected modules are not vendored or modified; any successor, patch, fork, vendoring, or closure change requires fresh review and updated notices.
     security:

@@ -41,19 +41,19 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-## Quarantined evidence-only notices — not approved or distributed
+<!-- BEGIN STEAD-NOTICE-QUARANTINE:DEP-APP-GO-PGX-V5-5-10-0:REJECTED-NOT-RELEASE-INPUT -->
 
-The following six notices preserve the license evidence collected for the rejected
-`github.com/jackc/pgx/v5` v5.10.0 closure. Their presence does not make any module
-release-eligible. A successor may reuse them only after a new immutable intake and
-independent approval establish the exact closure and distribution obligations.
+## REJECTED / QUARANTINED — pgx v5.10.0 closure notices (not release input)
+
+These exact six notices are rejected intake evidence only; this block is not approved,
+distributed, or a release-notice input. Any reuse requires a new approval ID and independent approval.
 
 ## NOTICE-PGX-MIT — pgx
 
 Candidate component: `github.com/jackc/pgx/v5` v5.10.0 at commit
-`7293fb11125be0373a92f716683f2d494f6fd4b0`. This runtime candidate is not yet
-approved or integrated; retain this notice if it is later distributed in
-`stead-api`.
+`7293fb11125be0373a92f716683f2d494f6fd4b0`. This runtime candidate is rejected,
+quarantined, and not integrated. This entry is evidence only and is excluded
+from release-notice inputs.
 
 Copyright (c) 2013-2021 Jack Christensen
 
@@ -220,6 +220,8 @@ INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
 CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 POSSIBILITY OF SUCH DAMAGE.
+
+<!-- END STEAD-NOTICE-QUARANTINE:DEP-APP-GO-PGX-V5-5-10-0:REJECTED-NOT-RELEASE-INPUT -->
 
 ## NOTICE-REACT-MIT — React, React DOM, and Scheduler
 
