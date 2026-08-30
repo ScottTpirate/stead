@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stead.dev/schemas/performance/reviewer-authorities-v1.schema.json",
+  "title": "Stead independently approved performance reviewer authorities v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["artifact_type", "schema_version", "implementation_owners", "authorities"],
+  "properties": {
+    "artifact_type": { "const": "performance_reviewer_authority_registry" },
+    "schema_version": { "const": "1.0" },
+    "implementation_owners": {
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["owner_id", "identity", "status"],
+        "properties": {
+          "owner_id": { "type": "string", "minLength": 1 },
+          "identity": { "type": "string", "minLength": 1 },
+          "status": { "const": "active" }
+        }
+      }
+    },
+    "authorities": {
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["authority_id", "identity", "role", "public_key_pem", "status"],
+        "properties": {
+          "authority_id": { "type": "string", "minLength": 1 },
+          "identity": { "type": "string", "minLength": 1 },
+          "role": { "enum": ["independent_qa", "independent_security", "ws12", "ws05"] },
+          "public_key_pem": { "type": "string", "pattern": "^-----BEGIN PUBLIC KEY-----" },
+          "status": { "const": "active" }
+        }
+      }
+    }
+  }
+}

@@ -21,18 +21,20 @@
       "type": "object", "additionalProperties": false,
       "required": ["path", "sha256", "output_sha256", "seed", "command"],
       "properties": {
-        "path": { "type": "string", "minLength": 1 },
+        "path": { "const": "tests/performance/datasets/generate_standard_corpus.rb" },
         "sha256": { "$ref": "#/$defs/sha256" },
         "output_sha256": { "$ref": "#/$defs/sha256" },
-        "seed": { "type": "integer", "minimum": 1 },
-        "command": { "type": "string", "minLength": 1 }
+        "seed": { "const": 2026083001 },
+        "command": { "const": "ruby tests/performance/datasets/generate_standard_corpus.rb" }
       }
     },
     "client": {
       "type": "object", "additionalProperties": false,
-      "required": ["cpu_architecture", "cpu_cores", "memory_mib", "os", "browser", "cpu_governor", "viewport_css_pixels", "device_scale_factor"],
+      "required": ["cpu_architecture", "cpu_model", "cpu_base_frequency_mhz", "cpu_cores", "memory_mib", "os", "browser", "cpu_governor", "viewport_css_pixels", "device_scale_factor"],
       "properties": {
         "cpu_architecture": { "type": "string", "minLength": 1 },
+        "cpu_model": { "type": "string", "minLength": 1 },
+        "cpu_base_frequency_mhz": { "type": "integer", "minimum": 1 },
         "cpu_cores": { "type": "integer", "minimum": 1 },
         "memory_mib": { "type": "integer", "minimum": 1 },
         "os": { "type": "string", "minLength": 1 },
@@ -44,9 +46,11 @@
     },
     "server": {
       "type": "object", "additionalProperties": false,
-      "required": ["cpu_architecture", "cpu_cores", "memory_mib", "os", "application_instances", "worker_instances", "component_versions"],
+      "required": ["cpu_architecture", "cpu_model", "cpu_base_frequency_mhz", "cpu_cores", "memory_mib", "os", "application_instances", "worker_instances", "component_versions"],
       "properties": {
         "cpu_architecture": { "type": "string", "minLength": 1 },
+        "cpu_model": { "type": "string", "minLength": 1 },
+        "cpu_base_frequency_mhz": { "type": "integer", "minimum": 1 },
         "cpu_cores": { "type": "integer", "minimum": 1 },
         "memory_mib": { "type": "integer", "minimum": 1 },
         "os": { "type": "string", "minLength": 1 },
@@ -99,7 +103,7 @@
     "corpus": {
       "type": "object", "additionalProperties": false,
       "required": [
-        "organizations", "teams", "team_edges", "projects", "work_items", "documents",
+        "organizations", "teams", "team_edges", "people", "agents", "projects", "work_items", "documents",
         "document_versions", "relationships", "activity_events", "inbox_entries",
         "audit_events", "repositories", "pull_requests", "builds", "packages", "releases"
       ],
@@ -107,6 +111,8 @@
         "organizations": { "$ref": "#/$defs/cardinality" },
         "teams": { "$ref": "#/$defs/cardinality" },
         "team_edges": { "$ref": "#/$defs/cardinality" },
+        "people": { "$ref": "#/$defs/cardinality" },
+        "agents": { "$ref": "#/$defs/cardinality" },
         "projects": { "$ref": "#/$defs/cardinality" },
         "work_items": { "$ref": "#/$defs/cardinality" },
         "documents": { "$ref": "#/$defs/cardinality" },
@@ -173,7 +179,7 @@
     },
     "load_shapes": { "type": "array", "minItems": 9, "items": { "$ref": "#/$defs/loadShape" } },
     "required_suite_artifact_kinds": {
-      "type": "array", "minItems": 10, "uniqueItems": true,
+      "type": "array", "minItems": 11, "uniqueItems": true,
       "items": { "$ref": "#/$defs/artifactKind" }
     },
     "telemetry_scan": {
@@ -194,18 +200,21 @@
     "artifactKind": {
       "enum": [
         "authorization_count", "browser_performance", "frontend_bundle", "go_microbenchmark",
-        "golden_slice_e2e", "peek", "projection_lag", "provider_count", "query_count", "response_before_relay"
+        "golden_slice_e2e", "peek", "projection_lag", "provider_count", "query_count", "response_before_relay", "runner_attestation"
       ]
     },
     "loadShape": {
       "type": "object", "additionalProperties": false,
-      "required": ["id", "concurrency", "warmup_requests", "measured_samples", "state", "result_counts"],
+      "required": ["id", "concurrency", "warmup_requests", "measured_samples", "state", "arrival_model", "pacing_ms", "duration_seconds", "result_counts"],
       "properties": {
         "id": { "type": "string", "minLength": 1 },
         "concurrency": { "type": "integer", "minimum": 1 },
         "warmup_requests": { "type": "integer", "minimum": 0 },
         "measured_samples": { "type": "integer", "minimum": 20 },
         "state": { "enum": ["cold", "warm"] },
+        "arrival_model": { "enum": ["closed_loop", "isolated_iteration"] },
+        "pacing_ms": { "type": "integer", "minimum": 1 },
+        "duration_seconds": { "type": "integer", "minimum": 1 },
         "result_counts": {
           "type": "array", "uniqueItems": true,
           "items": { "type": "integer", "minimum": 1 }
@@ -265,13 +274,20 @@
     },
     "baseline": {
       "type": "object", "additionalProperties": false,
-      "required": ["baseline_id", "metric", "value", "critical", "source_revision"],
+      "required": [
+        "baseline_id", "metric", "value", "critical", "source_revision",
+        "benchmark_profile", "disclosure_mode", "environment_sha256", "reference_artifact_sha256"
+      ],
       "properties": {
         "baseline_id": { "type": "string", "minLength": 1 },
         "metric": { "type": "string", "minLength": 1 },
         "value": { "type": "number", "exclusiveMinimum": 0 },
         "critical": { "type": "boolean" },
-        "source_revision": { "type": "string", "pattern": "^[0-9a-f]{40}$" }
+        "source_revision": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "benchmark_profile": { "const": "standard" },
+        "disclosure_mode": { "const": "request_boundary" },
+        "environment_sha256": { "$ref": "#/$defs/sha256" },
+        "reference_artifact_sha256": { "$ref": "#/$defs/sha256" }
       }
     }
   }

@@ -7,7 +7,8 @@
   "required": [
     "artifact_type", "schema_version", "evidence_id", "evidence_kind", "source",
     "dataset", "scenario_id", "provenance", "counts", "timings_ms", "sizes",
-    "web_vitals", "scaling_trials", "raw_samples", "raw_samples_sha256", "telemetry"
+    "web_vitals", "go_microbenchmark", "scaling_trials", "raw_samples", "raw_samples_sha256",
+    "request_traces", "request_traces_sha256", "telemetry"
   ],
   "properties": {
     "artifact_type": { "const": "performance_measurement" },
@@ -70,6 +71,15 @@
         "cls": { "type": "number", "minimum": 0 }
       }
     },
+    "go_microbenchmark": {
+      "type": ["object", "null"], "additionalProperties": false,
+      "required": ["nanoseconds_per_operation", "allocations_per_operation", "bytes_per_operation"],
+      "properties": {
+        "nanoseconds_per_operation": { "type": "number", "exclusiveMinimum": 0 },
+        "allocations_per_operation": { "type": "number", "minimum": 0 },
+        "bytes_per_operation": { "type": "number", "minimum": 0 }
+      }
+    },
     "scaling_trials": {
       "type": "array",
       "items": {
@@ -116,6 +126,51 @@
       }
     },
     "raw_samples_sha256": { "$ref": "#/$defs/sha256" },
+    "request_traces": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["trace_id_hash", "sample_index", "sample_started_monotonic_ns", "events"],
+        "properties": {
+          "trace_id_hash": { "$ref": "#/$defs/sha256" },
+          "sample_index": { "type": "integer", "minimum": 0 },
+          "sample_started_monotonic_ns": { "type": "integer", "minimum": 0 },
+          "events": {
+            "type": "array", "minItems": 1,
+            "items": {
+              "type": "object", "additionalProperties": false,
+              "required": ["type", "monotonic_ns", "origin", "route_template"],
+              "properties": {
+                "type": {
+                  "enum": [
+                    "browser_request", "sql_query", "postgres_write", "openfga_call",
+                    "policy_call", "provider_call", "nats_wait", "logical_audit_operation",
+                    "authorization_cache_hit", "authoritative_commit", "response_sent", "relay_started"
+                  ]
+                },
+                "monotonic_ns": { "type": "integer", "minimum": 0 },
+                "origin": { "enum": ["stead_api", "provider", "internal", null] },
+                "route_template": { "type": ["string", "null"], "minLength": 1 },
+                "write_role": { "enum": ["authoritative_state", "transactional_outbox", "aggregate_audit", null] },
+                "transaction_id_hash": {
+                  "oneOf": [
+                    { "$ref": "#/$defs/sha256" },
+                    { "type": "null" }
+                  ]
+                },
+                "outbox_event_id_hash": {
+                  "oneOf": [
+                    { "$ref": "#/$defs/sha256" },
+                    { "type": "null" }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "request_traces_sha256": { "$ref": "#/$defs/sha256" },
     "telemetry": {
       "type": "object", "additionalProperties": false,
       "required": [

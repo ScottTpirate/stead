@@ -6,7 +6,7 @@
   "additionalProperties": false,
   "required": [
     "artifact_type", "schema_version", "suite_id", "phase", "source", "dataset",
-    "runtime_components", "evidence", "benchmark_artifacts", "regression_reviews"
+    "ci_context", "runtime_components", "evidence", "benchmark_artifacts", "regression_reviews"
   ],
   "properties": {
     "artifact_type": { "const": "performance_candidate_suite" },
@@ -15,9 +15,10 @@
     "phase": { "const": "phase1" },
     "source": {
       "type": "object", "additionalProperties": false,
-      "required": ["revision", "dirty", "recorded_at", "implementation_owner", "tool_versions"],
+      "required": ["revision", "controls_revision", "dirty", "recorded_at", "implementation_owner", "tool_versions"],
       "properties": {
         "revision": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "controls_revision": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
         "dirty": { "const": false },
         "recorded_at": { "type": "string", "format": "date-time" },
         "implementation_owner": { "type": "string", "minLength": 1 },
@@ -28,16 +29,41 @@
         }
       }
     },
+    "ci_context": {
+      "type": "object", "additionalProperties": false,
+      "required": ["provider", "repository", "workflow_ref", "event_name", "run_id", "run_attempt", "ref_protected"],
+      "properties": {
+        "provider": { "const": "github_actions" },
+        "repository": { "const": "ScottTpirate/stead" },
+        "workflow_ref": { "const": "ScottTpirate/stead/.github/workflows/phase1-candidate.yml@refs/heads/main" },
+        "event_name": { "const": "workflow_dispatch" },
+        "run_id": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+        "run_attempt": { "type": "integer", "minimum": 1 },
+        "ref_protected": { "const": true }
+      }
+    },
     "dataset": { "$ref": "#/$defs/fileReference" },
     "runtime_components": {
       "type": "array", "minItems": 6,
       "items": {
         "type": "object", "additionalProperties": false,
-        "required": ["name", "version", "artifact_digest"],
+        "required": ["name", "version", "artifact", "version_probe"],
         "properties": {
           "name": { "enum": ["go", "node", "postgresql", "openfga", "nats_server", "gitea"] },
           "version": { "type": "string", "minLength": 1 },
-          "artifact_digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+          "artifact": { "$ref": "#/$defs/fileReference" },
+          "version_probe": {
+            "type": "object", "additionalProperties": false,
+            "required": ["argv", "stdout", "invocation_sha256"],
+            "properties": {
+              "argv": {
+                "type": "array", "minItems": 2, "maxItems": 2,
+                "items": { "type": "string", "minLength": 1 }
+              },
+              "stdout": { "$ref": "#/$defs/fileReference" },
+              "invocation_sha256": { "$ref": "#/$defs/sha256" }
+            }
+          }
         }
       }
     },
@@ -66,7 +92,7 @@
     "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
     "relativePath": {
       "type": "string", "minLength": 1,
-      "pattern": "^(artifacts/performance|packages/test-fixtures/harness/performance|tests/performance/datasets)/[A-Za-z0-9._/-]+$"
+      "pattern": "^(artifacts/performance|packages/test-fixtures/harness/performance|tests/performance/datasets|scripts/performance)/[A-Za-z0-9._/-]+$"
     },
     "fileReference": {
       "type": "object", "additionalProperties": false,

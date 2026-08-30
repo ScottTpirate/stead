@@ -1,0 +1,285 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stead.dev/schemas/performance/corpus-v1.schema.json",
+  "title": "Stead benchmark-usable standard corpus v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "artifact_type", "schema_version", "dataset_id", "generator_seed", "cardinalities",
+    "organizations", "teams", "team_edges", "people", "agents", "projects", "work_items",
+    "documents", "document_versions", "relationships", "activity_events", "inbox_entries",
+    "audit_events", "repositories", "pull_requests", "builds", "packages", "releases"
+  ],
+  "properties": {
+    "artifact_type": { "const": "performance_corpus" },
+    "schema_version": { "const": "1.0" },
+    "dataset_id": { "const": "stead-standard-request-boundary-v1" },
+    "generator_seed": { "const": 2026083001 },
+    "cardinalities": { "$ref": "#/$defs/cardinalities" },
+    "organizations": { "$ref": "#/$defs/organizations" },
+    "teams": { "$ref": "#/$defs/teams" },
+    "team_edges": { "$ref": "#/$defs/teamEdges" },
+    "people": { "$ref": "#/$defs/people" },
+    "agents": { "$ref": "#/$defs/agents" },
+    "projects": { "$ref": "#/$defs/projects" },
+    "work_items": { "$ref": "#/$defs/workItems" },
+    "documents": { "$ref": "#/$defs/documents" },
+    "document_versions": { "$ref": "#/$defs/documentVersions" },
+    "relationships": { "$ref": "#/$defs/relationships" },
+    "activity_events": { "$ref": "#/$defs/activityEvents" },
+    "inbox_entries": { "$ref": "#/$defs/inboxEntries" },
+    "audit_events": { "$ref": "#/$defs/auditEvents" },
+    "repositories": { "$ref": "#/$defs/repositories" },
+    "pull_requests": { "$ref": "#/$defs/pullRequests" },
+    "builds": { "$ref": "#/$defs/builds" },
+    "packages": { "$ref": "#/$defs/packages" },
+    "releases": { "$ref": "#/$defs/releases" }
+  },
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[a-z_]+_[0-9a-f]{24}$" },
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "boundedText": { "type": "string", "minLength": 1, "maxLength": 160 },
+    "searchText": { "type": "string", "minLength": 80, "maxLength": 240 },
+    "classification": { "enum": ["baseline:internal", "baseline:confidential", "baseline:restricted"] },
+    "cardinalities": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "organizations", "teams", "team_edges", "people", "agents", "projects", "work_items",
+        "documents", "document_versions", "relationships", "activity_events", "inbox_entries",
+        "audit_events", "repositories", "pull_requests", "builds", "packages", "releases"
+      ],
+      "properties": {
+        "organizations": { "const": 10 }, "teams": { "const": 80 }, "team_edges": { "const": 70 },
+        "people": { "const": 1000 }, "agents": { "const": 100 }, "projects": { "const": 200 },
+        "work_items": { "const": 10000 }, "documents": { "const": 5000 }, "document_versions": { "const": 20000 },
+        "relationships": { "const": 30000 }, "activity_events": { "const": 100000 }, "inbox_entries": { "const": 25000 },
+        "audit_events": { "const": 100000 }, "repositories": { "const": 50 }, "pull_requests": { "const": 2000 },
+        "builds": { "const": 5000 }, "packages": { "const": 1000 }, "releases": { "const": 500 }
+      }
+    },
+    "organizations": {
+      "type": "array", "minItems": 10, "maxItems": 10,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["id", "slug", "name", "classification", "status"],
+        "properties": {
+          "id": { "$ref": "#/$defs/id" }, "slug": { "$ref": "#/$defs/boundedText" },
+          "name": { "$ref": "#/$defs/boundedText" }, "classification": { "$ref": "#/$defs/classification" },
+          "status": { "const": "active" }
+        }
+      }
+    },
+    "teams": {
+      "type": "array", "minItems": 80, "maxItems": 80,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["id", "organization_id", "parent_team_id", "slug", "name", "classification", "status"],
+        "properties": {
+          "id": { "$ref": "#/$defs/id" }, "organization_id": { "$ref": "#/$defs/id" },
+          "parent_team_id": { "type": ["string", "null"], "pattern": "^[a-z_]+_[0-9a-f]{24}$" },
+          "slug": { "$ref": "#/$defs/boundedText" }, "name": { "$ref": "#/$defs/boundedText" },
+          "classification": { "$ref": "#/$defs/classification" }, "status": { "const": "active" }
+        }
+      }
+    },
+    "teamEdges": {
+      "type": "array", "minItems": 70, "maxItems": 70,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["parent_team_id", "child_team_id", "depth"],
+        "properties": {
+          "parent_team_id": { "$ref": "#/$defs/id" }, "child_team_id": { "$ref": "#/$defs/id" },
+          "depth": { "type": "integer", "minimum": 1, "maximum": 2 }
+        }
+      }
+    },
+    "people": {
+      "type": "array", "minItems": 1000, "maxItems": 1000,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["id", "organization_id", "home_team_id", "display_name", "department", "status"],
+        "properties": {
+          "id": { "$ref": "#/$defs/id" }, "organization_id": { "$ref": "#/$defs/id" }, "home_team_id": { "$ref": "#/$defs/id" },
+          "display_name": { "$ref": "#/$defs/boundedText" }, "department": { "$ref": "#/$defs/boundedText" },
+          "status": { "enum": ["active", "inactive"] }
+        }
+      }
+    },
+    "agents": {
+      "type": "array", "minItems": 100, "maxItems": 100,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["id", "organization_id", "name", "runtime_kind", "status", "delegated_by_person_id"],
+        "properties": {
+          "id": { "$ref": "#/$defs/id" }, "organization_id": { "$ref": "#/$defs/id" }, "name": { "$ref": "#/$defs/boundedText" },
+          "runtime_kind": { "enum": ["external_a2a", "external_mcp", "external_api"] },
+          "status": { "enum": ["active", "disabled"] }, "delegated_by_person_id": { "$ref": "#/$defs/id" }
+        }
+      }
+    },
+    "projects": {
+      "type": "array", "minItems": 200, "maxItems": 200,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["id", "organization_id", "team_id", "slug", "name", "status", "classification", "capabilities"],
+        "properties": {
+          "id": { "$ref": "#/$defs/id" }, "organization_id": { "$ref": "#/$defs/id" }, "team_id": { "$ref": "#/$defs/id" },
+          "slug": { "$ref": "#/$defs/boundedText" }, "name": { "$ref": "#/$defs/boundedText" },
+          "status": { "enum": ["planned", "active", "paused", "completed"] }, "classification": { "$ref": "#/$defs/classification" },
+          "capabilities": { "oneOf": [{ "const": ["work", "docs"] }, { "const": ["work", "docs", "code", "delivery"] }] }
+        }
+      }
+    },
+    "workItems": {
+      "type": "array", "minItems": 10000, "maxItems": 10000,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["id", "project_id", "organization_id", "title", "search_text", "status", "priority", "classification", "creator_person_id", "assignee_type", "assignee_id", "estimate_points"],
+        "properties": {
+          "id": { "$ref": "#/$defs/id" }, "project_id": { "$ref": "#/$defs/id" }, "organization_id": { "$ref": "#/$defs/id" },
+          "title": { "$ref": "#/$defs/boundedText" }, "search_text": { "$ref": "#/$defs/searchText" },
+          "status": { "enum": ["backlog", "ready", "in_progress", "blocked", "review", "done"] },
+          "priority": { "enum": ["low", "normal", "high", "urgent"] }, "classification": { "$ref": "#/$defs/classification" },
+          "creator_person_id": { "$ref": "#/$defs/id" }, "assignee_type": { "enum": ["person", "agent"] },
+          "assignee_id": { "$ref": "#/$defs/id" }, "estimate_points": { "enum": [1, 2, 3, 5, 8, 13] }
+        }
+      }
+    },
+    "documents": {
+      "type": "array", "minItems": 5000, "maxItems": 5000,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["id", "organization_id", "scope_type", "scope_id", "project_id", "slug", "title", "search_text", "status", "classification", "author_person_id", "word_count"],
+        "properties": {
+          "id": { "$ref": "#/$defs/id" }, "organization_id": { "$ref": "#/$defs/id" },
+          "scope_type": { "enum": ["organization", "team", "project"] }, "scope_id": { "$ref": "#/$defs/id" },
+          "project_id": { "type": ["string", "null"], "pattern": "^[a-z_]+_[0-9a-f]{24}$" },
+          "slug": { "$ref": "#/$defs/boundedText" }, "title": { "$ref": "#/$defs/boundedText" }, "search_text": { "$ref": "#/$defs/searchText" },
+          "status": { "enum": ["draft", "review", "published", "archived"] }, "classification": { "$ref": "#/$defs/classification" },
+          "author_person_id": { "$ref": "#/$defs/id" }, "word_count": { "type": "integer", "minimum": 250, "maximum": 5000 }
+        }
+      }
+    },
+    "documentVersions": {
+      "type": "array", "minItems": 20000, "maxItems": 20000,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["id", "document_id", "ordinal", "git_blob_sha256", "author_person_id", "state"],
+        "properties": {
+          "id": { "$ref": "#/$defs/id" }, "document_id": { "$ref": "#/$defs/id" },
+          "ordinal": { "type": "integer", "minimum": 1, "maximum": 4 }, "git_blob_sha256": { "$ref": "#/$defs/sha256" },
+          "author_person_id": { "$ref": "#/$defs/id" }, "state": { "enum": ["current", "historical"] }
+        }
+      }
+    },
+    "relationships": {
+      "type": "array", "minItems": 30000, "maxItems": 30000,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["id", "source_type", "source_id", "target_type", "target_id", "relationship_type", "organization_id"],
+        "properties": {
+          "id": { "$ref": "#/$defs/id" }, "source_type": { "const": "work_item" }, "source_id": { "$ref": "#/$defs/id" },
+          "target_type": { "const": "document" }, "target_id": { "$ref": "#/$defs/id" },
+          "relationship_type": { "enum": ["references", "implements", "informs", "blocks"] }, "organization_id": { "$ref": "#/$defs/id" }
+        }
+      }
+    },
+    "activityEvents": {
+      "type": "array", "minItems": 100000, "maxItems": 100000,
+      "items": { "$ref": "#/$defs/activityEvent" }
+    },
+    "activityEvent": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "organization_id", "actor_type", "actor_id", "verb", "object_type", "object_id", "sequence"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" }, "organization_id": { "$ref": "#/$defs/id" }, "actor_type": { "enum": ["person", "agent"] },
+        "actor_id": { "$ref": "#/$defs/id" }, "verb": { "enum": ["created", "updated", "assigned", "commented", "completed"] },
+        "object_type": { "const": "work_item" }, "object_id": { "$ref": "#/$defs/id" }, "sequence": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "inboxEntries": {
+      "type": "array", "minItems": 25000, "maxItems": 25000,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["id", "organization_id", "recipient_person_id", "activity_event_id", "state", "reason"],
+        "properties": {
+          "id": { "$ref": "#/$defs/id" }, "organization_id": { "$ref": "#/$defs/id" }, "recipient_person_id": { "$ref": "#/$defs/id" },
+          "activity_event_id": { "$ref": "#/$defs/id" }, "state": { "enum": ["unread", "read", "archived"] },
+          "reason": { "enum": ["assignment", "mention", "subscription", "review"] }
+        }
+      }
+    },
+    "auditEvents": {
+      "type": "array", "minItems": 100000, "maxItems": 100000,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["id", "organization_id", "principal_type", "principal_id", "operation", "resource_type", "resource_id", "decision", "sequence"],
+        "properties": {
+          "id": { "$ref": "#/$defs/id" }, "organization_id": { "$ref": "#/$defs/id" }, "principal_type": { "enum": ["person", "agent"] },
+          "principal_id": { "$ref": "#/$defs/id" }, "operation": { "enum": ["work.read", "work.update", "document.read", "search.query", "project.read"] },
+          "resource_type": { "const": "work_item" }, "resource_id": { "$ref": "#/$defs/id" },
+          "decision": { "enum": ["allow", "deny"] }, "sequence": { "type": "integer", "minimum": 1 }
+        }
+      }
+    },
+    "repositories": {
+      "type": "array", "minItems": 50, "maxItems": 50,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["id", "project_id", "name", "default_branch", "visibility", "provider_projection_state"],
+        "properties": {
+          "id": { "$ref": "#/$defs/id" }, "project_id": { "$ref": "#/$defs/id" }, "name": { "$ref": "#/$defs/boundedText" },
+          "default_branch": { "const": "main" }, "visibility": { "const": "project" },
+          "provider_projection_state": { "enum": ["current", "reconciling"] }
+        }
+      }
+    },
+    "pullRequests": {
+      "type": "array", "minItems": 2000, "maxItems": 2000,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["id", "repository_id", "number", "title", "status", "author_person_id"],
+        "properties": {
+          "id": { "$ref": "#/$defs/id" }, "repository_id": { "$ref": "#/$defs/id" }, "number": { "type": "integer", "minimum": 1 },
+          "title": { "$ref": "#/$defs/boundedText" }, "status": { "enum": ["open", "merged", "closed"] }, "author_person_id": { "$ref": "#/$defs/id" }
+        }
+      }
+    },
+    "builds": {
+      "type": "array", "minItems": 5000, "maxItems": 5000,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["id", "repository_id", "pull_request_id", "status", "duration_ms", "has_sbom"],
+        "properties": {
+          "id": { "$ref": "#/$defs/id" }, "repository_id": { "$ref": "#/$defs/id" }, "pull_request_id": { "$ref": "#/$defs/id" },
+          "status": { "enum": ["queued", "running", "succeeded", "failed", "cancelled"] },
+          "duration_ms": { "type": "integer", "minimum": 5000, "maximum": 900000 }, "has_sbom": { "type": "boolean" }
+        }
+      }
+    },
+    "packages": {
+      "type": "array", "minItems": 1000, "maxItems": 1000,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["id", "repository_id", "name", "version", "format", "size_bytes"],
+        "properties": {
+          "id": { "$ref": "#/$defs/id" }, "repository_id": { "$ref": "#/$defs/id" }, "name": { "$ref": "#/$defs/boundedText" },
+          "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" }, "format": { "enum": ["oci", "npm", "generic"] },
+          "size_bytes": { "type": "integer", "minimum": 1024, "maximum": 52428800 }
+        }
+      }
+    },
+    "releases": {
+      "type": "array", "minItems": 500, "maxItems": 500,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["id", "repository_id", "package_id", "name", "state", "approver_person_id"],
+        "properties": {
+          "id": { "$ref": "#/$defs/id" }, "repository_id": { "$ref": "#/$defs/id" }, "package_id": { "$ref": "#/$defs/id" },
+          "name": { "$ref": "#/$defs/boundedText" }, "state": { "enum": ["draft", "published", "withdrawn"] },
+          "approver_person_id": { "$ref": "#/$defs/id" }
+        }
+      }
+    }
+  }
+}

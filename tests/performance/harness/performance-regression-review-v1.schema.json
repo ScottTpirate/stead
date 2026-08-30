@@ -7,7 +7,8 @@
   "required": [
     "artifact_type", "schema_version", "review_id", "source_revision", "dataset_sha256",
     "evidence_sha256", "scenario_id", "baseline_id", "metric", "baseline", "current",
-    "regression_percent", "reviewer", "decision", "justification", "reviewed_at"
+    "regression_percent", "reviewer", "authority_id", "authority_revision",
+    "decision", "justification", "reviewed_at", "signature_algorithm", "signature_base64"
   ],
   "properties": {
     "artifact_type": { "const": "performance_regression_review" },
@@ -30,9 +31,13 @@
         "role": { "enum": ["independent_qa", "independent_security", "ws12", "ws05"] }
       }
     },
+    "authority_id": { "type": "string", "minLength": 1 },
+    "authority_revision": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
     "decision": { "enum": ["approved_exception", "rejected"] },
     "justification": { "type": "string", "minLength": 40 },
-    "reviewed_at": { "type": "string", "format": "date-time" }
+    "reviewed_at": { "type": "string", "format": "date-time" },
+    "signature_algorithm": { "const": "Ed25519" },
+    "signature_base64": { "type": "string", "pattern": "^[A-Za-z0-9+/]+={0,2}$" }
   },
   "$defs": {
     "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }

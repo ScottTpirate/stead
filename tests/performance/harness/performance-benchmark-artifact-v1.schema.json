@@ -1,13 +1,14 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://stead.dev/schemas/performance/benchmark-artifact-v1.schema.json",
-  "title": "Stead digest-bound performance benchmark artifact v1",
+  "title": "Stead per-scenario digest-bound performance benchmark artifact v1",
   "type": "object",
   "additionalProperties": false,
   "required": [
     "artifact_type", "schema_version", "artifact_id", "kind", "source_revision",
-    "dataset_sha256", "scenario_ids", "producer", "status", "measurements", "measurements_sha256",
-    "recorded_at", "causality"
+    "dataset_sha256", "scenario_id", "evidence_sha256", "request_traces_sha256",
+    "producer", "status", "observations", "observations_sha256", "measurement_files",
+    "recorded_at", "runner_attestation_sha256", "causality", "runner_execution"
   ],
   "properties": {
     "artifact_type": { "const": "performance_benchmark_artifact" },
@@ -16,12 +17,15 @@
     "kind": {
       "enum": [
         "authorization_count", "browser_performance", "frontend_bundle", "go_microbenchmark",
-        "golden_slice_e2e", "peek", "projection_lag", "provider_count", "query_count", "response_before_relay"
+        "golden_slice_e2e", "peek", "projection_lag", "provider_count", "query_count",
+        "response_before_relay", "runner_attestation"
       ]
     },
     "source_revision": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
     "dataset_sha256": { "$ref": "#/$defs/sha256" },
-    "scenario_ids": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+    "scenario_id": { "type": "string", "minLength": 1 },
+    "evidence_sha256": { "$ref": "#/$defs/sha256" },
+    "request_traces_sha256": { "$ref": "#/$defs/sha256" },
     "producer": {
       "type": "object", "additionalProperties": false,
       "required": ["tool", "version", "command"],
@@ -32,7 +36,7 @@
       }
     },
     "status": { "const": "PASS" },
-    "measurements": {
+    "observations": {
       "type": "array", "minItems": 1,
       "items": {
         "type": "object", "additionalProperties": false,
@@ -44,21 +48,78 @@
         }
       }
     },
-    "measurements_sha256": { "$ref": "#/$defs/sha256" },
+    "observations_sha256": { "$ref": "#/$defs/sha256" },
+    "measurement_files": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/fileReference" } },
     "recorded_at": { "type": "string", "format": "date-time" },
+    "runner_attestation_sha256": { "type": ["string", "null"], "pattern": "^[0-9a-f]{64}$" },
     "causality": {
       "type": ["object", "null"], "additionalProperties": false,
-      "required": ["trace_id_hash", "events"],
+      "required": ["trace_id_hash", "sample_index", "events"],
       "properties": {
         "trace_id_hash": { "$ref": "#/$defs/sha256" },
+        "sample_index": { "type": "integer", "minimum": 0 },
         "events": {
-          "type": "array", "minItems": 3, "maxItems": 3,
+          "type": "array", "minItems": 4, "maxItems": 4,
           "items": {
             "type": "object", "additionalProperties": false,
-            "required": ["type", "monotonic_ns"],
+            "required": ["type", "monotonic_ns", "transaction_id_hash", "outbox_event_id_hash"],
             "properties": {
-              "type": { "enum": ["authoritative_commit", "response_sent", "relay_started"] },
-              "monotonic_ns": { "type": "integer", "minimum": 0 }
+              "type": { "enum": ["postgres_write", "authoritative_commit", "response_sent", "relay_started"] },
+              "monotonic_ns": { "type": "integer", "minimum": 0 },
+              "transaction_id_hash": { "$ref": "#/$defs/sha256" },
+              "outbox_event_id_hash": { "$ref": "#/$defs/sha256" }
+            }
+          }
+        }
+      }
+    },
+    "runner_execution": {
+      "type": ["object", "null"], "additionalProperties": false,
+      "required": [
+        "binary", "stdout", "stderr", "argv", "command", "invocation_sha256", "exit_code",
+        "started_at", "ended_at", "environment_sha256", "environment_probe", "outputs"
+      ],
+      "properties": {
+        "binary": { "$ref": "#/$defs/fileReference" },
+        "stdout": { "$ref": "#/$defs/fileReference" },
+        "stderr": { "$ref": "#/$defs/fileReference" },
+        "argv": {
+          "type": "array", "minItems": 6, "maxItems": 6,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "command": { "type": "string", "minLength": 1 },
+        "invocation_sha256": { "$ref": "#/$defs/sha256" },
+        "exit_code": { "const": 0 },
+        "started_at": { "type": "string", "format": "date-time" },
+        "ended_at": { "type": "string", "format": "date-time" },
+        "environment_sha256": { "$ref": "#/$defs/sha256" },
+        "environment_probe": {
+          "type": "object", "additionalProperties": false,
+          "required": ["argv", "stdout", "invocation_sha256"],
+          "properties": {
+            "argv": {
+              "type": "array", "minItems": 6, "maxItems": 6,
+              "items": { "type": "string", "minLength": 1 }
+            },
+            "stdout": { "$ref": "#/$defs/fileReference" },
+            "invocation_sha256": { "$ref": "#/$defs/sha256" }
+          }
+        },
+        "outputs": {
+          "type": "array", "minItems": 1,
+          "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["kind", "path", "sha256"],
+            "properties": {
+              "kind": {
+                "enum": [
+                  "authorization_count", "browser_performance", "frontend_bundle", "go_microbenchmark",
+                  "golden_slice_e2e", "peek", "projection_lag", "provider_count", "query_count",
+                  "response_before_relay"
+                ]
+              },
+              "path": { "$ref": "#/$defs/relativePath" },
+              "sha256": { "$ref": "#/$defs/sha256" }
             }
           }
         }
@@ -66,6 +127,18 @@
     }
   },
   "$defs": {
-    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "relativePath": {
+      "type": "string", "minLength": 1,
+      "pattern": "^(artifacts/performance|packages/test-fixtures/harness/performance|scripts/performance)/[A-Za-z0-9._/-]+$"
+    },
+    "fileReference": {
+      "type": "object", "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": { "$ref": "#/$defs/relativePath" },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    }
   }
 }

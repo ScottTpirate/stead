@@ -1,109 +1,139 @@
 # Performance evidence
 
-WS-13 owns the independent harness and evidence contract. Feature owners emit
-instrumented measurements and benchmark artifacts; they cannot define their
-own scenario classification, count budget, baseline, candidate eligibility, or
-review disposition. The release verifier derives those decisions from the
-repository-owned manifest and the complete candidate suite.
+WS-13 owns this independent harness and evidence contract. Feature owners emit
+measurements and artifacts; they do not define scenario classification,
+budgets, baselines, candidate eligibility, or review authority. The canonical
+verifier derives those decisions from repository-owned controls and actual
+artifact bytes.
 
 ## Phase 1 authority boundary
 
-`tests/performance/datasets/standard-request-boundary-v1.json` is the trusted,
-digest-addressed Phase 1 dataset and scenario manifest. It fixes:
+`tests/performance/harness/normative_controls.rb` is the closed verifier-owned
+translation of PERF-002 through PERF-006, AUTH-002, and the Phase 1
+`request_boundary` rules. It pins the nine scenarios, classifications, load
+shapes, minima/exact counts, budgets, targets/ceilings, critical metrics, and
+kind-specific instrumentation. The dataset manifest must match these controls
+exactly; raising a target to `999999`, relabeling an ordinary read, disabling
+set-oriented behavior, or dropping instrumentation fails semantic validation.
 
-- the deterministic corpus generator path, digest, seed, output digest, and
-  exact cardinalities;
-- numeric client/server resources, component versions, network shaping, and
-  topology;
-- cold/warm cache resets, warmups, concurrency, samples, and scale result
-  counts;
-- all nine PERF-002 scenarios and their ordinary-read, primary-surface,
-  set-oriented, and frontend classifications;
-- scenario-owned count budgets, engineering targets, release ceilings,
-  critical-metric declarations, measured baselines, and required benchmark
-  artifact kinds; and
-- digest-only telemetry canaries plus normalized key/value scan rules.
+Candidate verification additionally requires a `controls_revision` that is an
+ancestor of both `origin/main` and the candidate. The directive, verifier,
+schemas, manifest, generator, baseline, reviewer registry, performance Make
+target, and protected candidate workflow may not differ after that revision.
+Changing one requires a newly merged immutable control revision.
 
-The manifest is `standard/request_boundary`. A Phase 1 candidate suite that
-references another manifest, injects `commit_boundary`, or relabels the trusted
-manifest fails. Full `commit_boundary` measurement remains a separately
-budgeted Phase 3 claim with guard/lease/quiescence/buffer proof.
+`tests/performance/datasets/standard-request-boundary-v1.json` binds:
 
-Evidence producers supply no `candidate_eligible`, classification,
-`count_budgets`, target, baseline-comparison, or free-form review field. The
-canonical verifier applies strict JSON Schema and semantic validation to every
-manifest, measurement, benchmark artifact, candidate suite, and regression
-review it reads.
+- the deterministic generator path and bytes, seed, output digest, and exact
+  300,010-record cardinalities;
+- schema-valid Organizations, hierarchical Teams and edges, Projects, Work,
+  Docs/versions, People, Agents, relationships, activity, Inbox, audit, and
+  software-capability records with same-organization referential integrity;
+- bounded search text plus verifier-owned count ranges for status,
+  classification, assignment, capability, scope, and lifecycle distributions;
+- exact client/server CPU model, base frequency, cores, memory, OS, browser,
+  component versions, shaped network, topology, and cache reset protocol;
+- exact arrival model, concurrency, warmup, pacing, duration, samples, and
+  scale cardinalities for every scenario; and
+- digest-only telemetry canaries plus forbidden normalized key/value rules.
+
+The manifest is only `standard/request_boundary`. `commit_boundary` is not a
+valid Phase 1 candidate claim.
 
 ## Measurement and candidate contracts
 
-Each measurement binds one scenario, source revision, exact dataset digest,
-runner/version/command, full raw sample series and their canonical digest,
-p50/p95/p99 summaries, count maxima, response bytes, bundle sizes, user-facing
-metrics, scaling trials, and safe aggregate telemetry records. The verifier
-recomputes percentiles, maxima, sample count, raw/telemetry digests, normalized
-key/value scans, targets, count budgets, and baseline regression percentages.
+Each measurement binds one scenario, source revision, dataset digest,
+runner/version/command, raw samples, summaries, counts, sizes, user-facing
+metrics, scaling trials, safe telemetry, and digest-bound request traces. A
+candidate must carry one unique trace for every measured sample. Those traces
+prove the exact pacing/duration schedule and the verifier applies every
+exact/minimum/budget rule to every raw request, not only to a maximum summary.
+The verifier recomputes percentiles, maxima, sample count, every evidence
+digest, telemetry scan, target result, and compatible-baseline regression.
 
-Hard invariants are verifier-owned:
+The closed count rules include:
 
-- zero browser requests to providers or internal infrastructure;
-- zero authorization-decision cache hits;
-- zero NATS waits in request handling;
-- exactly one browser request for a trusted primary surface after shell load;
-- zero provider calls for a trusted ordinary read; and
-- exactly one logical authorization/audit operation for a composed ordinary
-  request-boundary read.
+- zero browser requests to provider/internal origins, authorization cache
+  hits, and NATS waits;
+- exactly one composed browser request on primary server surfaces;
+- exactly one fresh OpenFGA call, deterministic policy call, and logical audit
+  operation for protected server scenarios;
+- zero provider calls on ordinary reads;
+- bounded SQL/write/provider work under scale trials; and
+- at least one authoritative-state write plus one transactional-outbox write
+  for metadata mutations, with both writes and the authoritative commit bound
+  to one transaction hash.
 
-A Phase 1 candidate suite becomes eligible only when it is clean and covers
-every trusted scenario with `measurement` evidence from the same immutable
-revision and dataset. It also requires digest-bound Go, browser, golden-slice,
-bundle, projection, Peek, query, authorization, provider, and
-response-before-relay artifacts. Runtime component versions must match the
-trusted reference and carry immutable artifact digests. Relay evidence includes
-a monotonic `authoritative_commit <= response_sent < relay_started` proof.
+A suite is candidate-eligible only in the protected, manually dispatched
+`phase1-candidate.yml` workflow from `main` in `ScottTpirate/stead`. The suite
+revision must resolve to and equal clean checked-out `HEAD`, match the trusted
+GitHub Actions environment, and use the trusted upstream remote. A synthetic
+SHA or caller-asserted CI context cannot pass.
 
-Critical regressions over ten percent are computed against baselines in the
-trusted manifest. They require a separate structured review artifact bound to
-the source revision, dataset digest, evidence file digest, scenario, baseline,
-metric, and verifier-derived values. The implementation owner cannot provide
-the independent approval. Engineering targets and absolute release ceilings
-cannot be waived by that review.
+Runtime components, version-probe output, evidence, benchmark artifacts,
+measurement files, runner stdout/stderr/binary, environment observations, and
+reviews use verifier-recomputed SHA-256 references to actual files. The
+verifier executes every component probe with closed arguments and compares the
+resulting bytes. Every scenario requires exactly one candidate-revision
+tracked runner attestation; the verifier re-executes its closed argv and its
+environment probe, which must reproduce the exact evidence and declared CPU,
+network, topology, corpus, cache, and load environment bytes. Each kind has a
+strict runner-output record whose payload bytes and observations are replayed
+through that controlled runner. Every wrapper binds that scenario's evidence,
+complete request-traces digest, runner-attestation digest, strict record, and
+exact kind-specific observation set. One generic `kind.result=1` artifact
+cannot cover multiple scenarios.
 
-The only carried-forward measured baseline in this foundation is the real
-60,808-byte minimal-shell bundle result. Timing metrics are declared critical
-but intentionally have no invented baseline until an owning benchmark produces
-reviewed measurements; an empty producer comparison cannot change either the
-critical-metric declarations or repository-owned baseline records.
+All seven server scenarios with PostgreSQL/audit/outbox work require their own
+trace-derived proof for every measured request. The transactional-outbox
+write, authoritative commit, response, and relay carry one transaction hash
+and one outbox-event hash and must satisfy
+`outbox_write <= authoritative_commit <= response_sent < relay_started`.
+Input acknowledgement and local command-palette scenarios remain client-local
+and require exact zero server operations.
 
-Telemetry evidence contains only safe metric records and hashed correlation
-context. The verifier scans normalized keys and normalized string values,
-compares them with digest-only canaries, and reports only counts/paths rather
-than protected values. Any canary, credential pattern, forbidden key, mismatched
-scan count, or retained protected content fails.
+## Baselines, reviews, and protected telemetry
 
-## Required suites
+The carried-forward frontend baseline is the actual 60,808-byte gzip minimal
+foundation shell at `a799f2e3d166eab4489e7451a5b53f59a9d78f50`. Verification
+rebuilds that immutable source tree with its exact lock, pinned Node runner,
+and measurement tool, then checks each output file's SHA-256 and uncompressed
+and gzip byte counts. Its ID/value/source/environment are also bound to the
+standard manifest. It is a delta baseline, not PERF-005 completion for the
+mature Devlane-derived interface; the absolute ceiling remains 256,000 bytes.
 
-- `T-PERF-001-ACCEPTANCE`: optimize useful golden-path behavior rather than an
-  isolated throughput result.
-- `T-PERF-002-ACCEPTANCE`: measure all engineering targets and release ceilings
-  under the trusted standard fixture.
-- `T-PERF-003-ACCEPTANCE`: prove the one-request projection-backed path, zero
-  ordinary-read provider calls, and zero NATS waits.
-- `T-PERF-004-ACCEPTANCE`: vary result count and prove bounded SQL,
-  authorization, provider, write, and audit work.
-- `T-PERF-005-ACCEPTANCE`: measure acknowledgement, Peek, command, route, cold
-  interactive, layout, and capability-split bundle behavior.
-- `T-PERF-006-ACCEPTANCE`: bind Go, browser, golden E2E, bundle, projection,
-  raw-sample, and regression evidence to the exact candidate.
+Other timing metrics intentionally have no invented baseline. Once a critical
+baseline is merged, the verifier accepts it only for the same profile,
+disclosure mode, scenario environment, source commit, and reference artifact.
+A regression over ten percent requires a structured review bound to the exact
+candidate/evidence and verifier-computed values. Reviewer identity, role, and
+Ed25519 key must come from an immutable registry revision already merged to
+`origin/main` and remain active and unchanged at the candidate. The
+implementation owner must also be repository-approved and match the immutable
+candidate commit author; independence is compared against that verified owner,
+not a caller-selected identity. The review signature must verify. Release
+ceilings remain nonwaivable.
 
-Owning Phase 1 modules still need to deliver the actual production runners and
-instrumentation that emit these artifacts. This foundation deliberately does
-not fabricate performance results or treat the contract fixture as release
-evidence.
+Telemetry scanning recursively examines every normalized key and string value.
+It rejects forbidden fields/content and raw, prefixed/suffixed, hexadecimal,
+percent-encoded, standard-Base64, and URL-safe-Base64 canaries, including
+canaries revealed inside delimited encoded substrings of keys or values.
+Evidence retains only safe records and scan counts, never protected canary
+content.
+
+## Current non-candidate gaps
+
+This foundation deliberately does not claim a green release candidate. Phase
+1 owners still must land the protected candidate workflow, production
+scenario runner, byte-backed runtime component descriptors, real measurements,
+and strict kind-specific runner outputs. Governance must separately merge
+approved implementation-owner and independent-reviewer authority records
+before a candidate or regression exception can pass; both registry lists are
+intentionally empty today. No timing baseline is fabricated by the unit tests.
 
 ## Commands
 
-Run the foundation adversarial tests and standalone fixture verification:
+Run the adversarial foundation gate and standalone noncandidate fixture:
 
 ```bash
 make performance-foundation-check
@@ -111,15 +141,9 @@ ruby tests/performance/harness/verify_evidence.rb \
   packages/test-fixtures/harness/performance/standard-request-boundary-valid.json
 ```
 
-Verify a frozen candidate suite:
+Verify a frozen suite after the missing production pieces exist:
 
 ```bash
 ruby tests/performance/harness/verify_evidence.rb --suite \
   artifacts/performance/phase1-candidate-suite.json
 ```
-
-The recorded `60,808`-byte gzip eager result is scoped to the merged minimal
-foundation shell at `a799f2e3d166eab4489e7451a5b53f59a9d78f50`. It is the
-starting delta baseline for frontend PRs, not evidence that the mature
-Devlane-derived interface satisfies PERF-005. The absolute universal-shell
-budget remains 250 KiB gzip, or 256,000 bytes.

@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stead.dev/schemas/performance/runner-output-v1.schema.json",
+  "title": "Stead verifier-replayed kind-specific runner output v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "artifact_type", "schema_version", "source_revision", "dataset_sha256", "scenario_id",
+    "evidence_sha256", "request_traces_sha256", "kind", "observations", "observations_sha256",
+    "payload_files"
+  ],
+  "properties": {
+    "artifact_type": { "const": "performance_runner_output" },
+    "schema_version": { "const": "1.0" },
+    "source_revision": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "dataset_sha256": { "$ref": "#/$defs/sha256" },
+    "scenario_id": { "type": "string", "minLength": 1 },
+    "evidence_sha256": { "$ref": "#/$defs/sha256" },
+    "request_traces_sha256": { "$ref": "#/$defs/sha256" },
+    "kind": {
+      "enum": [
+        "authorization_count", "browser_performance", "frontend_bundle", "go_microbenchmark",
+        "golden_slice_e2e", "peek", "projection_lag", "provider_count", "query_count",
+        "response_before_relay"
+      ]
+    },
+    "observations": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["metric", "value", "unit"],
+        "properties": {
+          "metric": { "type": "string", "minLength": 1 },
+          "value": { "type": "number", "minimum": 0 },
+          "unit": { "enum": ["bytes", "calls", "count", "milliseconds", "nanoseconds", "ratio"] }
+        }
+      }
+    },
+    "observations_sha256": { "$ref": "#/$defs/sha256" },
+    "payload_files": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/fileReference" } }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "relativePath": {
+      "type": "string", "minLength": 1,
+      "pattern": "^(artifacts/performance|packages/test-fixtures/harness/performance|scripts/performance)/[A-Za-z0-9._/-]+$"
+    },
+    "fileReference": {
+      "type": "object", "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": { "$ref": "#/$defs/relativePath" },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    }
+  }
+}

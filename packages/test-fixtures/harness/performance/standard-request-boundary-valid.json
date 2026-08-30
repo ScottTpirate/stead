@@ -11,7 +11,7 @@
   },
   "dataset": {
     "manifest_id": "stead-standard-request-boundary-v1",
-    "sha256": "31c23fc064c9e50b38277bd75df008ee4fa3088ae7b4c9faa15b35f9b09e949a"
+    "sha256": "ec2cac99664b96f606834d2f945c1be5d83e824263eb83fdb7fa0e9aa82e5014"
   },
   "scenario_id": "hot-composed-metadata",
   "provenance": {
@@ -45,6 +45,11 @@
     }
   },
   "web_vitals": { "lcp_ms": 400.0, "inp_ms": 30.0, "cls": 0.01 },
+  "go_microbenchmark": {
+    "nanoseconds_per_operation": 250.0,
+    "allocations_per_operation": 2.0,
+    "bytes_per_operation": 64.0
+  },
   "scaling_trials": [
     { "result_count": 1, "sql_queries": 4, "postgres_writes": 1, "openfga_calls": 1, "policy_calls": 1, "provider_calls": 0, "logical_audit_operations": 1 },
     { "result_count": 25, "sql_queries": 4, "postgres_writes": 1, "openfga_calls": 1, "policy_calls": 1, "provider_calls": 0, "logical_audit_operations": 1 },
@@ -90,6 +95,26 @@
     }
   },
   "raw_samples_sha256": "3bdd9b42d6b18ffea204829678e4dfe847fffc3f9f7f8d1f9d26bb1a25d9387d",
+  "request_traces": [{
+    "trace_id_hash": "bc5d5c11a12ef52a8a41f850d62990edcadb11e8e88bd3a9d9d0c5d3147f70ab",
+    "sample_index": 0,
+    "sample_started_monotonic_ns": 0,
+    "events": [
+      { "type": "browser_request", "monotonic_ns": 100, "origin": "stead_api", "route_template": "/api/v1/projects/{project_id}/overview" },
+      { "type": "openfga_call", "monotonic_ns": 110, "origin": null, "route_template": null },
+      { "type": "policy_call", "monotonic_ns": 120, "origin": null, "route_template": null },
+      { "type": "sql_query", "monotonic_ns": 130, "origin": null, "route_template": null },
+      { "type": "sql_query", "monotonic_ns": 140, "origin": null, "route_template": null },
+      { "type": "sql_query", "monotonic_ns": 150, "origin": null, "route_template": null },
+      { "type": "sql_query", "monotonic_ns": 160, "origin": null, "route_template": null },
+      { "type": "postgres_write", "monotonic_ns": 170, "origin": null, "route_template": null, "write_role": "transactional_outbox", "transaction_id_hash": "49bb376a37da4cc6638e11f3620bdb54a04c90d438a08f10b0e1d2b3bde57e99", "outbox_event_id_hash": "34a278b518db240050dbe38d9d2acbbf32b2f3bcfdfd2d89c0a8f336044fcf39" },
+      { "type": "logical_audit_operation", "monotonic_ns": 180, "origin": null, "route_template": null },
+      { "type": "authoritative_commit", "monotonic_ns": 190, "origin": null, "route_template": null, "transaction_id_hash": "49bb376a37da4cc6638e11f3620bdb54a04c90d438a08f10b0e1d2b3bde57e99", "outbox_event_id_hash": "34a278b518db240050dbe38d9d2acbbf32b2f3bcfdfd2d89c0a8f336044fcf39" },
+      { "type": "response_sent", "monotonic_ns": 200, "origin": null, "route_template": null, "transaction_id_hash": "49bb376a37da4cc6638e11f3620bdb54a04c90d438a08f10b0e1d2b3bde57e99", "outbox_event_id_hash": "34a278b518db240050dbe38d9d2acbbf32b2f3bcfdfd2d89c0a8f336044fcf39" },
+      { "type": "relay_started", "monotonic_ns": 300, "origin": null, "route_template": null, "transaction_id_hash": "49bb376a37da4cc6638e11f3620bdb54a04c90d438a08f10b0e1d2b3bde57e99", "outbox_event_id_hash": "34a278b518db240050dbe38d9d2acbbf32b2f3bcfdfd2d89c0a8f336044fcf39" }
+    ]
+  }],
+  "request_traces_sha256": "25c207cc20f85e258d9f3075ee573d646938afe186222bb003c68f36cde3a13e",
   "telemetry": {
     "ruleset_id": "stead-performance-safe-scan-v1",
     "records": [

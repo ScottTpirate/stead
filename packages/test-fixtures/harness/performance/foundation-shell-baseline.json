@@ -1,16 +1,31 @@
 {
+  "artifact_type": "frontend_bundle_baseline",
   "schema_version": "1.0",
   "baseline_id": "foundation-shell-a799f2e",
   "scope": "minimal-foundation-shell-only",
   "source_revision": "a799f2e3d166eab4489e7451a5b53f59a9d78f50",
   "source_pr": "https://github.com/ScottTpirate/stead/pull/1",
   "ci_run": "https://github.com/ScottTpirate/stead/actions/runs/33316292110",
+  "source_web_tree_oid": "f7733d9eefce45389a167b1b6e3e1b9ad2f5d563",
+  "package_lock_sha256": "378625ea9e9aaddac1cedb1ac1ae38aec05746bee5de577f82da4872642d9fce",
+  "dataset_manifest_id": "stead-standard-request-boundary-v1",
+  "dataset_sha256": "ec2cac99664b96f606834d2f945c1be5d83e824263eb83fdb7fa0e9aa82e5014",
   "measured_command": "npm run build && npm run validate:web-bundle",
+  "build_runner": {
+    "path": "scripts/run_pinned_node.sh",
+    "sha256": "01a384b7c510aa54af6c3d2ca621325c895442a3c98250c87b204bf71c22271c"
+  },
+  "measurement_tool": {
+    "path": "scripts/validate_web_bundle.mjs",
+    "sha256": "c084a76998867e057cfc413470472147468377020d5f8e99e0b890172da2d45a"
+  },
   "budget_bytes_gzip": 256000,
   "eager_javascript_bytes_gzip": 60808,
   "measured_files": [
     {
       "file": "assets/index-C25eOy4C.js",
+      "file_sha256": "d523f43d46b2f22af76db4d471846beb35a46bb71c4a4aac45100bd710b53d6b",
+      "uncompressed_bytes": 193739,
       "gzip_bytes": 60808
     }
   ],
