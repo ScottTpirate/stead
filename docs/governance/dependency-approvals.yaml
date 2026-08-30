@@ -372,3 +372,118 @@ records:
     change: { update_policy: "Exact version, SRI, build/bundle diff, transitive audit, browser tests, and license must be reviewed for every update.", rollback_version: "git:e24a4d9d05ad6df19c5bcaa9c385ee74fd5d8c31", rollback_constraints: "Return to the immutable dependency-free Phase 0 baseline or restore a subsequently approved Vite/config/lockfile set." }
     adr: null
     legal_approval: null
+
+  - approval_id: DEP-APP-NPM-VITEST-4-1-11
+    component:
+      name: vitest
+      kind: npm_package
+      ecosystem: npm
+      source_url: https://registry.npmjs.org/vitest/-/vitest-4.1.11.tgz
+      version: 4.1.11
+      digest: { algorithm: sha512-sri, value: "sha512-fhACrNXUidIbGSBr5FlbuBkO7VWC1ZyLl0DO4CU2DrQoAPxX84Ysxs+HeGQpii5lZWV1Q4gBZTTu49mF+A6Edw==" }
+      license_expression: MIT
+    usage:
+      owner: WS-05 frontend; WS-01 test toolchain
+      directories: [apps/web, package-lock.json, Makefile]
+      purpose: Execute deterministic frontend component and unit tests in the bounded Phase 1 foundation gate.
+      relationship: test
+      distributed_in: []
+      linkage_or_interface: Exact workspace devDependency; neither the runner nor its source enters the browser or any Stead release artifact.
+    decision: { category: REVIEW-NONRUNTIME, status: REVIEWED_PENDING_INDEPENDENT_APPROVAL, independent_approval_required: true, approvers: [], approved_at: null }
+    obligations: { notices: [], source_or_offer: Test runner is not distributed; retain upstream license metadata in the CI cache and dependency evidence., modifications: Package is used unmodified with repository-owned configuration. }
+    security: { vulnerability_result: "The exact candidate lock reports zero npm audit findings at low severity; independent review remains pending.", provenance_result: "Exact registry URL and SRI are lock-bound; npm verified registry signatures for all 76 installed packages and 30 provenance attestations; candidate lock SHA-256 is c05ad356c65817e97299903378e5bdcd36d2c926ffbf7b4aa750ef0c5695a917.", maintenance_risk: "Test runner execution can read repository fixtures and spawn worker processes; configuration fixes one worker, disables file parallelism, and admits no product credential or network fixture.", permissions_and_network: "CI installs with lifecycle scripts disabled and runs only repository tests with no credentials, telemetry, service listener, or required network access." }
+    change: { update_policy: "Every version, transitive graph, worker model, output-artifact, or use change requires a fresh lock, audit, provenance, test, and independent review.", rollback_version: "git:e24a4d9d05ad6df19c5bcaa9c385ee74fd5d8c31", rollback_constraints: "Scoped rollback restores parent a799f2e3d166eab4489e7451a5b53f59a9d78f50 manifests, lock, Makefile, and test files; the registry field retains the immutable Phase 0 recovery baseline." }
+    adr: null
+    legal_approval: null
+
+  - approval_id: DEP-APP-NPM-TESTING-LIBRARY-REACT-16-3-3
+    component:
+      name: "@testing-library/react"
+      kind: npm_package
+      ecosystem: npm
+      source_url: https://registry.npmjs.org/@testing-library/react/-/react-16.3.3.tgz
+      version: 16.3.3
+      digest: { algorithm: sha512-sri, value: "sha512-Uo193NgQbPMz6lrrhtRQQFcMC6Re/ELLFbbuVL30WDlZxlpZf9/lMHTAVxPRLw1q1iu9OJmR1c2BLiENRstdBg==" }
+      license_expression: MIT
+    usage:
+      owner: WS-05 frontend
+      directories: [apps/web, package-lock.json]
+      purpose: Render React components through user-visible DOM semantics for deterministic unit tests.
+      relationship: test
+      distributed_in: []
+      linkage_or_interface: Exact workspace devDependency used only by test source; it is excluded from production entrypoints and output chunks.
+    decision: { category: REVIEW-NONRUNTIME, status: REVIEWED_PENDING_INDEPENDENT_APPROVAL, independent_approval_required: true, approvers: [], approved_at: null }
+    obligations: { notices: [], source_or_offer: Test library is not distributed; retain upstream license metadata in dependency evidence., modifications: Package is used unmodified. }
+    security: { vulnerability_result: "The exact candidate lock reports zero npm audit findings at low severity; independent review remains pending.", provenance_result: "Exact registry URL and SRI are lock-bound under candidate lock SHA-256 c05ad356c65817e97299903378e5bdcd36d2c926ffbf7b4aa750ef0c5695a917.", maintenance_risk: "React peer compatibility and cleanup behavior must be revalidated on every update.", permissions_and_network: "Tests receive synthetic DOM fixtures only and no credentials, protected content, provider access, telemetry, or required network authority." }
+    change: { update_policy: "Review exact version, SRI, peer range, transitive graph, render/cleanup behavior, bundle exclusion, and lock diff on every change.", rollback_version: "git:e24a4d9d05ad6df19c5bcaa9c385ee74fd5d8c31", rollback_constraints: "Scoped rollback restores the pre-test parent manifests and lock and removes the unit-test harness; no product state changes." }
+    adr: null
+    legal_approval: null
+
+  - approval_id: DEP-APP-NPM-TESTING-LIBRARY-DOM-10-4-1
+    component:
+      name: "@testing-library/dom"
+      kind: npm_package
+      ecosystem: npm
+      source_url: https://registry.npmjs.org/@testing-library/dom/-/dom-10.4.1.tgz
+      version: 10.4.1
+      digest: { algorithm: sha512-sri, value: "sha512-o4PXJQidqJl82ckFaXUeoAW+XysPLauYI43Abki5hABd853iMhitooc6znOnczgbTYmEP6U6/y1ZyKAIsvMKGg==" }
+      license_expression: MIT
+    usage:
+      owner: WS-05 frontend
+      directories: [apps/web, package-lock.json]
+      purpose: Provide role, accessible-name, and scoped DOM queries for frontend unit tests.
+      relationship: test
+      distributed_in: []
+      linkage_or_interface: Exact workspace devDependency used only by tests and explicitly declared to make the direct semantic-query boundary auditable.
+    decision: { category: REVIEW-NONRUNTIME, status: REVIEWED_PENDING_INDEPENDENT_APPROVAL, independent_approval_required: true, approvers: [], approved_at: null }
+    obligations: { notices: [], source_or_offer: Test library is not distributed; retain upstream license metadata in dependency evidence., modifications: Package is used unmodified. }
+    security: { vulnerability_result: "The exact candidate lock reports zero npm audit findings at low severity; independent review remains pending.", provenance_result: "Exact registry URL and SRI are lock-bound under candidate lock SHA-256 c05ad356c65817e97299903378e5bdcd36d2c926ffbf7b4aa750ef0c5695a917.", maintenance_risk: "Accessible-name and query semantics can change; negative and keyboard fixtures must remain effective across updates.", permissions_and_network: "Queries operate only on an isolated synthetic DOM and have no credential, provider, file, telemetry, or required network access." }
+    change: { update_policy: "Review exact version, SRI, query semantics, transitive graph, bundle exclusion, and lock diff on every change.", rollback_version: "git:e24a4d9d05ad6df19c5bcaa9c385ee74fd5d8c31", rollback_constraints: "Scoped rollback restores the pre-test parent manifests and lock and removes the unit-test harness; no product state changes." }
+    adr: null
+    legal_approval: null
+
+  - approval_id: DEP-APP-NPM-TESTING-LIBRARY-USER-EVENT-14-6-6
+    component:
+      name: "@testing-library/user-event"
+      kind: npm_package
+      ecosystem: npm
+      source_url: https://registry.npmjs.org/@testing-library/user-event/-/user-event-14.6.6.tgz
+      version: 14.6.6
+      digest: { algorithm: sha512-sri, value: "sha512-Jbs9FpkkIDw8FgSc6kOVsOv8JuuqGAL7J4X1oot77JxAoDlkNn2GRkd0aYRVuQ+pVQAiHWVkE4rX/dkF5fBiCw==" }
+      license_expression: MIT
+    usage:
+      owner: WS-05 frontend
+      directories: [apps/web, package-lock.json]
+      purpose: Exercise keyboard, focus, and user interaction behavior in isolated component tests.
+      relationship: test
+      distributed_in: []
+      linkage_or_interface: Exact workspace devDependency invoked only by test source against happy-dom fixtures.
+    decision: { category: REVIEW-NONRUNTIME, status: REVIEWED_PENDING_INDEPENDENT_APPROVAL, independent_approval_required: true, approvers: [], approved_at: null }
+    obligations: { notices: [], source_or_offer: Test utility is not distributed; retain upstream license metadata in dependency evidence., modifications: Package is used unmodified. }
+    security: { vulnerability_result: "The exact candidate lock reports zero npm audit findings at low severity; independent review remains pending.", provenance_result: "Exact registry URL and SRI are lock-bound under candidate lock SHA-256 c05ad356c65817e97299903378e5bdcd36d2c926ffbf7b4aa750ef0c5695a917.", maintenance_risk: "Event sequencing and timer behavior can change; keyboard/focus fixtures must be rerun on every update.", permissions_and_network: "Synthetic events operate only inside the isolated DOM and receive no credential, protected content, telemetry, or network authority." }
+    change: { update_policy: "Review exact version, SRI, event behavior, transitive graph, bundle exclusion, and lock diff on every change.", rollback_version: "git:e24a4d9d05ad6df19c5bcaa9c385ee74fd5d8c31", rollback_constraints: "Scoped rollback restores the pre-test parent manifests and lock and removes the unit-test harness; no product state changes." }
+    adr: null
+    legal_approval: null
+
+  - approval_id: DEP-APP-NPM-HAPPY-DOM-20-11-2
+    component:
+      name: happy-dom
+      kind: npm_package
+      ecosystem: npm
+      source_url: https://registry.npmjs.org/happy-dom/-/happy-dom-20.11.2.tgz
+      version: 20.11.2
+      digest: { algorithm: sha512-sri, value: "sha512-7MB+bJLkxu3SowAfBJbjW+c55kNz5tkR45gu2qzrxznezhLeN5YIlJbwUgSzlGc+qWoZ8Ykg71H5ezz69xixrw==" }
+      license_expression: MIT
+    usage:
+      owner: WS-05 frontend; WS-01 test toolchain
+      directories: [apps/web, package-lock.json]
+      purpose: Supply the isolated DOM implementation for bounded component and keyboard/focus tests without a browser artifact.
+      relationship: test
+      distributed_in: []
+      linkage_or_interface: Exact workspace devDependency selected instead of jsdom; it is test-process-only and absent from production output.
+    decision: { category: REVIEW-NONRUNTIME, status: REVIEWED_PENDING_INDEPENDENT_APPROVAL, independent_approval_required: true, approvers: [], approved_at: null }
+    obligations: { notices: [], source_or_offer: Test environment is not distributed; retain upstream license metadata in dependency evidence., modifications: Package is used unmodified. }
+    security: { vulnerability_result: "The exact candidate lock reports zero npm audit findings at low severity; independent review remains pending.", provenance_result: "Exact registry URL and SRI are lock-bound under candidate lock SHA-256 c05ad356c65817e97299903378e5bdcd36d2c926ffbf7b4aa750ef0c5695a917.", maintenance_risk: "DOM emulation is not browser conformance; browser, visual, accessibility-engine, and performance claims remain blocked on issues 32 and 33.", permissions_and_network: "Runs in one isolated test worker against synthetic public fixtures with no browser binary, credentials, protected content, service listener, telemetry, or required network access." }
+    change: { update_policy: "Review exact version, SRI, Node compatibility, DOM behavior, transitive graph, resource use, bundle exclusion, and lock diff on every change.", rollback_version: "git:e24a4d9d05ad6df19c5bcaa9c385ee74fd5d8c31", rollback_constraints: "Scoped rollback restores the pre-test parent manifests and lock and removes the unit-test harness; no product state changes." }
+    adr: null
+    legal_approval: null
