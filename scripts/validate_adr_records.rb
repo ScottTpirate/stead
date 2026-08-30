@@ -15,7 +15,7 @@ EXPECTED_RECORDS = {
   "0004" => { candidate: "ADR-CAND-021", state: "ACCEPTED", owner_approval: true },
   "0005" => { candidate: "ADR-CAND-003", state: "ACCEPTED", owner_approval: false },
   "0006" => { candidate: "ADR-CAND-007", state: "ACCEPTED", owner_approval: true },
-  "0007" => { candidate: "ADR-CAND-002", state: "PROPOSED", owner_approval: false }
+  "0007" => { candidate: "ADR-CAND-002", state: "ACCEPTED", owner_approval: false }
 }.freeze
 
 EXPECTED_P1_006_ADR_CANDIDATES = %w[
@@ -116,6 +116,22 @@ ACCEPTED_RECORD_METADATA = {
       { "role" => "WS-13-independent-qa", "identity" => "/root/precommit_scope_audit", "disposition" => "APPROVED" },
       { "role" => "WS-13-independent-security", "identity" => "/root/revocation_mode_impact", "disposition" => "APPROVED" },
       { "role" => "project-owner", "identity" => "explicit 2026-08-30 project-owner instruction", "disposition" => "APPROVED" }
+    ]
+  },
+  "0007" => {
+    immutable_revision: "cc3dba0ccd740d18d138be52648fd4dba2008af5",
+    accepted_at: "2026-08-30",
+    approval_record_path: "docs/governance/adr-0007-approval-record.md",
+    approval_records: [
+      { "role" => "WS-01-architecture", "identity" => "/root/adr0007_cc3_arch_review", "disposition" => "APPROVED" },
+      { "role" => "WS-02-core-composition", "identity" => "/root/adr0007_cc3_interface_review", "disposition" => "APPROVED" },
+      { "role" => "WS-06-security-contract", "identity" => "/root/adr0007_cc3_interface_review", "disposition" => "APPROVED" },
+      { "role" => "WS-07-events-audit", "identity" => "/root/adr0007_cc3_interface_review", "disposition" => "APPROVED" },
+      { "role" => "WS-11-migration-namespace", "identity" => "/root/adr0007_cc3_ops_review", "disposition" => "APPROVED" },
+      { "role" => "WS-12-deployment-operations", "identity" => "/root/adr0007_cc3_ops_review", "disposition" => "APPROVED" },
+      { "role" => "WS-13-independent-qa", "identity" => "/root/adr0007_cc3_qa_review", "disposition" => "APPROVED" },
+      { "role" => "WS-13-independent-security", "identity" => "/root/adr0007_cc3_security_review", "disposition" => "APPROVED" },
+      { "role" => "project-owner", "identity" => "not required for this conforming selection", "disposition" => "NOT_REQUIRED" }
     ]
   }
 }.freeze

@@ -1,12 +1,12 @@
 # ADR-0007: PostgreSQL module isolation and transaction coordination
 
-- **Status:** Proposed
+- **Status:** Accepted at immutable decision revision `cc3dba0ccd740d18d138be52648fd4dba2008af5` on 2026-08-30
 - **Date:** 2026-08-30
 - **Decision owners:** WS-01, with WS-02 transaction/core-outbox integration, WS-06 security-state ownership, WS-07 audit/event integration, WS-11 migration-namespace ownership, and WS-12 migration-runner/operations ownership
 - **Project-owner approval required:** no; this selects physical mechanics within the approved modular-monolith, PostgreSQL-authority, namespace-ownership, transactional-outbox, and authorization contracts without changing a locked decision or project-owner-controlled contract
 - **Requirement IDs:** `PRIN-005`, `ARCH-003`, `ARCH-004`, `EVT-002`, `AUD-001`, `AUD-002`, `DEP-005`, `OPS-003`, `OPS-004`, `PERF-003`, `PERF-004`, `TEST-005`, `TEST-007`
 - **Affected contracts/modules/directories:** PostgreSQL access beneath `/apps/core/` and `/apps/worker/`; module-owned repositories and migrations; `/apps/core/internal/outbox/`; `/apps/steadctl/`; deployment, migration, upgrade, backup/restore, integration, security, event, and performance tests
-- **Resolves on acceptance:** `ADR-CAND-002`
+- **Resolves:** `ADR-CAND-002`
 - **Supersedes / superseded by:** supersedes no accepted decision; a database-per-module topology, changed namespace owner, direct cross-module table access, or general distributed-transaction mechanism requires a superseding ADR
 
 ## Context and decision scope
@@ -301,13 +301,13 @@ Review accepts this decision at one exact immutable revision; it does not approv
 
 | Role | Identity | Disposition | Evidence/date |
 |---|---|---|---|
-| Decision author (WS-01) | `/root/adr_cand_002` | PROPOSED | 2026-08-30; focused `ADR-CAND-002` draft for live issue 18 |
-| Architecture and standards (WS-01, non-author) | pending non-author reviewer | PENDING | Topology, boundary, compatibility, and supersession review required |
-| Core transaction/outbox owner (WS-02) | pending non-author reviewer | PENDING | Transaction role/participant, one-operation, and `core_outbox` review required |
-| Identity/authorization/classification owner (WS-06) | pending non-author reviewer | PENDING | Fence, permit, role, classification, and non-disclosure review required |
-| Events/audit owner (WS-07) | pending non-author reviewer | PENDING | Intent ownership, relay-port, idempotency, replay, and audit review required |
-| Migration namespace owner (WS-11) | pending non-author reviewer | PENDING | `migration` schema/role/ledger ownership and bounded Phase 1 case split review required |
-| Deployment/operations owner (WS-12) | pending non-author reviewer | PENDING | Migration, upgrade, backup/restore, external-PostgreSQL, and recovery review required |
-| Independent QA and C-QA traceability owner (distinct WS-13 identity) | pending non-author reviewer | PENDING | Exact catalog case split, WS-13-owned requirement/test mapping, failure injection, and performance review required; no author edit to `specs/traceability/` is accepted as approval |
-| Independent security (distinct WS-13 identity) | pending non-author reviewer | PENDING | Database privilege, bypass, backup, restore, and protected-telemetry review required |
-| Project owner | not required for this conforming selection | N/A | Required only if review changes a locked or project-owner-controlled contract |
+| Decision author (WS-01) | `/root/adr_cand_002` | AUTHOR — NOT APPROVAL | 2026-08-30; focused `ADR-CAND-002` draft for live issue 18 |
+| Architecture and standards (WS-01, non-author) | `/root/adr0007_cc3_arch_review` | ACCEPT | 2026-08-30; exact-revision topology, boundary, compatibility, routine/view closure, and supersession review |
+| Core transaction/outbox owner (WS-02) | `/root/adr0007_cc3_interface_review` | ACCEPT | 2026-08-30; transaction participant, one-operation, and `core_outbox` ownership review |
+| Identity/authorization/classification owner (WS-06) | `/root/adr0007_cc3_interface_review` | ACCEPT | 2026-08-30; fence, permit, role, classification, and non-disclosure review |
+| Events/audit owner (WS-07) | `/root/adr0007_cc3_interface_review` | ACCEPT | 2026-08-30; intent ownership, relay port, idempotency, replay, and audit review |
+| Migration namespace owner (WS-11) | `/root/adr0007_cc3_ops_review` | ACCEPT | 2026-08-30; `migration` schema/role/ledger ownership and bounded Phase 1 case split review |
+| Deployment/operations owner (WS-12) | `/root/adr0007_cc3_ops_review` | ACCEPT | 2026-08-30; migration, upgrade, backup/restore, external-PostgreSQL, and recovery review |
+| Independent QA and C-QA traceability owner (distinct WS-13 identity) | `/root/adr0007_cc3_qa_review` | ACCEPT | 2026-08-30; exact catalog case split, eleven test IDs, 36-edge mapping, failure injection, and performance review |
+| Independent security (distinct WS-13 identity) | `/root/adr0007_cc3_security_review` | ACCEPT | 2026-08-30; database privilege, encoding/bypass, backup, restore, and protected-telemetry review |
+| Project owner | not required for this conforming selection | N/A — NOT REQUIRED | This conforming physical-mechanics selection changes no locked or project-owner-controlled contract |

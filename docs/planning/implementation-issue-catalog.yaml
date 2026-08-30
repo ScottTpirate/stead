@@ -21,9 +21,22 @@ gates:
 adr_decision_gates:
   - {adr_id: ADR-CAND-001, state: ACCEPTED, decision_record: docs/adr/0001-canonical-uri-and-compatibility-profile.md, project_owner_approval_required: false, decide_before_issue: STEAD-P1-001, dependent_issues: [STEAD-P1-001, STEAD-P1-002, STEAD-P2-009, STEAD-P3-006]}
   - adr_id: ADR-CAND-002
-    state: PROPOSED
+    state: ACCEPTED
     decision_record: docs/adr/0007-postgresql-module-isolation-and-transaction-coordination.md
     project_owner_approval_required: false
+    immutable_revision: "cc3dba0ccd740d18d138be52648fd4dba2008af5"
+    accepted_at: "2026-08-30"
+    approval_record: docs/governance/adr-0007-approval-record.md
+    approval_records:
+      - {role: "WS-01-architecture", identity: "/root/adr0007_cc3_arch_review", disposition: "APPROVED"}
+      - {role: "WS-02-core-composition", identity: "/root/adr0007_cc3_interface_review", disposition: "APPROVED"}
+      - {role: "WS-06-security-contract", identity: "/root/adr0007_cc3_interface_review", disposition: "APPROVED"}
+      - {role: "WS-07-events-audit", identity: "/root/adr0007_cc3_interface_review", disposition: "APPROVED"}
+      - {role: "WS-11-migration-namespace", identity: "/root/adr0007_cc3_ops_review", disposition: "APPROVED"}
+      - {role: "WS-12-deployment-operations", identity: "/root/adr0007_cc3_ops_review", disposition: "APPROVED"}
+      - {role: "WS-13-independent-qa", identity: "/root/adr0007_cc3_qa_review", disposition: "APPROVED"}
+      - {role: "WS-13-independent-security", identity: "/root/adr0007_cc3_security_review", disposition: "APPROVED"}
+      - {role: "project-owner", identity: "not required for this conforming selection", disposition: "NOT_REQUIRED"}
     decide_before_issue: STEAD-P1-015
     dependent_issues: [STEAD-P1-015, STEAD-P1-017, STEAD-P1-006, STEAD-P1-002, STEAD-P1-007, STEAD-P1-011, STEAD-P2-010]
   - adr_id: ADR-CAND-003

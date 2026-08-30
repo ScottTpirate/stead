@@ -1,6 +1,6 @@
 # Unresolved implementation choices requiring ADRs
 
-**Status:** Active candidate queue; six candidates are resolved, one is proposed, and the remaining entries are deferred to their named decision point<br>
+**Status:** Active candidate queue; seven candidates are resolved and the remaining entries are deferred to their named decision point<br>
 **Rule:** An ADR may select among conforming options; it may not silently change a locked decision.
 
 ## Admission test
@@ -16,17 +16,12 @@ Phase 0 fixed each candidate's non-negotiable boundary without selecting its phy
 | Candidate | Disposition | Decision |
 |---|---|---|
 | `ADR-CAND-001` Canonical URI and compatibility profile | `ACCEPTED` on 2026-08-29 | [ADR-0001](./0001-canonical-uri-and-compatibility-profile.md) selects registered provider/host-independent `urn:uuid` identity with globally unique UUIDv7, mandatory separate tenancy/kind fields, a server-derived trusted-origin browser URL, version coexistence, redirects, migration, rollback, non-disclosure, and conformance tests. |
+| `ADR-CAND-002` PostgreSQL module isolation and cross-module reads | `ACCEPTED` on 2026-08-30 at `cc3dba0ccd740d18d138be52648fd4dba2008af5` | [ADR-0007](./0007-postgresql-module-isolation-and-transaction-coordination.md) selects one Stead database with exact module schemas/roles, registry-bound routines and safe read views, typed owner transaction participants, WS-02-only outbox access, owner-scoped migrations, and versioned read contracts/projections. |
 | `ADR-CAND-003` Authorization and policy-decision topology | `ACCEPTED` on 2026-08-30 at `24c74d52ef0a78840ab147da48c3d66589e49e3e` | [ADR-0005](./0005-authorization-and-policy-decision-topology.md) selects the native in-process Go evaluator, one fail-closed coordinator, zero decision caching, a signed deployment-selected normal `request_boundary` path with one logical composed-read authorization/audit operation, typed strict `commit_boundary` seams, durable effect permits where disclosure/effects outlive ordinary finite reads, revision fencing, and short-lived provider credentials. |
 | `ADR-CAND-004` Security-label algebra and profile identifiers | `ACCEPTED` on 2026-08-30 at `24c74d52ef0a78840ab147da48c3d66589e49e3e` | [ADR-0002](./0002-security-label-algebra-and-profile-identifiers.md) selects a profile-generic partial order, conservative joins, closed monotone semantic tables, stable identifier semantics without privileged profile IDs, distinct label/profile/bundle revisions, profile-ID-keyed ceilings, digest-bound external-mapping evidence, and v0.1 denial of all cross-profile composition/non-empty bridge sets. |
 | `ADR-CAND-005` Trusted principal and runtime-attribute normalization | `ACCEPTED` on 2026-08-30 at `24c74d52ef0a78840ab147da48c3d66589e49e3e` | [ADR-0003](./0003-trusted-principal-and-runtime-attributes.md) selects typed authority-bound assertions, deterministic precedence/conflict/freshness rules, immutable OIDC/SCIM correlation, revision fencing, and task/runtime-bound Agent evidence. |
 | `ADR-CAND-007` Policy-bundle distribution and trust roots | `ACCEPTED` on 2026-08-30 at `24c74d52ef0a78840ab147da48c3d66589e49e3e` | [ADR-0006](./0006-signed-policy-bundle-distribution-and-activation.md) selects the Stead Policy Activation Set v1, reproducible unsigned content, DSSE/P-256 signing, deployment-policy-driven thresholds/custody/cryptographic assurance, offline trust rotation, and atomic OpenFGA/policy activation; TUF is considered but is not the v1 activation authority. |
 | `ADR-CAND-021` Initial Team relation model | `ACCEPTED` on 2026-08-30 at `24c74d52ef0a78840ab147da48c3d66589e49e3e` | [ADR-0004](./0004-initial-team-role-and-authorization-semantics.md) selects fixed explicit `lead`, `member`, and `contributor` relations while preserving zero hierarchy/accountability inheritance. |
-
-## Proposed decisions awaiting approval
-
-| Candidate | Proposed decision | Remaining gate |
-|---|---|---|
-| `ADR-CAND-002` PostgreSQL module isolation and cross-module reads | [ADR-0007](./0007-postgresql-module-isolation-and-transaction-coordination.md) proposes one Stead database with exact module schemas/roles, typed owner transaction participants, WS-02-only outbox access, owner-scoped migrations, and versioned read views/projections. | Required non-author architecture, module-owner, operations, independent QA, and independent security reviews must accept one immutable revision before `STEAD-P1-015` or `STEAD-P1-017` activates. Project-owner approval is not required unless review changes a locked or project-owner-controlled contract. |
 
 ## Deferred choices required before dependent implementation
 
