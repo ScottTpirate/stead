@@ -1,6 +1,7 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
+require "digest"
 require "json"
 require "set"
 require "time"
@@ -29,6 +30,22 @@ DEFAULT_PERMISSIVE_NPM_LICENSES = Set.new(%w[0BSD Apache-2.0 BSD-2-Clause BSD-3-
 PROHIBITED_DIRECT_PACKAGES = Set.new(["@asyncapi/cli", "ajv-cli"]).freeze
 PROHIBITED_SETUP_ACTIONS = Set.new(["actions/setup-node", "actions/setup-go", "ruby/setup-ruby"]).freeze
 FOUNDATION_ROLLBACK_TARGET = "git:e24a4d9d05ad6df19c5bcaa9c385ee74fd5d8c31"
+DEVLANE_CANDIDATE_NAME = "devlane-stead-primitives"
+DEVLANE_PROVENANCE_SURFACE_SHA256 = "ad933a4856cb7dab30e1bf5d8c9eb1b17ea86478185472b55967b745a8345fdb"
+DEVLANE_REGISTRY_SURFACE_SHA256 = "bfe1046598dc8a4a400967a4848ed75d2aca98996a22aa91a1d4790c42704cc0"
+EXPECTED_DEVLANE_PENDING_DECISION = {
+  "category" => "ALLOW-PERMISSIVE",
+  "status" => "REVIEWED_PENDING_INDEPENDENT_APPROVAL",
+  "independent_approval_required" => true,
+  "approvers" => [],
+  "approved_at" => nil
+}.freeze
+EXPECTED_DEVLANE_PENDING_PROVENANCE_APPROVAL = {
+  "status" => "REVIEWED_PENDING_INDEPENDENT_APPROVAL",
+  "approved_source_distribution" => false,
+  "approvers" => [],
+  "approved_at" => nil
+}.freeze
 EXACT_GO_VERSION = /\Av\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?\z/
 GO_H1_DIGEST = /\Ah1:[A-Za-z0-9+\/]{43}=\z/
 PROHIBITED_GO_DIRECTIVES = Set.new(%w[exclude godebug replace retract tool toolchain]).freeze
@@ -670,6 +687,65 @@ def delete_nested_key!(value, path)
   parent.delete(path.last)
 end
 
+def canonical_json_value(value)
+  case value
+  when Hash
+    value.keys.sort.to_h { |key| [key, canonical_json_value(value.fetch(key))] }
+  when Array
+    value.map { |entry| canonical_json_value(entry) }
+  else
+    value
+  end
+end
+
+def canonical_sha256(value)
+  Digest::SHA256.hexdigest(JSON.generate(canonical_json_value(value)))
+end
+
+def devlane_candidate_errors(provenance, components)
+  errors = []
+  unless provenance.is_a?(Hash)
+    return ["devlane-provenance.yaml: document must be a mapping"]
+  end
+
+  import = provenance["proposed_import"]
+  unless import.is_a?(Hash)
+    return ["devlane-provenance.yaml: proposed_import must be a mapping"]
+  end
+
+  record = components[DEVLANE_CANDIDATE_NAME]
+  unless record.is_a?(Hash)
+    return ["dependency registry: missing Devlane primitive import candidate"]
+  end
+
+  approval_state = EXPECTED_DEVLANE_PENDING_PROVENANCE_APPROVAL.keys.to_h do |field|
+    [field, import[field]]
+  end
+  unless approval_state == EXPECTED_DEVLANE_PENDING_PROVENANCE_APPROVAL
+    errors << "devlane-provenance.yaml: proposed import must remain at the exact pending approval state until a reviewed successor revision is recorded"
+  end
+
+  unless record["decision"] == EXPECTED_DEVLANE_PENDING_DECISION
+    errors << "#{DEVLANE_CANDIDATE_NAME}: decision must remain at the exact pending state until a reviewed successor revision is recorded"
+  end
+
+  provenance_surface = Marshal.load(Marshal.dump(provenance))
+  EXPECTED_DEVLANE_PENDING_PROVENANCE_APPROVAL.each_key do |field|
+    provenance_surface.fetch("proposed_import").delete(field)
+  end
+  unless canonical_sha256(provenance_surface) == DEVLANE_PROVENANCE_SURFACE_SHA256
+    errors << "devlane-provenance.yaml: immutable candidate surface differs from the reviewed proposal"
+  end
+
+  registry_surface = Marshal.load(Marshal.dump(record))
+  %w[status approvers approved_at].each { |field| registry_surface.fetch("decision", {}).delete(field) }
+  unless canonical_sha256(registry_surface) == DEVLANE_REGISTRY_SURFACE_SHA256
+    errors << "#{DEVLANE_CANDIDATE_NAME}: immutable registry surface differs from the reviewed proposal"
+  end
+
+  errors
+end
+
 def run_validator_self_tests
   guard_count = 7
   pending_go = {
@@ -776,6 +852,78 @@ def run_validator_self_tests
 
   registry_fixture = load_yaml(REGISTRY_PATH)
   registry_components = registry_fixture.fetch("records").to_h { |record| [record.dig("component", "name"), record] }
+  provenance_fixture = load_yaml(PROVENANCE_PATH)
+  baseline_devlane_errors = devlane_candidate_errors(provenance_fixture, registry_components)
+  unless baseline_devlane_errors.empty?
+    failures << "Devlane self-test fixture does not match the exact pending candidate: #{baseline_devlane_errors.join('; ')}"
+  end
+
+  devlane_mutations = {
+    "fabricated approval metadata" => lambda do |provenance_copy, components_copy|
+      decision = components_copy.fetch(DEVLANE_CANDIDATE_NAME).fetch("decision")
+      decision["status"] = "APPROVED"
+      decision["approvers"] = ["arbitrary-reviewer-one", "arbitrary-reviewer-two"]
+      decision["approved_at"] = "2026-08-30T23:59:59Z"
+      import = provenance_copy.fetch("proposed_import")
+      import["status"] = "APPROVED"
+      import["approvers"] = decision["approvers"]
+      import["approved_at"] = decision["approved_at"]
+      import["approved_source_distribution"] = true
+    end,
+    "source URL" => lambda do |_provenance_copy, components_copy|
+      components_copy.fetch(DEVLANE_CANDIDATE_NAME).fetch("component")["source_url"] = "https://example.invalid/fork"
+    end,
+    "source version" => lambda do |_provenance_copy, components_copy|
+      components_copy.fetch(DEVLANE_CANDIDATE_NAME).fetch("component")["version"] = "unreviewed-version"
+    end,
+    "source digest" => lambda do |_provenance_copy, components_copy|
+      components_copy.fetch(DEVLANE_CANDIDATE_NAME).dig("component", "digest")["value"] = "0" * 40
+    end,
+    "scope version" => lambda do |provenance_copy, _components_copy|
+      provenance_copy.fetch("proposed_import")["scope_version"] = "expanded-scope"
+    end,
+    "excluded dependencies emptied" => lambda do |provenance_copy, _components_copy|
+      provenance_copy.fetch("proposed_import")["excluded_source_dependencies"] = []
+    end,
+    "excluded areas emptied" => lambda do |provenance_copy, _components_copy|
+      provenance_copy.fetch("proposed_import")["excluded_source_areas"] = []
+    end,
+    "review obligations emptied" => lambda do |provenance_copy, _components_copy|
+      provenance_copy.fetch("proposed_import")["review_obligations"] = []
+    end,
+    "notice obligations emptied" => lambda do |_provenance_copy, components_copy|
+      components_copy.fetch(DEVLANE_CANDIDATE_NAME).fetch("obligations")["notices"] = []
+    end,
+    "modification widened" => lambda do |provenance_copy, _components_copy|
+      provenance_copy.dig("proposed_import", "source_files", 0)["modification"] = "Import all source behavior unchanged."
+    end,
+    "non-mapping source appended" => lambda do |provenance_copy, _components_copy|
+      provenance_copy.dig("proposed_import", "source_files") << "unreviewed-source"
+    end,
+    "top-level field appended" => lambda do |provenance_copy, _components_copy|
+      provenance_copy["approval_override"] = true
+    end,
+    "registry constraint deleted" => lambda do |_provenance_copy, components_copy|
+      components_copy.fetch(DEVLANE_CANDIDATE_NAME).fetch("security").delete("permissions_and_network")
+    end,
+    "distribution flag changed alone" => lambda do |provenance_copy, _components_copy|
+      provenance_copy.fetch("proposed_import")["approved_source_distribution"] = true
+    end
+  }
+  devlane_mutation_survivors = []
+  devlane_mutations.each do |label, mutation|
+    mutated_provenance = Marshal.load(Marshal.dump(provenance_fixture))
+    mutated_components = Marshal.load(Marshal.dump(registry_components))
+    mutation.call(mutated_provenance, mutated_components)
+    if devlane_candidate_errors(mutated_provenance, mutated_components).empty?
+      devlane_mutation_survivors << label
+    end
+    guard_count += 1
+  end
+  unless devlane_mutation_survivors.empty?
+    failures << "Devlane candidate mutation survivors: #{devlane_mutation_survivors.join(', ')}"
+  end
+
   decision_mutation_survivors = []
   EXPECTED_REJECTED_DECISIONS.each do |name, expected_decision|
     expected_decision.each_key do |field|
@@ -1035,6 +1183,7 @@ REQUIRED_PINS.each do |name, (version, digest)|
 end
 
 provenance = load_yaml(PROVENANCE_PATH)
+errors.concat(devlane_candidate_errors(provenance, components))
 expected_provenance = {
   ["status"] => "PINNED_SOURCE_NOT_IMPORTED",
   ["upstream", "repository"] => "https://github.com/Devlaner/devlane",
