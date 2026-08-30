@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stead.dev/schemas/performance/benchmark-artifact-v1.schema.json",
+  "title": "Stead digest-bound performance benchmark artifact v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "artifact_type", "schema_version", "artifact_id", "kind", "source_revision",
+    "dataset_sha256", "scenario_ids", "producer", "status", "measurements", "measurements_sha256",
+    "recorded_at", "causality"
+  ],
+  "properties": {
+    "artifact_type": { "const": "performance_benchmark_artifact" },
+    "schema_version": { "const": "1.0" },
+    "artifact_id": { "type": "string", "minLength": 1 },
+    "kind": {
+      "enum": [
+        "authorization_count", "browser_performance", "frontend_bundle", "go_microbenchmark",
+        "golden_slice_e2e", "peek", "projection_lag", "provider_count", "query_count", "response_before_relay"
+      ]
+    },
+    "source_revision": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "dataset_sha256": { "$ref": "#/$defs/sha256" },
+    "scenario_ids": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+    "producer": {
+      "type": "object", "additionalProperties": false,
+      "required": ["tool", "version", "command"],
+      "properties": {
+        "tool": { "type": "string", "minLength": 1 },
+        "version": { "type": "string", "minLength": 1 },
+        "command": { "type": "string", "minLength": 1 }
+      }
+    },
+    "status": { "const": "PASS" },
+    "measurements": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["metric", "value", "unit"],
+        "properties": {
+          "metric": { "type": "string", "minLength": 1 },
+          "value": { "type": "number", "minimum": 0 },
+          "unit": { "enum": ["bytes", "calls", "count", "milliseconds", "nanoseconds", "ratio"] }
+        }
+      }
+    },
+    "measurements_sha256": { "$ref": "#/$defs/sha256" },
+    "recorded_at": { "type": "string", "format": "date-time" },
+    "causality": {
+      "type": ["object", "null"], "additionalProperties": false,
+      "required": ["trace_id_hash", "events"],
+      "properties": {
+        "trace_id_hash": { "$ref": "#/$defs/sha256" },
+        "events": {
+          "type": "array", "minItems": 3, "maxItems": 3,
+          "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["type", "monotonic_ns"],
+            "properties": {
+              "type": { "enum": ["authoritative_commit", "response_sent", "relay_started"] },
+              "monotonic_ns": { "type": "integer", "minimum": 0 }
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+  }
+}

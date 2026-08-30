@@ -1,32 +1,211 @@
 {
+  "artifact_type": "dataset_manifest",
   "schema_version": "1.0",
-  "dataset_id": "stead-standard-request-boundary-v1",
+  "manifest_id": "stead-standard-request-boundary-v1",
+  "phase": "phase1",
   "benchmark_profile": "standard",
   "disclosure_mode": "request_boundary",
-  "topology": "colocated single-region Phase 1 reference deployment",
-  "device": "documented four-core reference client with hardware and governor recorded by the runner",
-  "network": "same-region shaped network; exact latency, bandwidth, and loss recorded per run",
-  "corpus": "synthetic authorized Organization, parent/child Teams, general Project, Work, Docs, activity, inbox, audit, search, and additive software fixtures",
+  "generator": {
+    "path": "tests/performance/datasets/generate_standard_corpus.rb",
+    "sha256": "ecbe9fa7299e81ac1b7c76f36213d6d6b1517f5eecb0c6fcedc06e5a7976ffa0",
+    "output_sha256": "1677caee3ea112ef66a6bf401658c97ba0ca5ebce7060d0020d9f8062abb917b",
+    "seed": 2026083001,
+    "command": "ruby tests/performance/datasets/generate_standard_corpus.rb"
+  },
+  "client": {
+    "cpu_architecture": "x86_64", "cpu_cores": 4, "memory_mib": 8192,
+    "os": "Ubuntu 26.04", "browser": "Chromium 139.0.7258.66",
+    "cpu_governor": "performance", "viewport_css_pixels": "1440x900", "device_scale_factor": 1
+  },
+  "server": {
+    "cpu_architecture": "x86_64", "cpu_cores": 8, "memory_mib": 16384,
+    "os": "Linux amd64", "application_instances": 1, "worker_instances": 1,
+    "component_versions": {
+      "go": "1.27.0", "node": "26.8.1", "postgresql": "18.0",
+      "openfga": "1.10.2", "nats_server": "2.12.0", "gitea": "1.25.0"
+    }
+  },
+  "network": {
+    "round_trip_latency_ms": 20, "jitter_ms": 1, "download_mbps": 100,
+    "upload_mbps": 100, "packet_loss_percent": 0, "shaper": "tc-netem"
+  },
+  "topology": {
+    "region_count": 1,
+    "application_to_postgres_latency_ms": 1,
+    "application_to_openfga_latency_ms": 1,
+    "application_to_gitea_latency_ms": 1,
+    "application_to_nats_latency_ms": 1,
+    "postgres_connection_pool_size": 20,
+    "browser_origin": "https://stead.test",
+    "provider_origin": "https://gitea.internal.test"
+  },
+  "corpus": {
+    "organizations": 10, "teams": 80, "team_edges": 70, "projects": 200,
+    "work_items": 10000, "documents": 5000, "document_versions": 20000,
+    "relationships": 30000, "activity_events": 100000, "inbox_entries": 25000,
+    "audit_events": 100000, "repositories": 50, "pull_requests": 2000,
+    "builds": 5000, "packages": 1000, "releases": 500
+  },
+  "cache_protocol": {
+    "cold": {
+      "restart_browser_context": true,
+      "restart_application_process": true,
+      "clear_client_cache": true,
+      "clear_query_cache": true,
+      "retain_seeded_postgres_pages": true
+    },
+    "warm": {
+      "reuse_authenticated_browser_context": true,
+      "reuse_database_pool": true,
+      "execute_load_shape_warmup_requests": true
+    },
+    "between_scenarios": {
+      "reset_synthetic_principal": true,
+      "reset_correlation_context": true,
+      "reset_instrumentation_counters": true,
+      "reset_trace_buffer": true,
+      "reset_browser_route_state": true,
+      "reset_outbox_relay_checkpoint": true
+    },
+    "between_scale_trials": {
+      "restore_seeded_database_snapshot": true,
+      "reset_instrumentation_counters": true
+    }
+  },
   "load_shapes": [
-    { "id": "single-user-hot", "concurrency": 1, "samples": 100, "state": "warm" },
-    { "id": "single-user-cold", "concurrency": 1, "samples": 20, "state": "cold" },
-    { "id": "set-oriented-scale", "result_counts": [1, 25, 100, 250], "state": "warm" }
+    { "id": "single-user-hot", "concurrency": 1, "warmup_requests": 20, "measured_samples": 100, "state": "warm", "result_counts": [1, 25, 100, 250] },
+    { "id": "single-user-same-region", "concurrency": 1, "warmup_requests": 20, "measured_samples": 100, "state": "warm", "result_counts": [1, 25, 100, 250] },
+    { "id": "single-user-mutation", "concurrency": 1, "warmup_requests": 10, "measured_samples": 100, "state": "warm", "result_counts": [] },
+    { "id": "single-user-search", "concurrency": 1, "warmup_requests": 10, "measured_samples": 100, "state": "warm", "result_counts": [1, 25, 100, 250] },
+    { "id": "single-user-route", "concurrency": 1, "warmup_requests": 10, "measured_samples": 100, "state": "warm", "result_counts": [1, 25, 100, 250] },
+    { "id": "single-user-cold", "concurrency": 1, "warmup_requests": 0, "measured_samples": 20, "state": "cold", "result_counts": [] },
+    { "id": "single-user-projection", "concurrency": 1, "warmup_requests": 10, "measured_samples": 100, "state": "warm", "result_counts": [] },
+    { "id": "single-user-input", "concurrency": 1, "warmup_requests": 10, "measured_samples": 100, "state": "warm", "result_counts": [] },
+    { "id": "single-user-command", "concurrency": 1, "warmup_requests": 10, "measured_samples": 100, "state": "warm", "result_counts": [] }
   ],
-  "required_labels": [
-    "source revision",
-    "component and schema versions",
-    "dataset version",
-    "device",
-    "network",
-    "topology",
-    "corpus",
-    "load shape",
-    "cold or warm state",
-    "disclosure mode"
+  "required_suite_artifact_kinds": [
+    "authorization_count", "browser_performance", "frontend_bundle", "go_microbenchmark",
+    "golden_slice_e2e", "peek", "projection_lag", "provider_count", "query_count", "response_before_relay"
   ],
-  "notes": [
-    "This file fixes the evidence shape, not fabricated benchmark results.",
-    "A high-assurance commit_boundary run uses a distinct dataset/profile and must never be reported as standard.",
-    "Protected content is synthetic; evidence contains safe aggregate counters only."
+  "telemetry_scan": {
+    "ruleset_id": "stead-performance-safe-scan-v1",
+    "canary_value_sha256": [
+      "4ccce59bc8ec6680263d9eb7275ef8697dc500ae362416108abccfeb98171c1e",
+      "c0734646403ca8da85a9c96b817be88d6813e5f98cca205d55e584300a97b339"
+    ],
+    "forbidden_normalized_keys": [
+      "authorizationheader", "cookie", "credential", "credentials", "documentbody",
+      "issuebody", "password", "policyinput", "policyinputs", "privatekey",
+      "protectedcontent", "querytext", "rawresourceid", "rawresourceids",
+      "secret", "secrets", "token", "tokens", "workbody"
+    ],
+    "forbidden_normalized_value_patterns": [
+      "authorization:bearer", "beginecprivatekey", "beginopensshprivatekey",
+      "beginprivatekey", "password=", "set-cookie:"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "hot-composed-metadata", "type": "hot_composed_metadata_api", "load_shape_id": "single-user-hot",
+      "classifications": { "ordinary_read": true, "primary_surface_after_shell": true, "set_oriented": true, "frontend_touched": false },
+      "count_budgets": { "sql_queries": 4, "postgres_writes": 1, "openfga_calls": 1, "policy_calls": 1, "provider_calls": 0, "logical_audit_operations": 1 },
+      "targets": [
+        { "metric": "timings_ms.latency.p50", "maximum": 25.0, "kind": "engineering" },
+        { "metric": "timings_ms.latency.p95", "maximum": 100.0, "kind": "engineering" },
+        { "metric": "timings_ms.latency.p95", "maximum": 300.0, "kind": "release_ceiling" }
+      ],
+      "critical_metrics": ["timings_ms.latency.p95"],
+      "required_artifact_kinds": ["authorization_count", "go_microbenchmark", "provider_count", "query_count", "response_before_relay"],
+      "baselines": []
+    },
+    {
+      "id": "same-region-metadata", "type": "same_region_metadata_api", "load_shape_id": "single-user-same-region",
+      "classifications": { "ordinary_read": true, "primary_surface_after_shell": true, "set_oriented": true, "frontend_touched": false },
+      "count_budgets": { "sql_queries": 4, "postgres_writes": 1, "openfga_calls": 1, "policy_calls": 1, "provider_calls": 0, "logical_audit_operations": 1 },
+      "targets": [
+        { "metric": "timings_ms.latency.p95", "maximum": 150.0, "kind": "engineering" },
+        { "metric": "timings_ms.latency.p95", "maximum": 300.0, "kind": "release_ceiling" }
+      ],
+      "critical_metrics": ["timings_ms.latency.p95"],
+      "required_artifact_kinds": ["golden_slice_e2e", "response_before_relay"],
+      "baselines": []
+    },
+    {
+      "id": "metadata-mutation", "type": "metadata_mutation", "load_shape_id": "single-user-mutation",
+      "classifications": { "ordinary_read": false, "primary_surface_after_shell": true, "set_oriented": false, "frontend_touched": false },
+      "count_budgets": { "sql_queries": 8, "postgres_writes": 4, "openfga_calls": 1, "policy_calls": 1, "provider_calls": 1, "logical_audit_operations": 1 },
+      "targets": [
+        { "metric": "timings_ms.latency.p95", "maximum": 200.0, "kind": "engineering" },
+        { "metric": "timings_ms.latency.p95", "maximum": 500.0, "kind": "release_ceiling" }
+      ],
+      "critical_metrics": ["timings_ms.latency.p95"],
+      "required_artifact_kinds": ["response_before_relay"],
+      "baselines": []
+    },
+    {
+      "id": "remote-search-first-results", "type": "remote_search_first_results", "load_shape_id": "single-user-search",
+      "classifications": { "ordinary_read": true, "primary_surface_after_shell": true, "set_oriented": true, "frontend_touched": true },
+      "count_budgets": { "sql_queries": 5, "postgres_writes": 1, "openfga_calls": 1, "policy_calls": 1, "provider_calls": 0, "logical_audit_operations": 1 },
+      "targets": [
+        { "metric": "timings_ms.latency.p95", "maximum": 300.0, "kind": "engineering" },
+        { "metric": "timings_ms.latency.p95", "maximum": 1500.0, "kind": "release_ceiling" }
+      ],
+      "critical_metrics": ["timings_ms.latency.p95"],
+      "required_artifact_kinds": ["browser_performance", "golden_slice_e2e"],
+      "baselines": []
+    },
+    {
+      "id": "project-route-useful-content", "type": "project_route_useful_content", "load_shape_id": "single-user-route",
+      "classifications": { "ordinary_read": true, "primary_surface_after_shell": true, "set_oriented": true, "frontend_touched": true },
+      "count_budgets": { "sql_queries": 8, "postgres_writes": 1, "openfga_calls": 1, "policy_calls": 1, "provider_calls": 0, "logical_audit_operations": 1 },
+      "targets": [{ "metric": "timings_ms.latency.p95", "maximum": 500.0, "kind": "engineering" }],
+      "critical_metrics": ["timings_ms.latency.p95"],
+      "required_artifact_kinds": ["browser_performance", "golden_slice_e2e"],
+      "baselines": []
+    },
+    {
+      "id": "cold-initial-application", "type": "cold_initial_application", "load_shape_id": "single-user-cold",
+      "classifications": { "ordinary_read": true, "primary_surface_after_shell": false, "set_oriented": false, "frontend_touched": true },
+      "count_budgets": { "sql_queries": 8, "postgres_writes": 1, "openfga_calls": 1, "policy_calls": 1, "provider_calls": 0, "logical_audit_operations": 1 },
+      "targets": [
+        { "metric": "timings_ms.latency.p95", "maximum": 1000.0, "kind": "engineering" },
+        { "metric": "sizes.eager_javascript_gzip_bytes", "maximum": 256000, "kind": "release_ceiling" }
+      ],
+      "critical_metrics": ["timings_ms.latency.p95", "sizes.eager_javascript_gzip_bytes"],
+      "required_artifact_kinds": ["browser_performance", "frontend_bundle"],
+      "baselines": [
+        { "baseline_id": "foundation-shell-a799f2e", "metric": "sizes.eager_javascript_gzip_bytes", "value": 60808, "critical": true, "source_revision": "a799f2e3d166eab4489e7451a5b53f59a9d78f50" }
+      ]
+    },
+    {
+      "id": "projection-to-visible", "type": "projection_to_visible", "load_shape_id": "single-user-projection",
+      "classifications": { "ordinary_read": false, "primary_surface_after_shell": false, "set_oriented": false, "frontend_touched": false },
+      "count_budgets": { "sql_queries": 8, "postgres_writes": 4, "openfga_calls": 1, "policy_calls": 1, "provider_calls": 1, "logical_audit_operations": 1 },
+      "targets": [
+        { "metric": "timings_ms.projection_lag.p95", "maximum": 1000.0, "kind": "engineering" },
+        { "metric": "timings_ms.projection_lag.p95", "maximum": 5000.0, "kind": "release_ceiling" }
+      ],
+      "critical_metrics": ["timings_ms.projection_lag.p95"],
+      "required_artifact_kinds": ["projection_lag", "response_before_relay"],
+      "baselines": []
+    },
+    {
+      "id": "input-acknowledgement", "type": "input_acknowledgement", "load_shape_id": "single-user-input",
+      "classifications": { "ordinary_read": false, "primary_surface_after_shell": false, "set_oriented": false, "frontend_touched": true },
+      "count_budgets": { "sql_queries": 0, "postgres_writes": 0, "openfga_calls": 0, "policy_calls": 0, "provider_calls": 0, "logical_audit_operations": 0 },
+      "targets": [{ "metric": "timings_ms.latency.p95", "maximum": 50.0, "kind": "engineering" }],
+      "critical_metrics": ["timings_ms.latency.p95"],
+      "required_artifact_kinds": ["browser_performance", "peek"],
+      "baselines": []
+    },
+    {
+      "id": "command-palette-local-results", "type": "command_palette_local_results", "load_shape_id": "single-user-command",
+      "classifications": { "ordinary_read": false, "primary_surface_after_shell": false, "set_oriented": false, "frontend_touched": true },
+      "count_budgets": { "sql_queries": 0, "postgres_writes": 0, "openfga_calls": 0, "policy_calls": 0, "provider_calls": 0, "logical_audit_operations": 0 },
+      "targets": [{ "metric": "timings_ms.latency.p95", "maximum": 30.0, "kind": "engineering" }],
+      "critical_metrics": ["timings_ms.latency.p95"],
+      "required_artifact_kinds": ["browser_performance"],
+      "baselines": []
+    }
   ]
 }

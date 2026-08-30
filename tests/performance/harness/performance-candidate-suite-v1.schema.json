@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stead.dev/schemas/performance/candidate-suite-v1.schema.json",
+  "title": "Stead Phase 1 performance candidate suite v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "artifact_type", "schema_version", "suite_id", "phase", "source", "dataset",
+    "runtime_components", "evidence", "benchmark_artifacts", "regression_reviews"
+  ],
+  "properties": {
+    "artifact_type": { "const": "performance_candidate_suite" },
+    "schema_version": { "const": "1.0" },
+    "suite_id": { "type": "string", "minLength": 1, "maxLength": 160 },
+    "phase": { "const": "phase1" },
+    "source": {
+      "type": "object", "additionalProperties": false,
+      "required": ["revision", "dirty", "recorded_at", "implementation_owner", "tool_versions"],
+      "properties": {
+        "revision": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "dirty": { "const": false },
+        "recorded_at": { "type": "string", "format": "date-time" },
+        "implementation_owner": { "type": "string", "minLength": 1 },
+        "tool_versions": {
+          "type": "object", "minProperties": 1,
+          "propertyNames": { "type": "string", "minLength": 1 },
+          "additionalProperties": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "dataset": { "$ref": "#/$defs/fileReference" },
+    "runtime_components": {
+      "type": "array", "minItems": 6,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["name", "version", "artifact_digest"],
+        "properties": {
+          "name": { "enum": ["go", "node", "postgresql", "openfga", "nats_server", "gitea"] },
+          "version": { "type": "string", "minLength": 1 },
+          "artifact_digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+        }
+      }
+    },
+    "evidence": {
+      "type": "array", "minItems": 9,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["scenario_id", "path", "sha256"],
+        "properties": {
+          "scenario_id": { "type": "string", "minLength": 1 },
+          "path": { "$ref": "#/$defs/relativePath" },
+          "sha256": { "$ref": "#/$defs/sha256" }
+        }
+      }
+    },
+    "benchmark_artifacts": {
+      "type": "array", "minItems": 10,
+      "items": { "$ref": "#/$defs/fileReference" }
+    },
+    "regression_reviews": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/fileReference" }
+    }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "relativePath": {
+      "type": "string", "minLength": 1,
+      "pattern": "^(artifacts/performance|packages/test-fixtures/harness/performance|tests/performance/datasets)/[A-Za-z0-9._/-]+$"
+    },
+    "fileReference": {
+      "type": "object", "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": { "$ref": "#/$defs/relativePath" },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    }
+  }
+}

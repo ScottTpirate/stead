@@ -1,47 +1,31 @@
 {
+  "artifact_type": "performance_measurement",
   "schema_version": "1.0",
   "evidence_id": "fixture-standard-hot-composed-api-v1",
   "evidence_kind": "test_fixture",
-  "candidate_eligible": false,
   "source": {
     "revision": "a799f2e3d166eab4489e7451a5b53f59a9d78f50",
     "dirty": false,
     "recorded_at": "2026-08-30T14:14:27Z",
-    "tool_versions": {
-      "go": "1.27.0",
-      "node": "26.8.1",
-      "ruby": "3.4.10"
-    }
+    "tool_versions": { "go": "1.27.0", "node": "26.8.1", "ruby": "3.4.10" }
   },
-  "scenario": {
-    "id": "fixture-hot-composed-metadata",
-    "type": "hot_composed_metadata_api",
-    "benchmark_profile": "standard",
-    "disclosure_mode": "request_boundary",
-    "dataset_version": "stead-standard-request-boundary-v1",
-    "device": "synthetic-contract-device",
-    "network": "synthetic-colocated-network",
-    "topology": "synthetic-colocated-reference-topology",
-    "corpus": "synthetic-authorized-general-project",
-    "load_shape": "single-user-hot",
-    "state": "warm",
-    "sample_count": 100,
-    "ordinary_read": true,
-    "primary_surface_after_shell": true,
-    "set_oriented": true,
-    "frontend_touched": true
+  "dataset": {
+    "manifest_id": "stead-standard-request-boundary-v1",
+    "sha256": "31c23fc064c9e50b38277bd75df008ee4fa3088ae7b4c9faa15b35f9b09e949a"
+  },
+  "scenario_id": "hot-composed-metadata",
+  "provenance": {
+    "runner": "stead-performance-contract-fixture",
+    "runner_version": "1.0.0",
+    "command": "ruby tests/performance/harness/performance_foundation_test.rb",
+    "started_at": "2026-08-30T14:14:00Z",
+    "ended_at": "2026-08-30T14:14:27Z"
   },
   "counts": {
-    "browser_requests": 1,
-    "sql_queries": 4,
-    "postgres_writes": 1,
-    "openfga_calls": 1,
-    "policy_calls": 1,
-    "provider_calls": 0,
-    "nats_waits": 0,
-    "logical_audit_operations": 1,
-    "browser_forbidden_origin_requests": 0,
-    "authorization_cache_hits": 0
+    "browser_requests": 1, "sql_queries": 4, "postgres_writes": 1,
+    "openfga_calls": 1, "policy_calls": 1, "provider_calls": 0,
+    "nats_waits": 0, "logical_audit_operations": 1,
+    "browser_forbidden_origin_requests": 0, "authorization_cache_hits": 0
   },
   "timings_ms": {
     "latency": { "p50": 20.0, "p95": 80.0, "p99": 95.0 },
@@ -56,52 +40,74 @@
     "eager_javascript_gzip_bytes": 60808,
     "lazy_javascript_chunks": [],
     "frontend_baseline": {
-      "baseline_id": "foundation-shell-a799f2e",
-      "baseline_gzip_bytes": 60808,
-      "current_gzip_bytes": 60808,
-      "delta_gzip_bytes": 0,
-      "lazy_chunk_delta_gzip_bytes": 0
+      "baseline_id": "foundation-shell-a799f2e", "baseline_gzip_bytes": 60808,
+      "current_gzip_bytes": 60808, "delta_gzip_bytes": 0, "lazy_chunk_delta_gzip_bytes": 0
     }
   },
-  "web_vitals": {
-    "lcp_ms": 400.0,
-    "inp_ms": 30.0,
-    "cls": 0.01
-  },
-  "count_budgets": {
-    "sql_queries": 4,
-    "postgres_writes": 1,
-    "openfga_calls": 1,
-    "policy_calls": 1,
-    "provider_calls": 0,
-    "logical_audit_operations": 1
-  },
+  "web_vitals": { "lcp_ms": 400.0, "inp_ms": 30.0, "cls": 0.01 },
   "scaling_trials": [
     { "result_count": 1, "sql_queries": 4, "postgres_writes": 1, "openfga_calls": 1, "policy_calls": 1, "provider_calls": 0, "logical_audit_operations": 1 },
     { "result_count": 25, "sql_queries": 4, "postgres_writes": 1, "openfga_calls": 1, "policy_calls": 1, "provider_calls": 0, "logical_audit_operations": 1 },
     { "result_count": 100, "sql_queries": 4, "postgres_writes": 1, "openfga_calls": 1, "policy_calls": 1, "provider_calls": 0, "logical_audit_operations": 1 },
     { "result_count": 250, "sql_queries": 4, "postgres_writes": 1, "openfga_calls": 1, "policy_calls": 1, "provider_calls": 0, "logical_audit_operations": 1 }
   ],
-  "baseline_comparison": [
-    {
-      "metric": "timings_ms.latency.p95",
-      "baseline": 75.0,
-      "current": 80.0,
-      "regression_percent": 6.6667,
-      "critical": true,
-      "independent_review_ref": null
+  "raw_samples": {
+    "timings_ms": {
+      "latency": [10, 12, 14, 16, 18, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 30, 40, 60, 80, 95],
+      "sql": [1, 1, 1, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 5, 7, 9, 12],
+      "openfga": [0.5, 0.5, 0.5, 0.5, 0.5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1.5, 2, 2.5, 3, 5],
+      "policy": [0.1, 0.1, 0.2, 0.2, 0.3, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.7, 0.9, 1.2, 1.5, 2],
+      "provider": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      "projection_lag": [100, 110, 120, 130, 140, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 300, 400, 600, 800, 950]
     },
-    {
-      "metric": "sizes.eager_javascript_gzip_bytes",
-      "baseline": 60808,
-      "current": 60808,
-      "regression_percent": 0.0,
-      "critical": true,
-      "independent_review_ref": null
+    "counts": [
+      { "browser_requests": 1, "sql_queries": 4, "postgres_writes": 1, "openfga_calls": 1, "policy_calls": 1, "provider_calls": 0, "nats_waits": 0, "logical_audit_operations": 1, "browser_forbidden_origin_requests": 0, "authorization_cache_hits": 0 },
+      { "browser_requests": 1, "sql_queries": 4, "postgres_writes": 1, "openfga_calls": 1, "policy_calls": 1, "provider_calls": 0, "nats_waits": 0, "logical_audit_operations": 1, "browser_forbidden_origin_requests": 0, "authorization_cache_hits": 0 },
+      { "browser_requests": 1, "sql_queries": 4, "postgres_writes": 1, "openfga_calls": 1, "policy_calls": 1, "provider_calls": 0, "nats_waits": 0, "logical_audit_operations": 1, "browser_forbidden_origin_requests": 0, "authorization_cache_hits": 0 },
+      { "browser_requests": 1, "sql_queries": 4, "postgres_writes": 1, "openfga_calls": 1, "policy_calls": 1, "provider_calls": 0, "nats_waits": 0, "logical_audit_operations": 1, "browser_forbidden_origin_requests": 0, "authorization_cache_hits": 0 },
+      { "browser_requests": 1, "sql_queries": 4, "postgres_writes": 1, "openfga_calls": 1, "policy_calls": 1, "provider_calls": 0, "nats_waits": 0, "logical_audit_operations": 1, "browser_forbidden_origin_requests": 0, "authorization_cache_hits": 0 },
+      { "browser_requests": 1, "sql_queries": 4, "postgres_writes": 1, "openfga_calls": 1, "policy_calls": 1, "provider_calls": 0, "nats_waits": 0, "logical_audit_operations": 1, "browser_forbidden_origin_requests": 0, "authorization_cache_hits": 0 },
+      { "browser_requests": 1, "sql_queries": 4, "postgres_writes": 1, "openfga_calls": 1, "policy_calls": 1, "provider_calls": 0, "nats_waits": 0, "logical_audit_operations": 1, "browser_forbidden_origin_requests": 0, "authorization_cache_hits": 0 },
+      { "browser_requests": 1, "sql_queries": 4, "postgres_writes": 1, "openfga_calls": 1, "policy_calls": 1, "provider_calls": 0, "nats_waits": 0, "logical_audit_operations": 1, "browser_forbidden_origin_requests": 0, "authorization_cache_hits": 0 },
+      { "browser_requests": 1, "sql_queries": 4, "postgres_writes": 1, "openfga_calls": 1, "policy_calls": 1, "provider_calls": 0, "nats_waits": 0, "logical_audit_operations": 1, "browser_forbidden_origin_requests": 0, "authorization_cache_hits": 0 },
+      { "browser_requests": 1, "sql_queries": 4, "postgres_writes": 1, "openfga_calls": 1, "policy_calls": 1, "provider_calls": 0, "nats_waits": 0, "logical_audit_operations": 1, "browser_forbidden_origin_requests": 0, "authorization_cache_hits": 0 },
+      { "browser_requests": 1, "sql_queries": 4, "postgres_writes": 1, "openfga_calls": 1, "policy_calls": 1, "provider_calls": 0, "nats_waits": 0, "logical_audit_operations": 1, "browser_forbidden_origin_requests": 0, "authorization_cache_hits": 0 },
+      { "browser_requests": 1, "sql_queries": 4, "postgres_writes": 1, "openfga_calls": 1, "policy_calls": 1, "provider_calls": 0, "nats_waits": 0, "logical_audit_operations": 1, "browser_forbidden_origin_requests": 0, "authorization_cache_hits": 0 },
+      { "browser_requests": 1, "sql_queries": 4, "postgres_writes": 1, "openfga_calls": 1, "policy_calls": 1, "provider_calls": 0, "nats_waits": 0, "logical_audit_operations": 1, "browser_forbidden_origin_requests": 0, "authorization_cache_hits": 0 },
+      { "browser_requests": 1, "sql_queries": 4, "postgres_writes": 1, "openfga_calls": 1, "policy_calls": 1, "provider_calls": 0, "nats_waits": 0, "logical_audit_operations": 1, "browser_forbidden_origin_requests": 0, "authorization_cache_hits": 0 },
+      { "browser_requests": 1, "sql_queries": 4, "postgres_writes": 1, "openfga_calls": 1, "policy_calls": 1, "provider_calls": 0, "nats_waits": 0, "logical_audit_operations": 1, "browser_forbidden_origin_requests": 0, "authorization_cache_hits": 0 },
+      { "browser_requests": 1, "sql_queries": 4, "postgres_writes": 1, "openfga_calls": 1, "policy_calls": 1, "provider_calls": 0, "nats_waits": 0, "logical_audit_operations": 1, "browser_forbidden_origin_requests": 0, "authorization_cache_hits": 0 },
+      { "browser_requests": 1, "sql_queries": 4, "postgres_writes": 1, "openfga_calls": 1, "policy_calls": 1, "provider_calls": 0, "nats_waits": 0, "logical_audit_operations": 1, "browser_forbidden_origin_requests": 0, "authorization_cache_hits": 0 },
+      { "browser_requests": 1, "sql_queries": 4, "postgres_writes": 1, "openfga_calls": 1, "policy_calls": 1, "provider_calls": 0, "nats_waits": 0, "logical_audit_operations": 1, "browser_forbidden_origin_requests": 0, "authorization_cache_hits": 0 },
+      { "browser_requests": 1, "sql_queries": 4, "postgres_writes": 1, "openfga_calls": 1, "policy_calls": 1, "provider_calls": 0, "nats_waits": 0, "logical_audit_operations": 1, "browser_forbidden_origin_requests": 0, "authorization_cache_hits": 0 },
+      { "browser_requests": 1, "sql_queries": 4, "postgres_writes": 1, "openfga_calls": 1, "policy_calls": 1, "provider_calls": 0, "nats_waits": 0, "logical_audit_operations": 1, "browser_forbidden_origin_requests": 0, "authorization_cache_hits": 0 }
+    ],
+    "response_bytes": [48000, 48000, 48000, 48000, 48000, 48000, 48000, 48000, 48000, 48000, 48000, 48000, 48000, 48000, 48000, 48000, 48000, 48000, 48000, 48000],
+    "web_vitals": {
+      "lcp_ms": [300, 300, 310, 310, 320, 320, 330, 330, 340, 340, 350, 350, 360, 360, 370, 370, 380, 390, 400, 450],
+      "inp_ms": [10, 10, 12, 12, 14, 14, 16, 16, 18, 18, 20, 20, 22, 22, 24, 24, 26, 28, 30, 35],
+      "cls": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.001, 0.001, 0.002, 0.002, 0.003, 0.004, 0.005, 0.008, 0.01, 0.02]
     }
-  ],
+  },
+  "raw_samples_sha256": "3bdd9b42d6b18ffea204829678e4dfe847fffc3f9f7f8d1f9d26bb1a25d9387d",
   "telemetry": {
-    "safe_correlation_id": "perf-fixture-0001",
-    "protected_content_canary_hits": 0
+    "ruleset_id": "stead-performance-safe-scan-v1",
+    "records": [
+      {
+        "metric": "http.server.duration",
+        "value": 80,
+        "attributes": {
+          "correlation_id_hash": "09e16394645b7dfb5b1510e2f099a829b1959130a86661c9a3e80a6d1fd5d0de",
+          "scenario_id": "hot-composed-metadata"
+        }
+      }
+    ],
+    "records_sha256": "bb7fdd9dda2edde84a3efe894e57bd18268f91569a476f3aa055cf9ad6374aad",
+    "normalized_key_count": 5,
+    "normalized_string_value_count": 3,
+    "forbidden_key_hits": 0,
+    "forbidden_value_hits": 0,
+    "canary_value_hits": 0,
+    "protected_content_retained": false
   }
 }

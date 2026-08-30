@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stead.dev/schemas/performance/regression-review-v1.schema.json",
+  "title": "Stead independent performance regression review v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "artifact_type", "schema_version", "review_id", "source_revision", "dataset_sha256",
+    "evidence_sha256", "scenario_id", "baseline_id", "metric", "baseline", "current",
+    "regression_percent", "reviewer", "decision", "justification", "reviewed_at"
+  ],
+  "properties": {
+    "artifact_type": { "const": "performance_regression_review" },
+    "schema_version": { "const": "1.0" },
+    "review_id": { "type": "string", "minLength": 1 },
+    "source_revision": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "dataset_sha256": { "$ref": "#/$defs/sha256" },
+    "evidence_sha256": { "$ref": "#/$defs/sha256" },
+    "scenario_id": { "type": "string", "minLength": 1 },
+    "baseline_id": { "type": "string", "minLength": 1 },
+    "metric": { "type": "string", "minLength": 1 },
+    "baseline": { "type": "number", "exclusiveMinimum": 0 },
+    "current": { "type": "number", "minimum": 0 },
+    "regression_percent": { "type": "number" },
+    "reviewer": {
+      "type": "object", "additionalProperties": false,
+      "required": ["identity", "role"],
+      "properties": {
+        "identity": { "type": "string", "minLength": 1 },
+        "role": { "enum": ["independent_qa", "independent_security", "ws12", "ws05"] }
+      }
+    },
+    "decision": { "enum": ["approved_exception", "rejected"] },
+    "justification": { "type": "string", "minLength": 40 },
+    "reviewed_at": { "type": "string", "format": "date-time" }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+  }
+}
