@@ -224,8 +224,13 @@ counts; transport exposes source plus the archive/attestation/policy and release
 signing/threshold facts retained by `ImmutableReleaseHandoff`. The observer
 never reparses protected bodies or invents facts absent from a stage boundary.
 
-Lifecycle identifiers are limited to 128 ASCII identifier bytes and are copied
-when the wrapper is created. They are never passed into canonical encoders,
+Lifecycle operation, correlation, causation, and generic workflow identities
+are limited to 128 ASCII identifier bytes and are copied when the wrapper is
+created. The separately typed build-recipe fact preserves the producer's full
+1-to-256-byte opaque-ID domain. Trust-recovery and lowering approval thresholds
+preserve every positive producer `int` exactly; signature thresholds remain
+separately constrained to the producer's 1-to-16 signature contract. These
+observation values are never passed into canonical encoders,
 signing requests, DSSE envelopes, archives, attestations, handoffs, or transport
 descriptors. Events expose no payload, envelope, archive, signature, key,
 credential, protected body, source content, filesystem path, parser text,

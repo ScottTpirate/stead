@@ -120,6 +120,171 @@ func runObservedCeremony(t testing.TB, context policyrelease.LifecycleContext, r
 	}
 }
 
+func runObservedFourStageLifecycle(t testing.TB, input policyrelease.BuildInput, recorder *lifecycleRecorder) {
+	t.Helper()
+	workflow, err := policyrelease.NewObservedWorkflow(lifecycleContext("four-stage"), recorder)
+	if err != nil {
+		t.Fatal(err)
+	}
+	unsigned, err := workflow.PrepareUnsigned(input)
+	if err != nil {
+		t.Fatalf("observed PrepareUnsigned: %v (%s)", err, policyrelease.ErrorCode(err))
+	}
+	threshold := unsigned.SigningRequest.RequiredSignatureThreshold
+	activationEnvelope, activationSigning := externallySign(t, policyrelease.ActivationManifestPayloadType, unsigned.ManifestPayload, threshold, false)
+	activation, err := workflow.FinalizeActivationArchive(unsigned, activationEnvelope, activationSigning)
+	if err != nil {
+		t.Fatalf("observed FinalizeActivationArchive: %v (%s)", err, policyrelease.ErrorCode(err))
+	}
+	releaseInput := policyrelease.ReleaseAttestationInput{
+		ReleaseWorkflowIdentity: "stead-ci-policy-release-workflow-v1",
+		ReviewReceipts: []policyrelease.ReviewReceipt{{
+			ReviewerID:         "fixture-final-reviewer",
+			Role:               "independent-release",
+			SubjectDigest:      activation.ArchiveDigest,
+			RecordDigest:       policyrelease.SHA256Digest([]byte("fixture-final-review-record")),
+			ClaimedDisposition: "accept",
+		}},
+		OfflineCheckReceipt: policyrelease.OfflineCheckReceipt{
+			ClaimedOutcome:       "pass",
+			SubjectArchiveDigest: activation.ArchiveDigest,
+			ReportDigest:         policyrelease.SHA256Digest([]byte("offline-check-report")),
+		},
+	}
+	attestation, err := workflow.PrepareReleaseAttestation(activation, releaseInput)
+	if err != nil {
+		t.Fatalf("observed PrepareReleaseAttestation: %v (%s)", err, policyrelease.ErrorCode(err))
+	}
+	releaseEnvelope, releaseSigning := externallySign(t, policyrelease.ReleaseAttestationPayloadType, attestation.PayloadBytes, threshold, false)
+	if _, err := workflow.FinalizeReleaseHandoff(activation, attestation, releaseEnvelope, releaseSigning); err != nil {
+		t.Fatalf("observed FinalizeReleaseHandoff: %v (%s)", err, policyrelease.ErrorCode(err))
+	}
+}
+
+func rebindApprovalThresholds(t testing.TB, input *policyrelease.BuildInput, recovery, lowering int) {
+	t.Helper()
+	input.Manifest.DeploymentPolicy.TrustRecoveryApprovalThreshold = recovery
+	input.Manifest.DeploymentPolicy.LoweringApprovalThreshold = lowering
+	mutateBoundJSON(t, input, "payload/deployment-policy.json", func(document map[string]any) {
+		assurance := document["assurance"].(map[string]any)
+		assurance["trust_recovery_approval_threshold"] = recovery
+		assurance["lowering_approval_threshold"] = lowering
+	})
+	assuranceRebound := false
+	for index := range input.PayloadFiles {
+		if input.PayloadFiles[index].Path != input.Manifest.DeploymentPolicy.PresentedAssuranceResultPath {
+			continue
+		}
+		var assurance policyrelease.PresentedAssuranceEvaluationV1
+		if err := json.Unmarshal(input.PayloadFiles[index].Content, &assurance); err != nil {
+			t.Fatal(err)
+		}
+		assurance.DeploymentPolicyDigest = input.Manifest.DeploymentPolicy.Digest
+		assurance.TrustRecoveryApprovalThreshold = recovery
+		assurance.LoweringApprovalThreshold = lowering
+		content, err := json.Marshal(assurance)
+		if err != nil {
+			t.Fatal(err)
+		}
+		input.PayloadFiles[index].Content = content
+		input.Manifest.DeploymentPolicy.PresentedAssuranceResultDigest = policyrelease.SHA256Digest(content)
+		assuranceRebound = true
+		break
+	}
+	if !assuranceRebound {
+		t.Fatal("presented assurance result fixture missing")
+	}
+	mutateAndRebindTrustSet(t, input, func(document map[string]any) {
+		document["deployment_policy_digest"] = input.Manifest.DeploymentPolicy.Digest
+	})
+	rebindPolicyContentIndex(t, input)
+}
+
+// CICD-004, SEC-002, SEC-003, and TEST-008: every producer-admitted recipe
+// identifier and approval threshold is preserved exactly at all four stages
+// that carry the deployment/build facts; invalid producer values fail closed.
+func TestLifecycleProducerDomainsArePreservedExactly(t *testing.T) {
+	wantStages := []policyrelease.LifecycleStageCode{
+		policyrelease.LifecycleStagePrepareUnsigned,
+		policyrelease.LifecycleStageFinalizeActivationArchive,
+		policyrelease.LifecycleStagePrepareReleaseAttestation,
+		policyrelease.LifecycleStageFinalizeReleaseHandoff,
+	}
+	t.Run("build-recipe-version", func(t *testing.T) {
+		for _, size := range []int{0, 1, 128, 129, 256, 257} {
+			t.Run(strconv.Itoa(size), func(t *testing.T) {
+				input := fixtureBuildInput(t, "commercial", 1, false)
+				input.Manifest.BuildRecipeVersion = strings.Repeat("r", size)
+				recorder := &lifecycleRecorder{}
+				if size == 0 || size == 257 {
+					workflow, err := policyrelease.NewObservedWorkflow(lifecycleContext("recipe-invalid-"+strconv.Itoa(size)), recorder)
+					if err != nil {
+						t.Fatal(err)
+					}
+					unsigned, operationErr := workflow.PrepareUnsigned(input)
+					if policyrelease.ErrorCode(operationErr) != "invalid_identifier" || unsigned.ManifestPayload != nil || unsigned.SigningRequestBytes != nil || len(recorder.events) != 1 || recorder.events[0].Outcome != policyrelease.LifecycleOutcomeFailure || recorder.events[0].Facts.BuildRecipeVersion != "" {
+						t.Fatalf("invalid recipe size %d: output=%d/%d events=%#v err=%v (%s)", size, len(unsigned.ManifestPayload), len(unsigned.SigningRequestBytes), recorder.events, operationErr, policyrelease.ErrorCode(operationErr))
+					}
+					return
+				}
+
+				runObservedFourStageLifecycle(t, input, recorder)
+				if len(recorder.events) != len(wantStages) {
+					t.Fatalf("recipe size %d events=%d, want %d", size, len(recorder.events), len(wantStages))
+				}
+				for index, event := range recorder.events {
+					if event.Stage != wantStages[index] || event.Outcome != policyrelease.LifecycleOutcomeSuccess || event.Facts.BuildRecipeVersion != input.Manifest.BuildRecipeVersion || len(event.Facts.BuildRecipeVersion) != size {
+						t.Fatalf("recipe size %d event[%d]=%#v", size, index, event)
+					}
+				}
+			})
+		}
+	})
+
+	maxInt := int(^uint(0) >> 1)
+	for _, thresholdKind := range []struct {
+		name string
+	}{
+		{"trust-recovery"},
+		{"lowering"},
+	} {
+		t.Run(thresholdKind.name, func(t *testing.T) {
+			for _, value := range []int{0, 1, 256, 257, maxInt} {
+				t.Run(strconv.Itoa(value), func(t *testing.T) {
+					input := fixtureBuildInput(t, "commercial", 1, false)
+					if thresholdKind.name == "trust-recovery" {
+						rebindApprovalThresholds(t, &input, value, 1)
+					} else {
+						rebindApprovalThresholds(t, &input, 1, value)
+					}
+					recorder := &lifecycleRecorder{}
+					if value == 0 {
+						workflow, err := policyrelease.NewObservedWorkflow(lifecycleContext(thresholdKind.name+"-invalid"), recorder)
+						if err != nil {
+							t.Fatal(err)
+						}
+						unsigned, operationErr := workflow.PrepareUnsigned(input)
+						if policyrelease.ErrorCode(operationErr) != "invalid_assurance_threshold" || unsigned.ManifestPayload != nil || unsigned.SigningRequestBytes != nil || len(recorder.events) != 1 || recorder.events[0].Outcome != policyrelease.LifecycleOutcomeFailure {
+							t.Fatalf("invalid %s threshold: output=%d/%d events=%#v err=%v (%s)", thresholdKind.name, len(unsigned.ManifestPayload), len(unsigned.SigningRequestBytes), recorder.events, operationErr, policyrelease.ErrorCode(operationErr))
+						}
+						return
+					}
+
+					runObservedFourStageLifecycle(t, input, recorder)
+					if len(recorder.events) != len(wantStages) {
+						t.Fatalf("%s threshold %d events=%d, want %d", thresholdKind.name, value, len(recorder.events), len(wantStages))
+					}
+					for index, event := range recorder.events {
+						if event.Stage != wantStages[index] || event.Outcome != policyrelease.LifecycleOutcomeSuccess || event.Facts.TrustRecoveryApprovalThreshold != input.Manifest.DeploymentPolicy.TrustRecoveryApprovalThreshold || event.Facts.LoweringApprovalThreshold != input.Manifest.DeploymentPolicy.LoweringApprovalThreshold || event.Facts.RequiredSignatureThreshold != 1 {
+							t.Fatalf("%s threshold %d event[%d]=%#v", thresholdKind.name, value, index, event)
+						}
+					}
+				})
+			}
+		})
+	}
+}
+
 func TestObservedWorkflowIsOutOfArtifactAndDeterministic(t *testing.T) {
 	firstContext := lifecycleContext("first-boundary")
 	secondContext := lifecycleContext("second-boundary")
@@ -445,20 +610,24 @@ func TestLifecycleContextAndEventsAreBoundedCopiedAndRedacted(t *testing.T) {
 }
 
 type lifecycleContractFixture struct {
-	SchemaVersion             string                                       `json:"schema_version"`
-	Authority                 string                                       `json:"authority"`
-	ProducerOwner             string                                       `json:"producer_owner"`
-	DurableAuditOwner         string                                       `json:"durable_audit_owner"`
-	IdentifierMaxBytes        int                                          `json:"identifier_max_bytes"`
-	ObserverFailureCode       string                                       `json:"observer_failure_code"`
-	OperationGuardFailureCode string                                       `json:"operation_guard_failure_code"`
-	Workflows                 []policyrelease.LifecycleWorkflowCode        `json:"workflows"`
-	Outcomes                  []policyrelease.LifecycleOutcomeCode         `json:"outcomes"`
-	ThresholdResults          []policyrelease.LifecycleThresholdResultCode `json:"threshold_results"`
-	Stages                    []policyrelease.LifecycleStageCode           `json:"stages"`
-	EventFields               []string                                     `json:"event_fields"`
-	FactFields                []string                                     `json:"fact_fields"`
-	AcknowledgementFields     []string                                     `json:"acknowledgement_fields"`
+	SchemaVersion                   string                                       `json:"schema_version"`
+	Authority                       string                                       `json:"authority"`
+	ProducerOwner                   string                                       `json:"producer_owner"`
+	DurableAuditOwner               string                                       `json:"durable_audit_owner"`
+	IdentifierMaxBytes              int                                          `json:"identifier_max_bytes"`
+	BuildRecipeVersionMaxBytes      int                                          `json:"build_recipe_version_max_bytes"`
+	ApprovalThresholdMinimum        int                                          `json:"approval_threshold_minimum"`
+	ApprovalThresholdRepresentation string                                       `json:"approval_threshold_representation"`
+	SignatureThresholdMaximum       int                                          `json:"signature_threshold_maximum"`
+	ObserverFailureCode             string                                       `json:"observer_failure_code"`
+	OperationGuardFailureCode       string                                       `json:"operation_guard_failure_code"`
+	Workflows                       []policyrelease.LifecycleWorkflowCode        `json:"workflows"`
+	Outcomes                        []policyrelease.LifecycleOutcomeCode         `json:"outcomes"`
+	ThresholdResults                []policyrelease.LifecycleThresholdResultCode `json:"threshold_results"`
+	Stages                          []policyrelease.LifecycleStageCode           `json:"stages"`
+	EventFields                     []string                                     `json:"event_fields"`
+	FactFields                      []string                                     `json:"fact_fields"`
+	AcknowledgementFields           []string                                     `json:"acknowledgement_fields"`
 }
 
 func jsonFieldNames(kind reflect.Type) []string {
@@ -485,7 +654,7 @@ func TestLifecycleObservationFixtureClosesTheSafeSurface(t *testing.T) {
 		policyrelease.LifecycleStageFinalizeReleaseHandoff,
 		policyrelease.LifecycleStageBuildTransportDescriptor,
 	}
-	if fixture.SchemaVersion != policyrelease.LifecycleObservationSchemaVersion || fixture.Authority != policyrelease.NonAuthorizingHandoffAuthority || fixture.ProducerOwner != policyrelease.LifecycleObservationProducerOwner || fixture.DurableAuditOwner != policyrelease.LifecycleObservationDurableOwner || fixture.IdentifierMaxBytes != policyrelease.MaxLifecycleIdentifierBytes || fixture.ObserverFailureCode != "lifecycle_observer_failed" || fixture.OperationGuardFailureCode != "lifecycle_operation_in_progress" {
+	if fixture.SchemaVersion != policyrelease.LifecycleObservationSchemaVersion || fixture.Authority != policyrelease.NonAuthorizingHandoffAuthority || fixture.ProducerOwner != policyrelease.LifecycleObservationProducerOwner || fixture.DurableAuditOwner != policyrelease.LifecycleObservationDurableOwner || fixture.IdentifierMaxBytes != policyrelease.MaxLifecycleIdentifierBytes || fixture.BuildRecipeVersionMaxBytes != policyrelease.MaxLifecycleBuildRecipeVersionBytes || fixture.ApprovalThresholdMinimum != policyrelease.MinLifecycleApprovalThreshold || fixture.ApprovalThresholdRepresentation != "exact_positive_go_int" || fixture.SignatureThresholdMaximum != policyrelease.MaxEnvelopeSignatures || fixture.ObserverFailureCode != "lifecycle_observer_failed" || fixture.OperationGuardFailureCode != "lifecycle_operation_in_progress" {
 		t.Fatalf("lifecycle fixture header = %#v", fixture)
 	}
 	if !reflect.DeepEqual(fixture.Workflows, []policyrelease.LifecycleWorkflowCode{policyrelease.LifecycleWorkflowActivation, policyrelease.LifecycleWorkflowRelease, policyrelease.LifecycleWorkflowTransport}) || !reflect.DeepEqual(fixture.Outcomes, []policyrelease.LifecycleOutcomeCode{policyrelease.LifecycleOutcomeFailure, policyrelease.LifecycleOutcomeSuccess}) || !reflect.DeepEqual(fixture.Stages, wantStages) {

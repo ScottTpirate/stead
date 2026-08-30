@@ -1,9 +1,13 @@
 {
-  "schema_version": "1.1.0",
+  "schema_version": "1.2.0",
   "authority": "none",
   "producer_owner": "WS-09",
   "durable_audit_owner": "WS-07",
   "identifier_max_bytes": 128,
+  "build_recipe_version_max_bytes": 256,
+  "approval_threshold_minimum": 1,
+  "approval_threshold_representation": "exact_positive_go_int",
+  "signature_threshold_maximum": 16,
   "observer_failure_code": "lifecycle_observer_failed",
   "operation_guard_failure_code": "lifecycle_operation_in_progress",
   "acknowledgement_fields": [

@@ -6,10 +6,12 @@ import (
 )
 
 const (
-	LifecycleObservationSchemaVersion = "1.1.0"
-	LifecycleObservationProducerOwner = "WS-09"
-	LifecycleObservationDurableOwner  = "WS-07"
-	MaxLifecycleIdentifierBytes       = 128
+	LifecycleObservationSchemaVersion   = "1.2.0"
+	LifecycleObservationProducerOwner   = "WS-09"
+	LifecycleObservationDurableOwner    = "WS-07"
+	MaxLifecycleIdentifierBytes         = 128
+	MaxLifecycleBuildRecipeVersionBytes = 256
+	MinLifecycleApprovalThreshold       = 1
 )
 
 type LifecycleWorkflowCode string
@@ -180,8 +182,15 @@ func boundedLifecycleCount(value, maximum int) int {
 	return value
 }
 
-func boundedLifecycleThreshold(value, maximum int) int {
+func boundedLifecycleSignatureThreshold(value, maximum int) int {
 	if value < 1 || value > maximum {
+		return 0
+	}
+	return value
+}
+
+func lifecycleApprovalThreshold(value int) int {
+	if value < MinLifecycleApprovalThreshold {
 		return 0
 	}
 	return value
@@ -196,6 +205,13 @@ func lifecycleDigest(value string) string {
 
 func lifecycleIdentifier(value string) string {
 	if !validLifecycleIdentifier(value) {
+		return ""
+	}
+	return strings.Clone(value)
+}
+
+func lifecycleBuildRecipeVersion(value string) string {
+	if len(value) == 0 || len(value) > MaxLifecycleBuildRecipeVersionBytes || !opaqueIDPattern.MatchString(value) {
 		return ""
 	}
 	return strings.Clone(value)
@@ -265,7 +281,7 @@ func lifecyclePresentedWaiverFacts(waivers []PresentedWaiverReceiptV1) (int, int
 }
 
 func applyLifecycleThresholdFacts(facts *LifecycleFacts, requested, presented int) {
-	facts.RequiredSignatureThreshold = boundedLifecycleThreshold(requested, MaxEnvelopeSignatures)
+	facts.RequiredSignatureThreshold = boundedLifecycleSignatureThreshold(requested, MaxEnvelopeSignatures)
 	facts.ThresholdResult = LifecycleThresholdNotEvaluated
 	if facts.RequiredSignatureThreshold == 0 || presented < 0 || presented > MaxEnvelopeSignatures {
 		return
@@ -283,8 +299,8 @@ func lifecyclePolicyFacts(policy DeploymentPolicyBinding) LifecycleFacts {
 		DeploymentPolicyDigest:         lifecycleDigest(policy.Digest),
 		PresentedAssuranceResultDigest: lifecycleDigest(policy.PresentedAssuranceResultDigest),
 		DistinctCustodiansRequired:     policy.DistinctSigningCustodians,
-		TrustRecoveryApprovalThreshold: boundedLifecycleThreshold(policy.TrustRecoveryApprovalThreshold, MaxMetadataEntries),
-		LoweringApprovalThreshold:      boundedLifecycleThreshold(policy.LoweringApprovalThreshold, MaxMetadataEntries),
+		TrustRecoveryApprovalThreshold: lifecycleApprovalThreshold(policy.TrustRecoveryApprovalThreshold),
+		LoweringApprovalThreshold:      lifecycleApprovalThreshold(policy.LoweringApprovalThreshold),
 		ThresholdResult:                LifecycleThresholdNotEvaluated,
 	}
 	applyLifecycleThresholdFacts(&facts, policy.PolicySignatureThreshold, -1)
@@ -297,7 +313,7 @@ func lifecycleUnsignedFacts(unsigned UnsignedActivation) LifecycleFacts {
 	facts.BuildWorkflowIdentity = lifecycleIdentifier(unsigned.EvidenceManifest.BuildWorkflowIdentity)
 	facts.SourceRevision = lifecycleSourceRevision(unsigned.Manifest.SourceRevision)
 	facts.DependencyLockDigest = lifecycleDigest(unsigned.Manifest.DependencyLockDigest)
-	facts.BuildRecipeVersion = lifecycleIdentifier(unsigned.Manifest.BuildRecipeVersion)
+	facts.BuildRecipeVersion = lifecycleBuildRecipeVersion(unsigned.Manifest.BuildRecipeVersion)
 	facts.ActivationSetID = lifecycleDigest(unsigned.ActivationSetID)
 	facts.PolicyBundleID = lifecycleDigest(unsigned.PolicyBundleID)
 	facts.EvidenceManifestDigest = lifecycleDigest(unsigned.EvidenceManifestDigest)
@@ -417,7 +433,7 @@ func (workflow *ObservedWorkflow) PrepareUnsigned(input BuildInput) (UnsignedAct
 	facts.BuildWorkflowIdentity = lifecycleIdentifier(input.Evidence.BuildWorkflowIdentity)
 	facts.SourceRevision = lifecycleSourceRevision(input.Manifest.SourceRevision)
 	facts.DependencyLockDigest = lifecycleDigest(input.Manifest.DependencyLockDigest)
-	facts.BuildRecipeVersion = lifecycleIdentifier(input.Manifest.BuildRecipeVersion)
+	facts.BuildRecipeVersion = lifecycleBuildRecipeVersion(input.Manifest.BuildRecipeVersion)
 	facts.PresentedReviewReceiptCount, facts.PresentedAcceptedReviewCount = lifecycleReviewFacts(input.Evidence.ReviewReceipts)
 	facts.PresentedWaiverReceiptCount, facts.PresentedApprovedWaiverCount = lifecycleWaiverFacts(input.Evidence.WaiverReceipts)
 	facts.ReviewApprovalTreatment = LifecycleTreatmentPresentedUnverified
