@@ -1,12 +1,12 @@
 # ADR-0004: Initial Team role and authorization semantics
 
-- **Status:** Proposed; decision complete, dependent implementation remains blocked pending the approvals below
+- **Status:** Accepted at immutable decision revision `24c74d52ef0a78840ab147da48c3d66589e49e3e` on 2026-08-30; dependent implementation evidence remains separately gated
 - **Date:** 2026-08-29
 - **Decision owners:** WS-06 with WS-02 Team-domain implementation
 - **Project-owner approval required:** yes; this fixes a public Team-role and authorization contract used by the API and product UI
 - **Requirement IDs:** `PRIN-015`, `DOM-009`, `AUTH-002`, `AUTH-003`, `AUTH-006`, `CLS-006`, `UX-006`, `UX-007`, `AGENT-003`, `SEC-006`, `TEST-004`
 - **Affected contracts/modules/directories:** Team relationship storage in `/modules/organization/`, identity/provisioning in `/modules/identity/`, `/modules/authorization/`, `/policies/openfga/`, `/packages/domain-schemas/`, identity provider interfaces, Team portions of `/specs/openapi/`, Team/authorization/audit events, Team UI, provider permission projection, migration/export, and classification/non-disclosure tests
-- **Resolves upon acceptance:** `ADR-CAND-021`
+- **Resolves:** `ADR-CAND-021`
 - **Supersedes / superseded by:** none; new roles, changed grant semantics, lead subject types/cardinality, or hierarchy/accountability inheritance require a superseding ADR and public compatibility plan
 
 ## Context and decision scope
@@ -166,7 +166,7 @@ These tests supply evidence for `T-PRIN-015-ACCEPTANCE`, `T-DOM-009-ACCEPTANCE`,
 
 ## Rollout and supersession
 
-`STEAD-P1-006`, and the Team-domain/UI work in `STEAD-P1-002` and `STEAD-P1-005`, remain blocked until this ADR receives the required approvals. WS-02 and WS-06 must land schema/model/migration changes together behind the new model revision; WS-05 may implement labels only from the accepted API contract. A future ADR may add a role only with project-owner approval, a public API/model major when required, migration and coexistence behavior, provider/export mappings, accessibility documentation, and the full no-hierarchy/no-accountability/non-disclosure matrix. It may not turn roles into configurable ontology or weaken central authorization/classification.
+This ADR has received its required decision approvals. `STEAD-P1-006`, and the Team-domain/UI work in `STEAD-P1-002` and `STEAD-P1-005`, remain controlled by their other dependencies and implementation-evidence gates. WS-02 and WS-06 must land schema/model/migration changes together behind the new model revision; WS-05 may implement labels only from the accepted API contract. A future ADR may add a role only with project-owner approval, a public API/model major when required, migration and coexistence behavior, provider/export mappings, accessibility documentation, and the full no-hierarchy/no-accountability/non-disclosure matrix. It may not turn roles into configurable ontology or weaken central authorization/classification.
 
 ## Reviews and approvals
 
@@ -174,10 +174,10 @@ Review here approves this decision record at one exact revision. Owned contract 
 
 | Role | Identity | Disposition | Evidence/date |
 |---|---|---|---|
-| Contract owner (WS-06 identity/authorization) | pending non-author reviewer | PENDING | Decision-level OpenFGA/provisioning/revocation semantics now; model evidence later |
-| Team domain owner (WS-02) | pending non-author reviewer | PENDING | Decision-level binding/cardinality/transaction boundary now; migration/recovery evidence later |
-| Architecture and standards (WS-01) | pending non-author reviewer | PENDING | Fixed ontology, public contract, portability, and compatibility review |
+| Contract owner (WS-06 identity/authorization) | `/root/contract_owner_review` | ACCEPT | 2026-08-30; exact-revision OpenFGA/provisioning/revocation semantics review; model evidence remains later-gated |
+| Team domain owner (WS-02) | `/root/core_owner_review` | ACCEPT | 2026-08-30; exact-revision binding, cardinality, lifecycle, and transaction-boundary review; migration/recovery evidence remains later-gated |
+| Architecture and standards (WS-01) | `/root/architecture_standards_review/profile_contract_audit` | ACCEPT | 2026-08-30; exact-revision fixed ontology, public contract, portability, and compatibility review |
 | Product/frontend (WS-05) | pending implementation review | PENDING | Role language, progressive disclosure, accessibility, and context before UI merge |
-| Independent QA (WS-13) | pending non-author reviewer | PENDING | Decision/test-plan reciprocity now; golden, migration, and reproducibility evidence later |
-| Independent security (distinct WS-13 identity) | pending non-author reviewer | PENDING | Decision-level hierarchy/accountability/group/Agent review now; executable bypass/leakage evidence later |
-| Project owner | pending | PENDING | Required public Team-role/authorization-contract approval |
+| Independent QA (WS-13) | `/root/precommit_scope_audit` | ACCEPT | 2026-08-30; exact-revision decision/test-plan and traceability review; golden, migration, and reproducibility evidence remains later-gated |
+| Independent security (distinct WS-13 identity) | `/root/revocation_mode_impact` | ACCEPT | 2026-08-30; exact-revision hierarchy/accountability/group/Agent security review; executable bypass/leakage evidence remains later-gated |
+| Project owner | explicit 2026-08-30 project-owner instruction | ACCEPT | Exact revision `24c74d52ef0a78840ab147da48c3d66589e49e3e`; [approval record](../governance/phase1-foundation-approval-record.md) |

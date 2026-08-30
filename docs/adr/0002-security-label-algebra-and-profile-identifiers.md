@@ -1,13 +1,13 @@
 # ADR-0002: Security-label algebra and profile identifiers
 
-- **Status:** Proposed for approval
+- **Status:** Accepted at immutable decision revision `24c74d52ef0a78840ab147da48c3d66589e49e3e` on 2026-08-30
 - **Date:** 2026-08-29
 - **Decision owners:** WS-06
 - **Project-owner approval required:** yes; `SCH-SECURITY-LABEL`, `POL-LABEL-LATTICE`, `POL-LABEL-PROFILE`, and `POL-LABEL-STARTERS` require project-owner approval under the contract ownership matrix
 - **Requirement IDs:** `DOM-007`, `UX-003`, `AUTH-002`, `AUTH-004`, `AUTH-005`, `AUTH-006`, `CLS-001`, `CLS-002`, `CLS-003`, `CLS-004`, `CLS-005`, `CLS-006`, `CLS-007`, `CLS-008`, `STOR-003`, `TEST-002`, `TEST-003`, `TEST-004`, `TEST-008`, `AGENT-003`, `AGENT-006`
 - **Affected contracts/modules/directories:** `SCH-SECURITY-LABEL`, `SCH-DEPLOYMENT-DOMAIN`, `PROFILE-OWGP`, `POL-DECISION-IO-V0.1`, `POL-DECISION-CLASSIFICATION`, `POL-DECISION-FLOW`, `POL-LABEL-LATTICE`, `POL-LABEL-PROFILE`, `POL-LABEL-STARTERS`; `/modules/classification/`, `/modules/authorization/`, `/packages/domain-schemas/security/`, `/policies/security-label-profiles/`, `/policies/policy-decision/`, `/policies/deployment-domains/`, `/specs/work-graph-profile/`, `/specs/openapi/`, event/audit contracts, and all protected-resource consumers
-- **Resolves:** `ADR-CAND-004` upon acceptance
-- **Supersedes / superseded by:** upon acceptance, this project-owner-approved pre-consumer correction supersedes the Phase 0 shorthand in `docs/architecture/security-label-lattice.md` that grouped releasability with union-composed restriction sets; releasability is an allowed-audience coordinate and therefore composes by intersection. An incompatible algebra, identifier, or profile-evolution rule requires a superseding ADR.
+- **Resolves:** `ADR-CAND-004`
+- **Supersedes / superseded by:** this project-owner-approved pre-consumer correction supersedes the Phase 0 shorthand in `docs/architecture/security-label-lattice.md` that grouped releasability with union-composed restriction sets; releasability is an allowed-audience coordinate and therefore composes by intersection. An incompatible algebra, identifier, or profile-evolution rule requires a superseding ADR.
 
 ## Context and decision scope
 
@@ -250,7 +250,7 @@ For an Agent, the label result is one term in the required intersection of deleg
 
 ### Data model, migration, and backward compatibility
 
-The current OWGP field set remains sufficient; this ADR defines the explicit-label integer `version` and its relationship to the separate effective-label consistency token `label_revision`. This proposed pre-consumer packet constrains identifiers and supplies the closed profile-level implication, incompatibility, sensitivity/dimension requirement, trusted-context, registry-mapping/provenance, releasability-intersection, and presentation contracts without changing product ontology. Implementation must also document qualified category/scoped-instance forms and materialize the required alias/deprecation and compatibility evidence before such features are used. Acceptance updates `docs/architecture/security-label-lattice.md` so its normative summary distinguishes union-composed restrictions from intersection-composed allowed audiences. A later breaking schema edit requires normal versioning and supersession; this ADR does not authorize one silently.
+The current OWGP field set remains sufficient; this ADR defines the explicit-label integer `version` and its relationship to the separate effective-label consistency token `label_revision`. This accepted pre-consumer packet constrains identifiers and supplies the closed profile-level implication, incompatibility, sensitivity/dimension requirement, trusted-context, registry-mapping/provenance, releasability-intersection, and presentation contracts without changing product ontology. Implementation must also document qualified category/scoped-instance forms and materialize the required alias/deprecation and compatibility evidence before such features are used. This acceptance updates `docs/architecture/security-label-lattice.md` so its normative summary distinguishes union-composed restrictions from intersection-composed allowed audiences. A later breaking schema edit requires normal versioning and supersession; this ADR does not authorize one silently.
 
 Migration inventory records each label's explicit integer version, effective `label_revision`, source/container label versions, profile ID, exact source/target profile version and bundle ID/digest, normalized values, aliases, unknowns, and resulting disposition. Every installed label validates against its exact signed profile version; the checked-in starters receive no exception. Ambiguous strings, unknown values, invalid external mappings, mixed profiles without an exact signed approved bridge, and unprovable bundle provenance fail closed and enter the existing protected migration quarantine rather than receiving defaults.
 
@@ -308,7 +308,7 @@ Required operational signals include profile verification/activation failure, un
 
 This ADR selects no evaluator, runtime library, SaaS registry, model provider, or cloud service. Algebra, normalization, and stable-ID validation are implementable with approved standard-library facilities. Any new parser, policy engine, signature library, registry snapshot, or generated data package requires exact version/digest, provenance, license, vulnerability, air-gap, SBOM, notice, and independent approval through the existing dependency workflow.
 
-The profile contract retains its signed, versioned, offline-verifiable bundle requirement. The Phase 0 `sigstore-bundle` token had no materialized or production consumer; this controlled packet normalizes it pre-compatibility to the Stead Policy Activation Set v1 proposed by ADR-0006. Project-owner approval of this revision is still required before that proposal is accepted. No network lookup is permitted during an authorization decision. External-registry material is imported only as an exact, provenance-recorded, reviewable snapshot; availability of that material does not itself authorize a completeness, readiness, compliance, accreditation, or validation claim.
+The profile contract retains its signed, versioned, offline-verifiable bundle requirement. The Phase 0 `sigstore-bundle` token had no materialized or production consumer; this controlled packet normalizes it pre-compatibility to the Stead Policy Activation Set v1 selected by accepted ADR-0006. Project-owner approval is recorded against this exact immutable revision. No network lookup is permitted during an authorization decision. External-registry material is imported only as an exact, provenance-recorded, reviewable snapshot; availability of that material does not itself authorize a completeness, readiness, compliance, accreditation, or validation claim.
 
 ### Documentation and accessibility
 
@@ -339,7 +339,7 @@ Golden-scenario evidence must include a general-work Project under a checked-in 
 
 ## Rollout and supersession
 
-`ADR-CAND-004` remains blocking for `STEAD-P1-006` until this ADR is accepted and the candidate/index/issue/traceability references are updated by their owners. After acceptance, implementation proceeds in dependency order:
+`ADR-CAND-004` is resolved by this accepted ADR and its candidate/index/issue/traceability references. Dependent implementation remains controlled by its other issue dependencies and implementation-evidence gates and proceeds in dependency order:
 
 1. corrected security-label architecture summary, profile schema, and stable vocabularies;
 2. lattice/normalization/property fixtures;
@@ -355,13 +355,13 @@ A future ADR may supersede this decision only with a formal compatibility mappin
 
 ## Reviews and approvals
 
-This proposed ADR does not unblock implementation merely by existing in the repository. Decision-record approval applies to one immutable revision containing this exact choice, ownership, compatibility plan, and named test obligations. It authorizes the subsequent owned contract/test work but does not assert that its executable evidence already exists. The implementation author cannot provide an independent approval or approve a waiver for their own work.
+This accepted ADR does not by itself approve dependent implementation. Decision-record approval applies to one immutable revision containing this exact choice, ownership, compatibility plan, and named test obligations. It authorizes the subsequent owned contract/test work but does not assert that its executable evidence already exists. The implementation author cannot provide an independent approval or approve a waiver for their own work.
 
 | Role | Identity | Disposition | Evidence/date |
 |---|---|---|---|
-| Contract owner (WS-06) | pending independently identified reviewer | PENDING | Decision semantics and owned-contract boundary now; executable algebra/profile evidence gates implementation activation |
-| Architecture and standards (WS-01) | pending independently identified reviewer | PENDING | Compatibility, ontology, ownership, and implementation-neutrality review required |
+| Contract owner (WS-06) | `/root/contract_owner_review` | ACCEPT | 2026-08-30; exact revision `24c74d52ef0a78840ab147da48c3d66589e49e3e`; [approval record](../governance/phase1-foundation-approval-record.md) |
+| Architecture and standards (WS-01) | `/root/architecture_standards_review/profile_contract_audit` | ACCEPT | 2026-08-30; exact-revision compatibility, ontology, ownership, and implementation-neutrality review; [approval record](../governance/phase1-foundation-approval-record.md) |
 | Container/consumer reviewers (WS-04/08/09/10/12 and affected owners) | pending implementation review | PENDING | Required before each affected consumer implementation merges |
-| Independent QA (WS-13) | pending distinct reviewer | PENDING | Decision/test-plan reciprocity now; reproducible schema/property/migration/golden evidence before implementation approval |
-| Independent security (WS-13) | pending reviewer distinct from QA and implementation | PENDING | Decision-level classification and bypass review now; executable mutation/non-disclosure/direct-path/cross-domain evidence later |
-| Project owner | pending | PENDING | Explicit approval required by the contract ownership matrix |
+| Independent QA (WS-13) | `/root/precommit_scope_audit` | ACCEPT | 2026-08-30; exact-revision scope, traceability, and foundation validation; executable schema/property/migration/golden evidence remains an implementation gate |
+| Independent security (WS-13) | `/root/revocation_mode_impact` | ACCEPT | 2026-08-30; exact-revision classification, bypass, nondisclosure, direct-path, and cross-domain review; executable evidence remains later-gated |
+| Project owner | explicit 2026-08-30 project-owner instruction | ACCEPT | Exact revision `24c74d52ef0a78840ab147da48c3d66589e49e3e`; [approval record](../governance/phase1-foundation-approval-record.md) |

@@ -9,7 +9,7 @@ Deferred implementation choices are enforced by the [ADR candidate implementatio
 
 ## Controlling rule
 
-Phase 0 contract, architecture, planning, threat-model, test-design, and governance work is baselined at tag `phase0`. `STEAD-P1-001` is `COMPLETED_PHASE_1`; later Phase 1 issues remain `DEPENDENCY_BLOCKED` until their exact dependencies and ADR gates pass, and every Phase 2–3 issue is `PHASE_GATED`.
+Phase 0 contract, architecture, planning, threat-model, test-design, and governance work is baselined at tag `phase0`. ADR-0002 through ADR-0006 are accepted at immutable decision revision `24c74d52ef0a78840ab147da48c3d66589e49e3e`; this does not resolve another ADR candidate or supply implementation evidence. `STEAD-P1-001` is `COMPLETED_PHASE_1`; later Phase 1 issues remain `DEPENDENCY_BLOCKED` until their exact remaining dependencies and ADR gates pass, and every Phase 2–3 issue is `PHASE_GATED`.
 
 `GATE-P0-APPROVED` is `APPROVED` against tag `phase0`, immutable commit `e24a4d9d05ad6df19c5bcaa9c385ee74fd5d8c31`, with the five dispositions recorded in the closeout packet. The gate opens dependency-ready work only. Any proposed change to a locked decision still requires its own ADR and project-owner approval.
 
@@ -73,7 +73,7 @@ The Phase 1 records preserve the approved principal, assignment, authorization, 
 | Order | Issue | Owner | Direct predecessors | Deliverable |
 |---:|---|---|---|---|
 | 1 | STEAD-P1-001 | WS-01 | GATE-P0-APPROVED | Root manifests, CI and contract-test foundation, schema/API lint, dependency approvals/notices, and Devlane provenance |
-| 2 | STEAD-P1-015 | WS-02, with WS-06/07 handoff | GATE-P0-APPROVED, P1-001, accepted ADR-CAND-002/003/007 | Owner-scoped one-operation request-boundary authorization/audit composition, `core_outbox` and durable-effect ports, plus typed strict-mode coordination seams; no domain feature implementation or strict persistence prerequisite |
+| 2 | STEAD-P1-015 | WS-02, with WS-06/07 handoff | GATE-P0-APPROVED, P1-001, accepted ADR-CAND-003/007, and unresolved ADR-CAND-002 | Owner-scoped one-operation request-boundary authorization/audit composition, `core_outbox` and durable-effect ports, plus typed strict-mode coordination seams; no domain feature implementation or strict persistence prerequisite |
 | 2 | STEAD-P1-016 | WS-09 | GATE-P0-APPROVED, P1-001, accepted ADR-CAND-007 | Deterministic policy activation archive, pre-signing evidence, post-signing release attestation, and immutable writer/fixture handoff; no runtime activation authority |
 | 3 | STEAD-P1-006 | WS-06 | P1-001, P1-015, P1-016, accepted security ADRs | Bootstrap/OIDC identity; central set-oriented OpenFGA + policy path; signed profile-neutral mode selection; complete `request_boundary`; typed `commit_boundary` seam |
 | 4 | STEAD-P1-002 | WS-02 | P1-001, P1-006, P1-015, approved core/auth contracts | Canonical modular core, PrincipalRef-based User/Agent Work assignment, PostgreSQL ownership, bounded composed-read queries, optimistic concurrency and atomic outbox |

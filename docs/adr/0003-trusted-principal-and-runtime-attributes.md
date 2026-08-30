@@ -1,12 +1,12 @@
 # ADR-0003: Trusted principal and runtime attributes
 
-- **Status:** Proposed; decision complete, dependent implementation remains blocked pending the approvals below
+- **Status:** Accepted at immutable decision revision `24c74d52ef0a78840ab147da48c3d66589e49e3e` on 2026-08-30; dependent implementation evidence remains separately gated
 - **Date:** 2026-08-29
 - **Decision owners:** WS-06
 - **Project-owner approval required:** yes; the normalization is conforming, but its pre-consumer correction of the closed `POL-DECISION-IO-V0.1` schema requires project-owner approval under the contract ownership matrix
 - **Requirement IDs:** `PRIN-007`, `PRIN-011`, `PRIN-012`, `DOM-010`, `AUTH-001`, `AUTH-002`, `AUTH-004`, `AUTH-005`, `AUTH-006`, `CLS-003`, `CLS-006`, `AGENT-001`, `AGENT-003`, `AGENT-006`, `SEC-006`, `TEST-004`
 - **Affected contracts/modules/directories:** `/modules/identity/`, `/modules/authorization/`, `/packages/domain-schemas/identity/`, `/packages/provider-sdk/identity/`, `/providers/identity-oidc/`, `/providers/identity-scim/`, `TrustedAttributeProvider`, `/policies/policy-decision/`, identity portions of `/specs/openapi/`, identity/audit event schemas, deployment security-domain profiles, authorization consistency fences, and protected projections
-- **Resolves upon acceptance:** `ADR-CAND-005`
+- **Resolves:** `ADR-CAND-005`
 - **Supersedes / superseded by:** none; a change to assertion identity, authority selection, conflict handling, or runtime-attestation binding requires a superseding ADR and compatibility plan
 
 ## Context and decision scope
@@ -164,7 +164,7 @@ These tests supply concrete evidence for `T-AUTH-001-ACCEPTANCE`, `T-AUTH-002-AC
 
 ## Rollout and supersession
 
-`STEAD-P1-006` remains blocked until this ADR and the independently required policy/topology and label decisions are accepted. WS-06 publishes the v1 schema, authority registry, mapping fixtures, and migration plan before any consumer reads claims. Consumers switch only through the central authorization contract. A future ADR may add a new evidence source or attestation profile, but it must preserve canonical principal identity, no self-assertion, conflict-as-deny, revision fencing, external-runtime neutrality, and the Agent authority intersection or explicitly obtain project-owner approval to change a locked decision.
+This ADR and the independently required policy/topology and label decisions in the approved foundation packet are accepted. `STEAD-P1-006` remains controlled by its other dependencies and implementation-evidence gates. WS-06 publishes the v1 schema, authority registry, mapping fixtures, and migration plan before any consumer reads claims. Consumers switch only through the central authorization contract. A future ADR may add a new evidence source or attestation profile, but it must preserve canonical principal identity, no self-assertion, conflict-as-deny, revision fencing, external-runtime neutrality, and the Agent authority intersection or explicitly obtain project-owner approval to change a locked decision.
 
 ## Reviews and approvals
 
@@ -172,9 +172,9 @@ Review here approves this decision record at one exact revision. Consumer review
 
 | Role | Identity | Disposition | Evidence/date |
 |---|---|---|---|
-| Contract owner (WS-06 identity/authorization) | pending non-author reviewer | PENDING | Decision semantics and owned-contract boundary; implementation evidence remains separately gated |
-| Architecture and standards (WS-01) | pending non-author reviewer | PENDING | Canonical identity, portability, and boundary review |
+| Contract owner (WS-06 identity/authorization) | `/root/contract_owner_review` | ACCEPT | 2026-08-30; exact-revision decision semantics and owned-contract boundary; implementation evidence remains separately gated |
+| Architecture and standards (WS-01) | `/root/architecture_standards_review/profile_contract_audit` | ACCEPT | 2026-08-30; exact-revision canonical identity, portability, and boundary review; [approval record](../governance/phase1-foundation-approval-record.md) |
 | Domain/search/operations consumers (WS-02/08/12) | pending reviewers | PENDING | Persistence, projection, deployment, backup, and runtime-seam review |
-| Independent QA (WS-13) | pending non-author reviewer | PENDING | Decision/test-plan reciprocity now; executable contract, migration, negative-test, and reproducibility evidence before implementation approval |
-| Independent security (distinct WS-13 identity) | pending non-author reviewer | PENDING | Decision-level authority, revocation, non-disclosure, Agent, and bypass review now; executable evidence later |
-| Project owner | pending | PENDING | Required for the pre-consumer `POL-DECISION-IO-V0.1` correction |
+| Independent QA (WS-13) | `/root/precommit_scope_audit` | ACCEPT | 2026-08-30; exact-revision decision/test-plan and traceability review; executable contract, migration, negative-test, and reproducibility evidence remains later-gated |
+| Independent security (distinct WS-13 identity) | `/root/revocation_mode_impact` | ACCEPT | 2026-08-30; exact-revision authority, revocation, nondisclosure, Agent, and bypass review; executable evidence remains later-gated |
+| Project owner | explicit 2026-08-30 project-owner instruction | ACCEPT | Exact revision `24c74d52ef0a78840ab147da48c3d66589e49e3e`; [approval record](../governance/phase1-foundation-approval-record.md) |

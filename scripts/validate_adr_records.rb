@@ -9,11 +9,56 @@ ROOT = Pathname.new(__dir__).parent.expand_path
 
 EXPECTED_RECORDS = {
   "0001" => { candidate: "ADR-CAND-001", state: "ACCEPTED", owner_approval: false },
-  "0002" => { candidate: "ADR-CAND-004", state: "PROPOSED", owner_approval: true },
-  "0003" => { candidate: "ADR-CAND-005", state: "PROPOSED", owner_approval: true },
-  "0004" => { candidate: "ADR-CAND-021", state: "PROPOSED", owner_approval: true },
-  "0005" => { candidate: "ADR-CAND-003", state: "PROPOSED", owner_approval: false },
-  "0006" => { candidate: "ADR-CAND-007", state: "PROPOSED", owner_approval: true }
+  "0002" => { candidate: "ADR-CAND-004", state: "ACCEPTED", owner_approval: true },
+  "0003" => { candidate: "ADR-CAND-005", state: "ACCEPTED", owner_approval: true },
+  "0004" => { candidate: "ADR-CAND-021", state: "ACCEPTED", owner_approval: true },
+  "0005" => { candidate: "ADR-CAND-003", state: "ACCEPTED", owner_approval: false },
+  "0006" => { candidate: "ADR-CAND-007", state: "ACCEPTED", owner_approval: true }
+}.freeze
+
+DECISION_REVISION = "24c74d52ef0a78840ab147da48c3d66589e49e3e"
+ACCEPTED_AT = "2026-08-30"
+APPROVAL_RECORD_PATH = "docs/governance/phase1-foundation-approval-record.md"
+EXPECTED_APPROVAL_RECORDS = {
+  "0002" => [
+    { "role" => "WS-06-security-contract", "identity" => "/root/contract_owner_review", "disposition" => "APPROVED" },
+    { "role" => "WS-01-architecture", "identity" => "/root/architecture_standards_review/profile_contract_audit", "disposition" => "APPROVED" },
+    { "role" => "WS-13-independent-qa", "identity" => "/root/precommit_scope_audit", "disposition" => "APPROVED" },
+    { "role" => "WS-13-independent-security", "identity" => "/root/revocation_mode_impact", "disposition" => "APPROVED" },
+    { "role" => "project-owner", "identity" => "explicit 2026-08-30 project-owner instruction", "disposition" => "APPROVED" }
+  ],
+  "0003" => [
+    { "role" => "WS-06-security-contract", "identity" => "/root/contract_owner_review", "disposition" => "APPROVED" },
+    { "role" => "WS-01-architecture", "identity" => "/root/architecture_standards_review/profile_contract_audit", "disposition" => "APPROVED" },
+    { "role" => "WS-13-independent-qa", "identity" => "/root/precommit_scope_audit", "disposition" => "APPROVED" },
+    { "role" => "WS-13-independent-security", "identity" => "/root/revocation_mode_impact", "disposition" => "APPROVED" },
+    { "role" => "project-owner", "identity" => "explicit 2026-08-30 project-owner instruction", "disposition" => "APPROVED" }
+  ],
+  "0004" => [
+    { "role" => "WS-06-security-contract", "identity" => "/root/contract_owner_review", "disposition" => "APPROVED" },
+    { "role" => "WS-02-team-domain", "identity" => "/root/core_owner_review", "disposition" => "APPROVED" },
+    { "role" => "WS-01-architecture", "identity" => "/root/architecture_standards_review/profile_contract_audit", "disposition" => "APPROVED" },
+    { "role" => "WS-13-independent-qa", "identity" => "/root/precommit_scope_audit", "disposition" => "APPROVED" },
+    { "role" => "WS-13-independent-security", "identity" => "/root/revocation_mode_impact", "disposition" => "APPROVED" },
+    { "role" => "project-owner", "identity" => "explicit 2026-08-30 project-owner instruction", "disposition" => "APPROVED" }
+  ],
+  "0005" => [
+    { "role" => "WS-06-security-contract", "identity" => "/root/contract_owner_review", "disposition" => "APPROVED" },
+    { "role" => "WS-01-architecture", "identity" => "/root/architecture_standards_review/profile_contract_audit", "disposition" => "APPROVED" },
+    { "role" => "WS-02-core-composition", "identity" => "/root/core_owner_review", "disposition" => "APPROVED" },
+    { "role" => "WS-13-independent-qa", "identity" => "/root/precommit_scope_audit", "disposition" => "APPROVED" },
+    { "role" => "WS-13-independent-security", "identity" => "/root/revocation_mode_impact", "disposition" => "APPROVED" },
+    { "role" => "project-owner", "identity" => "explicit 2026-08-30 project-owner concurrence", "disposition" => "CONCURRED_NOT_REQUIRED" }
+  ],
+  "0006" => [
+    { "role" => "WS-06-security-contract", "identity" => "/root/contract_owner_review", "disposition" => "APPROVED" },
+    { "role" => "WS-01-architecture", "identity" => "/root/architecture_standards_review/profile_contract_audit", "disposition" => "APPROVED" },
+    { "role" => "WS-02-core-composition", "identity" => "/root/core_owner_review", "disposition" => "APPROVED" },
+    { "role" => "WS-09-build-signing", "identity" => "/root/build_owner_review", "disposition" => "APPROVED" },
+    { "role" => "WS-13-independent-qa", "identity" => "/root/precommit_scope_audit", "disposition" => "APPROVED" },
+    { "role" => "WS-13-independent-security", "identity" => "/root/revocation_mode_impact", "disposition" => "APPROVED" },
+    { "role" => "project-owner", "identity" => "explicit 2026-08-30 project-owner instruction", "disposition" => "APPROVED" }
+  ]
 }.freeze
 
 REQUIRED_SECTIONS = [
@@ -46,6 +91,12 @@ issues = issue_catalog.fetch("issues").to_h { |issue| [issue.fetch("id"), issue]
 adr_index = ROOT.join("docs/adr/INDEX.md").read(encoding: "UTF-8")
 candidate_index = ROOT.join("docs/governance/adr-candidate-index.md").read(encoding: "UTF-8")
 choice_queue = ROOT.join("docs/adr/unresolved-implementation-choices.md").read(encoding: "UTF-8")
+approval_record = ROOT.join(APPROVAL_RECORD_PATH).read(encoding: "UTF-8")
+
+failures << "#{APPROVAL_RECORD_PATH}: missing exact immutable decision revision" unless approval_record.include?(DECISION_REVISION)
+EXPECTED_APPROVAL_RECORDS.values.flatten.map { |record| record.fetch("identity") }.uniq.each do |identity|
+  failures << "#{APPROVAL_RECORD_PATH}: missing reviewer identity #{identity}" unless approval_record.include?(identity)
+end
 
 paths = Dir.glob(ROOT.join("docs/adr/0[0-9][0-9][1-9]-*.md")).sort.map { |path| Pathname.new(path) }
 actual_numbers = paths.filter_map { |path| path.basename.to_s[/\A(\d{4})-/, 1] }
@@ -106,6 +157,21 @@ paths.each do |path|
   failures << "implementation issue catalog: #{candidate} state must be #{expected.fetch(:state)}" unless gate["state"] == expected.fetch(:state)
   failures << "implementation issue catalog: #{candidate} decision_record must be #{relative}" unless gate["decision_record"] == relative
   failures << "implementation issue catalog: #{candidate} project-owner flag mismatch" unless gate["project_owner_approval_required"] == expected.fetch(:owner_approval)
+
+  next unless EXPECTED_APPROVAL_RECORDS.key?(number)
+
+  failures << "#{relative}: accepted record must name exact decision revision #{DECISION_REVISION}" unless source.include?(DECISION_REVISION)
+  failures << "implementation issue catalog: #{candidate} immutable revision mismatch" unless gate["immutable_revision"] == DECISION_REVISION
+  failures << "implementation issue catalog: #{candidate} accepted_at must be #{ACCEPTED_AT}" unless gate["accepted_at"] == ACCEPTED_AT
+  failures << "implementation issue catalog: #{candidate} approval_record mismatch" unless gate["approval_record"] == APPROVAL_RECORD_PATH
+  unless gate["approval_records"] == EXPECTED_APPROVAL_RECORDS.fetch(number)
+    failures << "implementation issue catalog: #{candidate} approval_records do not match the exact required decision-time dispositions"
+  end
+
+  approval_identities = Array(gate["approval_records"]).to_h { |record| [record["role"], record["identity"]] }
+  if approval_identities["WS-13-independent-qa"] == approval_identities["WS-13-independent-security"]
+    failures << "implementation issue catalog: #{candidate} independent QA and security identities must be distinct"
+  end
 end
 
 all_test_owners.each do |test_id, owners|
@@ -114,7 +180,7 @@ end
 
 security_issue = issues["STEAD-P1-006"]
 if security_issue
-  required_candidates = EXPECTED_RECORDS.values.select { |record| record.fetch(:state) == "PROPOSED" }.map { |record| record.fetch(:candidate) }
+  required_candidates = EXPECTED_RECORDS.reject { |number, _record| number == "0001" }.values.map { |record| record.fetch(:candidate) }
   criteria = Array(security_issue["acceptance_criteria"]).join(" ")
   missing_candidates = required_candidates.reject { |candidate| criteria.include?(candidate) }
   failures << "STEAD-P1-006 acceptance criteria omit ADR gates: #{missing_candidates.join(', ')}" unless missing_candidates.empty?

@@ -1,19 +1,19 @@
 # ADR-0005: Authorization and policy-decision topology
 
-- **Status:** Proposed — decision selected; acceptance awaits the reviews below
+- **Status:** Accepted at immutable decision revision `24c74d52ef0a78840ab147da48c3d66589e49e3e` on 2026-08-30
 - **Date:** 2026-08-29
 - **Decision owners:** WS-06, with WS-02 application-composition integration and WS-01 public-contract review
 - **Project-owner approval required:** no; this selects a conforming implementation inside the locked OpenFGA plus deterministic policy-decision architecture and does not weaken or replace that architecture
 - **Requirement IDs:** `PRIN-007`, `PRIN-010`, `PRIN-011`, `PRIN-012`, `PRIN-015`, `ARCH-001`, `DOM-007`, `DOM-009`, `DOM-010`, `DOC-004`, `AUTH-001`, `AUTH-002`, `AUTH-003`, `AUTH-004`, `AUTH-005`, `AUTH-006`, `CLS-001`, `CLS-003`, `CLS-004`, `CLS-005`, `CLS-006`, `CLS-007`, `CLS-008`, `AGENT-001`, `AGENT-003`, `AGENT-004`, `AGENT-005`, `AGENT-006`, `AUD-001`, `AUD-002`, `OPS-001`, `OPS-002`, `PERF-002`, `PERF-003`, `PERF-004`, `PERF-006`, `SEC-002`, `SEC-004`, `SEC-006`, `TEST-001`, `TEST-002`, `TEST-003`, `TEST-004`, `TEST-006`, `TEST-008`
 - **Affected contracts/modules/directories:** `/modules/authorization/`, `/modules/classification/`, `/modules/identity/`, `/apps/core/`, `/policies/openfga/`, `/policies/policy-decision/`, provider access gateways and credential issuers, audit/event consumers, and authorization/classification test fixtures
-- **Resolves upon acceptance:** `ADR-CAND-003`
+- **Resolves:** `ADR-CAND-003`
 - **Supersedes / superseded by:** supersedes no accepted decision; a different evaluator, a separately addressable evaluator, nonzero decision caching, or a changed combining rule requires a superseding ADR
 
 ## Context and decision scope
 
 The Master Build Directive already fixes the authorization architecture. Authentication and trusted context, stock OpenFGA, the implementation-neutral deterministic policy-decision layer, and provider/path enforcement are complementary checks. Every required check must allow, every explicit deny wins, and no module or administrator has an alternative path. OpenFGA cannot be removed or repurposed as the classification evaluator. The policy-decision boundary cannot be removed, expressed as provider-specific business logic, or made dependent on OPA/Rego without an approved decision.
 
-`ADR-CAND-003` leaves only the evaluator and physical topology, call sequencing, failure deadlines, decision-cache behavior, provider credential issuance, and preservation of future Agent authorization seams unresolved. This ADR selects those implementation details. The signed deployment security-domain policy now selects one closed disclosure/revocation assurance mode: `request_boundary` or `commit_boundary`. No security-label profile ID has mode semantics. `ADR-CAND-002` still controls physical PostgreSQL namespaces and migration coordination for outbox and durable-effect persistence plus typed strict-mode coordination ports; it must not make strict guard/quiescence persistence a prerequisite for the standard Phase 1 path. `STEAD-P1-015` supplies the WS-02-owned core/outbox composition handoff before this implementation activates. This ADR does not revise the OpenFGA model, policy input/output schemas, decision table, security-label algebra, trusted-attribute normalization, Team relation semantics, or signed-bundle format selected separately by ADR-0006.
+`ADR-CAND-003` left only the evaluator and physical topology, call sequencing, failure deadlines, decision-cache behavior, provider credential issuance, and preservation of future Agent authorization seams unresolved. This ADR selects those implementation details. The signed deployment security-domain policy now selects one closed disclosure/revocation assurance mode: `request_boundary` or `commit_boundary`. No security-label profile ID has mode semantics. `ADR-CAND-002` still controls physical PostgreSQL namespaces and migration coordination for outbox and durable-effect persistence plus typed strict-mode coordination ports; it must not make strict guard/quiescence persistence a prerequisite for the standard Phase 1 path. `STEAD-P1-015` supplies the WS-02-owned core/outbox composition handoff before this implementation activates. This ADR does not revise the OpenFGA model, policy input/output schemas, decision table, security-label algebra, trusted-attribute normalization, Team relation semantics, or signed-bundle format selected separately by ADR-0006.
 
 ## Decision drivers
 
@@ -251,10 +251,10 @@ Review here approves this decision record at one exact revision. Consumer review
 
 | Role | Identity | Disposition | Evidence/date |
 |---|---|---|---|
-| Contract owner (WS-06) | pending non-author reviewer | PENDING | Required for policy semantics, OpenFGA boundary, and Agent intersection |
-| Architecture and standards (WS-01) | pending reviewer | PENDING | Required for topology, module boundaries, and contract compatibility |
-| Core composition owner (WS-02) | pending reviewer | PENDING | Decision-level `/apps/core` wiring boundary now; executable composition evidence before merge |
+| Contract owner (WS-06) | `/root/contract_owner_review` | ACCEPT | 2026-08-30; exact-revision policy semantics, OpenFGA boundary, and Agent-intersection review |
+| Architecture and standards (WS-01) | `/root/architecture_standards_review/profile_contract_audit` | ACCEPT | 2026-08-30; exact-revision topology, module-boundary, compatibility, and profile-neutrality review |
+| Core composition owner (WS-02) | `/root/core_owner_review` | ACCEPT | 2026-08-30; exact-revision `/apps/core`, one-operation, outbox-port, and strict-seam boundary review; executable composition evidence remains later-gated |
 | Provider/event/search/operations reviewers (WS-03/07/08/09/12) | pending implementation reviewers | PENDING | Required before each owned consumer or bypass path activates |
-| Independent QA (distinct WS-13 identity) | pending reviewer | PENDING | Decision/test-plan reciprocity now; exact failure-injection, migration, and golden evidence later |
-| Independent security (distinct WS-13 identity) | pending reviewer | PENDING | Must not be the ADR author; decision-level security/dependency review now and executable evidence later |
-| Project owner | not required for this conforming selection | N/A | Required only if a future change reopens a locked decision |
+| Independent QA (distinct WS-13 identity) | `/root/precommit_scope_audit` | ACCEPT | 2026-08-30; exact-revision decision/test-plan and traceability review; failure-injection, migration, and golden evidence remains later-gated |
+| Independent security (distinct WS-13 identity) | `/root/revocation_mode_impact` | ACCEPT | 2026-08-30; exact-revision security, revocation-mode, dependency-boundary, and nondisclosure review; executable evidence remains later-gated |
+| Project owner | explicit 2026-08-30 concurrence; approval not required | N/A — CONCUR | Exact revision `24c74d52ef0a78840ab147da48c3d66589e49e3e`; [approval record](../governance/phase1-foundation-approval-record.md) |

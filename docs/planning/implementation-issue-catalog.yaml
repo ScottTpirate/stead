@@ -21,13 +21,87 @@ gates:
 adr_decision_gates:
   - {adr_id: ADR-CAND-001, state: ACCEPTED, decision_record: docs/adr/0001-canonical-uri-and-compatibility-profile.md, project_owner_approval_required: false, decide_before_issue: STEAD-P1-001, dependent_issues: [STEAD-P1-001, STEAD-P1-002, STEAD-P2-009, STEAD-P3-006]}
   - {adr_id: ADR-CAND-002, state: DEFERRED, decide_before_issue: STEAD-P1-015, dependent_issues: [STEAD-P1-015, STEAD-P1-006, STEAD-P1-002, STEAD-P1-007, STEAD-P1-011, STEAD-P2-010]}
-  - {adr_id: ADR-CAND-003, state: PROPOSED, decision_record: docs/adr/0005-authorization-and-policy-decision-topology.md, project_owner_approval_required: false, decide_before_issue: STEAD-P1-015, dependent_issues: [STEAD-P1-015, STEAD-P1-006, STEAD-P1-003, STEAD-P1-007, STEAD-P1-008, STEAD-P1-012, STEAD-P2-006, STEAD-P3-002, STEAD-P3-007, STEAD-P3-008]}
-  - {adr_id: ADR-CAND-004, state: PROPOSED, decision_record: docs/adr/0002-security-label-algebra-and-profile-identifiers.md, project_owner_approval_required: true, decide_before_issue: STEAD-P1-006, dependent_issues: [STEAD-P1-006, STEAD-P1-002, STEAD-P2-004]}
-  - {adr_id: ADR-CAND-005, state: PROPOSED, decision_record: docs/adr/0003-trusted-principal-and-runtime-attributes.md, project_owner_approval_required: true, decide_before_issue: STEAD-P1-006, dependent_issues: [STEAD-P1-006, STEAD-P2-004, STEAD-P2-006]}
+  - adr_id: ADR-CAND-003
+    state: ACCEPTED
+    decision_record: docs/adr/0005-authorization-and-policy-decision-topology.md
+    project_owner_approval_required: false
+    immutable_revision: "24c74d52ef0a78840ab147da48c3d66589e49e3e"
+    accepted_at: "2026-08-30"
+    approval_record: docs/governance/phase1-foundation-approval-record.md
+    approval_records:
+      - {role: "WS-06-security-contract", identity: "/root/contract_owner_review", disposition: "APPROVED"}
+      - {role: "WS-01-architecture", identity: "/root/architecture_standards_review/profile_contract_audit", disposition: "APPROVED"}
+      - {role: "WS-02-core-composition", identity: "/root/core_owner_review", disposition: "APPROVED"}
+      - {role: "WS-13-independent-qa", identity: "/root/precommit_scope_audit", disposition: "APPROVED"}
+      - {role: "WS-13-independent-security", identity: "/root/revocation_mode_impact", disposition: "APPROVED"}
+      - {role: "project-owner", identity: "explicit 2026-08-30 project-owner concurrence", disposition: "CONCURRED_NOT_REQUIRED"}
+    decide_before_issue: STEAD-P1-015
+    dependent_issues: [STEAD-P1-015, STEAD-P1-006, STEAD-P1-003, STEAD-P1-007, STEAD-P1-008, STEAD-P1-012, STEAD-P2-006, STEAD-P3-002, STEAD-P3-007, STEAD-P3-008]
+  - adr_id: ADR-CAND-004
+    state: ACCEPTED
+    decision_record: docs/adr/0002-security-label-algebra-and-profile-identifiers.md
+    project_owner_approval_required: true
+    immutable_revision: "24c74d52ef0a78840ab147da48c3d66589e49e3e"
+    accepted_at: "2026-08-30"
+    approval_record: docs/governance/phase1-foundation-approval-record.md
+    approval_records:
+      - {role: "WS-06-security-contract", identity: "/root/contract_owner_review", disposition: "APPROVED"}
+      - {role: "WS-01-architecture", identity: "/root/architecture_standards_review/profile_contract_audit", disposition: "APPROVED"}
+      - {role: "WS-13-independent-qa", identity: "/root/precommit_scope_audit", disposition: "APPROVED"}
+      - {role: "WS-13-independent-security", identity: "/root/revocation_mode_impact", disposition: "APPROVED"}
+      - {role: "project-owner", identity: "explicit 2026-08-30 project-owner instruction", disposition: "APPROVED"}
+    decide_before_issue: STEAD-P1-006
+    dependent_issues: [STEAD-P1-006, STEAD-P1-002, STEAD-P2-004]
+  - adr_id: ADR-CAND-005
+    state: ACCEPTED
+    decision_record: docs/adr/0003-trusted-principal-and-runtime-attributes.md
+    project_owner_approval_required: true
+    immutable_revision: "24c74d52ef0a78840ab147da48c3d66589e49e3e"
+    accepted_at: "2026-08-30"
+    approval_record: docs/governance/phase1-foundation-approval-record.md
+    approval_records:
+      - {role: "WS-06-security-contract", identity: "/root/contract_owner_review", disposition: "APPROVED"}
+      - {role: "WS-01-architecture", identity: "/root/architecture_standards_review/profile_contract_audit", disposition: "APPROVED"}
+      - {role: "WS-13-independent-qa", identity: "/root/precommit_scope_audit", disposition: "APPROVED"}
+      - {role: "WS-13-independent-security", identity: "/root/revocation_mode_impact", disposition: "APPROVED"}
+      - {role: "project-owner", identity: "explicit 2026-08-30 project-owner instruction", disposition: "APPROVED"}
+    decide_before_issue: STEAD-P1-006
+    dependent_issues: [STEAD-P1-006, STEAD-P2-004, STEAD-P2-006]
   - {adr_id: ADR-CAND-006, state: DEFERRED, decide_before_issue: STEAD-P1-007, dependent_issues: [STEAD-P1-007, STEAD-P1-008, STEAD-P1-012, STEAD-P2-005]}
-  - {adr_id: ADR-CAND-007, state: PROPOSED, decision_record: docs/adr/0006-signed-policy-bundle-distribution-and-activation.md, project_owner_approval_required: true, decide_before_issue: STEAD-P1-016, dependent_issues: [STEAD-P1-016, STEAD-P1-015, STEAD-P1-006, STEAD-P1-011, STEAD-P2-004, STEAD-P2-010]}
+  - adr_id: ADR-CAND-007
+    state: ACCEPTED
+    decision_record: docs/adr/0006-signed-policy-bundle-distribution-and-activation.md
+    project_owner_approval_required: true
+    immutable_revision: "24c74d52ef0a78840ab147da48c3d66589e49e3e"
+    accepted_at: "2026-08-30"
+    approval_record: docs/governance/phase1-foundation-approval-record.md
+    approval_records:
+      - {role: "WS-06-security-contract", identity: "/root/contract_owner_review", disposition: "APPROVED"}
+      - {role: "WS-01-architecture", identity: "/root/architecture_standards_review/profile_contract_audit", disposition: "APPROVED"}
+      - {role: "WS-02-core-composition", identity: "/root/core_owner_review", disposition: "APPROVED"}
+      - {role: "WS-09-build-signing", identity: "/root/build_owner_review", disposition: "APPROVED"}
+      - {role: "WS-13-independent-qa", identity: "/root/precommit_scope_audit", disposition: "APPROVED"}
+      - {role: "WS-13-independent-security", identity: "/root/revocation_mode_impact", disposition: "APPROVED"}
+      - {role: "project-owner", identity: "explicit 2026-08-30 project-owner instruction", disposition: "APPROVED"}
+    decide_before_issue: STEAD-P1-016
+    dependent_issues: [STEAD-P1-016, STEAD-P1-015, STEAD-P1-006, STEAD-P1-011, STEAD-P2-004, STEAD-P2-010]
   - {adr_id: ADR-CAND-008, state: DEFERRED, decide_before_issue: STEAD-P1-003, dependent_issues: [STEAD-P1-003, STEAD-P1-012, STEAD-P2-001]}
-  - {adr_id: ADR-CAND-021, state: PROPOSED, decision_record: docs/adr/0004-initial-team-role-and-authorization-semantics.md, project_owner_approval_required: true, decide_before_issue: STEAD-P1-006, dependent_issues: [STEAD-P1-006, STEAD-P1-002, STEAD-P1-005, STEAD-P2-003]}
+  - adr_id: ADR-CAND-021
+    state: ACCEPTED
+    decision_record: docs/adr/0004-initial-team-role-and-authorization-semantics.md
+    project_owner_approval_required: true
+    immutable_revision: "24c74d52ef0a78840ab147da48c3d66589e49e3e"
+    accepted_at: "2026-08-30"
+    approval_record: docs/governance/phase1-foundation-approval-record.md
+    approval_records:
+      - {role: "WS-06-security-contract", identity: "/root/contract_owner_review", disposition: "APPROVED"}
+      - {role: "WS-02-team-domain", identity: "/root/core_owner_review", disposition: "APPROVED"}
+      - {role: "WS-01-architecture", identity: "/root/architecture_standards_review/profile_contract_audit", disposition: "APPROVED"}
+      - {role: "WS-13-independent-qa", identity: "/root/precommit_scope_audit", disposition: "APPROVED"}
+      - {role: "WS-13-independent-security", identity: "/root/revocation_mode_impact", disposition: "APPROVED"}
+      - {role: "project-owner", identity: "explicit 2026-08-30 project-owner instruction", disposition: "APPROVED"}
+    decide_before_issue: STEAD-P1-006
+    dependent_issues: [STEAD-P1-006, STEAD-P1-002, STEAD-P1-005, STEAD-P2-003]
 epics:
   - id: "EPIC-P0-A"
     title: "Constitution and canonical contracts"
