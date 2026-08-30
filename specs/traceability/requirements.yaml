@@ -534,7 +534,7 @@ requirements:
   - requirement_id: "CLS-006"
     title: "No unauthorized existence leakage"
     implementation_modules: ["modules/classification", "modules/authorization", "policies/policy-decision", "policies/security-label-profiles"]
-    issue_ids: ["STEAD-P0-007", "STEAD-P1-006", "STEAD-P2-004"]
+    issue_ids: ["STEAD-P0-007", "STEAD-P1-003", "STEAD-P1-006", "STEAD-P2-004"]
     test_ids: ["T-CLS-006-ACCEPTANCE", "T-ADR-0009-CONFLICT-QUARANTINE", "T-ADR-0009-PERMISSION-DRIFT", "T-ADR-0009-PROVIDER-OUTAGE"]
     documentation: ["docs/architecture/security-label-lattice.md", "docs/security/classification-bypass-inventory.md"]
     status: DEPENDENCY_BLOCKED_PHASE_1

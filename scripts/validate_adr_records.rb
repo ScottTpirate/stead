@@ -16,7 +16,7 @@ EXPECTED_RECORDS = {
   "0005" => { candidate: "ADR-CAND-003", state: "ACCEPTED", owner_approval: false },
   "0006" => { candidate: "ADR-CAND-007", state: "ACCEPTED", owner_approval: true },
   "0007" => { candidate: "ADR-CAND-002", state: "ACCEPTED", owner_approval: false },
-  "0009" => { candidate: "ADR-CAND-008", state: "DEFERRED", owner_approval: false }
+  "0009" => { candidate: "ADR-CAND-008", state: "PROPOSED", owner_approval: false }
 }.freeze
 
 EXPECTED_REQUIREMENT_TEST_LINKS = {
@@ -699,6 +699,10 @@ paths.each do |path|
     failures << "docs/adr/INDEX.md: missing #{basename}" unless adr_index.include?("./#{basename}")
     failures << "docs/governance/adr-candidate-index.md: missing #{basename}" unless candidate_index.include?("../adr/#{basename}")
     failures << "docs/adr/unresolved-implementation-choices.md: missing #{basename}" unless choice_queue.include?("./#{basename}")
+  elsif expected.fetch(:state) == "PROPOSED"
+    failures << "docs/adr/INDEX.md: missing proposed #{basename}" unless adr_index.include?("./#{basename}")
+    failures << "docs/governance/adr-candidate-index.md: missing proposed #{basename}" unless candidate_index.include?("../adr/#{basename}")
+    failures << "docs/adr/unresolved-implementation-choices.md: missing proposed #{basename}" unless choice_queue.include?("./#{basename}")
   else
     failures << "docs/adr/INDEX.md: missing deferred candidate #{candidate}" unless adr_index.include?(candidate)
     failures << "docs/governance/adr-candidate-index.md: missing deferred candidate #{candidate}" unless candidate_index.include?(candidate)
@@ -714,6 +718,14 @@ paths.each do |path|
   if expected.fetch(:state) == "ACCEPTED"
     failures << "implementation issue catalog: #{candidate} decision_record must be #{relative}" unless gate["decision_record"] == relative
     failures << "implementation issue catalog: #{candidate} project-owner flag mismatch" unless gate["project_owner_approval_required"] == expected.fetch(:owner_approval)
+  elsif expected.fetch(:state) == "PROPOSED"
+    failures << "implementation issue catalog: proposed #{candidate} decision_record must be #{relative}" unless gate["decision_record"] == relative
+    failures << "implementation issue catalog: proposed #{candidate} project-owner flag mismatch" unless gate["project_owner_approval_required"] == expected.fetch(:owner_approval)
+    acceptance_fields = %w[immutable_revision accepted_at approval_record approval_records]
+    present_acceptance_fields = acceptance_fields.select { |field| gate.key?(field) }
+    unless present_acceptance_fields.empty?
+      failures << "implementation issue catalog: proposed #{candidate} must not carry acceptance fields: #{present_acceptance_fields.join(', ')}"
+    end
   else
     acceptance_fields = %w[decision_record immutable_revision accepted_at approval_record approval_records]
     present_acceptance_fields = acceptance_fields.select { |field| gate.key?(field) }
@@ -1326,6 +1338,56 @@ unless Array(adr_0007_gate&.fetch("dependent_issues", nil)).include?("STEAD-P1-0
   failures << "implementation issue catalog: ADR-CAND-002 dependent issues omit STEAD-P1-017"
 end
 
+adr_0009_gate = adr_gates["ADR-CAND-008"]
+adr_0009_expected_dependents = %w[
+  STEAD-P1-002
+  STEAD-P1-003
+  STEAD-P1-011
+  STEAD-P1-012
+  STEAD-P2-001
+].to_set
+adr_0009_actual_dependents = Array(adr_0009_gate&.fetch("dependent_issues", nil)).to_set
+unless adr_0009_actual_dependents == adr_0009_expected_dependents
+  failures << "implementation issue catalog: ADR-CAND-008 exact dependent issues must be #{adr_0009_expected_dependents.to_a.sort.join(', ')}, found #{adr_0009_actual_dependents.to_a.sort.join(', ')}"
+end
+
+provider_issue = issues["STEAD-P1-003"]
+provider_requirements = Array(provider_issue&.fetch("requirement_ids", nil)).to_set
+missing_provider_requirements = requirements_by_number.fetch("0009", []).to_set - provider_requirements
+unless missing_provider_requirements.empty?
+  failures << "STEAD-P1-003 requirement IDs omit ADR-0009 provider obligations: #{missing_provider_requirements.to_a.sort.join(', ')}"
+end
+provider_acceptance = Array(provider_issue&.fetch("acceptance_criteria", nil)).join(" ")
+unless provider_acceptance.include?("Only after ADR-CAND-008 is accepted") &&
+       provider_acceptance.include?("deterministic accept/reset/quarantine") &&
+       provider_acceptance.include?("without holding PostgreSQL transactions across provider I/O")
+  failures << "STEAD-P1-003 acceptance must preserve the ADR-CAND-008 gate, closed outcomes, and no-transaction-across-provider-I/O boundary"
+end
+
+operations_issue = issues["STEAD-P1-011"]
+operations_acceptance = Array(operations_issue&.fetch("acceptance_criteria", nil)).join(" ")
+unless operations_acceptance.include?("Own ADR-0009's versioned reconciliation configuration") &&
+       operations_acceptance.include?("without selecting reconciliation outcomes or declaring ambiguous effects terminal")
+  failures << "STEAD-P1-011 acceptance must preserve WS-12 configuration/operations ownership without moving reconciliation authority"
+end
+
+adr_0009_owned_path_requirements = {
+  "STEAD-P1-002" => %w[apps/core modules/project modules/work tests/integration/core packages/test-fixtures/core],
+  "STEAD-P1-003" => %w[modules/scm providers/gitea tests/contract/gitea],
+  "STEAD-P1-011" => %w[apps/steadctl docs/operator tests/upgrade tests/backup-restore],
+  "STEAD-P1-012" => %w[specs/traceability tests/security tests/contract/harness]
+}.freeze
+adr_0009_owned_path_requirements.each do |issue_id, required_paths|
+  issue = issues[issue_id]
+  unless issue
+    failures << "implementation issue catalog: missing #{issue_id} for ADR-0009 owned-path split"
+    next
+  end
+
+  missing_paths = required_paths.to_set - Array(issue["owned_directories"]).to_set
+  failures << "#{issue_id} owned directories omit ADR-0009 contribution paths: #{missing_paths.to_a.sort.join(', ')}" unless missing_paths.empty?
+end
+
 %w[STEAD-P1-011 STEAD-P1-012].each do |dependent_issue_id|
   dependent_issue = issues[dependent_issue_id]
   if dependent_issue.nil?
@@ -1547,6 +1609,30 @@ implementation_assignments = {
       T-ADR-0007-FAILURE-INJECTION
       T-ADR-0007-OBSERVABILITY-PERFORMANCE
     ]
+  },
+  "0009" => {
+    "STEAD-P1-002" => %w[
+      T-ADR-0009-DIRECT-CHANGE-ACCEPT
+      T-ADR-0009-CONFLICT-QUARANTINE
+      T-ADR-0009-AMBIGUOUS-MUTATION
+    ],
+    "STEAD-P1-003" => tests_by_number.fetch("0009", []),
+    "STEAD-P1-011" => %w[
+      T-ADR-0009-WEBHOOK-IDEMPOTENCY
+      T-ADR-0009-PERMISSION-DRIFT
+      T-ADR-0009-PROVIDER-OUTAGE
+      T-ADR-0009-AMBIGUOUS-MUTATION
+      T-ADR-0009-FULL-RECONCILIATION
+      T-ADR-0009-UPGRADE-ROLLBACK
+    ],
+    "STEAD-P1-012" => tests_by_number.fetch("0009", []),
+    "STEAD-P2-001" => %w[
+      T-ADR-0009-PRECEDENCE
+      T-ADR-0009-PERMISSION-DRIFT
+      T-ADR-0009-PROVIDER-OUTAGE
+      T-ADR-0009-FULL-RECONCILIATION
+      T-ADR-0009-UPGRADE-ROLLBACK
+    ]
   }
 }.freeze
 
@@ -1570,6 +1656,24 @@ implementation_assignments.each do |number, issue_assignments|
   failures << "ADR-#{number} owner-split implementation coverage omits: #{missing_implementation_tests.to_a.sort.join(', ')}" unless missing_implementation_tests.empty?
 end
 
+# ADR-0009 crosses canonical-owner, provider, operations, and independent-gate
+# boundaries. Close every issue assignment in both directions so a test cannot
+# be silently transferred to a foreign implementation owner.
+adr_0009_expected_issue_assignments = implementation_assignments.fetch("0009").transform_values(&:to_set)
+adr_0009_actual_issue_assignments = issues.each_with_object({}) do |(issue_id, issue), assignments|
+  adr_tests = Array(issue["automated_tests"]).grep(/^T-ADR-0009-/).to_set
+  assignments[issue_id] = adr_tests unless adr_tests.empty?
+end
+(adr_0009_expected_issue_assignments.keys | adr_0009_actual_issue_assignments.keys).sort.each do |issue_id|
+  expected_tests = adr_0009_expected_issue_assignments.fetch(issue_id, Set.new)
+  actual_tests = adr_0009_actual_issue_assignments.fetch(issue_id, Set.new)
+  next if actual_tests == expected_tests
+
+  missing_tests = expected_tests - actual_tests
+  unexpected_tests = actual_tests - expected_tests
+  failures << "#{issue_id} ADR-0009 exact owner assignment mismatch: missing [#{missing_tests.to_a.sort.join(', ')}], unexpected [#{unexpected_tests.to_a.sort.join(', ')}]"
+end
+
 phase_one_adr5_tests = tests_by_number.fetch("0005", []).reject { |test_id| test_id == "T-ADR-0005-COMMIT-BOUNDARY" }
 phase_one_independent_tests = tests_by_number.slice("0003", "0004").values.flatten.to_set
 phase_one_independent_tests.merge(phase_one_adr5_tests)
@@ -1580,6 +1684,7 @@ phase_one_independent_tests.merge(
   tests_by_number.fetch("0006", []).reject { |test_id| test_id == "T-ADR-0006-AIRGAP-EVIDENCE" }
 )
 phase_one_independent_tests.merge(tests_by_number.fetch("0007", []))
+phase_one_independent_tests.merge(tests_by_number.fetch("0009", []))
 phase_three_independent_tests = Set[
   "T-ADR-0002-CUI-PROFILE",
   "T-ADR-0005-COMMIT-BOUNDARY",

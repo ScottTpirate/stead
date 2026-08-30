@@ -2,10 +2,10 @@
 
 - **Status:** Proposed
 - **Date:** 2026-08-30
-- **Decision owners:** WS-03, with WS-02 canonical-domain, WS-06 authorization/classification, and WS-07 event/audit integration
+- **Decision owners:** WS-03, with WS-02 canonical-domain, WS-06 authorization/classification, WS-07 event/audit integration, and WS-12 deployment/operations integration
 - **Project-owner approval required:** no; this selects a conforming reconciliation implementation inside the locked stock-Gitea, canonical-Stead, central-authorization, local-projection architecture and changes no owner-controlled public ontology or security decision
 - **Requirement IDs:** `PRIN-002`, `ARCH-004`, `DOM-004`, `SCM-001`, `SCM-002`, `SCM-003`, `SCM-004`, `SCM-005`, `CLS-006`, `CLS-007`, `TEST-006`, `PERF-003`
-- **Affected contracts/modules/directories:** `/modules/scm/`, `/providers/gitea/`, `/tests/contract/gitea/`, WS-02 canonical owner ports, WS-06 authorization and provider-enforcement ports, WS-07 audit/event ports, provider projections under the WS-03-owned PostgreSQL schema, and Gitea compatibility/operations evidence
+- **Affected contracts/modules/directories:** `/modules/scm/`, `/providers/gitea/`, `/tests/contract/gitea/`, WS-02 canonical owner ports, WS-06 authorization and provider-enforcement ports, WS-07 audit/event ports, provider projections under the WS-03-owned PostgreSQL schema, and WS-12-owned effective configuration, secret references, doctor, backup/restore, upgrade, rollback, and performance evidence
 - **Resolves on acceptance:** `ADR-CAND-008`
 - **Supersedes / superseded by:** supersedes no accepted decision; a changed precedence class, automatic ontology import, direct-provider authority, unmediated browser/provider path, or different ambiguity safety rule requires a superseding ADR
 
@@ -114,7 +114,7 @@ Three paths share the same reconciliation function and the per-provider-call per
 - a successful Stead mutation performs immediate confirmation/projection before success;
 - a checkpointed full inventory scans bounded pages on a jittered schedule and resumes after restart without trusting page order as causality.
 
-The Phase 1 default full scan interval is 15 minutes and its supported maximum is 60 minutes. Deployment configuration may lower, but not raise, that maximum. This is a missed-event/drift backstop, not the control that makes stale provider permission safe. Central security mutations mark the provider-enforcement fence pending and complete their required provider/credential reconciliation before acknowledgment under ADR-0005; gateways and scoped credentials enforce current central state independently of scheduled scans.
+The Phase 1 default full scan interval is 15 minutes and its supported maximum is 60 minutes. The WS-12-owned versioned effective-configuration contract may lower, but not raise, that maximum; WS-03 consumes the validated value through a typed port and cannot reinterpret it. This is a missed-event/drift backstop, not the control that makes stale provider permission safe. Central security mutations mark the provider-enforcement fence pending and complete their required provider/credential reconciliation before acknowledgment under ADR-0005; gateways and scoped credentials enforce current central state independently of scheduled scans.
 
 Ordinary composed reads continue from the last confirmed local projection during a provider outage only when current central authorization succeeds and the resource has no pending security, mapping, deletion, or unsafe-content ambiguity. They make zero Gitea calls and may expose only a non-resource-specific degraded-service indication to an already authorized user. Provider mutations, direct credentials, raw paths, and unsafe projection fields deny while their required provider state cannot be verified. A provider outage never causes a fail-open read, fabricated empty state, canonical delete, or cross-resource existence leak.
 
@@ -127,6 +127,8 @@ Public errors use stable RFC 9457 problem types such as `provider-unavailable`, 
 ADR-0007's accepted physical PostgreSQL rules govern the actual schema and migration sequence. WS-03 owns provider mappings, snapshot/projection state, operation intents, webhook attempts, quarantine state, and reconciliation cursors under the `scm` module namespace. It writes canonical Work, Organization, Project, authorization, audit, activity, inbox, or search state only through typed owner ports or versioned events. Shared outbox and authorization-effect state are accessed only through their owning ports. No code reads or writes a Gitea table, imports an internal Gitea package, or treats a provider backup as Stead canonical storage.
 
 Projection and reconciliation rows are versioned and rebuildable. Operation, mapping, quarantine, acceptance/reset, and audit evidence needed to explain an external effect is durable and is not discarded as a cache. Protected provider bodies and opaque locators remain access-controlled internal data; telemetry does not label them.
+
+The implementation split is closed. WS-02 owns canonical-resource compare/write ports and their transaction semantics; it does not classify provider fields or call Gitea. WS-06 owns central decisions, provider-enforcement fences, and authorization-effect permits; it does not reconcile provider state. WS-07 owns audit/event schemas and delivery; it does not read Gitea or write the `scm` schema. WS-12 owns effective deployment configuration, secret references and rotation orchestration, supported-version preflight, doctor, backup/restore, upgrade/rollback orchestration, and operational benchmark evidence; it does not select reconciliation outcomes. WS-03 alone owns compatibility profiles, webhook verification, provider calls, mappings, projections, reconciliation state, and the accept/reset/quarantine selector, consuming every foreign obligation through those typed ports.
 
 ## Consequences
 
@@ -144,13 +146,13 @@ Compatibility profiles are keyed by exact Gitea version and API/schema digest. T
 
 ### Upgrade, rollback, backup, restore, and recovery
 
-`steadctl upgrade` preflights the target pinned Gitea image/version/digest against the complete provider contract, current plus two prior supported minors, and next candidate where upstream exists. It drains or reconciles nonterminal operations, completes a full scan, backs up authoritative Stead data plus Gitea through supported mechanisms, verifies restore metadata, upgrades Gitea before enabling a compatible adapter profile, then runs shadow reads and full reconciliation before mutations resume.
+WS-12 orchestrates `steadctl upgrade`, secret-reference rotation, consistent backup/restore, and rollback. It calls WS-03-owned typed preflight, drain/reconciliation, shadow-read, and full-scan probes; it cannot edit compatibility profiles or declare an ambiguous provider operation terminal. The target pinned Gitea image/version/digest is checked against the complete provider contract, current plus two prior supported minors, and next candidate where upstream exists. The workflow drains or reconciles nonterminal operations, completes a full scan, backs up authoritative Stead data plus Gitea through supported mechanisms, verifies restore metadata, upgrades Gitea before enabling a compatible adapter profile, then runs shadow reads and full reconciliation before mutations resume.
 
 Adapter rollback is allowed only when the predecessor profile supports the active Gitea version and persisted WS-03 schema. Otherwise mutations remain disabled for forward recovery or the operator restores the consistent pre-upgrade Gitea and Stead backup set. Restore resumes dirty generations and ambiguous operations idempotently; it never marks them successful from backup age. Webhook secrets and provider credentials are restored through the approved secret path, not logged or embedded in projection data.
 
 ### APIs, schemas, events, providers, and standards mappings
 
-Public APIs expose canonical IDs, operation status, safe degraded state, ETags, and RFC 9457 problems only. Provider IDs, raw reconciliation class, provider version, and reset candidates remain internal or in separately authorized operator diagnostics. Events use canonical CloudEvents identities and causation; receipt of a provider event never authorizes delivery or a canonical mutation. Search, graph, activity, and inbox consume committed canonical/projection events and remain rebuildable.
+Public APIs expose canonical IDs, operation status, safe degraded state, ETags, and RFC 9457 problems only. Provider IDs, raw reconciliation class, provider version, and reset candidates remain internal or in separately authorized operator diagnostics. Events use canonical CloudEvents identities and causation; receipt of a provider event never authorizes delivery or a canonical mutation. Any event or DLQ record carries only the event contract's minimized effective-security reference; raw, display, and provider label material is prohibited in events, DLQ copies, logs, traces, metrics, doctor output, and support evidence. Search, graph, activity, and inbox consume committed canonical/projection events and remain rebuildable.
 
 The adapter uses documented REST APIs, HMAC webhooks, Git protocols, and supported authentication. Floating upstream documentation is evidence for implementation review, not the compatibility contract; each supported profile pins the exact upstream API schema or fixture digest used by its tests.
 
@@ -189,6 +191,8 @@ Decision acceptance names future implementation obligations; it does not claim t
 
 `T-STEAD-P1-003-CONTRACT`, the mapped SCM/architecture/classification/performance tests, `T-ADR-0005-PROVIDER-PATH`, and TEST-009/TEST-010 must consume these fixtures rather than create a second reconciliation rule. Failure injection covers database commit before/after provider dispatch, process death at every operation transition, webhook loss/redelivery, rate limiting, provider restart, pagination churn, permission removal, and projection rebuild.
 
+Implementation evidence is split bidirectionally across the WS-02 canonical-acceptance contribution, WS-03 provider/reconciliation implementation, WS-12 operational integration, and WS-13 independent gate. WS-03 owns all ten primary suites; WS-02 and WS-12 contribute only their named boundary cases. WS-06 and WS-07 approve their authorization/fencing and audit/event contracts without moving provider-specific implementation into their issues. The machine-readable catalog and validator reject a missing or foreign ADR-0009 issue/test assignment even when the union of test names still appears complete.
+
 ## Rollout and supersession
 
 Rollout is expand, shadow, activate, contract:
@@ -212,6 +216,7 @@ A future ADR may add a provider or stronger native concurrency token by adding a
 | Canonical transaction owner (WS-02) | pending | pending | pending |
 | Authorization/classification owner (WS-06) | pending | pending | pending |
 | Event/audit owner (WS-07) | pending | pending | pending |
+| Deployment/operations owner (WS-12) | pending | pending | pending |
 | Independent QA/security (WS-13) | pending distinct reviewer | pending | pending |
 | Project owner | not required | conforming implementation decision | pending governance confirmation |
 
