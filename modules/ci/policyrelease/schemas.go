@@ -23,7 +23,6 @@ var (
 	semanticVersionPattern    = regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+$`)
 	profilePayloadPathPattern = regexp.MustCompile(`^(policies|tests)/[A-Za-z0-9_./-]+$`)
 	profileTestIDPattern      = regexp.MustCompile(`^T-[A-Z0-9-]+$`)
-	spdxIDPattern             = regexp.MustCompile(`^SPDXRef-[A-Za-z0-9_.-]{1,128}$`)
 )
 
 var (
@@ -342,10 +341,6 @@ type slsaProvenanceEvidenceV1 struct {
 	Subject       []slsaSubjectV1 `json:"subject"`
 	PredicateType string          `json:"predicateType"`
 	Predicate     slsaPredicateV1 `json:"predicate"`
-}
-
-type spdxGraphHeaderV301 struct {
-	Type string `json:"type"`
 }
 
 type spdxCreationInfoV301 struct {

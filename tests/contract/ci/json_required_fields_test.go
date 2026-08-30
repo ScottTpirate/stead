@@ -47,12 +47,15 @@ func TestSecuritySensitiveZeroValuedEvidenceMembersAreRequiredAndTyped(t *testin
 	testCases := []struct {
 		name      string
 		path      string
+		target    func(map[string]any) map[string]any
 		member    string
 		wrongType any
 	}{
-		{"provenance network access", "evidence/provenance.json", "network_access", 0},
-		{"license unknown count", "evidence/license-result.json", "unknown_or_disallowed", false},
-		{"vulnerability unknown count", "evidence/vulnerability-result.json", "unknown_critical_or_high", false},
+		{"provenance network access", "evidence/provenance.json", func(document map[string]any) map[string]any {
+			return document["predicate"].(map[string]any)["buildDefinition"].(map[string]any)["internalParameters"].(map[string]any)
+		}, "networkAccess", 0},
+		{"license unknown count", "evidence/license-result.json", func(document map[string]any) map[string]any { return document }, "unknown_or_disallowed", false},
+		{"vulnerability unknown count", "evidence/vulnerability-result.json", func(document map[string]any) map[string]any { return document }, "unknown_critical_or_high", false},
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -69,11 +72,12 @@ func TestSecuritySensitiveZeroValuedEvidenceMembersAreRequiredAndTyped(t *testin
 				t.Run(mutation.name, func(t *testing.T) {
 					input := fixtureBuildInput(t, "commercial", 1, false)
 					mutateEvidenceReport(t, &input, testCase.path, func(document map[string]any) {
+						target := testCase.target(document)
 						if mutation.remove {
-							delete(document, testCase.member)
+							delete(target, testCase.member)
 							return
 						}
-						document[testCase.member] = mutation.value
+						target[testCase.member] = mutation.value
 					})
 					assertPrepareJSONContractError(t, input, mutation.code)
 				})

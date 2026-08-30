@@ -516,6 +516,20 @@ func TestReleaseAttestationRejectsSelfReferenceSwapsAndIncompleteEvidence(t *tes
 		}
 	})
 
+	t.Run("rejected waiver", func(t *testing.T) {
+		input := releaseInput("reviewer-a", "accept")
+		input.WaiverReceipts = []policyrelease.WaiverReceipt{{
+			WaiverID:           "fixture-rejected-waiver",
+			SubjectDigest:      activation.ArchiveDigest,
+			RecordDigest:       policyrelease.SHA256Digest([]byte("fixture-rejected-waiver-record")),
+			ClaimedDisposition: "rejected",
+		}}
+		_, err := policyrelease.PrepareReleaseAttestation(activation, input)
+		if policyrelease.ErrorCode(err) != "presented_release_waiver_not_approved" {
+			t.Fatalf("rejected waiver error = %v (%s)", err, policyrelease.ErrorCode(err))
+		}
+	})
+
 	t.Run("missing approval", func(t *testing.T) {
 		input := releaseInput("reviewer-a", "accept")
 		input.ReviewReceipts = nil

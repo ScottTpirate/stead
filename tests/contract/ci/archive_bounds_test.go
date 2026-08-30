@@ -165,6 +165,63 @@ func TestArchiveResourceBoundaries(t *testing.T) {
 // T-ADR-0006-ARCHIVE-SAFETY: caller-controlled writer input is rejected before
 // the builder copies or parses any file content.
 func TestWriterResourceBoundsArePreflighted(t *testing.T) {
+	appendToCallerContent := func(t testing.TB, input *policyrelease.BuildInput, target int) {
+		t.Helper()
+		current := 0
+		for _, file := range input.PayloadFiles {
+			current += len(file.Content)
+		}
+		for _, file := range input.EvidenceFiles {
+			current += len(file.Content)
+		}
+		remaining := target - current
+		if remaining < 0 {
+			t.Fatal("fixture already exceeds target content")
+		}
+		shared := bytes.Repeat([]byte{'x'}, policyrelease.MaxArchiveFileBytes)
+		for index := 0; remaining > 0; index++ {
+			size := min(remaining, len(shared))
+			input.EvidenceFiles = append(input.EvidenceFiles, policyrelease.File{
+				Path:      fmt.Sprintf("evidence/preflight-boundary-%d.txt", index),
+				MediaType: "text/plain; charset=utf-8",
+				Content:   shared[:size],
+			})
+			remaining -= size
+		}
+	}
+
+	t.Run("aggregate exact and one over", func(t *testing.T) {
+		exact := fixtureBuildInput(t, "commercial", 1, false)
+		appendToCallerContent(t, &exact, policyrelease.MaxArchiveContent)
+		if _, err := policyrelease.PrepareUnsigned(exact); policyrelease.ErrorCode(err) != "unknown_evidence_path" {
+			t.Fatalf("exact aggregate did not pass preflight: %v (%s)", err, policyrelease.ErrorCode(err))
+		}
+		oneOver := fixtureBuildInput(t, "commercial", 1, false)
+		appendToCallerContent(t, &oneOver, policyrelease.MaxArchiveContent+1)
+		if _, err := policyrelease.PrepareUnsigned(oneOver); policyrelease.ErrorCode(err) != "archive_content_limit" {
+			t.Fatalf("one-over aggregate preflight error = %v (%s)", err, policyrelease.ErrorCode(err))
+		}
+	})
+
+	t.Run("per-file exact and one over", func(t *testing.T) {
+		exact := fixtureBuildInput(t, "commercial", 1, false)
+		exact.EvidenceFiles = append(exact.EvidenceFiles, policyrelease.File{
+			Path: "evidence/preflight-file-exact.txt", MediaType: "text/plain; charset=utf-8",
+			Content: bytes.Repeat([]byte{'x'}, policyrelease.MaxArchiveFileBytes),
+		})
+		if _, err := policyrelease.PrepareUnsigned(exact); policyrelease.ErrorCode(err) != "unknown_evidence_path" {
+			t.Fatalf("exact per-file content did not pass preflight: %v (%s)", err, policyrelease.ErrorCode(err))
+		}
+		oneOver := fixtureBuildInput(t, "commercial", 1, false)
+		oneOver.EvidenceFiles = append(oneOver.EvidenceFiles, policyrelease.File{
+			Path: "evidence/preflight-file-one-over.txt", MediaType: "text/plain; charset=utf-8",
+			Content: make([]byte, policyrelease.MaxArchiveFileBytes+1),
+		})
+		if _, err := policyrelease.PrepareUnsigned(oneOver); policyrelease.ErrorCode(err) != "archive_file_size_limit" {
+			t.Fatalf("one-over per-file preflight error = %v (%s)", err, policyrelease.ErrorCode(err))
+		}
+	})
+
 	t.Run("aggregate before JSON parsing", func(t *testing.T) {
 		input := fixtureBuildInput(t, "commercial", 1, false)
 		sharedMalformedJSON := bytes.Repeat([]byte{'{'}, policyrelease.MaxArchiveFileBytes)
