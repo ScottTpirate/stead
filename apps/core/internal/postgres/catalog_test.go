@@ -301,6 +301,10 @@ func TestDecodeManifestRejectsNonCanonicalJSONBeforeTypedDecode(t *testing.T) {
 	if _, err := DecodeManifest(bytes.NewReader(data)); err != nil {
 		t.Fatalf("canonical fixture rejected: %v", err)
 	}
+	canonicalZero := []byte(replaceOnce(t, string(data), `"connection_limit": -1`, `"connection_limit": 0`))
+	if _, err := DecodeManifest(bytes.NewReader(canonicalZero)); err != nil {
+		t.Fatalf("canonical zero integer rejected: %v", err)
+	}
 
 	augmented := loadCoreOutboxManifest(t)
 	augmented.Objects = append(augmented.Objects, ObjectSpec{Schema: "core_outbox", Name: "event_intents", Kind: "table", Owner: "core_outbox_owner"})
@@ -337,6 +341,7 @@ func TestDecodeManifestRejectsNonCanonicalJSONBeforeTypedDecode(t *testing.T) {
 		{"unknown_nested", []byte(replaceOnce(t, fixture, `"superuser": false,`, `"unknown": false, "superuser": false,`))},
 		{"null_array", []byte(replaceOnce(t, fixture, `"configuration": []`, `"configuration": null`))},
 		{"noncanonical_integer", []byte(replaceOnce(t, fixture, `"connection_limit": -1`, `"connection_limit": -1.0`))},
+		{"negative_zero_integer", []byte(replaceOnce(t, fixture, `"connection_limit": -1`, `"connection_limit": -0`))},
 		{"missing_required", []byte(replaceOnce(t, fixture, `"superuser": false, `, ``))},
 		{"trailing_value", append(append([]byte(nil), data...), []byte(`{}`)...)},
 		{"invalid_utf8", []byte("{\"deployment_key\":\"\xff\"}")},

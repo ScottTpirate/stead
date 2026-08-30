@@ -12,7 +12,7 @@ import (
 
 const maximumManifestBytes = 8 << 20
 
-var canonicalJSONInteger = regexp.MustCompile(`^-?(0|[1-9][0-9]*)$`)
+var canonicalJSONInteger = regexp.MustCompile(`^(0|-?[1-9][0-9]*)$`)
 
 type manifestJSONKind uint8
 
