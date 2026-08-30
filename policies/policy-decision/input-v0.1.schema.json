@@ -64,12 +64,12 @@
     },
     "agent_context": {
       "type": "object",
-      "required": ["agent_authority_revision", "runtime_identity", "runtime_security_domain", "classification_ceiling", "compartments", "model_provider", "tool_scope", "execution_environment", "attestation", "expires_at", "revoked"],
+      "required": ["agent_authority_revision", "runtime_identity", "runtime_security_domain", "classification_ceilings", "compartments", "model_provider", "tool_scope", "execution_environment", "attestation", "expires_at", "revoked"],
       "properties": {
         "agent_authority_revision": {"type": "string"},
         "runtime_identity": {"type": "string"},
         "runtime_security_domain": {"type": "string"},
-        "classification_ceiling": {"type": "string"},
+        "classification_ceilings": {"type": "array", "items": {"$ref": "../deployment-domains/domain-profile-v0.1.schema.json#/$defs/ProfileCeiling"}, "minItems": 1},
         "compartments": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
         "model_provider": {"type": "string"},
         "tool_scope": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
@@ -94,11 +94,11 @@
     },
     "session": {
       "type": "object",
-      "required": ["authentication_strength", "security_domain", "security_ceiling", "network_zone", "device_trust", "environment", "expires_at"],
+      "required": ["authentication_strength", "security_domain", "classification_ceilings", "network_zone", "device_trust", "environment", "expires_at"],
       "properties": {
         "authentication_strength": {"type": "string"},
         "security_domain": {"type": "string"},
-        "security_ceiling": {"type": "string"},
+        "classification_ceilings": {"type": "array", "items": {"$ref": "../deployment-domains/domain-profile-v0.1.schema.json#/$defs/ProfileCeiling"}, "minItems": 1},
         "network_zone": {"type": "string"},
         "device_trust": {"type": "string"},
         "environment": {"type": "string"},
@@ -126,11 +126,10 @@
         "operation": {"enum": ["download", "export", "share", "downgrade", "declassify", "decontrol", "remove_restriction"]},
         "destination": {
           "type": "object",
-          "required": ["security_domain", "classification_ceiling", "allowed_label_profiles", "organization_ids", "releasability_groups", "channel"],
+          "required": ["security_domain", "label_profile_ceilings", "organization_ids", "releasability_groups", "channel"],
           "properties": {
             "security_domain": {"type": "string"},
-            "classification_ceiling": {"type": "string"},
-            "allowed_label_profiles": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+            "label_profile_ceilings": {"type": "array", "items": {"$ref": "../deployment-domains/domain-profile-v0.1.schema.json#/$defs/ProfileCeiling"}, "minItems": 1},
             "organization_ids": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
             "releasability_groups": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
             "channel": {"type": "string"}
@@ -173,12 +172,12 @@
     },
     "infrastructure_context": {
       "type": "object",
-      "required": ["operation", "target_domain", "provider", "classification_ceiling", "allowed", "encryption_profile", "network_zone"],
+      "required": ["operation", "target_domain", "provider", "profile_ceiling", "allowed", "encryption_profile", "network_zone"],
       "properties": {
         "operation": {"enum": ["admission", "storage", "backup", "restore", "integration"]},
         "target_domain": {"type": "string"},
         "provider": {"type": "string"},
-        "classification_ceiling": {"type": "string"},
+        "profile_ceiling": {"$ref": "../deployment-domains/domain-profile-v0.1.schema.json#/$defs/ProfileCeiling"},
         "allowed": {"type": "boolean"},
         "encryption_profile": {"type": "string"},
         "network_zone": {"type": "string"},

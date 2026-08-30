@@ -1,0 +1,35 @@
+profile_id: regulated_example
+version: "7.2.1"
+profile_purpose: test_fixture
+scope:
+  summary: "Synthetic profile proving that Stead accepts a new vocabulary without application changes."
+  coverage_statement: "Contract fixture only; covers its three invented sensitivity values."
+  limitations: ["Not an implementation or claim for any real regulatory or classification regime."]
+authoritative_sources: []
+sensitivity_order: [open, controlled, highly_controlled]
+handling_regimes: [review_required]
+allowed_categories:
+  - {id: synthetic_category, subcategories: [synthetic_subcategory]}
+allowed_compartments: [synthetic_compartment]
+dissemination_controls: [named_audience_only]
+releasability_groups: [synthetic_staff]
+export_controls: []
+normalization: {identifier_case: exact, set_order: lexicographic, unknown_value: deny}
+dominance: profile_partial_order_v1
+join: least_upper_bound_plus_union_of_handling_restrictions
+releasable_to_join: intersection_fail_on_empty
+cross_profile_composition: deny_without_signed_approved_bridge
+lowering: deny_by_default_authorized_reasoned_audited
+lowering_approval: {minimum_approvers: 2, distinct_approvers: true, human_approvers_required: true}
+presentation:
+  renderer_id: stead.security_markings.v1
+  renderer_version: "1.0.0"
+  text_authoritative: true
+  color_supplemental_only: true
+  sensitivity_markings:
+    - {id: open, display_text: Open}
+    - {id: controlled, display_text: Controlled}
+    - {id: highly_controlled, display_text: Highly Controlled}
+  required_surfaces: [badge, top_banner, export]
+  action_warnings: [copy, download, export, share]
+bundle_signing: {required: true, format: stead-policy-activation-set-dsse-v1, materialization_gate: RG-08-SECURITY}

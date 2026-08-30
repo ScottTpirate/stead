@@ -75,6 +75,37 @@
       "allOf": [{"$ref": "#/$defs/SecurityLabelFields"}],
       "unevaluatedProperties": false
     },
+    "SecurityPresentation": {
+      "type": "object",
+      "description": "Authorized, server-derived presentation data from the active validated profile or its versioned system renderer; never an authorization input or executable UI extension.",
+      "required": ["profile_id", "profile_version", "policy_bundle_id", "label_revision", "renderer_id", "renderer_version", "markings", "required_surfaces", "warning_actions", "text_authoritative", "color_supplemental_only"],
+      "properties": {
+        "profile_id": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$"},
+        "profile_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+        "policy_bundle_id": {"type": "string", "minLength": 1},
+        "label_revision": {"type": "string", "minLength": 1},
+        "renderer_id": {"type": "string", "minLength": 1},
+        "renderer_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+        "markings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["kind", "text"],
+            "properties": {
+              "kind": {"enum": ["sensitivity", "handling", "category", "compartment", "dissemination", "releasability", "export_control", "review"]},
+              "text": {"type": "string", "minLength": 1}
+            },
+            "additionalProperties": false
+          },
+          "minItems": 1
+        },
+        "required_surfaces": {"type": "array", "items": {"enum": ["badge", "top_banner", "bottom_banner", "document", "print", "export", "session_indicator"]}, "uniqueItems": true},
+        "warning_actions": {"type": "array", "items": {"enum": ["copy", "download", "export", "print", "share"]}, "uniqueItems": true},
+        "text_authoritative": {"const": true},
+        "color_supplemental_only": {"const": true}
+      },
+      "additionalProperties": false
+    },
     "Provenance": {
       "type": "object",
       "required": ["created_at", "created_by"],
@@ -98,7 +129,7 @@
     },
     "ResourceEnvelope": {
       "type": "object",
-      "required": ["kind", "id", "uri", "browser_url", "schema_version", "version", "instance_id", "scope_kind", "scope_id", "organization_id", "container", "title", "created_at", "created_by", "updated_at", "updated_by", "security_label_id", "effective_security_label", "provenance", "external_references", "relationships"],
+      "required": ["kind", "id", "uri", "browser_url", "schema_version", "version", "instance_id", "scope_kind", "scope_id", "organization_id", "container", "title", "created_at", "created_by", "updated_at", "updated_by", "security_label_id", "effective_security_label", "security_presentation", "provenance", "external_references", "relationships"],
       "properties": {
         "kind": {"$ref": "#/$defs/ResourceRef/properties/kind"},
         "id": {"$ref": "#/$defs/UuidV7"},
@@ -119,6 +150,7 @@
         "security_label_id": {"$ref": "#/$defs/UuidV7"},
         "version": {"type": "integer", "minimum": 1},
         "effective_security_label": {"$ref": "#/$defs/SecurityLabelValue"},
+        "security_presentation": {"$ref": "#/$defs/SecurityPresentation"},
         "provenance": {"$ref": "#/$defs/Provenance"},
         "relationships": {"type": "array", "items": {"$ref": "#/$defs/Relationship"}},
         "external_references": {"type": "array", "items": {"type": "object", "required": ["provider", "external_id"], "properties": {"provider": {"type": "string"}, "external_id": {"type": "string"}}, "additionalProperties": false}}

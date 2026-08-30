@@ -1,0 +1,18 @@
+domain_id: high-assurance-private-example
+version: "3.0.0"
+policy_purpose: test_fixture
+scope:
+  summary: "Synthetic multi-profile high-assurance domain proving data-driven assurance without a government profile."
+  limitations: ["Contract fixture only; not a real regulatory, classification, compliance, accreditation, or cryptographic-validation claim."]
+label_profile_ceilings:
+  - {profile_id: commercial, profile_version: "1.0.0", classification_ceiling: confidential}
+  - {profile_id: regulated_example, profile_version: "7.2.1", classification_ceiling: highly_controlled}
+trusted_attribute_authorities: [synthetic_oidc, synthetic_runtime_attestation]
+approved_profile_bridges: []
+allowed_integrations: [gitea]
+allowed_notification_channels: [in_app]
+storage: {providers: [filesystem], encryption_profile: synthetic_high_assurance, residency: [test_boundary]}
+backup: {enabled: true, domains: [synthetic_backup], encryption_profile: synthetic_backup_high_assurance}
+runner: {pools: [synthetic_isolated], ephemeral: true, allowed_images: [signed_approved]}
+network: {zones: [synthetic_user, synthetic_service], egress_policy: deny_all}
+assurance: {policy_signature_threshold: 3, distinct_signing_custodians: true, trust_recovery_approval_threshold: 3, distinct_trust_recovery_approvers: true, lowering_approval_threshold: 2, approved_cryptographic_boundary: synthetic_validated_boundary, validated_cryptographic_module_required: true, evidence_profile: synthetic_high_assurance}

@@ -4,7 +4,7 @@
 **Status:** Reconciled normative build specification
 **Audience:** Project-manager agent, architecture agent, implementation subagents, QA/security agents
 **Project name:** `Stead`
-**Canonical component prefix:** `platform` for existing component, API, event, and CLI contract names
+**Canonical concrete interface names:** `stead-web`, `stead-api`, `stead-worker`, `steadctl`, the Stead API, and `stead.<domain>.<action>.v<major>` event types/subjects
 
 **Revision 0.2 reconciliation summary:** broadens the product from a developer-tool suite into an organization-wide open work and knowledge platform; makes software-delivery capabilities additive; defines hierarchical Teams without implicit permission inheritance; introduces organization/team/project knowledge containers; incorporates and preserves the approved `AGENT-001` through `AGENT-007` contracts; and replaces the single software-heavy golden path with general-work and software-extension paths. This file is the sole authoritative directive after reconciliation.
 
@@ -238,7 +238,7 @@ The production target includes:
 - unified activity and audit;
 - identity provisioning and single sign-on;
 - relationship-based and attribute/classification-based authorization;
-- classification-aware handling for government-oriented deployments;
+- classification-aware handling for regulated, high-assurance, classified, and specialized deployments;
 - migration from Jira and Confluence;
 - local, Kubernetes, cloud, and air-gapped installation;
 - backups, restores, upgrades, diagnostics, and observability;
@@ -1052,7 +1052,9 @@ Required global interactions:
 
 The UI MUST display the effective security label wherever protected content is shown.
 
-Government-oriented profiles MUST support:
+Security badges, banners, document/export markings, warnings, and accessible presentation MUST be driven by the active validated security-label profile or by a versioned system renderer declared for that profile. Profile IDs and profile-specific vocabulary MUST NOT trigger privileged authorization behavior or require a fork of `stead-web`. Text and markings are authoritative; color is supplemental and MUST NOT be the only signal.
+
+Where an active profile or deployment security-domain policy requires them, the UI MUST support:
 
 - persistent top and bottom classification/handling banners;
 - document and export markings;
@@ -1271,37 +1273,34 @@ version
 
 Security-label profiles are signed, versioned policy bundles. They are not free-form administrator fields.
 
-The product MUST ship with:
+Profiles MUST be declarative, schema-validated, deterministic, and offline-verifiable. They MUST define or reference their sensitivity vocabulary, handling regimes, categories/subcategories, compartments, dissemination controls, releasability, export controls, presentation/marking rules where applicable, normalization, dominance and join semantics, lowering/declassification/decontrol requirements, and mapping provenance. They MUST NOT be arbitrary executable plugins or a user-defined policy language.
 
-1. a commercial sensitivity profile;
-2. a US-government-oriented profile.
+Stead code MUST treat `profile_id` as a stable data identifier and MUST NOT give a particular profile ID privileged semantics. Approved profiles appropriate to an installation MAY be installed without changing the canonical ontology or application code. Maintained starter/reference profiles MAY be shipped for testing and evaluation, but they are not exhaustive definitions of an industry, government, regulatory, or classified-information regime.
 
-## CLS-002 — US government profile
+## CLS-002 — Security-label policy profiles and external-regime mappings
 
-The US government profile MUST:
+The generic profile mechanism MUST support ordinary business sensitivity, regulated and CUI environments, and high-assurance, classified, or specialized vocabularies without a Stead fork or profile-specific authorization branch.
 
-- model `UNCLASSIFIED`, `CONFIDENTIAL`, `SECRET`, and `TOP_SECRET` as sensitivity/classification values;
-- treat CUI as a separate handling regime, not a classification level;
-- support CUI categories/subcategories and CUI Basic/Specified handling metadata;
-- support compartments/programs and dissemination/releasability markings;
-- support derivation, review, decontrol, downgrade, and authority metadata;
-- align control documentation to NIST SP 800-53 Rev. 5.x and NIST SP 800-171 Rev. 3 where applicable;
-- support a FIPS-capable deployment mode without claiming that an unvalidated build is FIPS validated.
+A maintained profile that claims to represent an external regulatory, handling, or classification regime MUST identify authoritative sources, scope, mapping version, provenance, tested coverage, and known limitations. It MUST NOT imply coverage beyond the mappings and tests actually supplied. Framework expressiveness or installation of a profile MUST NOT itself be described as completeness, compliance, accreditation, authorization to operate, cross-domain approval, or cryptographic validation.
+
+Completing every possible external vocabulary is not a prerequisite for the core product. New approved profiles MUST remain data governed by the same closed schemas, signed activation, central evaluator, UI rendering contract, and release gates.
 
 ## CLS-003 — Deployment security domain
 
 Every installation MUST define:
 
 - security-domain identifier;
-- maximum permitted sensitivity/classification;
-- allowed security-label profiles;
+- allowed security-label profiles with one unambiguous ceiling for each permitted profile/version;
+- trusted identity, attribute, runtime-attestation, profile, and signing authorities;
 - allowed external integrations;
 - allowed notification channels;
 - allowed storage and backup destinations;
 - allowed runner pools;
-- network-zone requirements.
+- network-zone and egress requirements;
+- required signature threshold, custody/separation rules, and approved cryptographic boundary; and
+- other environment-specific assurance controls needed by the deployment.
 
-A resource whose label exceeds the installation ceiling MUST be rejected.
+A resource whose label exceeds the ceiling for its own profile MUST be rejected. An unknown profile, missing or ambiguous profile ceiling, or cross-profile composition MUST fail closed. Cross-profile composition remains prohibited unless an explicitly signed and approved compatibility/bridge rule covers the exact profiles, versions, direction, and operation; such a rule never creates a built-in cross-domain or write-down path.
 
 ## CLS-004 — Container boundary rules
 
@@ -1327,7 +1326,7 @@ Lowering, declassifying, decontrolling, or removing a compartment/handling restr
 - require an authorized classification/security role;
 - require a written reason and source authority;
 - be fully audited;
-- support two-person approval in the US-government profile;
+- require the signature/approval threshold and separation of duty selected by the applicable signed profile and deployment security-domain policy, including two-person approval where required;
 - invalidate caches, search projections, notifications, and exports;
 - trigger reindex/reconciliation.
 
@@ -1372,7 +1371,7 @@ Repository-level permissions MUST be reconciled from the central authorization m
 
 Contextual restrictions that Gitea cannot evaluate directly MUST be enforced by an access gateway, network/security-domain controls, credential issuance, or a documented equivalent.
 
-The product MUST NOT claim government-classification readiness until bypass tests prove that direct provider paths cannot exceed the central policy.
+The product MUST NOT claim readiness for any regulated, classified, or specialized regime until the exact mapped profile, deployment controls, and bypass tests prove that direct provider paths cannot exceed the central policy. Framework capability alone is not such evidence.
 
 ## CLS-008 — Cross-domain prohibition
 
@@ -1836,17 +1835,17 @@ For organizations using managed/existing services.
 - NATS bundled or external
 - no cloud-specific requirement
 
-### `government-airgap`
+### `high-assurance-airgap`
 
-For isolated or government-oriented environments.
+For isolated or high-assurance environments, whether commercial, regulated, government, classified, or specialized.
 
 - offline OCI image/chart bundle
 - no outbound network dependency
 - signed artifacts and offline verification material
-- US-government security-label profile
-- classification banners/markings
+- one or more explicitly approved signed security-label profiles
+- profile-driven classification/handling banners and markings where required
 - strict external-integration allowlist
-- FIPS-capable crypto configuration option
+- deployment-policy-selected cryptographic boundary, including a FIPS-capable option where required
 - separate runner and storage domains
 - OSCAL component/control artifacts
 - backup/export destinations explicitly approved
@@ -1858,7 +1857,7 @@ The default interactive installation MUST ask no more than these decision groups
 1. Docker/local or Kubernetes
 2. connected or air-gapped
 3. identity provider choice
-4. standard/commercial, CUI-ready, or classified-domain security profile
+4. approved security-label profile set and deployment security-domain/assurance policy
 5. bundled or external database/storage/search
 6. hostname/TLS inputs
 
@@ -1910,7 +1909,7 @@ An air-gap bundle MUST include:
 - offline documentation;
 - vulnerability and known-issue manifest.
 
-A government-airgap install MUST make no unapproved network call.
+A high-assurance air-gap install MUST make no unapproved network call.
 
 ## DEP-005 — Upgrade behavior
 
@@ -2053,9 +2052,9 @@ Release images MUST use minimal bases, non-root users where feasible, read-only 
 
 TLS MUST be supported for all network paths and required in production.
 
-Encryption at rest is provided through database, filesystem, volume, object-store, or KMS integrations and MUST be documented per profile.
+Encryption at rest is provided through database, filesystem, volume, object-store, or KMS integrations and MUST be documented per deployment security-domain policy.
 
-The government profile MUST support use of FIPS 140-3-validated cryptographic modules and approved algorithms, but the project MUST not claim validation for an unvalidated exact build/module.
+An applicable deployment security-domain policy MAY require FIPS 140-3-validated cryptographic modules and approved algorithms. Stead MUST support such a selectable approved cryptographic boundary without keying behavior on a security-label profile name, and the project MUST NOT claim validation for an unvalidated exact build/module/configuration.
 
 ## SEC-004 — Threat modeling
 
@@ -2077,7 +2076,7 @@ Threat-model findings become tracked requirements, not prose-only documentation.
 
 The project MUST publish an OSCAL Component Definition describing how the platform supports relevant controls.
 
-The government profile SHOULD include a starter OSCAL System Security Plan template and control implementation statements for NIST SP 800-53 and NIST SP 800-171-related capabilities.
+Where an approved deployment/security policy claims mappings to an external control regime, the project SHOULD provide scoped OSCAL implementation aids for the controls actually mapped and tested. A starter System Security Plan template and NIST SP 800-53 or NIST SP 800-171-related statements MAY be supplied when applicable.
 
 These artifacts are implementation aids and MUST not claim an authorization outcome.
 
@@ -2342,7 +2341,7 @@ Deliver:
 Deliver:
 
 - real-time document collaboration;
-- government-airgap profile;
+- high-assurance air-gap profile;
 - FIPS-capable configuration;
 - OSCAL artifacts;
 - full migration/cutover/redirect workflow;
@@ -2374,7 +2373,7 @@ The project-manager agent MUST create separate workstreams with explicit interfa
    - Devlane fork, design constitution, capability-driven shell, universal object surfaces, global Knowledge, Team hierarchy views, shared editor/components, accessibility, visual regression.
 
 6. **Identity/authorization/classification**
-   - OIDC/SCIM, OpenFGA, the policy-decision layer, security labels, government profile, bypass testing.
+   - OIDC/SCIM, OpenFGA, the policy-decision layer, generic signed security-label profiles, deployment security domains, bypass testing.
 
 7. **Events/activity/inbox/audit**
    - NATS, CloudEvents, AsyncAPI, notifications, audit, replay.

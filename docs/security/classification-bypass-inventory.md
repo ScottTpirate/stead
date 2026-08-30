@@ -21,7 +21,7 @@ Every protected request must apply the shared sequence:
 authenticated principal
 → principal type and, when present, initiating principal plus delegation/task scope
 → trusted attributes and session context
-→ trusted runtime domain, classification ceiling, compartments, model-provider, tool-scope, and execution-environment context when applicable
+→ trusted runtime domain, profile-qualified classification ceilings, compartments, model-provider, tool-scope, and execution-environment context when applicable
 → canonical resource and effective security label
 → OpenFGA relationship/need-to-know decision
 → deterministic classification, handling, context, information-flow, and explicit-deny policy decision
@@ -111,7 +111,7 @@ All `SEC-BYP-*` tests use canonical resources in at least two organizations and 
 7. lower-classification runner and service principal;
 8. principal/service from another organization or security domain.
 9. `agent` with an explicit narrow task grant, its delegating user, an agent with only the user’s broader authority, a revoked task, a revoked agent, and a `service_account` control principal;
-10. external runtime contexts varying security domain, classification ceiling, compartments, model provider, tool scope and execution environment.
+10. external runtime contexts varying security domain, profile-qualified classification ceilings, compartments, model provider, tool scope and execution environment.
 
 The oracle records the OpenFGA model ID, policy-decision bundle/version and decision, effective security-label version, provider enforcement result, request/correlation ID, and expected audit record without placing protected content in evidence. Test fixtures use synthetic canary strings and keys so leakage scans can cover response bodies, headers, redirects, logs, events, caches, files and external sinks.
 

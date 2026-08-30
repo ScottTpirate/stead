@@ -124,7 +124,10 @@ end
 
 implementation_assignments = {
   "0002" => {
-    "STEAD-P1-006" => tests_by_number.fetch("0002", [])
+    "STEAD-P1-006" => tests_by_number.fetch("0002", []).reject { |test_id| test_id == "T-ADR-0002-CUI-PROFILE" },
+    "STEAD-P3-002" => %w[
+      T-ADR-0002-CUI-PROFILE
+    ]
   },
   "0003" => {
     "STEAD-P1-006" => tests_by_number.fetch("0003", [])
@@ -134,10 +137,15 @@ implementation_assignments = {
       T-ADR-0004-ROLE-ENUM
       T-ADR-0004-SUBJECT-TYPES
       T-ADR-0004-LEAD-CARDINALITY
+      T-ADR-0004-ACCOUNTABILITY-NON-GRANT
       T-ADR-0004-REVOCATION-AND-SOURCES
       T-ADR-0004-MIGRATION-ROLLBACK
     ],
+    "STEAD-P1-004" => %w[
+      T-ADR-0004-ACCOUNTABILITY-NON-GRANT
+    ],
     "STEAD-P1-005" => %w[
+      T-ADR-0004-ACCOUNTABILITY-NON-GRANT
       T-ADR-0004-NONDISCLOSURE
     ],
     "STEAD-P1-006" => %w[
@@ -160,13 +168,16 @@ implementation_assignments = {
       T-ADR-0005-ZERO-CACHE
       T-ADR-0005-DETERMINISM
       T-ADR-0005-FENCE
+      T-ADR-0005-BOUNDED-READ-GUARD
       T-ADR-0005-AGENT-INTERSECTION
       T-ADR-0005-PRINCIPALS
     ],
     "STEAD-P1-007" => %w[
+      T-ADR-0005-BOUNDED-READ-GUARD
       T-ADR-0005-OBSERVABILITY
     ],
     "STEAD-P1-008" => %w[
+      T-ADR-0005-BOUNDED-READ-GUARD
       T-ADR-0005-NONDISCLOSURE
     ],
     "STEAD-P1-011" => %w[
@@ -176,6 +187,7 @@ implementation_assignments = {
     "STEAD-P1-015" => %w[
       T-ADR-0005-SEQUENCE
       T-ADR-0005-FENCE
+      T-ADR-0005-BOUNDED-READ-GUARD
     ]
   },
   "0006" => {
@@ -192,6 +204,9 @@ implementation_assignments = {
       T-ADR-0006-ROLLBACK
       T-ADR-0006-FAILURE-INJECTION
       T-ADR-0006-AUDIT-PRIVACY
+      T-ADR-0006-ASSURANCE-POLICY
+      T-ADR-0006-CUSTODIAN-SEPARATION
+      T-ADR-0006-TUF-NONAUTHORITY
     ],
     "STEAD-P1-011" => %w[
       T-ADR-0006-TRANSPORT-IDENTITY
@@ -203,6 +218,9 @@ implementation_assignments = {
       T-ADR-0006-FAILURE-INJECTION
       T-ADR-0006-BACKUP-RESTORE
       T-ADR-0006-AUDIT-PRIVACY
+      T-ADR-0006-ASSURANCE-POLICY
+      T-ADR-0006-CUSTODIAN-SEPARATION
+      T-ADR-0006-TUF-NONAUTHORITY
     ],
     "STEAD-P1-015" => %w[
       T-ADR-0006-ATOMIC-ACTIVATION
@@ -215,6 +233,9 @@ implementation_assignments = {
       T-ADR-0006-CONTENT-INTEGRITY
       T-ADR-0006-ARCHIVE-SAFETY
       T-ADR-0006-POLICY-CONFORMANCE
+      T-ADR-0006-ASSURANCE-POLICY
+      T-ADR-0006-CUSTODIAN-SEPARATION
+      T-ADR-0006-TUF-NONAUTHORITY
     ],
     "STEAD-P3-007" => %w[
       T-ADR-0006-AIRGAP-EVIDENCE
@@ -242,11 +263,17 @@ implementation_assignments.each do |number, issue_assignments|
   failures << "ADR-#{number} owner-split implementation coverage omits: #{missing_implementation_tests.to_a.sort.join(', ')}" unless missing_implementation_tests.empty?
 end
 
-phase_one_independent_tests = tests_by_number.slice("0002", "0003", "0004", "0005").values.flatten.to_set
+phase_one_independent_tests = tests_by_number.slice("0003", "0004", "0005").values.flatten.to_set
+phase_one_independent_tests.merge(
+  tests_by_number.fetch("0002", []).reject { |test_id| test_id == "T-ADR-0002-CUI-PROFILE" }
+)
 phase_one_independent_tests.merge(
   tests_by_number.fetch("0006", []).reject { |test_id| test_id == "T-ADR-0006-AIRGAP-EVIDENCE" }
 )
-phase_three_independent_tests = Set["T-ADR-0006-AIRGAP-EVIDENCE"]
+phase_three_independent_tests = Set[
+  "T-ADR-0002-CUI-PROFILE",
+  "T-ADR-0006-AIRGAP-EVIDENCE"
+]
 
 {
   "STEAD-P1-012" => phase_one_independent_tests,
@@ -262,12 +289,14 @@ phase_three_independent_tests = Set["T-ADR-0006-AIRGAP-EVIDENCE"]
   failures << "#{issue_id} independent ADR coverage omits: #{missing_tests.to_a.sort.join(', ')}" unless missing_tests.empty?
 end
 
-future_airgap_test = "T-ADR-0006-AIRGAP-EVIDENCE"
-%w[STEAD-P1-011 STEAD-P1-012].each do |issue_id|
-  issue = issues[issue_id]
-  next unless issue
+phase_three_independent_tests.each do |future_test|
+  issues.each_value do |issue|
+    next unless issue["phase"] == "phase-1"
 
-  failures << "#{issue_id} must defer #{future_airgap_test} to Phase 3" if Array(issue["automated_tests"]).include?(future_airgap_test)
+    if Array(issue["automated_tests"]).include?(future_test)
+      failures << "#{issue.fetch('id')} must defer #{future_test} to Phase 3"
+    end
+  end
 end
 
 phase_one_operations = issues["STEAD-P1-011"]

@@ -3,28 +3,28 @@
 - **Status:** Proposed for approval
 - **Date:** 2026-08-29
 - **Decision owners:** WS-06
-- **Project-owner approval required:** yes; `SCH-SECURITY-LABEL`, `POL-LABEL-LATTICE`, `POL-LABEL-COMMERCIAL`, and `POL-LABEL-USGOV` require project-owner approval under the contract ownership matrix
+- **Project-owner approval required:** yes; `SCH-SECURITY-LABEL`, `POL-LABEL-LATTICE`, `POL-LABEL-PROFILE`, and `POL-LABEL-STARTERS` require project-owner approval under the contract ownership matrix
 - **Requirement IDs:** `DOM-007`, `UX-003`, `AUTH-002`, `AUTH-004`, `AUTH-005`, `AUTH-006`, `CLS-001`, `CLS-002`, `CLS-003`, `CLS-004`, `CLS-005`, `CLS-006`, `CLS-007`, `CLS-008`, `STOR-003`, `TEST-002`, `TEST-003`, `TEST-004`, `TEST-008`, `AGENT-003`, `AGENT-006`
-- **Affected contracts/modules/directories:** `SCH-SECURITY-LABEL`, `SCH-DEPLOYMENT-DOMAIN`, `PROFILE-OWGP`, `POL-DECISION-IO-V0.1`, `POL-DECISION-CLASSIFICATION`, `POL-DECISION-FLOW`, `POL-LABEL-LATTICE`, `POL-LABEL-COMMERCIAL`, `POL-LABEL-USGOV`; `/modules/classification/`, `/modules/authorization/`, `/packages/domain-schemas/security/`, `/policies/security-label-profiles/`, `/policies/policy-decision/`, `/policies/deployment-domains/`, `/specs/work-graph-profile/`, `/specs/openapi/`, event/audit contracts, and all protected-resource consumers
+- **Affected contracts/modules/directories:** `SCH-SECURITY-LABEL`, `SCH-DEPLOYMENT-DOMAIN`, `PROFILE-OWGP`, `POL-DECISION-IO-V0.1`, `POL-DECISION-CLASSIFICATION`, `POL-DECISION-FLOW`, `POL-LABEL-LATTICE`, `POL-LABEL-PROFILE`, `POL-LABEL-STARTERS`; `/modules/classification/`, `/modules/authorization/`, `/packages/domain-schemas/security/`, `/policies/security-label-profiles/`, `/policies/policy-decision/`, `/policies/deployment-domains/`, `/specs/work-graph-profile/`, `/specs/openapi/`, event/audit contracts, and all protected-resource consumers
 - **Resolves:** `ADR-CAND-004` upon acceptance
 - **Supersedes / superseded by:** upon acceptance, this project-owner-approved pre-consumer correction supersedes the Phase 0 shorthand in `docs/architecture/security-label-lattice.md` that grouped releasability with union-composed restriction sets; releasability is an allowed-audience coordinate and therefore composes by intersection. An incompatible algebra, identifier, or profile-evolution rule requires a superseding ADR.
 
 ## Context and decision scope
 
-The directive fixes the `SecurityLabel` fields, requires a defined least-upper-bound operation over container, explicit, source, and handling labels, and prohibits a derived resource from weakening any source. It also fixes two shipped profiles, treats CUI as handling rather than a classification level, requires signed/versioned policy bundles, denies resources above a deployment ceiling, and denies built-in cross-domain or write-down transfer. `ADR-CAND-004` left the algebra, incomparable-value behavior, profile/value identifiers, commercial vocabulary, and version compatibility open.
+The directive fixes the `SecurityLabel` fields, requires a defined least-upper-bound operation over container, explicit, source, and handling labels, and prohibits a derived resource from weakening any source. It also requires a generic signed/versioned profile mechanism, profile-qualified deployment ceilings, authoritative provenance for profiles that map external regimes, and denial of built-in cross-domain or write-down transfer. The checked-in `commercial` and `us_government` files are starter/reference data, not product modes or the exhaustive set of supported security environments. `ADR-CAND-004` left the algebra, incomparable-value behavior, profile/value identifiers, starter vocabularies, and version compatibility open.
 
 The current Phase 0 contracts establish useful seams but do not completely define those choices:
 
 - OWGP `SecurityLabelValue` has the directive fields and an integer `version` but permits arbitrary strings.
 - Profile sources have a stable `profile_id`, a separate semantic `version`, a sensitivity order, vocabulary lists, the named join rule, lowering behavior, and a Sigstore-compatible signing requirement.
 - Policy input carries an effective label, label revision, and exact `policy_bundle_id`; policy output repeats the bundle ID.
-- Deployment-domain profiles carry a ceiling and allowed profile IDs.
+- Deployment security-domain policies carry exactly one ceiling for each permitted profile/version plus environment-specific trust and assurance controls.
 
 The approved Phase 0 architecture summary also described effective labels as a union including “releasability restrictions.” That shorthand is safe only if releasability is encoded as denied-recipient restrictions. The canonical field is instead `releasable_to`, an allowed audience: union would broaden disclosure. This ADR explicitly replaces that sentence with audience intersection before any production label or policy consumer exists. Because the document is project-owner-controlled and the semantic correction affects classification, the replacement is part of this ADR's required project-owner approval rather than a silent editorial interpretation.
 
 This ADR gives those seams one deterministic meaning. It does not select the policy evaluator or topology reserved to `ADR-CAND-003`, trusted-attribute normalization reserved to `ADR-CAND-005`, bundle distribution and trust roots reserved to `ADR-CAND-007`, a cross-domain solution, a configurable ontology, or a compliance/accreditation claim.
 
-The US-government profile must follow authoritative implementing guidance. The [NARA CUI program](https://www.archives.gov/cui/about) defines CUI as unclassified information requiring safeguarding or dissemination controls, while the [NARA CUI Registry](https://www.archives.gov/cui/registry/category-marking-list) is the source for category and marking data. [NIST SP 800-171 Rev. 3](https://csrc.nist.gov/pubs/sp/800/171/r3/final) supplies applicable protection requirements for CUI in nonfederal systems. These references do not make Stead accredited or turn a profile token into an official marking without an exact, reviewed mapping.
+A maintained profile that claims to map an external classification, handling, or regulatory regime must follow its authoritative implementing guidance and record the exact source, scope, mapping version, provenance, tested coverage, and limitations. For the limited US-oriented starter mapping, the [NARA CUI program](https://www.archives.gov/cui/about) defines CUI as unclassified information requiring safeguarding or dissemination controls, while the [NARA CUI Registry](https://www.archives.gov/cui/registry/category-marking-list) supplies category and marking data. [NIST SP 800-171 Rev. 3](https://csrc.nist.gov/pubs/sp/800/171/r3/final) supplies applicable protection requirements for CUI in nonfederal systems. These references do not make Stead accredited or turn a profile token into an official marking without an exact, reviewed mapping.
 
 ## Decision drivers
 
@@ -34,7 +34,7 @@ The US-government profile must follow authoritative implementing guidance. The [
 - Built-in identifiers must remain stable across display-label, policy-bundle, provider, and deployment changes.
 - The OWGP label-value `version`, the effective-label consistency revision, profile `version`, and policy-bundle identity must not be conflated.
 - The same result must be reproducible in local, Kubernetes, external-service, and air-gapped deployments without a cloud registry.
-- CUI categories and controls require authoritative provenance and must remain distinct from national-security classification values.
+- Any external-regime categories and controls require authoritative provenance; the limited CUI fixture must remain distinct from national-security classification values.
 - Policy evolution and rollback must never reinterpret an existing ID or turn an earlier deny into an accidental allow.
 
 ## Considered options
@@ -71,7 +71,7 @@ Every comparison or join occurs under one exact, verified policy bundle `B`. The
 - implication, dominance, incompatibility, and representability rules;
 - releasability audience containment/intersection rules;
 - category/subcategory and external-registry mappings;
-- lowering/two-person requirements; and
+- lowering, approval-threshold, and separation-of-duty requirements; and
 - the policy rules that consume the label.
 
 The evaluator first normalizes a label against `B`. An unknown profile, unknown or deprecated-without-alias value, invalid qualified ID, unverifiable bundle, incompatible bundle/profile version, or unresolved external mapping has no permissive interpretation. Normalization fails and the protected operation denies. A migration tool may retain the source record in its existing protected quarantine flow, but no normal resource, search result, event, notification, export, or provider grant may expose it.
@@ -86,7 +86,7 @@ The profile document's `version` is semantic versioning for the profile. `policy
 
 Identifiers are semantic keys, not display labels:
 
-- `profile_id` uses the canonical lowercase token grammar `[a-z][a-z0-9_]{0,63}`. The initial IDs are exactly `commercial` and `us_government`.
+- `profile_id` uses the canonical lowercase token grammar `[a-z][a-z0-9_]{0,63}`. The checked-in starter/reference IDs are `commercial` and `us_government`, but Stead code gives neither ID privileged semantics. A conforming synthetic third profile must pass the same schema, activation, evaluator, API, presentation, migration, and test paths without application changes.
 - Profile vocabulary definition IDs are case-sensitive ASCII tokens matching `[A-Za-z][A-Za-z0-9_]{0,127}`. Their case and spelling are immutable.
 - A category value is either `<category_id>` or the qualified `<category_id>/<subcategory_id>`. A bare subcategory is invalid.
 - A concrete compartment or other instance-valued restriction uses `<namespace_id>:<stable_instance_id>`. Display names, Team names, Project keys, provider IDs, and mutable paths are not stable instance IDs. The signed profile declares the allowed namespace and trusted registry; a UUIDv7 is preferred for locally issued instances.
@@ -133,7 +133,7 @@ audience_B(R2) ⊆ audience_B(R1)
 E1 ⊆ E2
 ```
 
-after profile implication and dominance normalization. The sensitivity coordinate is totally ordered for each shipped profile. The product is a partial order because compartments, controls, and audiences may be incomparable. Labels from different profile lines are incomparable unless a separately signed, versioned, non-weakening bridge maps both to one target profile. No such bridge ships in the initial release.
+after profile implication and dominance normalization. The sensitivity coordinate is totally ordered for every validated profile. The product is a partial order because compartments, controls, and audiences may be incomparable. Labels from different profile lines are incomparable unless a separately signed, versioned, non-weakening bridge maps both to one target profile. No such bridge ships in the initial release.
 
 An empty `handling_regimes`, `categories`, `compartments`, `dissemination_controls`, or `export_controls` set means that dimension adds no restriction. An empty `releasable_to` means **no profile-specific audience restriction**, not “release to nobody.” It is the universal audience only for the releasability coordinate; OpenFGA, organization policy, security-domain policy, and all other authorization checks still apply.
 
@@ -184,13 +184,13 @@ A resource label may add display, export, retention, or handling obligations, bu
 
 A deployment domain accepts a label only when the profile is allowed, the exact bundle is verified, sensitivity does not exceed the profile-compatible ceiling, all container/provider paths can enforce the result, and every policy-decision check allows. A ceiling string from another profile has no implicit mapping and denies. Raising a label is an authorized, audited mutation that commits the new label/policy fence before projections or provider grants can serve it.
 
-Lowering sensitivity, removing a handling regime/category/compartment/control/export restriction, or broadening `releasable_to` is a lowering operation. It never occurs through ordinary join, migration, profile upgrade, or rollback. It is denied by default and requires the directive-mandated authority, source authority, written reason, audit, invalidation/reconciliation, and two distinct eligible approvers when the active profile requires two-person lowering. Approval contracts remain principal-typed and do not assume that every reviewer is human; the initial `us_government` policy nevertheless requires two independently authenticated `user` principals unless a later approved profile and accreditation policy explicitly permits another acting-principal type. One principal acting through two identities or an Agent delegated by the first approver does not satisfy separation of duty.
+Lowering sensitivity, removing a handling regime/category/compartment/control/export restriction, or broadening `releasable_to` is a lowering operation. It never occurs through ordinary join, migration, profile upgrade, or rollback. It is denied by default and requires the directive-mandated authority, source authority, written reason, audit, invalidation/reconciliation, and the stricter approval threshold and custody/separation rules selected by the active signed profile and deployment security-domain policy. Approval contracts remain principal-typed and do not assume that every reviewer is human; when the effective policy requires human separation of duty, it requires the configured number of distinct independently authenticated `user` principals. One principal acting through two identities or an Agent delegated by an approver does not satisfy separation of duty. No threshold is inferred from a profile name.
 
 Core Stead provides no cross-domain or write-down allow. A higher-to-lower destination, incompatible profile/domain, or unverifiable destination denies even when a proposed lower label is supplied. An external accredited process may consume a separately authorized, audited interface in a later approved scope; this ADR creates no such route.
 
 ### 6. Initial profile vocabularies
 
-The initial commercial profile has the following canonical v1 vocabulary:
+The checked-in commercial starter/reference profile has the following v1 test vocabulary:
 
 | Dimension | Stable values / order |
 |---|---|
@@ -205,7 +205,7 @@ The initial commercial profile has the following canonical v1 vocabulary:
 
 These are fixed policy vocabulary, not user-created fields or product ontology. A named compartment, recipient group, or partner is an authorized registry instance under the declared namespace, not a new vocabulary definition.
 
-The initial government profile preserves these current v1 identifiers:
+The checked-in, deliberately limited US-government-oriented starter/reference profile preserves these v1 fixture identifiers:
 
 | Dimension | Stable values / order |
 |---|---|
@@ -220,7 +220,7 @@ The initial government profile preserves these current v1 identifiers:
 
 `CUI_BASIC` and `CUI_SPECIFIED` are handling regimes, never sensitivity values. A label using either must have `UNCLASSIFIED` sensitivity, at least one exact category/subcategory mapping to the reviewed NARA registry snapshot, and the applicable authority/handling metadata. A CUI category may be Basic or Specified according to its governing authority; the profile cannot infer that status from the category display name. Neither regime globally dominates the other. Composition preserves the union of applicable category-specific controls and applies Basic requirements wherever the governing authority does not supply a different Specified control. A classified label may carry other applicable handling/export restrictions, but it cannot be labeled CUI.
 
-The checked-in `CUI_*` grouping IDs are Stead profile IDs, not official banner markings. User-visible government markings must be generated only from exact external-registry mappings and agency policy in the signed bundle. Missing, stale, or ambiguous mappings deny the affected operation and block any government-readiness claim.
+The checked-in `CUI_*` grouping IDs are Stead starter-profile IDs, not official banner markings or a complete US-government vocabulary. User-visible markings are produced from validated versioned presentation data in the active signed profile or its declared versioned system renderer; `stead-web` never branches on profile ID. A profile that claims official mappings must bind them to exact external-registry provenance and applicable authority policy. Missing, stale, unknown, or ambiguous presentation/mapping data denies the affected display/export operation and blocks any readiness claim. Text is authoritative and color is supplemental.
 
 ### 7. Profile and schema compatibility
 
@@ -230,7 +230,7 @@ The checked-in `CUI_*` grouping IDs are Stead profile IDs, not official banner m
 - a minor may add new IDs and rules that apply only to those new IDs, but cannot change the order, implication, compatibility, audience, or decision meaning of an existing ID;
 - a change that removes/redefines an ID, reorders sensitivity, changes an existing combination from allow/representable to a weaker result, changes empty-set semantics, or changes the algebra is breaking.
 
-Because the current label value does not embed a profile semantic version, a breaking profile change MUST use a new `profile_id`, coexist with the old profile, and migrate labels explicitly. It MUST NOT publish a new major under `commercial` or `us_government` and reinterpret stored labels. A future representation may add an explicit profile-version field only through the API/schema-major and coexistence process in ADR-0001.
+Because the current label value does not embed a profile semantic version, a breaking change to any profile MUST use a new `profile_id`, coexist with the old profile, and migrate labels explicitly. It MUST NOT publish a new major under an existing stable ID and reinterpret stored labels. A future representation may add an explicit profile-version field only through the API/schema-major and coexistence process in ADR-0001.
 
 Every decision and derived-label record binds the effective `label_revision` to the exact `policy_bundle_id`; that bundle in turn binds the profile version and content digest. Decision consistency fences include the effective-label and policy-bundle revisions. ADR-0005 selects no authorization-decision cache for v1; any future cache approved by a superseding ADR must include the same revisions. Semantic replay uses the recorded bundle, not whichever profile is currently active.
 
@@ -250,7 +250,7 @@ For an Agent, the label result is one term in the required intersection of deleg
 
 The current OWGP field set remains sufficient; this ADR defines the explicit-label integer `version` and its relationship to the separate effective-label consistency token `label_revision`. Contract implementation must constrain identifiers, document qualified category/scoped-instance forms, and add profile-level implication, dominance, incompatibility, releasability-intersection, external-mapping, alias/deprecation, and compatibility metadata. Acceptance also updates `docs/architecture/security-label-lattice.md` so its normative summary distinguishes union-composed restrictions from intersection-composed allowed audiences. These additions are made in the owned policy/profile contracts after this ADR is accepted; this ADR does not authorize an unversioned in-place breaking schema edit.
 
-Migration inventory records each label's explicit integer version, effective `label_revision`, source/container label versions, profile ID, exact source/target profile version and bundle ID/digest, normalized values, aliases, unknowns, and resulting disposition. Existing `commercial` and `us_government` labels validate against the signed v1 vocabulary. Ambiguous strings, unknown values, invalid CUI mappings, mixed profiles, and unprovable bundle provenance fail closed and enter the existing protected migration quarantine rather than receiving defaults.
+Migration inventory records each label's explicit integer version, effective `label_revision`, source/container label versions, profile ID, exact source/target profile version and bundle ID/digest, normalized values, aliases, unknowns, and resulting disposition. Every installed label validates against its exact signed profile version; the checked-in starters receive no exception. Ambiguous strings, unknown values, invalid external mappings, mixed profiles without an exact signed approved bridge, and unprovable bundle provenance fail closed and enter the existing protected migration quarantine rather than receiving defaults.
 
 After validation, migration canonicalizes set order, preserves stable IDs and derivation sources, recomputes every effective label, and invalidates/rebuilds provider grants, search, graph, activity, notifications, caches, attachments, exports, and other projections. It never lowers a label. A breaking profile migration uses a new profile ID, explicit mapping and provenance, coexistence, and the ordinary lowering workflow wherever any coordinate would become less restrictive.
 
@@ -278,10 +278,10 @@ The following follow-up contract changes are required after acceptance:
 | `SCH-SECURITY-LABEL` and `/packages/domain-schemas/security/security-label/` | Mirror the OWGP field set; constrain stable IDs; define label-revision semantics, normalization, qualified categories, scoped restrictions, and fail-closed validation | WS-06; WS-01 and all container owners review; WS-13 and project owner approve |
 | `PROFILE-OWGP` and `/specs/work-graph-profile/` | Clarify embedded/effective label serialization and preserve provider-independent resource/provenance references without changing ontology | WS-01; all domains review; WS-06, WS-13, and project owner approve |
 | `POL-LABEL-LATTICE` | Encode the partial order, join, representability, container/ceiling, raise/lower, and property/mutation fixtures | WS-06; all container owners review; WS-01, WS-13, and project owner approve |
-| `POL-LABEL-COMMERCIAL` | Encode the exact commercial v1 vocabulary, stable registry namespaces, display mappings, compatibility rules, and signed-version metadata | WS-06; WS-01 reviews; WS-13 and project owner approve |
-| `POL-LABEL-USGOV` | Encode government v1 vocabulary, exact NARA mapping provenance, CUI Basic/Specified rules, no-certification statement, and profile tests | WS-06; WS-12 and WS-13 review; WS-01 and project owner approve |
+| `POL-LABEL-PROFILE` | Encode the closed declarative profile schema, algebra semantics, mapping provenance, compatibility rules, signed-version metadata, and versioned presentation directives without executable extensions or privileged IDs | WS-06; WS-01/05/12 review; WS-13 and project owner approve |
+| `POL-LABEL-STARTERS` | Maintain commercial and limited US-government-oriented reference/test data under the same generic contract, with explicit scope, sources, limitations, and no compliance/readiness claim | WS-06; WS-01/12/13 review; project owner approves |
 | `POL-DECISION-IO-V0.1`, classification, and data-flow policy | Bind decisions to bundle/label revisions; add safe reasons for invalid profile, unrepresentable join, ceiling, lowering, and cross-domain denial without selecting an evaluator | WS-06; affected policy-input owners review; WS-01, WS-13, and project owner approve |
-| `SCH-DEPLOYMENT-DOMAIN` | Validate allowed profile IDs and profile-compatible ceilings against the exact activated bundle | WS-06; WS-12 and WS-01 review; WS-13 and project owner approve |
+| `SCH-DEPLOYMENT-DOMAIN` | Validate exact profile/version/ceiling bindings, trusted authorities, signed bridges, and deployment-selected trust/cryptographic/assurance controls against the exact activated bundle | WS-06; WS-12 and WS-01 review; WS-13 and project owner approve |
 | OpenAPI, events, audit, search, provider, export, and migration contracts | Consume the shared effective-label result and bundle fence; do not reimplement algebra or expose protected metadata | Existing sole contract owner; WS-06 security review and WS-13 approval where required |
 
 JSON Schema remains 2020-12, APIs remain provider-neutral, and the policy-decision interface remains implementation-neutral. CUI mappings may cite NARA registry identifiers and authoritative source metadata, but those mappings are profile data rather than new universal ontology.
@@ -306,13 +306,13 @@ Required operational signals include profile verification/activation failure, un
 
 This ADR selects no evaluator, runtime library, SaaS registry, model provider, or cloud service. Algebra, normalization, and stable-ID validation are implementable with approved standard-library facilities. Any new parser, policy engine, signature library, registry snapshot, or generated data package requires exact version/digest, provenance, license, vulnerability, air-gap, SBOM, notice, and independent approval through the existing dependency workflow.
 
-The profile contract retains its signed, versioned, offline-verifiable bundle requirement. The Phase 0 `bundle_signing.format: sigstore-bundle` value was a non-materialized placeholder while `ADR-CAND-007` remained open; accepted ADR-0006 replaces it with the Stead Policy Activation Set v1 DSSE profile and records the compatibility change before any production consumer exists. This label ADR does not select or alter that envelope. No network lookup is permitted during an authorization decision. External CUI registry material is imported only as an exact, provenance-recorded, reviewable snapshot; availability of that material does not itself authorize a government-readiness or compliance claim.
+The profile contract retains its signed, versioned, offline-verifiable bundle requirement. The Phase 0 `sigstore-bundle` token had no materialized or production consumer; this controlled packet normalizes it pre-compatibility to the Stead Policy Activation Set v1 proposed by ADR-0006. Project-owner approval of this revision is still required before that proposal is accepted. No network lookup is permitted during an authorization decision. External-registry material is imported only as an exact, provenance-recorded, reviewable snapshot; availability of that material does not itself authorize a completeness, readiness, compliance, accreditation, or validation claim.
 
 ### Documentation and accessibility
 
 Contributor documentation must explain the algebra, identifier grammar, profile/version/bundle distinction, canonical serialization, failure modes, and ownership. Operator documentation must cover profile installation, signature verification, ceiling configuration, dry-run upgrade, reconciliation, rollback, backup/restore, external-registry update, and incident response. Security documentation must map every classification bypass path and make the no-cross-domain boundary explicit.
 
-User documentation and accessible UI markings use reviewed display labels rather than exposing opaque IDs alone. Banners, export/print markings, warnings, and screen-reader text remain calm but unmistakable under `UX-003`; color is never the sole signal. The US profile documentation must distinguish Stead internal IDs from official CUI markings and state that configuration is not accreditation, authorization to operate, or FIPS validation.
+User documentation and accessible UI markings use the authorized server-derived `SecurityPresentation` bound to profile version, bundle, renderer version, and label revision rather than exposing opaque IDs alone. The profile supplies closed presentation tokens/data or selects a versioned Stead renderer; it cannot inject HTML, CSS, scripts, navigation, ontology, workflow, or authorization grants. Banners, export/print markings, warnings, and screen-reader text remain calm but unmistakable under `UX-003`; color is never the sole signal. Documentation for any external-regime mapping distinguishes Stead internal IDs from official markings and states the profile's exact scope and limitations.
 
 ## Verification
 
@@ -322,9 +322,10 @@ Decision-record acceptance approves the algebra/profile choice and the named ver
 - `T-ADR-0002-PARTIAL-ORDER`: property-tests reflexivity, antisymmetry, and transitivity; proves shipped sensitivity orders and restriction/audience directions; cross-profile and unresolved values are incomparable rather than permissive.
 - `T-ADR-0002-JOIN`: property-tests defined joins for commutativity, associativity, idempotence, upper-bound, leastness, deterministic replay, source union, sensitivity maximum, restriction union, audience intersection, and container/source/explicit/handling composition.
 - `T-ADR-0002-INCOMPARABLE`: negative fixtures cover cross-profile inputs, empty audience intersection, unknown compartments/categories, conflicting dissemination/releasability, incompatible handling, conflicting authority/review metadata, invalid external mappings, and attempts to default/drop a restriction; every case fails closed without a partially visible resource.
-- `T-ADR-0002-CUI-PROFILE`: proves exact US sensitivity values; CUI never appears as a sensitivity; Basic/Specified validation, non-dominance, and category-specific control preservation; required category/authority mapping; invalid classified-plus-CUI combinations; official-marking provenance; and no compliance/accreditation/FIPS claim.
-- `T-ADR-0002-CONTAINER-CEILING-FLOW`: proves per-item labels cannot exceed provider/container enforcement, different access creates a separate container, unknown/incompatible ceilings deny, label raises fence every projection/path, lower runners/runtimes deny, and all core cross-domain/write-down paths deny.
-- `T-ADR-0002-LOWERING`: proves every less-restrictive coordinate change is detected; authority/source/reason/audit/invalidation are mandatory; the generic contract remains principal-typed; the initial government profile requires two distinct eligible `user` approvers; and assignment, administration, self-approval, or delegated Agent identity cannot bypass separation of duty.
+- `T-ADR-0002-PROFILE-NEUTRALITY`: proves a synthetic third profile and a high-assurance non-government domain pass the same closed schema, signed activation, evaluator, profile-driven presentation, API, migration, and rollback seams without changing the canonical ontology, forking Stead or `stead-web`, adding profile-ID branches, or changing the browser/API architecture; executable-profile, user-policy-language, and UI-code-injection attempts fail; unknown/mismatched data remains fail closed; and cross-profile joins deny without an exact signed approved bridge or built-in transfer path.
+- `T-ADR-0002-CUI-PROFILE`: Phase 3 completion evidence proves the limited US starter's exact mapped sensitivity values; CUI never appears as a sensitivity; Basic/Specified validation, non-dominance, category-specific control preservation, source/scope/version/limitation provenance, invalid classified-plus-CUI combinations, official-marking provenance, and no completeness/compliance/accreditation/FIPS claim. Phase 1 validates only the generic schema and synthetic compatibility seam and does not complete an external vocabulary.
+- `T-ADR-0002-CONTAINER-CEILING-FLOW`: proves per-item labels cannot exceed provider/container enforcement; every ceiling is bound to exactly one profile/version; missing, duplicate, foreign-vocabulary, removed-profile, or incompatible ceilings deny; different access creates a separate container; label raises fence every projection/path; lower runners/runtimes deny; and all core cross-domain/write-down paths deny.
+- `T-ADR-0002-LOWERING`: proves every less-restrictive coordinate change is detected; authority/source/reason/audit/invalidation are mandatory; the generic contract remains principal-typed; the stricter signed profile/deployment-domain threshold applies without an ID branch; and assignment, administration, self-approval, or delegated Agent identity cannot bypass separation of duty.
 - `T-ADR-0002-COMPAT-MIGRATION`: proves compatible patch/minor behavior, breaking-new-profile-ID coexistence, alias equivalence, deterministic inventory/normalization, unknown-value quarantine, no-lowering migration, recomputation, backup/restore, safe old-bundle denial, and forward recovery.
 - `T-ADR-0002-BUNDLE-AUDIT`: proves missing/invalid/stale/unapproved bundles deny; decisions bind exact profile/bundle/label revisions; audit has dual principal/correlation context; telemetry contains no full labels or protected high-cardinality values; and air-gapped verification performs no network lookup.
 
@@ -332,7 +333,7 @@ These ADR tests supplement, rather than replace, `T-DOM-007-ACCEPTANCE`, `T-AUTH
 
 Authorization/classification implementation must reach 100% decision-row/policy-rule coverage and at least 90% mutation score for critical policies. Required mutations include reversing sensitivity order, replacing audience intersection with union, dropping each restriction dimension, treating unknown as empty, allowing a ceiling mismatch, weakening CUI Specified to Basic, bypassing the second approver, accepting an invalid bundle, and permitting a cross-domain result.
 
-Golden-scenario evidence must include an ordinary commercial general-work Project, protected derived Work/Docs content, a label raise propagated across every projection/path, an Agent-context denial at the label intersection, direct-provider denial, restore/replay under the same bundle, and the mandatory cross-domain denial. Government-profile fixtures remain synthetic and do not create a readiness claim.
+Golden-scenario evidence must include a general-work Project under a checked-in starter profile, protected derived Work/Docs content, a label raise propagated across every projection/path, an Agent-context denial at the label intersection, direct-provider denial, restore/replay under the same bundle, and the mandatory cross-domain denial. A synthetic third profile proves extensibility in Phase 1. External-regime fixtures remain scoped reference data; completing authoritative vocabularies and assurance evidence is later-phase work and does not create a readiness claim.
 
 ## Rollout and supersession
 

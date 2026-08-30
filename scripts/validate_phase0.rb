@@ -392,6 +392,11 @@ if directive_text
   unless missing_v02_ids.empty?
     failures << "#{relative_path(DIRECTIVE_PATH)}: missing v0.2 reconciliation requirement IDs: #{format_ids(missing_v02_ids)}"
   end
+
+  expected_concrete_names = %w[stead-web stead-api stead-worker steadctl stead.<domain>.<action>.v<major>]
+  missing_concrete_names = expected_concrete_names.reject { |name| directive_text.include?(name) }
+  failures << "#{relative_path(DIRECTIVE_PATH)}: canonical header omits concrete Stead names: #{missing_concrete_names.join(', ')}" unless missing_concrete_names.empty?
+  failures << "#{relative_path(DIRECTIVE_PATH)}: stale platform canonical-prefix header remains" if directive_text.include?("Canonical component prefix:")
 end
 
 inventory = load_yaml(INVENTORY_PATH, failures)
@@ -1192,7 +1197,7 @@ end
 owgp = parsed_json["specs/work-graph-profile/owgp-v0.1.schema.json"]
 if owgp
   definitions = owgp["$defs"].is_a?(Hash) ? owgp["$defs"] : {}
-  expected_definitions = %w[ResourceEnvelope ResourceRef ContainerRef Instance Organization User DirectoryGroup Agent AgentRun ServicePrincipal Team Initiative Project Cycle WorkItem Document Repository Branch Commit PullRequest Build Deployment Release Package Artifact Attachment PrincipalRef ActingPrincipalRef WorkAssigneeRef SecurityLabel SecurityLabelValue Comment Activity Notification AuditRecord]
+  expected_definitions = %w[ResourceEnvelope ResourceRef ContainerRef Instance Organization User DirectoryGroup Agent AgentRun ServicePrincipal Team Initiative Project Cycle WorkItem Document Repository Branch Commit PullRequest Build Deployment Release Package Artifact Attachment PrincipalRef ActingPrincipalRef WorkAssigneeRef SecurityLabel SecurityLabelValue SecurityPresentation Comment Activity Notification AuditRecord]
   missing_definitions = expected_definitions - definitions.keys
   failures << "specs/work-graph-profile/owgp-v0.1.schema.json: missing definitions: #{missing_definitions.join(', ')}" unless missing_definitions.empty?
 
@@ -1207,7 +1212,7 @@ if owgp
   failures << "specs/work-graph-profile/owgp-v0.1.schema.json: Document kinds must use universal values" unless document_types == %w[page specification decision procedure policy]
 
   envelope_required = definitions.dig("ResourceEnvelope", "required") || []
-  expected_envelope_fields = %w[kind id uri schema_version version organization_id container title created_at created_by updated_at updated_by security_label_id effective_security_label provenance external_references relationships]
+  expected_envelope_fields = %w[kind id uri schema_version version organization_id container title created_at created_by updated_at updated_by security_label_id effective_security_label security_presentation provenance external_references relationships]
   missing_envelope_fields = expected_envelope_fields - envelope_required
   failures << "specs/work-graph-profile/owgp-v0.1.schema.json: common envelope omits #{missing_envelope_fields.join(', ')}" unless missing_envelope_fields.empty?
 

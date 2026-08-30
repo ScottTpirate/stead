@@ -116,12 +116,12 @@ These issues are `PHASE_GATED` and depend on the successful Pilot/Beta gate.
 | Order | Issue | Owner | Direct predecessors | Deliverable |
 |---:|---|---|---|---|
 | 1 | STEAD-P3-001 | WS-04 | P2-011 | Lossless Yjs real-time document collaboration |
-| 1 | STEAD-P3-002 | WS-06 | P2-011 | Government label/FIPS-capable/OSCAL profile and cross-domain denial |
+| 1 | STEAD-P3-002 | WS-06 | P2-011 | External-regime/high-assurance profiles, policy-selected assurance evidence, and cross-domain denial |
 | 1 | STEAD-P3-003 | WS-07 | P2-011 | Tamper-evident audit checkpoints and production exports |
 | 1 | STEAD-P3-004 | WS-08 | P2-011 | OpenSearch scale profile and production permission-aware MCP |
 | 1 | STEAD-P3-005 | WS-09 | P2-011 | Signed SBOM/provenance/checksum/notices/scanning release set |
 | 1 | STEAD-P3-006 | WS-11 | P2-011 | Delta sync, cutover, source transition and permanent redirects |
-| 1 | STEAD-P3-007 | WS-12 | P2-011 | Government-airgap, HA, upgrade matrix and production SLO validation |
+| 1 | STEAD-P3-007 | WS-12 | P2-011 | High-assurance air-gap, HA, upgrade matrix and production SLO validation |
 | 2 | STEAD-P3-008 | WS-13 | P3-001…007 | Independent Production 1.0 security and release decision |
 
 ## Mandatory issue contract

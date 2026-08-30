@@ -58,6 +58,7 @@ This document records the required monorepo shape, exclusive edit ownership, dep
   /openfga                WS-06
   /policy-decision        WS-06  implementation-neutral classification/context/information-flow contracts
   /security-label-profiles WS-06
+  /deployment-domains     WS-06  profile-qualified ceilings and environment assurance controls; WS-12 operations review
 
 /specs
   /openapi                WS-01
@@ -72,7 +73,7 @@ This document records the required monorepo shape, exclusive edit ownership, dep
 /deploy
   /compose                WS-12
   /helm                   WS-12
-  /airgap                 WS-12
+  /airgap                WS-12  high-assurance-airgap install profile assets
   /examples               WS-12
 
 /tests
@@ -304,7 +305,7 @@ The following are merge blockers, not style preferences:
 | `BND-010` | secret/protected body enters event, log, telemetry, search, frontend state, or audit unnecessarily | taint fixtures, log/event snapshot scans, secret scanning, telemetry assertions |
 | `BND-011` | provider-specific fields or locators become canonical behavior | schema/API compatibility check and provider-parity contract suite |
 | `BND-012` | source migration creates new ontology/workflow or silently drops data | canonical-enum validation and unsupported-construct completeness test |
-| `BND-013` | air-gap/government profile makes an unapproved network call | network-disabled install/runtime test and egress capture |
+| `BND-013` | network-restricted or high-assurance air-gap deployment makes an unapproved network call | network-disabled install/runtime test and egress capture |
 | `BND-014` | implementation owner changes shared contract/test/gate concurrently or self-approves | contract lock/CODEOWNERS check and approval identity/separation gate |
 | `BND-015` | unapproved license/dependency/action/image enters distributed output | dependency/SBOM/license/action pin/image digest gates |
 | `BND-016` | actor/assignee/reviewer/subscriber/request contracts assume a human user rather than the principal kinds allowed at that field | schema lint and fixtures for acting `user`/`agent`/`service_account` contexts and the narrower `user`/`agent` Work-assignee union across API, event, and audit contracts |

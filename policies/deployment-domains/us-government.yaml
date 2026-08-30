@@ -1,10 +1,17 @@
 domain_id: us-government-controlled
-version: "1.0"
-classification_ceiling: SECRET
-allowed_label_profiles: [us_government]
+version: "1.0.0"
+policy_purpose: starter_reference
+scope:
+  summary: "Limited US-government-oriented deployment-domain example for schema and fail-closed conformance tests."
+  limitations: ["Not a complete security domain, control baseline, accreditation package, authorization to operate, classified-system approval, or cryptographic validation claim."]
+label_profile_ceilings:
+  - {profile_id: us_government, profile_version: "1.0.0", classification_ceiling: SECRET}
+trusted_attribute_authorities: [approved_federal_oidc, approved_scim, approved_runtime_attestation]
+approved_profile_bridges: []
 allowed_integrations: [gitea, approved_federal_oidc, approved_scim, approved_siem]
 allowed_notification_channels: [in_app, approved_siem]
 storage: {providers: [approved_s3_compatible], encryption_profile: federal-managed, residency: [US]}
 backup: {enabled: true, domains: [us-government-backup], encryption_profile: federal-backup-managed}
 runner: {pools: [government-domain-ephemeral], ephemeral: true, allowed_images: [signed_federal_approved]}
 network: {zones: [government_user, government_service, government_runner], egress_policy: deny_all}
+assurance: {policy_signature_threshold: 2, distinct_signing_custodians: true, trust_recovery_approval_threshold: 2, distinct_trust_recovery_approvers: true, lowering_approval_threshold: 2, approved_cryptographic_boundary: deployment_approved_fips_capable, validated_cryptographic_module_required: true, evidence_profile: starter_nist_control_mapping}

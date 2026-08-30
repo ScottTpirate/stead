@@ -13,6 +13,7 @@ shared:
   organization_container: &organization_container {kind: organization, id: *org, uri: "urn:uuid:018f0000-0000-7000-8000-000000000001", browser_url: "https://stead.example/r/organization/018f0000-0000-7000-8000-000000000001"}
   project_container: &project_container {kind: project, id: *project, uri: "urn:uuid:018f0000-0000-7000-8000-000000000005", browser_url: "https://stead.example/r/project/018f0000-0000-7000-8000-000000000005"}
   label: &label {profile_id: commercial, sensitivity_level: internal, handling_regimes: [], categories: [], compartments: [], dissemination_controls: [], releasable_to: [], export_controls: [], derivation_sources: [], version: 1}
+  security_presentation: &security_presentation {profile_id: commercial, profile_version: "1.0.0", policy_bundle_id: example-commercial-bundle-v1, label_revision: example-label-revision-1, renderer_id: stead.security_markings.v1, renderer_version: "1.0.0", markings: [{kind: sensitivity, text: Internal}], required_surfaces: [badge], warning_actions: [download, export, share], text_authoritative: true, color_supplemental_only: true}
   provenance: &provenance {created_at: "2026-08-28T12:00:00Z", created_by: {type: user, id: *alice}, derived_from: [], source_metadata: {}}
   envelope: &envelope
     schema_version: "1.0"
@@ -27,6 +28,7 @@ shared:
     updated_by: {type: user, id: *alice}
     security_label_id: *label_id
     effective_security_label: *label
+    security_presentation: *security_presentation
     provenance: *provenance
     external_references: []
     relationships: []

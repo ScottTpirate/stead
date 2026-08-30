@@ -13,7 +13,7 @@
 
 Stead must normalize human, Agent, service-account, directory-membership, session, and future external-runtime evidence without trusting provider claim names or allowing a subject to assert its own authority. Authorization must distinguish an acting principal from a non-acting Directory Group, correlate OIDC and SCIM identities without email-based identity collisions, and evaluate short-lived Agent runtime evidence without turning a runtime or model provider into an authorization source.
 
-The existing policy-decision contract already reserves trusted-attribute provenance, freshness, runtime identity, security domain, classification ceiling, compartments, model provider, tool scope, execution environment, revocation, and the six-way Agent authority intersection. This ADR fixes their normalization and conflict semantics before `STEAD-P1-006`. It does not select an OIDC/SCIM product, policy evaluator, agent runtime, attestation technology, signature format, model provider, or executable agent orchestration.
+The existing policy-decision contract already reserves trusted-attribute provenance, freshness, runtime identity, security domain, profile-qualified classification ceilings, compartments, model provider, tool scope, execution environment, revocation, and the six-way Agent authority intersection. This ADR fixes their normalization and conflict semantics before `STEAD-P1-006`. It does not select an OIDC/SCIM product, policy evaluator, agent runtime, attestation technology, signature format, model provider, or executable agent orchestration.
 
 ## Decision drivers
 
@@ -89,7 +89,7 @@ Persistent Agent identity/authority assertions and per-execution runtime evidenc
 - canonical Agent ID and Agent authority revision;
 - external workload/runtime identity;
 - exact delegation, task scope, and session/environment context;
-- runtime security domain, classification ceiling, and compartments;
+- runtime security domain, profile-qualified classification ceilings, and compartments;
 - model provider, tool scope, and execution environment;
 - issuing authority, provenance/attestation reference, issue/expiry time, version, verification, and revocation revision.
 

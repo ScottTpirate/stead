@@ -1,19 +1,128 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://stead.example/policies/deployment-domains/domain-profile-v0.1.schema.json",
+  "title": "Stead deployment security-domain policy",
   "type": "object",
-  "required": ["domain_id", "version", "classification_ceiling", "allowed_label_profiles", "allowed_integrations", "allowed_notification_channels", "storage", "backup", "runner", "network"],
+  "required": [
+    "domain_id",
+    "version",
+    "policy_purpose",
+    "scope",
+    "label_profile_ceilings",
+    "trusted_attribute_authorities",
+    "approved_profile_bridges",
+    "allowed_integrations",
+    "allowed_notification_channels",
+    "storage",
+    "backup",
+    "runner",
+    "network",
+    "assurance"
+  ],
   "properties": {
-    "domain_id": {"type": "string"},
-    "version": {"type": "string"},
-    "classification_ceiling": {"type": "string"},
-    "allowed_label_profiles": {"type": "array", "items": {"type": "string"}, "minItems": 1, "uniqueItems": true},
+    "domain_id": {"type": "string", "pattern": "^[a-z][a-z0-9_.-]{0,127}$"},
+    "version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+    "policy_purpose": {"enum": ["starter_reference", "maintained_deployment", "test_fixture"]},
+    "scope": {
+      "type": "object",
+      "required": ["summary", "limitations"],
+      "properties": {
+        "summary": {"type": "string", "minLength": 1},
+        "limitations": {"type": "array", "items": {"type": "string", "minLength": 1}, "minItems": 1, "uniqueItems": true}
+      },
+      "additionalProperties": false
+    },
+    "label_profile_ceilings": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/ProfileCeiling"},
+      "minItems": 1
+    },
+    "trusted_attribute_authorities": {"type": "array", "items": {"type": "string", "minLength": 1}, "minItems": 1, "uniqueItems": true},
+    "approved_profile_bridges": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["bridge_id", "from_profile_id", "from_profile_version", "to_profile_id", "to_profile_version", "direction", "signed_approval_digest"],
+        "properties": {
+          "bridge_id": {"type": "string", "pattern": "^[a-z][a-z0-9_.-]{0,127}$"},
+          "from_profile_id": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$"},
+          "from_profile_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+          "to_profile_id": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$"},
+          "to_profile_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+          "direction": {"enum": ["from_to", "bidirectional"]},
+          "signed_approval_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+        },
+        "additionalProperties": false
+      }
+    },
     "allowed_integrations": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
     "allowed_notification_channels": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
-    "storage": {"type": "object", "required": ["providers", "encryption_profile", "residency"], "properties": {"providers": {"type": "array", "items": {"type": "string"}}, "encryption_profile": {"type": "string"}, "residency": {"type": "array", "items": {"type": "string"}}}, "additionalProperties": false},
-    "backup": {"type": "object", "required": ["enabled", "domains", "encryption_profile"], "properties": {"enabled": {"type": "boolean"}, "domains": {"type": "array", "items": {"type": "string"}}, "encryption_profile": {"type": "string"}}, "additionalProperties": false},
-    "runner": {"type": "object", "required": ["pools", "ephemeral", "allowed_images"], "properties": {"pools": {"type": "array", "items": {"type": "string"}}, "ephemeral": {"type": "boolean"}, "allowed_images": {"type": "array", "items": {"type": "string"}}}, "additionalProperties": false},
-    "network": {"type": "object", "required": ["zones", "egress_policy"], "properties": {"zones": {"type": "array", "items": {"type": "string"}}, "egress_policy": {"enum": ["deny_all", "allowlisted", "managed"]}}, "additionalProperties": false}
+    "storage": {
+      "type": "object",
+      "required": ["providers", "encryption_profile", "residency"],
+      "properties": {
+        "providers": {"type": "array", "items": {"type": "string"}, "minItems": 1, "uniqueItems": true},
+        "encryption_profile": {"type": "string"},
+        "residency": {"type": "array", "items": {"type": "string"}, "minItems": 1, "uniqueItems": true}
+      },
+      "additionalProperties": false
+    },
+    "backup": {
+      "type": "object",
+      "required": ["enabled", "domains", "encryption_profile"],
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "domains": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "encryption_profile": {"type": "string"}
+      },
+      "additionalProperties": false
+    },
+    "runner": {
+      "type": "object",
+      "required": ["pools", "ephemeral", "allowed_images"],
+      "properties": {
+        "pools": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "ephemeral": {"type": "boolean"},
+        "allowed_images": {"type": "array", "items": {"type": "string"}, "uniqueItems": true}
+      },
+      "additionalProperties": false
+    },
+    "network": {
+      "type": "object",
+      "required": ["zones", "egress_policy"],
+      "properties": {
+        "zones": {"type": "array", "items": {"type": "string"}, "minItems": 1, "uniqueItems": true},
+        "egress_policy": {"enum": ["deny_all", "allowlisted", "managed"]}
+      },
+      "additionalProperties": false
+    },
+    "assurance": {
+      "type": "object",
+      "required": ["policy_signature_threshold", "distinct_signing_custodians", "trust_recovery_approval_threshold", "distinct_trust_recovery_approvers", "lowering_approval_threshold", "approved_cryptographic_boundary", "validated_cryptographic_module_required", "evidence_profile"],
+      "properties": {
+        "policy_signature_threshold": {"type": "integer", "minimum": 1},
+        "distinct_signing_custodians": {"type": "boolean"},
+        "trust_recovery_approval_threshold": {"type": "integer", "minimum": 1},
+        "distinct_trust_recovery_approvers": {"type": "boolean"},
+        "lowering_approval_threshold": {"type": "integer", "minimum": 1},
+        "approved_cryptographic_boundary": {"type": "string", "minLength": 1},
+        "validated_cryptographic_module_required": {"type": "boolean"},
+        "evidence_profile": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": false
+    }
+  },
+  "$defs": {
+    "ProfileCeiling": {
+      "type": "object",
+      "required": ["profile_id", "profile_version", "classification_ceiling"],
+      "properties": {
+        "profile_id": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$"},
+        "profile_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+        "classification_ceiling": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": false
+    }
   },
   "additionalProperties": false
 }

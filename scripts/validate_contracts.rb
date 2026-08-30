@@ -9,6 +9,13 @@ require "yaml"
 
 ROOT = Pathname.new(__dir__).parent.expand_path
 
+PROFILE_SOURCE_DOCUMENTS = Dir.glob(ROOT.join("policies/security-label-profiles/*.yaml")).sort.map do |path|
+  Pathname.new(path).relative_path_from(ROOT).to_s
+end.freeze
+DEPLOYMENT_DOMAIN_DOCUMENTS = Dir.glob(ROOT.join("policies/deployment-domains/*.yaml")).sort.map do |path|
+  Pathname.new(path).relative_path_from(ROOT).to_s
+end.freeze
+
 DOCUMENTS = %w[
   specs/schema-registry.yaml
   specs/work-graph-profile/owgp-v0.1.schema.json
@@ -24,13 +31,10 @@ DOCUMENTS = %w[
   policies/policy-decision/output-v0.1.schema.json
   policies/policy-decision/decision-table.yaml
   policies/security-label-profiles/profile-v0.1.schema.json
-  policies/security-label-profiles/commercial.yaml
-  policies/security-label-profiles/us-government.yaml
   policies/deployment-domains/domain-profile-v0.1.schema.json
-  policies/deployment-domains/commercial.yaml
-  policies/deployment-domains/us-government.yaml
   policies/openfga/model-tests.yaml
-].freeze
+] + PROFILE_SOURCE_DOCUMENTS + DEPLOYMENT_DOMAIN_DOCUMENTS
+DOCUMENTS.freeze
 
 JSON_SCHEMA_DOCUMENTS = %w[
   specs/work-graph-profile/owgp-v0.1.schema.json
@@ -217,6 +221,9 @@ assignee_kinds = definitions.dig("WorkAssigneeRef", "allOf", 1, "properties", "t
 failures << "OWGP WorkAssigneeRef must be exactly user or agent" unless assignee_kinds == %w[user agent]
 missing_definitions = FINAL_DEFINITIONS - definitions.keys
 failures << "OWGP omits fixed entities: #{missing_definitions.join(', ')}" unless missing_definitions.empty?
+failures << "OWGP omits the profile-driven SecurityPresentation contract" unless definitions.key?("SecurityPresentation")
+resource_envelope_required = Array(definitions.dig("ResourceEnvelope", "required"))
+failures << "Every authorized resource representation must carry server-derived security presentation data" unless resource_envelope_required.include?("security_presentation")
 FINAL_DEFINITIONS.each do |name|
   definition = definitions[name]
   next unless definition
@@ -244,6 +251,10 @@ failures << "OpenAPI Work Item update must require If-Match" unless patch_parame
 project_view_ref = openapi.dig("paths", "/projects/{project_id}", "get", "responses", "200", "$ref")
 failures << "OpenAPI Project read must use filtered ProjectView" unless project_view_ref == "#/components/responses/ProjectView"
 failures << "OpenAPI SearchResult must reject undeclared disclosure fields" unless openapi.dig("components", "schemas", "SearchResult", "additionalProperties") == false
+%w[ProjectView SearchResult].each do |schema_name|
+  presentation_ref = openapi.dig("components", "schemas", schema_name, "properties", "security_presentation", "$ref")
+  failures << "OpenAPI #{schema_name} must expose the shared profile-driven security presentation" unless presentation_ref == "../work-graph-profile/owgp-v0.1.schema.json#/$defs/SecurityPresentation"
+end
 failures << "OpenAPI Problem must reject undeclared disclosure fields" unless openapi.dig("components", "schemas", "Problem", "additionalProperties") == false
 search_results_schema = openapi.dig("components", "responses", "SearchResults", "content", "application/json", "schema") || {}
 failures << "OpenAPI SearchResults wrapper must reject undeclared aggregate fields" unless search_results_schema["additionalProperties"] == false
@@ -308,24 +319,63 @@ end
 failures << "Provider common contract omits operation semantics" unless providers.dig("common_contract", "operation_semantics").is_a?(Hash)
 
 label_schema = documents["policies/security-label-profiles/profile-v0.1.schema.json"] || {}
-required_label_fields = %w[allowed_categories allowed_compartments dissemination_controls releasability_groups export_controls join lowering two_person_lowering]
+required_label_fields = %w[profile_purpose scope authoritative_sources allowed_categories allowed_compartments dissemination_controls releasability_groups export_controls normalization dominance join releasable_to_join cross_profile_composition lowering lowering_approval presentation bundle_signing]
 missing_label_fields = required_label_fields - Array(label_schema["required"])
 failures << "Security-label profile schema omits: #{missing_label_fields.join(', ')}" unless missing_label_fields.empty?
-%w[commercial us-government].each do |name|
-  profile = documents["policies/security-label-profiles/#{name}.yaml"] || {}
+profiles_by_id = {}
+PROFILE_SOURCE_DOCUMENTS.each do |path|
+  name = File.basename(path, ".yaml")
+  profile = documents[path] || {}
   missing = Array(label_schema["required"]) - profile.keys
   failures << "#{name} label profile omits: #{missing.join(', ')}" unless missing.empty?
   validate_instance(profile, label_schema, "#{name} label profile", failures)
+  profile_id = profile["profile_id"]
+  failures << "#{name} label profile repeats profile_id #{profile_id}" if profiles_by_id.key?(profile_id)
+  profiles_by_id[profile_id] = profile
+  failures << "#{name} label profile version must be semantic x.y.z" unless profile["version"].to_s.match?(/\A\d+\.\d+\.\d+\z/)
+  sensitivity_ids = Array(profile["sensitivity_order"])
+  marking_ids = Array(profile.dig("presentation", "sensitivity_markings")).map { |marking| marking["id"] }
+  failures << "#{name} label profile presentation must cover every sensitivity in canonical order" unless marking_ids == sensitivity_ids
+  if profile["profile_purpose"] == "external_regime_mapping" && Array(profile["authoritative_sources"]).empty?
+    failures << "#{name} external-regime profile must identify authoritative sources"
+  end
+  failures << "#{name} label profile must be activated only through the Stead Policy Activation Set" unless profile.dig("bundle_signing", "format") == "stead-policy-activation-set-dsse-v1"
 end
-government_categories = Array(documents.dig("policies/security-label-profiles/us-government.yaml", "allowed_categories"))
-failures << "US-government profile must enumerate CUI categories/subcategories" unless government_categories.any? { |entry| entry["id"].to_s.start_with?("CUI_") && Array(entry["subcategories"]).any? }
+%w[commercial us_government].each do |reference_profile_id|
+  failures << "Starter/reference profile #{reference_profile_id} must remain available as non-privileged data" unless profiles_by_id.key?(reference_profile_id)
+end
+government_reference = profiles_by_id["us_government"] || {}
+government_categories = Array(government_reference["allowed_categories"])
+failures << "US-government starter profile must enumerate its limited CUI test mappings" unless government_categories.any? { |entry| entry["id"].to_s.start_with?("CUI_") && Array(entry["subcategories"]).any? }
+failures << "US-government starter profile must declare mapping limitations and authoritative provenance" if Array(government_reference.dig("scope", "limitations")).empty? || Array(government_reference["authoritative_sources"]).empty?
 
 deployment_schema = documents["policies/deployment-domains/domain-profile-v0.1.schema.json"] || {}
-%w[commercial us-government].each do |name|
-  profile = documents["policies/deployment-domains/#{name}.yaml"] || {}
-  missing = Array(deployment_schema["required"]) - profile.keys
+DEPLOYMENT_DOMAIN_DOCUMENTS.each do |path|
+  name = File.basename(path, ".yaml")
+  domain = documents[path] || {}
+  missing = Array(deployment_schema["required"]) - domain.keys
   failures << "#{name} deployment-domain profile omits: #{missing.join(', ')}" unless missing.empty?
-  validate_instance(profile, deployment_schema, "#{name} deployment-domain profile", failures)
+  validate_instance(domain, deployment_schema, "#{name} deployment-domain profile", failures)
+  bindings = Array(domain["label_profile_ceilings"])
+  binding_ids = bindings.map { |binding| binding["profile_id"] }
+  failures << "#{name} deployment domain must declare exactly one ceiling per profile" unless binding_ids.uniq.length == binding_ids.length
+  bindings.each do |binding|
+    profile = profiles_by_id[binding["profile_id"]]
+    unless profile
+      failures << "#{name} deployment domain references unknown profile #{binding['profile_id']}"
+      next
+    end
+    failures << "#{name} deployment domain profile version mismatch for #{binding['profile_id']}" unless binding["profile_version"] == profile["version"]
+    failures << "#{name} deployment domain ceiling #{binding['classification_ceiling']} is foreign or unknown for #{binding['profile_id']}" unless Array(profile["sensitivity_order"]).include?(binding["classification_ceiling"])
+  end
+  Array(domain["approved_profile_bridges"]).each do |bridge|
+    failures << "#{name} profile bridge #{bridge['bridge_id']} must reference two installed profile ceilings" unless [bridge["from_profile_id"], bridge["to_profile_id"]].all? { |id| binding_ids.include?(id) }
+    failures << "#{name} profile bridge #{bridge['bridge_id']} must cross distinct profiles" if bridge["from_profile_id"] == bridge["to_profile_id"]
+    from_binding = bindings.find { |binding| binding["profile_id"] == bridge["from_profile_id"] }
+    to_binding = bindings.find { |binding| binding["profile_id"] == bridge["to_profile_id"] }
+    failures << "#{name} profile bridge #{bridge['bridge_id']} from-version must match the installed ceiling binding" if from_binding && bridge["from_profile_version"] != from_binding["profile_version"]
+    failures << "#{name} profile bridge #{bridge['bridge_id']} to-version must match the installed ceiling binding" if to_binding && bridge["to_profile_version"] != to_binding["profile_version"]
+  end
 end
 
 policy_input = documents["policies/policy-decision/input-v0.1.schema.json"] || {}
@@ -338,6 +388,14 @@ failures << "policy-decision input omits agent authorization intersection terms"
 end
 required_policy_context = policy_input.dig("properties", "policy_context", "required") || []
 failures << "policy-decision input must declare required policy contexts" unless required_policy_context.include?("required_contexts")
+profile_ceiling_ref = "../deployment-domains/domain-profile-v0.1.schema.json#/$defs/ProfileCeiling"
+profile_ceiling_locations = [
+  policy_input.dig("properties", "agent_context", "properties", "classification_ceilings", "items", "$ref"),
+  policy_input.dig("properties", "session", "properties", "classification_ceilings", "items", "$ref"),
+  policy_input.dig("properties", "data_flow_context", "properties", "destination", "properties", "label_profile_ceilings", "items", "$ref"),
+  policy_input.dig("properties", "infrastructure_context", "properties", "profile_ceiling", "$ref")
+]
+failures << "Every policy-decision ceiling context must use the shared profile-qualified ceiling contract" unless profile_ceiling_locations.all? { |reference| reference == profile_ceiling_ref }
 policy_cases = Array(documents.dig("policies/policy-decision/decision-table.yaml", "cases"))
 policy_ids = policy_cases.filter_map { |entry| entry["id"] }
 failures << "policy decision case IDs must use the implementation-neutral POLICY prefix" unless policy_ids.all? { |id| id.start_with?("POLICY-") }
@@ -401,6 +459,14 @@ missing_audit_context = expected_audit_context - audit_required
 failures << "OWGP AuditRecord omits mandatory audit context: #{missing_audit_context.join(', ')}" unless missing_audit_context.empty?
 failures << "OWGP AuthenticationContext must be closed" unless definitions.dig("AuthenticationContext", "additionalProperties") == false
 failures << "OWGP AuditChangeContext must define hashes, controlled delta, and not-applicable modes" unless Array(definitions.dig("AuditChangeContext", "oneOf")).length == 3
+
+production_code_paths = Dir.glob(ROOT.join("{apps,internal,modules,providers}/**/*.{go,js,jsx,mjs,ts,tsx}"), File::FNM_EXTGLOB).select { |path| File.file?(path) }
+production_code_paths.each do |path|
+  source = File.read(path, encoding: "UTF-8")
+  next unless source.match?(/\b(?:commercial|us_government|us-government)\b/)
+
+  failures << "#{Pathname.new(path).relative_path_from(ROOT)}: production code must not branch on starter/reference profile IDs"
+end
 
 if failures.empty?
   puts "Contract validation passed: documents=#{documents.length} refs=resolved openfga_suites=#{test_suites.length} openfga_assertions=#{check_assertions}"

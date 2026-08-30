@@ -1,5 +1,13 @@
 profile_id: commercial
-version: "1.0"
+version: "1.0.0"
+profile_purpose: starter_reference
+scope:
+  summary: "Starter business-sensitivity vocabulary for Stead examples and conformance tests."
+  coverage_statement: "Covers only the identifiers and rules declared in this file."
+  limitations: ["Not an exhaustive definition of commercial, privacy, financial, healthcare, export-control, or other regulated obligations."]
+authoritative_sources:
+  - {source_id: bis_ear, title: "Export Administration Regulations", uri: "https://www.bis.gov/regulations/ear", source_version_or_date: "retrieved-2026-08-29", mapped_scope: "EAR identifier and review reminder only"}
+  - {source_id: ddtc_itar, title: "International Traffic in Arms Regulations", uri: "https://www.pmddtc.state.gov/ddtc_public/ddtc_public?id=ddtc_public_portal_itar_landing", source_version_or_date: "retrieved-2026-08-29", mapped_scope: "ITAR identifier and review reminder only"}
 sensitivity_order: [public, internal, confidential, restricted]
 handling_regimes: [privacy, legal_hold, export_control]
 allowed_categories:
@@ -13,6 +21,22 @@ export_controls:
   - {id: EAR, rule: "Recipient, destination, technology, and license authorization must be validated before export."}
   - {id: ITAR, rule: "US-person and authorized-destination checks are mandatory before access or export."}
 join: least_upper_bound_plus_union_of_handling_restrictions
+normalization: {identifier_case: exact, set_order: lexicographic, unknown_value: deny}
+dominance: profile_partial_order_v1
+releasable_to_join: intersection_fail_on_empty
+cross_profile_composition: deny_without_signed_approved_bridge
 lowering: deny_by_default_authorized_reasoned_audited
-two_person_lowering: false
-bundle_signing: {required: true, format: sigstore-bundle, materialization_gate: RG-08-SECURITY}
+lowering_approval: {minimum_approvers: 1, distinct_approvers: true, human_approvers_required: false}
+presentation:
+  renderer_id: stead.security_markings.v1
+  renderer_version: "1.0.0"
+  text_authoritative: true
+  color_supplemental_only: true
+  sensitivity_markings:
+    - {id: public, display_text: Public}
+    - {id: internal, display_text: Internal}
+    - {id: confidential, display_text: Confidential}
+    - {id: restricted, display_text: Restricted}
+  required_surfaces: [badge]
+  action_warnings: [download, export, share]
+bundle_signing: {required: true, format: stead-policy-activation-set-dsse-v1, materialization_gate: RG-08-SECURITY}

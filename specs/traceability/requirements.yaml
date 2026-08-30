@@ -498,7 +498,7 @@ requirements:
     status: PHASE_GATED
     release: "phase-2"
   - requirement_id: "CLS-002"
-    title: "US government profile"
+    title: "Security-label policy profiles and external-regime mappings"
     implementation_modules: ["modules/classification", "modules/authorization", "policies/policy-decision", "policies/security-label-profiles"]
     issue_ids: ["STEAD-P0-007", "STEAD-P2-004", "STEAD-P3-002"]
     test_ids: ["T-CLS-002-ACCEPTANCE"]

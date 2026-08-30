@@ -10,7 +10,7 @@ Phase 1 must prove two paths in one product and canonical model. The general-wor
 - `ORG-ALPHA`; parent `TEAM-OPERATIONS`; child `TEAM-PEOPLE`; contributing `TEAM-LEGAL`.
 - `ID-AUTHOR`, `ID-REVIEWER`, `ID-LOW`, `ID-NO-NTK`, and `ID-SECURITY-OFFICER` with synthetic trusted attributes.
 - `AGENT-BACKEND` and contract-only `AGENT-RUN-SHAPE`; no runtime or execution endpoint.
-- commercial protected label below the deployment ceiling plus negative compartment/ceiling fixtures.
+- one starter/reference profile label below that profile's deployment-domain ceiling, a synthetic third-profile fixture proving profile-ID neutrality, and negative compartment, wrong-profile, cross-profile-without-bridge, and ceiling fixtures.
 - clean local install with pinned Gitea, PostgreSQL, NATS, OpenFGA, the policy-decision layer, filesystem BlobStore, and PostgreSQL SearchProvider.
 
 The harness records source revision; component/image/provider/schema/model/policy/profile versions and digests; fixture versions; OpenTelemetry correlation; safe state hashes; test results; retries; and reviewer identities.
@@ -60,9 +60,9 @@ Begin from the same shell/model and create a `software` Project `STEAD`, owned b
 | OpenFGA/policy-decision | Every relation/decision row; hierarchy non-inheritance; assignment non-grant; trusted expiry; agent intersection/revocation; 100% decision-row and ≥90% critical mutation coverage. |
 | Unit/property/fuzz | fixed enums/cardinality, UUIDv7, hierarchy cycles/depth, capability dependencies, label join/no-lowering, Markdown/frontmatter, webhooks/importers. |
 | Integration/replay | transaction+outbox, provider reconciliation, duplicate/out-of-order/restart/DLQ, authorized projection rebuild, audit completeness. |
-| Browser/accessibility | both paths, six persona journeys, keyboard/screen reader parity, WCAG 2.2 AA, deep links/context preservation, no Devlane route/ontology dependency. |
+| Browser/accessibility | both paths, six persona journeys, keyboard/screen reader parity, WCAG 2.2 AA, deep links/context preservation, no Devlane route/ontology dependency, and profile-driven authoritative text/markings/banners/badges with color supplemental and no profile-ID branch. |
 | Security/classification | lower sensitivity, missing compartment/need-to-know, admin/security officer, expired data, downgrade, every bypass, export/backup/log/runner/cross-domain denial. |
-| Operations | fresh install, doctor, no-network air gap when applicable, consistent backup/restore, supported upgrade, injected rollback/forward recovery. |
+| Operations | fresh install, doctor, no-network high-assurance air gap when applicable, consistent backup/restore, supported upgrade, injected rollback/forward recovery. |
 | Supply chain/performance | dependency/license/SBOM/signature/provenance gates and published reproducible SLO/load/chaos fixtures without leakage. |
 
 ## Evidence and release rule

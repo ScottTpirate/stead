@@ -1,11 +1,61 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://stead.example/policies/security-label-profiles/profile-v0.1.schema.json",
+  "title": "Stead declarative security-label policy profile",
+  "description": "Closed, non-executable profile data. Profile identifiers select validated data and never privileged product behavior.",
   "type": "object",
-  "required": ["profile_id", "version", "sensitivity_order", "handling_regimes", "allowed_categories", "allowed_compartments", "dissemination_controls", "releasability_groups", "export_controls", "join", "lowering", "two_person_lowering", "bundle_signing"],
+  "required": [
+    "profile_id",
+    "version",
+    "profile_purpose",
+    "scope",
+    "authoritative_sources",
+    "sensitivity_order",
+    "handling_regimes",
+    "allowed_categories",
+    "allowed_compartments",
+    "dissemination_controls",
+    "releasability_groups",
+    "export_controls",
+    "normalization",
+    "dominance",
+    "join",
+    "releasable_to_join",
+    "cross_profile_composition",
+    "lowering",
+    "lowering_approval",
+    "presentation",
+    "bundle_signing"
+  ],
   "properties": {
-    "profile_id": {"type": "string"},
-    "version": {"type": "string"},
+    "profile_id": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$"},
+    "version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+    "profile_purpose": {"enum": ["starter_reference", "maintained_internal", "external_regime_mapping", "test_fixture"]},
+    "scope": {
+      "type": "object",
+      "required": ["summary", "coverage_statement", "limitations"],
+      "properties": {
+        "summary": {"type": "string", "minLength": 1},
+        "coverage_statement": {"type": "string", "minLength": 1},
+        "limitations": {"type": "array", "items": {"type": "string", "minLength": 1}, "minItems": 1, "uniqueItems": true}
+      },
+      "additionalProperties": false
+    },
+    "authoritative_sources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["source_id", "title", "uri", "source_version_or_date", "mapped_scope"],
+        "properties": {
+          "source_id": {"type": "string", "pattern": "^[a-z][a-z0-9_.-]{0,127}$"},
+          "title": {"type": "string", "minLength": 1},
+          "uri": {"type": "string", "format": "uri"},
+          "source_version_or_date": {"type": "string", "minLength": 1},
+          "mapped_scope": {"type": "string", "minLength": 1}
+        },
+        "additionalProperties": false
+      }
+    },
     "sensitivity_order": {"type": "array", "items": {"type": "string"}, "minItems": 1, "uniqueItems": true},
     "handling_regimes": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
     "allowed_categories": {
@@ -32,19 +82,70 @@
         "additionalProperties": false
       }
     },
+    "normalization": {
+      "type": "object",
+      "required": ["identifier_case", "set_order", "unknown_value"],
+      "properties": {
+        "identifier_case": {"const": "exact"},
+        "set_order": {"const": "lexicographic"},
+        "unknown_value": {"const": "deny"}
+      },
+      "additionalProperties": false
+    },
+    "dominance": {"const": "profile_partial_order_v1"},
     "join": {"const": "least_upper_bound_plus_union_of_handling_restrictions"},
+    "releasable_to_join": {"const": "intersection_fail_on_empty"},
+    "cross_profile_composition": {"const": "deny_without_signed_approved_bridge"},
     "lowering": {"const": "deny_by_default_authorized_reasoned_audited"},
-    "two_person_lowering": {"type": "boolean"},
+    "lowering_approval": {
+      "type": "object",
+      "required": ["minimum_approvers", "distinct_approvers", "human_approvers_required"],
+      "properties": {
+        "minimum_approvers": {"type": "integer", "minimum": 1},
+        "distinct_approvers": {"const": true},
+        "human_approvers_required": {"type": "boolean"}
+      },
+      "additionalProperties": false
+    },
+    "presentation": {
+      "type": "object",
+      "required": ["renderer_id", "renderer_version", "text_authoritative", "color_supplemental_only", "sensitivity_markings", "required_surfaces", "action_warnings"],
+      "properties": {
+        "renderer_id": {"type": "string", "pattern": "^[a-z][a-z0-9_.-]{0,127}$"},
+        "renderer_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+        "text_authoritative": {"const": true},
+        "color_supplemental_only": {"const": true},
+        "sensitivity_markings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "display_text"],
+            "properties": {"id": {"type": "string"}, "display_text": {"type": "string", "minLength": 1}},
+            "additionalProperties": false
+          },
+          "minItems": 1
+        },
+        "required_surfaces": {"type": "array", "items": {"enum": ["badge", "top_banner", "bottom_banner", "document", "print", "export", "session_indicator"]}, "uniqueItems": true},
+        "action_warnings": {"type": "array", "items": {"enum": ["copy", "download", "export", "print", "share"]}, "uniqueItems": true}
+      },
+      "additionalProperties": false
+    },
     "bundle_signing": {
       "type": "object",
       "required": ["required", "format", "materialization_gate"],
       "properties": {
         "required": {"const": true},
-        "format": {"const": "sigstore-bundle"},
+        "format": {"const": "stead-policy-activation-set-dsse-v1"},
         "materialization_gate": {"const": "RG-08-SECURITY"}
       },
       "additionalProperties": false
     }
   },
+  "allOf": [
+    {
+      "if": {"properties": {"profile_purpose": {"const": "external_regime_mapping"}}, "required": ["profile_purpose"]},
+      "then": {"properties": {"authoritative_sources": {"minItems": 1}}}
+    }
+  ],
   "additionalProperties": false
 }

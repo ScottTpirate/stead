@@ -140,7 +140,7 @@ components:
     AgentRun: {$ref: '../work-graph-profile/owgp-v0.1.schema.json#/$defs/AgentRun'}
     ProjectView:
       type: object
-      required: [kind, id, uri, browser_url, schema_version, instance_id, scope_kind, scope_id, organization_id, title, purpose, lifecycle_state, owning_team_id, authorized_capabilities, visible_areas, effective_security_label, version]
+      required: [kind, id, uri, browser_url, schema_version, instance_id, scope_kind, scope_id, organization_id, title, purpose, lifecycle_state, owning_team_id, authorized_capabilities, visible_areas, effective_security_label, security_presentation, version]
       properties:
         kind: {const: project}
         id: {$ref: '#/components/schemas/UuidV7'}
@@ -158,6 +158,7 @@ components:
         authorized_capabilities: {type: array, items: {enum: [work, docs, scm, code_review, ci, packages, releases, deployments]}, uniqueItems: true}
         visible_areas: {type: array, items: {enum: [overview, work, docs, code, delivery]}, uniqueItems: true}
         effective_security_label: {$ref: '../work-graph-profile/owgp-v0.1.schema.json#/$defs/SecurityLabelValue'}
+        security_presentation: {$ref: '../work-graph-profile/owgp-v0.1.schema.json#/$defs/SecurityPresentation'}
         version: {type: integer, minimum: 1}
       additionalProperties: false
     WorkItemCreate:
@@ -191,7 +192,7 @@ components:
       additionalProperties: false
     SearchResult:
       type: object
-      required: [resource_type, id, uri, browser_url, schema_version, instance_id, scope_kind, scope_id, organization_id, title, effective_security_label]
+      required: [resource_type, id, uri, browser_url, schema_version, instance_id, scope_kind, scope_id, organization_id, title, effective_security_label, security_presentation]
       properties:
         resource_type: {enum: [organization, team, project, work_item, document, person, agent, repository, branch, commit, code_file, code_symbol, pull_request, build, deployment, release, package, artifact, attachment, comment]}
         id: {$ref: '#/components/schemas/UuidV7'}
@@ -205,6 +206,7 @@ components:
         title: {type: string}
         snippet: {type: string}
         effective_security_label: {$ref: '../work-graph-profile/owgp-v0.1.schema.json#/$defs/SecurityLabelValue'}
+        security_presentation: {$ref: '../work-graph-profile/owgp-v0.1.schema.json#/$defs/SecurityPresentation'}
         container: {$ref: '../work-graph-profile/owgp-v0.1.schema.json#/$defs/ContainerRef'}
       additionalProperties: false
     Problem:

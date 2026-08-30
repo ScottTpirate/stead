@@ -234,7 +234,7 @@ Dependency order is `M0-A -> M0-B -> (M0-C and M0-D) -> M0-E -> M0-F`. Broad fea
 
 **Accountability.** Own `steadctl`, Compose/Helm/air-gap packaging, configuration/profile contracts, install/doctor/upgrade/backup/restore/export/import flows, OpenTelemetry and health conventions, portability, reliability/load profiles, and recovery orchestration.
 
-**Exclusive paths and contracts.** `/apps/steadctl/`, `/deploy/compose/`, `/deploy/helm/`, `/deploy/airgap/`, `/deploy/examples/`, `/packages/domain-schemas/config/`, operator documentation, operational test fixtures, and deployment/backup metadata owned by the CLI rather than a domain module.
+**Exclusive paths and contracts.** `/apps/steadctl/`, `/deploy/compose/`, `/deploy/helm/`, `/deploy/airgap/`, `/deploy/examples/`, `/packages/domain-schemas/config/`, operator documentation, operational test fixtures, and deployment/backup metadata owned by the CLI rather than a domain module. The install profile carried by `/deploy/airgap/` is named `high-assurance-airgap`.
 
 **Assigned requirements.** `PRIN-008`, `PRIN-009`; `DEP-001`, `DEP-002`, `DEP-003`, `DEP-004`, `DEP-005`; `OPS-001`, `OPS-002`, `OPS-003`, `OPS-004`, `OPS-005`.
 

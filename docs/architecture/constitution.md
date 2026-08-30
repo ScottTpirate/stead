@@ -113,7 +113,9 @@ Git repositories, Git/Markdown/OKF documents, portable attachment manifests, ver
 
 A repository, tracker repository, docs repository, package namespace, runner pool, cache, artifact store, backup set, and deployment security domain are enforceable boundaries. Item labels may add markings but never grant access finer than the enclosing cloneable/provider container can enforce. Differing access requires a separate container.
 
-Derived resources take the defined join of all applicable source, explicit, container, and handling restrictions and never silently become less restrictive. Lowering or removing restrictions is denied by default, authorized and reasoned, fully audited, cache/projection invalidating, and two-person approved where the government profile requires it. Core Stead never automates cross-domain or write-down transfer.
+Security-label policy profiles are declarative, schema-validated, versioned, and signed. Stable profile IDs have no privileged product or authorization semantics; deployment security-domain policy binds each permitted profile/version to its own ceiling and selects environment assurance controls. Cross-profile composition fails closed without an explicitly signed approved bridge, and profile-driven text/markings remain authoritative over supplemental color in the UI.
+
+Derived resources take the defined join of all applicable source, explicit, container, and handling restrictions and never silently become less restrictive. Lowering or removing restrictions is denied by default, authorized and reasoned, fully audited, cache/projection invalidating, and subject to the approval threshold and custody/separation controls required by the active deployment security-domain policy. Core Stead never automates cross-domain or write-down transfer.
 
 Audit and event contracts preserve the acting principal and type, a distinct initiating/requesting principal when applicable, delegation/task context, and correlation/causation. They can represent `requested_by = user:alice` with `actor = agent:backend-agent` without a schema revision.
 

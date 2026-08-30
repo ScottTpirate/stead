@@ -1,5 +1,13 @@
 profile_id: us_government
-version: "1.0"
+version: "1.0.0"
+profile_purpose: external_regime_mapping
+scope:
+  summary: "Limited US-government-oriented reference mapping for Stead schema and fail-closed compatibility tests."
+  coverage_statement: "Maps the sensitivity values, CUI handling examples, and controls explicitly declared in this file against the cited source snapshots."
+  limitations: ["Not a complete US Government classification or CUI vocabulary.", "Does not establish compliance, accreditation, authorization to operate, cross-domain approval, or FIPS validation."]
+authoritative_sources:
+  - {source_id: eo_13526, title: "Executive Order 13526 - Classified National Security Information", uri: "https://www.archives.gov/isoo/policy-documents/cnsi-eo.html", source_version_or_date: "2009-12-29", mapped_scope: "UNCLASSIFIED through TOP_SECRET sensitivity ordering used by this starter profile"}
+  - {source_id: nara_cui_registry, title: "NARA CUI Registry Category List", uri: "https://www.archives.gov/cui/registry/category-list", source_version_or_date: "retrieved-2026-08-29", mapped_scope: "Only the CUI category/subcategory examples declared in this starter profile"}
 sensitivity_order: [UNCLASSIFIED, CONFIDENTIAL, SECRET, TOP_SECRET]
 handling_regimes: [CUI_BASIC, CUI_SPECIFIED, export_control]
 allowed_categories:
@@ -15,6 +23,22 @@ export_controls:
   - {id: EAR, rule: "Validate citizenship, destination, end use, license, and technical-data restrictions."}
   - {id: ITAR, rule: "Validate US-person status, registration, license or exemption, destination, and technical-data restrictions."}
 join: least_upper_bound_plus_union_of_handling_restrictions
+normalization: {identifier_case: exact, set_order: lexicographic, unknown_value: deny}
+dominance: profile_partial_order_v1
+releasable_to_join: intersection_fail_on_empty
+cross_profile_composition: deny_without_signed_approved_bridge
 lowering: deny_by_default_authorized_reasoned_audited
-two_person_lowering: true
-bundle_signing: {required: true, format: sigstore-bundle, materialization_gate: RG-08-SECURITY}
+lowering_approval: {minimum_approvers: 2, distinct_approvers: true, human_approvers_required: true}
+presentation:
+  renderer_id: stead.security_markings.v1
+  renderer_version: "1.0.0"
+  text_authoritative: true
+  color_supplemental_only: true
+  sensitivity_markings:
+    - {id: UNCLASSIFIED, display_text: UNCLASSIFIED}
+    - {id: CONFIDENTIAL, display_text: CONFIDENTIAL}
+    - {id: SECRET, display_text: SECRET}
+    - {id: TOP_SECRET, display_text: TOP SECRET}
+  required_surfaces: [badge, top_banner, bottom_banner, document, print, export, session_indicator]
+  action_warnings: [copy, download, export, print, share]
+bundle_signing: {required: true, format: stead-policy-activation-set-dsse-v1, materialization_gate: RG-08-SECURITY}
