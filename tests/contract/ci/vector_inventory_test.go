@@ -1628,8 +1628,18 @@ func TestBuilderNegativeInventoryCoversEveryOwnedObligation(t *testing.T) {
 	}
 	reviewerCases := map[string]bool{
 		"dsse-r1-s1-arbitrary-receipt-nonauthority":      false,
+		"signing-receipt-count-one-over":                 false,
+		"archive-entry-name-log-injection":               false,
 		"evidence-renamed-or-encoded-protected-material": false,
+		"policy-content-index-stale-digest":              false,
+		"provenance-source-revision-mismatch":            false,
+		"provenance-dependency-lock-mismatch":            false,
+		"provenance-subject-digest-mismatch":             false,
+		"build-review-count-one-over":                    false,
+		"manifest-metadata-count-one-over":               false,
 		"handoff-deep-copy-isolation":                    false,
+		"release-review-count-one-over":                  false,
+		"release-waiver-count-one-over":                  false,
 		"profile-schema-id-or-version-mismatch":          false,
 		"deployment-schema-id-or-version-mismatch":       false,
 		"deployment-profile-ceiling-mismatch":            false,
