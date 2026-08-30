@@ -93,6 +93,15 @@ func TestManifestCollectionsArePreflightedBeforeCopy(t *testing.T) {
 	}
 }
 
+func TestBuildFileCardinalityIsPreflightedBeforeFileValidation(t *testing.T) {
+	input := fixtureBuildInput(t, "commercial", 1, false)
+	input.PayloadFiles = make([]policyrelease.File, policyrelease.MaxArchiveFiles-1)
+	result, err := policyrelease.PrepareUnsigned(input)
+	if policyrelease.ErrorCode(err) != "archive_content_limit" || result.ManifestPayload != nil || result.SigningRequestBytes != nil {
+		t.Fatalf("file-count preflight = %v (%s), request bytes=%d", err, policyrelease.ErrorCode(err), len(result.SigningRequestBytes))
+	}
+}
+
 func TestPresentedSigningReceiptCardinalityIsPreflighted(t *testing.T) {
 	receipts := make([]policyrelease.PresentedSignatureReceipt, policyrelease.MaxEnvelopeSignatures)
 	for index := range receipts {

@@ -23,6 +23,8 @@ type tarFixtureEntry struct {
 	uid      int
 }
 
+const testUSTARBlockSize = 512
+
 func makeUSTARFixture(t testing.TB, entries []tarFixtureEntry) []byte {
 	t.Helper()
 	var buffer bytes.Buffer
@@ -88,6 +90,11 @@ func rewriteUSTARChecksum(block []byte) {
 		sum += uint64(value)
 	}
 	copy(block[148:156], []byte(fmt.Sprintf("%06o\x00 ", sum)))
+}
+
+func writeUSTAROctalField(field []byte, value uint64) {
+	encoded := fmt.Sprintf("%0*o\x00", len(field)-1, value)
+	copy(field, encoded)
 }
 
 // T-ADR-0006-ARCHIVE-SAFETY exact archive, file, content, entry, path, and
@@ -450,4 +457,105 @@ func TestArchiveEntriesAreLexicographicallySorted(t *testing.T) {
 	if len(sorted) != len(names) {
 		t.Fatal("entry accounting mismatch")
 	}
+}
+
+// T-ADR-0006-ARCHIVE-SAFETY: each strict physical-header parser failure and
+// exact-directory-set comparison remains externally observable and fail-closed.
+func TestArchiveRejectsMalformedPhysicalFieldsAndDirectorySets(t *testing.T) {
+	base := makeUSTARFixture(t, []tarFixtureEntry{{name: "file", content: []byte("x")}})
+	fieldCases := []struct {
+		name   string
+		mutate func([]byte)
+		code   string
+	}{
+		{"name suffix after NUL", func(block []byte) { block[0], block[1], block[2] = 'a', 0, 'b' }, "noncanonical_ustar_string"},
+		{"prefix suffix after NUL", func(block []byte) { block[345], block[346], block[347] = 'a', 0, 'b' }, "noncanonical_ustar_string"},
+		{"mode digit", func(block []byte) { block[100] = '8' }, "noncanonical_ustar_number"},
+		{"group digit", func(block []byte) { block[116] = '8' }, "noncanonical_ustar_number"},
+		{"mtime digit", func(block []byte) { block[136] = '8' }, "noncanonical_ustar_number"},
+		{"link name suffix after NUL", func(block []byte) { block[157], block[158], block[159] = 'a', 0, 'b' }, "noncanonical_ustar_string"},
+		{"user name suffix after NUL", func(block []byte) { block[265], block[266], block[267] = 'a', 0, 'b' }, "noncanonical_ustar_string"},
+		{"group name suffix after NUL", func(block []byte) { block[297], block[298], block[299] = 'a', 0, 'b' }, "noncanonical_ustar_string"},
+		{"device major digit", func(block []byte) { block[329] = '8' }, "noncanonical_ustar_number"},
+		{"device minor digit", func(block []byte) { block[337] = '8' }, "noncanonical_ustar_number"},
+	}
+	for _, testCase := range fieldCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			mutated := append([]byte(nil), base...)
+			testCase.mutate(mutated[:512])
+			rewriteUSTARChecksum(mutated[:512])
+			if _, err := policyrelease.InspectArchive(mutated); policyrelease.ErrorCode(err) != testCase.code {
+				t.Fatalf("error = %v (%s), want %s", err, policyrelease.ErrorCode(err), testCase.code)
+			}
+		})
+	}
+
+	t.Run("single zero block between entries", func(t *testing.T) {
+		archive := makeUSTARFixture(t, []tarFixtureEntry{
+			{name: "a", content: []byte("x")},
+			{name: "b", content: []byte("x")},
+		})
+		const firstEntryBytes = 2 * testUSTARBlockSize
+		mutated := make([]byte, 0, len(archive)+testUSTARBlockSize)
+		mutated = append(mutated, archive[:firstEntryBytes]...)
+		mutated = append(mutated, make([]byte, testUSTARBlockSize)...)
+		mutated = append(mutated, archive[firstEntryBytes:]...)
+		if _, err := policyrelease.InspectArchive(mutated); policyrelease.ErrorCode(err) != "single_zero_ustar_block" {
+			t.Fatalf("error = %v (%s)", err, policyrelease.ErrorCode(err))
+		}
+	})
+
+	t.Run("directory with content", func(t *testing.T) {
+		mutated := makeUSTARFixture(t, []tarFixtureEntry{{name: "directory/", typeflag: tar.TypeDir}})
+		writeUSTAROctalField(mutated[124:136], 1)
+		rewriteUSTARChecksum(mutated[:512])
+		if _, err := policyrelease.InspectArchive(mutated); policyrelease.ErrorCode(err) != "directory_with_content" {
+			t.Fatalf("error = %v (%s)", err, policyrelease.ErrorCode(err))
+		}
+	})
+
+	t.Run("declared content beyond archive", func(t *testing.T) {
+		mutated := append([]byte(nil), base...)
+		writeUSTAROctalField(mutated[124:136], uint64(len(mutated)+1))
+		rewriteUSTARChecksum(mutated[:512])
+		if _, err := policyrelease.InspectArchive(mutated); policyrelease.ErrorCode(err) != "truncated_ustar_content" {
+			t.Fatalf("error = %v (%s)", err, policyrelease.ErrorCode(err))
+		}
+	})
+
+	archive, envelope, files := canonicalArchiveFixture(t)
+	t.Run("invalid listed file path", func(t *testing.T) {
+		invalid := append([]policyrelease.ManifestFile(nil), files...)
+		invalid[0].Path = "outside"
+		if _, err := policyrelease.ValidateArchive(archive, envelope, invalid); policyrelease.ErrorCode(err) != "invalid_manifest_file_path" {
+			t.Fatalf("error = %v (%s)", err, policyrelease.ErrorCode(err))
+		}
+	})
+	t.Run("duplicate listed file", func(t *testing.T) {
+		duplicate := append(append([]policyrelease.ManifestFile(nil), files...), files[0])
+		if _, err := policyrelease.ValidateArchive(archive, envelope, duplicate); policyrelease.ErrorCode(err) != "duplicate_manifest_file" {
+			t.Fatalf("error = %v (%s)", err, policyrelease.ErrorCode(err))
+		}
+	})
+	t.Run("extra directory", func(t *testing.T) {
+		withExtra := makeUSTARFixture(t, []tarFixtureEntry{
+			{name: "manifest.dsse.json", content: envelope},
+			{name: "payload/", typeflag: tar.TypeDir},
+			{name: "payload/item.json", content: []byte("fixed-payload")},
+			{name: "z/", typeflag: tar.TypeDir},
+		})
+		if _, err := policyrelease.ValidateArchive(withExtra, envelope, files); policyrelease.ErrorCode(err) != "archive_directory_set_mismatch" {
+			t.Fatalf("error = %v (%s)", err, policyrelease.ErrorCode(err))
+		}
+	})
+	t.Run("wrong directory", func(t *testing.T) {
+		withWrong := makeUSTARFixture(t, []tarFixtureEntry{
+			{name: "manifest.dsse.json", content: envelope},
+			{name: "other/", typeflag: tar.TypeDir},
+			{name: "payload/item.json", content: []byte("fixed-payload")},
+		})
+		if _, err := policyrelease.ValidateArchive(withWrong, envelope, files); policyrelease.ErrorCode(err) != "archive_directory_set_mismatch" {
+			t.Fatalf("error = %v (%s)", err, policyrelease.ErrorCode(err))
+		}
+	})
 }

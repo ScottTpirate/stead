@@ -35,6 +35,9 @@ func TestManifestAndDeploymentInputBoundaries(t *testing.T) {
 		{"OpenFGA schema", func(input *policyrelease.BuildInput) { input.Manifest.OpenFGAModel.SchemaVersion = "1.0" }, "unsupported_openfga_schema"},
 		{"OpenFGA digest", func(input *policyrelease.BuildInput) { input.Manifest.OpenFGAModel.SourceDigest = "sha256:00" }, "invalid_digest"},
 		{"missing supported versions", func(input *policyrelease.BuildInput) { input.Manifest.SupportedSteadVersions = nil }, "missing_required_list"},
+		{"invalid supported version identifier", func(input *policyrelease.BuildInput) {
+			input.Manifest.SupportedSteadVersions = []string{"bad version"}
+		}, "invalid_identifier"},
 		{"duplicate context", func(input *policyrelease.BuildInput) {
 			input.Manifest.RequiredContextIDs = []string{"trusted-principal", "trusted-principal"}
 		}, "duplicate_value"},
@@ -72,6 +75,27 @@ func TestManifestAndDeploymentInputBoundaries(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			input := fixtureBuildInput(t, "commercial", 1, false)
 			testCase.mutate(&input)
+			_, err := policyrelease.PrepareUnsigned(input)
+			if policyrelease.ErrorCode(err) != testCase.code {
+				t.Fatalf("error = %v (%s), want %s", err, policyrelease.ErrorCode(err), testCase.code)
+			}
+		})
+	}
+}
+
+func TestArtifactPathKindAndRootBoundaries(t *testing.T) {
+	testCases := []struct {
+		name string
+		path string
+		code string
+	}{
+		{"directory path presented as file", "payload/", "invalid_archive_path"},
+		{"payload file under evidence root", "evidence/not-payload.json", "wrong_archive_root"},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			input := fixtureBuildInput(t, "commercial", 1, false)
+			input.PayloadFiles[0].Path = testCase.path
 			_, err := policyrelease.PrepareUnsigned(input)
 			if policyrelease.ErrorCode(err) != testCase.code {
 				t.Fatalf("error = %v (%s), want %s", err, policyrelease.ErrorCode(err), testCase.code)

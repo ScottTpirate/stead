@@ -222,10 +222,54 @@ non-secret, nonproduction P-256 scalar solely to make independent verification
 repeatable. No private material exists in the fixture and its key has no Stead
 trust authority.
 
+### RG-03 control-flow branch-arm gate
+
+`TestPolicyReleaseControlFlowBranchCoverage` is the executable branch gate for
+the active, non-test Go sources returned for this package by the pinned
+toolchain's `go list`. It is not a statement-region or coverprofile percentage
+renamed as branch coverage. The denominator contains these control-flow arms:
+
+- the true and false outcome of every `if`, including a synthesized false arm
+  when the source omits `else`; every condition in an `else if` chain remains a
+  separate two-outcome decision;
+- every clause and the default outcome of expression and type switches, with a
+  synthesized default arm when the source omits one;
+- every communication and explicit default clause of a `select`; and
+- body entry and normal exit for every potentially exiting `for` and every
+  `range`. The exit marker after the loop executes on condition/range
+  exhaustion or `break`, but not when a return, panic, or jump bypasses the
+  continuation. A conditionless or compile-time-constant `for` fails analysis
+  instead of adding a statically impossible body or exit arm to the denominator.
+
+The test creates an isolated temporary repository copy, parses those package
+sources with `go/ast`, and inserts a semantic no-op marker at the start of each
+arm and immediately after each loop. It then runs the complete CI contract
+package in an explicitly identified child process with `-count=1`,
+`-covermode=count`, and `-coverpkg` restricted to `policyrelease`. Each marker
+must map to exactly one compiler counter block. An arm is covered only when its
+counter is nonzero; the test fails unless `covered * 100 >= total * 80` and
+prints the exact numerator, denominator, percentage, and every uncovered source
+position. Instrumented files and the profile exist only in the temporary copy.
+Source containing `fallthrough` also fails analysis because count coverage
+cannot distinguish case selection from fallthrough entry with this marker
+contract.
+
+Short-circuit operand edges within `&&` and `||` expressions are explicitly
+outside this denominator. The approved Go compiler's count profile exposes
+source-region counters, not operand-edge counters. Recovering those edges would
+require semantic expression rewriting, which can change evaluation order,
+side effects, panic behavior, and typed expression context; this gate does not
+make that unsound claim. Analyzer self-tests prove that 100% ordinary statement
+coverage cannot hide an unexecuted implicit-false arm, that synthetic
+else/default markers do not execute on a taken explicit arm, and that switch,
+type-switch, select, and loop body/exit outcomes lower or raise the metric while
+the denominator remains stable.
+
 Run:
 
 ```sh
 scripts/run_pinned_go.sh go test ./tests/contract/ci -count=1
+scripts/run_pinned_go.sh go test ./tests/contract/ci -run '^TestPolicyReleaseControlFlowBranchCoverage$' -count=1 -v
 scripts/run_pinned_go.sh go test ./tests/contract/ci -run '^TestGoldenOfflineVector$' -count=1
 scripts/run_pinned_go.sh go test ./tests/contract/ci -bench . -benchmem -count=5
 ```
