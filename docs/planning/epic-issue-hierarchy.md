@@ -75,6 +75,7 @@ The Phase 1 records preserve the approved principal, assignment, authorization, 
 | 1 | STEAD-P1-001 | WS-01 | GATE-P0-APPROVED | Root manifests, CI and contract-test foundation, schema/API lint, dependency approvals/notices, and Devlane provenance |
 | 2 | STEAD-P1-015 | WS-02, with WS-06/07 handoff | GATE-P0-APPROVED, P1-001, accepted ADR-CAND-003/007, and unresolved ADR-CAND-002 | Owner-scoped one-operation request-boundary authorization/audit composition, `core_outbox` and durable-effect ports, plus typed strict-mode coordination seams; no domain feature implementation or strict persistence prerequisite |
 | 2 | STEAD-P1-016 | WS-09 | GATE-P0-APPROVED, P1-001, accepted ADR-CAND-007 | Deterministic policy activation archive, pre-signing evidence, post-signing release attestation, and immutable writer/fixture handoff; no runtime activation authority |
+| 3 | STEAD-P1-017 | WS-11 | GATE-P0-APPROVED, P1-001, P1-015, and accepted ADR-CAND-002 | Materialize only the WS-11 `migration` namespace, deployment-qualified roles, deny-by-default ACLs, and owner ledger through the generic migration harness; no importer, cutover, provider-sync, aggregate runner, backup, or restore ownership |
 | 3 | STEAD-P1-006 | WS-06 | P1-001, P1-015, P1-016, accepted security ADRs | Bootstrap/OIDC identity; central set-oriented OpenFGA + policy path; signed profile-neutral mode selection; complete `request_boundary`; typed `commit_boundary` seam |
 | 4 | STEAD-P1-002 | WS-02 | P1-001, P1-006, P1-015, approved core/auth contracts | Canonical modular core, PrincipalRef-based User/Agent Work assignment, PostgreSQL ownership, bounded composed-read queries, optimistic concurrency and atomic outbox |
 | 5 | STEAD-P1-003 | WS-03 | P1-002, P1-006 | Stock Gitea adapter, hidden tracker/board, provider-neutral Work backing, docs Git, and local rebuildable provider projection; no general code repo or ordinary-read provider waterfall |
@@ -86,8 +87,8 @@ The Phase 1 records preserve the approved principal, assignment, authorization, 
 | 8 | STEAD-P1-013 | WS-03 | P1-003, P1-005, P1-006 | Additive software code repository, branch, commit and Pull Request path |
 | 9 | STEAD-P1-009 | WS-09 | P1-006, P1-007, P1-010, P1-013 | One pinned Action with build/SBOM/artifact/release trace |
 | 10 | STEAD-P1-014 | WS-05 | P1-004, P1-007…009, P1-013 | Present Code and Delivery in the same shell; complete TEST-010 UI path |
-| 11 | STEAD-P1-011 | WS-12 | P1-001…010, P1-013…016 | One-command local install, OTel/health/doctor, policy activation operations, and backup/restore baseline |
-| 12 | STEAD-P1-012 | WS-13 | P1-001…011, P1-013…016 | Independently gate TEST-009 before TEST-010; standard performance/call-count evidence; request-boundary security; strict seam; policy activation, bypass, restore and upgrade |
+| 11 | STEAD-P1-011 | WS-12 | P1-001…010, P1-013…017 | One-command local install, OTel/health/doctor, policy activation operations, and backup/restore baseline |
+| 12 | STEAD-P1-012 | WS-13 | P1-001…011, P1-013…017 | Independently gate TEST-009 before TEST-010; standard performance/call-count evidence; request-boundary security; strict seam; policy activation, bypass, restore and upgrade |
 
 No Phase 2 issue opens merely because its implementation dependency is merged. The Phase 1 candidate must pass STEAD-P1-012 and receive its recorded release decision.
 
