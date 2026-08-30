@@ -3,8 +3,10 @@ package postgres
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"os"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -26,32 +28,67 @@ func TestSeededCatalogMutationsFailClosed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var inventory struct {
-		Cases []struct {
-			Mutation     string `json:"mutation"`
-			ExpectedCode Code   `json:"expected_code"`
-		} `json:"cases"`
+	type mutationCase struct {
+		Mutation     string `json:"mutation"`
+		Edge         int    `json:"edge"`
+		ExpectedCode Code   `json:"expected_code"`
 	}
-	if err := json.Unmarshal(data, &inventory); err != nil {
+	var inventory struct {
+		Scope string         `json:"scope"`
+		Cases []mutationCase `json:"cases"`
+	}
+	decoder := json.NewDecoder(strings.NewReader(string(data)))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&inventory); err != nil {
 		t.Fatal(err)
 	}
-	if len(inventory.Cases) != 6 {
-		t.Fatalf("mutation inventory has %d cases, want 6", len(inventory.Cases))
+	var trailing any
+	if err := decoder.Decode(&trailing); err != io.EOF {
+		t.Fatal("mutation inventory contains trailing data")
+	}
+	if inventory.Scope != "STEAD-P1-015 core_outbox-only catalog conformance contribution" {
+		t.Fatal("mutation inventory scope drifted")
+	}
+	wantInventory := make([]mutationCase, 0, len(manifest.Memberships)*5+2)
+	for edge := range manifest.Memberships {
+		wantInventory = append(wantInventory,
+			mutationCase{"membership_inherit_inversion", edge, CodeMissingState},
+			mutationCase{"membership_set_inversion", edge, CodeMissingState},
+			mutationCase{"membership_admin_true", edge, CodeMembershipAdminEnabled},
+			mutationCase{"membership_reversal", edge, CodeMissingState},
+			mutationCase{"membership_unknown_grantor", edge, CodeUnknownPrincipal},
+		)
+	}
+	wantInventory = append(wantInventory,
+		mutationCase{"extra_schema_grant", -1, CodeExtraState},
+		mutationCase{"persistent_column_acl", -1, CodeColumnACLPresent},
+	)
+	if !reflect.DeepEqual(inventory.Cases, wantInventory) {
+		t.Fatalf("mutation inventory is not the exact generated per-edge inventory\ngot:  %#v\nwant: %#v", inventory.Cases, wantInventory)
+	}
+	seen := make(map[string]struct{}, len(inventory.Cases))
+	for _, testCase := range inventory.Cases {
+		key := testCase.Mutation + ":" + strconv.Itoa(testCase.Edge)
+		if _, duplicate := seen[key]; duplicate {
+			t.Fatalf("duplicate seeded mutation %s edge %d", testCase.Mutation, testCase.Edge)
+		}
+		seen[key] = struct{}{}
 	}
 
 	for _, testCase := range inventory.Cases {
-		t.Run(testCase.Mutation, func(t *testing.T) {
+		t.Run(testCase.Mutation+"_edge_"+strconv.Itoa(testCase.Edge), func(t *testing.T) {
 			snapshot := snapshotForManifest(manifest)
 			switch testCase.Mutation {
-			case "membership_option_inversion":
-				snapshot.Memberships[0].InheritOption = false
-				snapshot.Memberships[0].SetOption = true
+			case "membership_inherit_inversion":
+				snapshot.Memberships[testCase.Edge].InheritOption = !snapshot.Memberships[testCase.Edge].InheritOption
+			case "membership_set_inversion":
+				snapshot.Memberships[testCase.Edge].SetOption = !snapshot.Memberships[testCase.Edge].SetOption
 			case "membership_reversal":
-				snapshot.Memberships[0].Role, snapshot.Memberships[0].Member = snapshot.Memberships[0].Member, snapshot.Memberships[0].Role
+				snapshot.Memberships[testCase.Edge].Role, snapshot.Memberships[testCase.Edge].Member = snapshot.Memberships[testCase.Edge].Member, snapshot.Memberships[testCase.Edge].Role
 			case "membership_admin_true":
-				snapshot.Memberships[0].AdminOption = true
-			case "unknown_grantor":
-				snapshot.Memberships[0].Grantor = "protected_unknown_grantor"
+				snapshot.Memberships[testCase.Edge].AdminOption = true
+			case "membership_unknown_grantor":
+				snapshot.Memberships[testCase.Edge].Grantor = "protected_unknown_grantor"
 			case "extra_schema_grant":
 				snapshot.SchemaACLs = append(snapshot.SchemaACLs, ACLState{Schema: "core_outbox", Grantor: snapshot.Roles[1].Name, Grantee: PublicPrincipal, Privilege: "USAGE"})
 			case "persistent_column_acl":
@@ -93,6 +130,70 @@ func TestExactComparisonRejectsUnknownDuplicateMissingExtraAndDrift(t *testing.T
 	}
 }
 
+func TestLockstepManifestAndCatalogCannotAuthorizeProhibitedState(t *testing.T) {
+	base := loadCoreOutboxManifest(t)
+	roleMutations := []struct {
+		name   string
+		mutate func(*RoleProperties)
+	}{
+		{"superuser", func(value *RoleProperties) { value.Superuser = true }},
+		{"create_role", func(value *RoleProperties) { value.CreateRole = true }},
+		{"create_database", func(value *RoleProperties) { value.CreateDatabase = true }},
+		{"replication", func(value *RoleProperties) { value.Replication = true }},
+		{"bypass_rls", func(value *RoleProperties) { value.BypassRLS = true }},
+	}
+	for _, testCase := range roleMutations {
+		t.Run("role_"+testCase.name, func(t *testing.T) {
+			manifest := cloneManifest(t, base)
+			testCase.mutate(&manifest.Roles[0].Properties)
+			assertViolationCode(t, Compare(manifest, snapshotForManifest(manifest)), CodeProhibitedRoleCapability)
+		})
+	}
+
+	t.Run("membership_admin", func(t *testing.T) {
+		manifest := cloneManifest(t, base)
+		manifest.Memberships[0].AdminOption = true
+		assertViolationCode(t, Compare(manifest, snapshotForManifest(manifest)), CodeMembershipAdminEnabled)
+	})
+
+	objectBase := cloneManifest(t, base)
+	objectBase.Objects = append(objectBase.Objects, ObjectSpec{Schema: "core_outbox", Name: "event_intents", Kind: "table", Owner: "core_outbox_owner"})
+	objectBase.ObjectACLs = append(objectBase.ObjectACLs, ACLSpec{Schema: "core_outbox", Object: "event_intents", ObjectKind: "table", Grantor: "core_outbox_owner", Grantee: "core_outbox_owner", Privilege: "SELECT"})
+	aclMutations := []struct {
+		name   string
+		base   Manifest
+		code   Code
+		mutate func(*Manifest)
+	}{
+		{"database_public", base, CodePublicPrivilege, func(value *Manifest) { value.DatabaseACLs[0].Grantee = PublicPrincipal }},
+		{"schema_public", base, CodePublicPrivilege, func(value *Manifest) { value.SchemaACLs[0].Grantee = PublicPrincipal }},
+		{"object_public", objectBase, CodePublicPrivilege, func(value *Manifest) { value.ObjectACLs[0].Grantee = PublicPrincipal }},
+		{"default_public", base, CodePublicPrivilege, func(value *Manifest) { value.DefaultACLs[0].Grantee = PublicPrincipal }},
+		{"database_grant_option", base, CodeGrantOptionEnabled, func(value *Manifest) { value.DatabaseACLs[0].GrantOption = true }},
+		{"schema_grant_option", base, CodeGrantOptionEnabled, func(value *Manifest) { value.SchemaACLs[0].GrantOption = true }},
+		{"object_grant_option", objectBase, CodeGrantOptionEnabled, func(value *Manifest) { value.ObjectACLs[0].GrantOption = true }},
+		{"default_grant_option", base, CodeGrantOptionEnabled, func(value *Manifest) { value.DefaultACLs[0].GrantOption = true }},
+	}
+	for _, testCase := range aclMutations {
+		t.Run(testCase.name, func(t *testing.T) {
+			manifest := cloneManifest(t, testCase.base)
+			testCase.mutate(&manifest)
+			assertViolationCode(t, Compare(manifest, snapshotForManifest(manifest)), testCase.code)
+		})
+	}
+}
+
+func TestRoleEqualityIsStructuredAndConfigurationIsCollisionSafe(t *testing.T) {
+	manifest := loadCoreOutboxManifest(t)
+	manifest.Roles[0].Properties.Configuration = []string{"a\x1fb", "c"}
+	snapshot := snapshotForManifest(manifest)
+	if err := Compare(manifest, snapshot); err != nil {
+		t.Fatalf("exact control-character configuration failed: %v", err)
+	}
+	snapshot.Roles[0].Properties.Configuration = []string{"a", "b\x1fc"}
+	assertViolationCode(t, Compare(manifest, snapshot), CodePropertyDrift)
+}
+
 func TestManifestIdentityAndDuplicateValidation(t *testing.T) {
 	manifest := loadCoreOutboxManifest(t)
 
@@ -105,6 +206,14 @@ func TestManifestIdentityAndDuplicateValidation(t *testing.T) {
 	invalidRoleName.Roles[0].Name = "foreign_owner"
 	assertViolationCode(t, ValidateManifest(invalidRoleName), CodeInvalidRegisteredIdentity)
 
+	wrongBindingUUID := cloneManifest(t, manifest)
+	wrongBindingUUID.Roles[0].Binding = "stead-role:v1:00000000-0000-4000-8000-000000000002:database-owner"
+	assertViolationCode(t, ValidateManifest(wrongBindingUUID), CodeInvalidRegisteredIdentity)
+
+	wrongBindingVersion := cloneManifest(t, manifest)
+	wrongBindingVersion.Roles[0].Binding = strings.Replace(wrongBindingVersion.Roles[0].Binding, "stead-role:v1:", "stead-role:v2:", 1)
+	assertViolationCode(t, ValidateManifest(wrongBindingVersion), CodeInvalidRegisteredIdentity)
+
 	duplicate := manifest
 	duplicate.Memberships = append(append([]MembershipSpec(nil), manifest.Memberships...), manifest.Memberships[0])
 	assertViolationCode(t, ValidateManifest(duplicate), CodeDuplicateExpected)
@@ -113,6 +222,16 @@ func TestManifestIdentityAndDuplicateValidation(t *testing.T) {
 	unknown.Memberships = append([]MembershipSpec(nil), manifest.Memberships...)
 	unknown.Memberships[0].Grantor = "not_registered"
 	assertViolationCode(t, ValidateManifest(unknown), CodeUnknownPrincipal)
+}
+
+func TestLegitimateLoginAndInheritRolePropertiesRemainValid(t *testing.T) {
+	manifest := loadCoreOutboxManifest(t)
+	if !manifest.Roles[3].Properties.Inherit || !manifest.Roles[4].Properties.Login {
+		t.Fatal("fixture no longer exercises legitimate INHERIT and LOGIN properties")
+	}
+	if err := Compare(manifest, snapshotForManifest(manifest)); err != nil {
+		t.Fatalf("legitimate role properties rejected: %v", err)
+	}
 }
 
 func TestPostgreSQL16MinimumIsEnforced(t *testing.T) {
@@ -137,7 +256,7 @@ func TestCatalogQueryContractsCoverExactACLInputs(t *testing.T) {
 		}
 	}
 	for name, fragments := range map[string][]string{
-		"roles":         {"pg_roles", "rolinherit", "rolbypassrls", "rolpassword", "rolvaliduntil", "rolconfig", "shobj_description"},
+		"roles":         {"pg_roles", "rolinherit", "rolbypassrls", "rolpassword", "rolvaliduntil", "rolconfig", "shobj_description", "json_agg", "configuration_json"},
 		"memberships":   {"pg_auth_members", "admin_option", "inherit_option", "set_option", "grantor"},
 		"database_acls": {"pg_database", "aclexplode", "acldefault"},
 		"schema_acls":   {"pg_namespace", "aclexplode", "acldefault"},
@@ -150,6 +269,9 @@ func TestCatalogQueryContractsCoverExactACLInputs(t *testing.T) {
 				t.Errorf("query %s does not contain required catalog fragment %s", name, fragment)
 			}
 		}
+	}
+	if strings.Contains(byName["roles"].SQL, `E'\x1f'`) {
+		t.Fatal("role query still uses a lossy unit-separator encoding")
 	}
 
 	copyOfContracts := CatalogQueryContracts()
@@ -188,6 +310,19 @@ func loadCoreOutboxManifest(t *testing.T) Manifest {
 		t.Fatal(err)
 	}
 	return manifest
+}
+
+func cloneManifest(t *testing.T, manifest Manifest) Manifest {
+	t.Helper()
+	encoded, err := json.Marshal(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cloned Manifest
+	if err := json.Unmarshal(encoded, &cloned); err != nil {
+		t.Fatal(err)
+	}
+	return cloned
 }
 
 func snapshotForManifest(manifest Manifest) Snapshot {

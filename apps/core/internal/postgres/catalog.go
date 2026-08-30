@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -231,6 +232,9 @@ const (
 	CodeMissingState              Code = "missing_state"
 	CodeExtraState                Code = "extra_state"
 	CodePropertyDrift             Code = "property_drift"
+	CodeProhibitedRoleCapability  Code = "prohibited_role_capability"
+	CodePublicPrivilege           Code = "public_privilege"
+	CodeGrantOptionEnabled        Code = "grant_option_enabled"
 	CodeMembershipAdminEnabled    Code = "membership_admin_enabled"
 	CodeColumnACLPresent          Code = "column_acl_present"
 	CodeServerVersionUnsupported  Code = "server_version_unsupported"
@@ -272,12 +276,17 @@ func ValidateManifest(manifest Manifest) error {
 	}
 
 	prefix := "sd_" + manifest.DeploymentKey + "_"
+	bindingPrefix := "stead-role:v1:" + manifest.InstallationUUID + ":"
 	semanticIDs := map[string]int{}
 	roleNames := map[string]int{}
 	roleBindings := map[string]int{}
 	for i, role := range manifest.Roles {
-		if role.SemanticID == "" || role.Binding == "" || !identifierPattern.MatchString(role.Name) || !strings.HasPrefix(role.Name, prefix) || len(role.Name) > 63 {
+		if !identifierPattern.MatchString(role.SemanticID) || role.Binding != bindingPrefix+role.SemanticID || !identifierPattern.MatchString(role.Name) || !strings.HasPrefix(role.Name, prefix) || len(role.Name) > 63 {
 			v = append(v, Violation{Code: CodeInvalidRegisteredIdentity, Section: "roles", ExpectedOrdinal: i})
+		}
+		properties := role.Properties
+		if properties.Superuser || properties.CreateRole || properties.CreateDatabase || properties.Replication || properties.BypassRLS {
+			v = append(v, Violation{Code: CodeProhibitedRoleCapability, Section: "roles", ExpectedOrdinal: i})
 		}
 		if previous, ok := semanticIDs[role.SemanticID]; ok {
 			v = append(v, Violation{Code: CodeDuplicateExpected, Section: "roles.semantic_id", ExpectedOrdinal: previous, ActualOrdinal: i})
@@ -370,6 +379,12 @@ func ValidateManifest(manifest Manifest) error {
 			if acl.Privilege == "" {
 				v = append(v, Violation{Code: CodeInvalidRegisteredIdentity, Section: section, ExpectedOrdinal: i})
 			}
+			if acl.Grantee == PublicPrincipal {
+				v = append(v, Violation{Code: CodePublicPrivilege, Section: section, ExpectedOrdinal: i})
+			}
+			if acl.GrantOption {
+				v = append(v, Violation{Code: CodeGrantOptionEnabled, Section: section, ExpectedOrdinal: i})
+			}
 			validResource := false
 			switch section {
 			case "database_acls":
@@ -397,6 +412,12 @@ func ValidateManifest(manifest Manifest) error {
 		}
 		if !knownSchema || acl.ObjectKind == "" || acl.Privilege == "" {
 			v = append(v, Violation{Code: CodeInvalidRegisteredIdentity, Section: "default_acls", ExpectedOrdinal: i})
+		}
+		if acl.Grantee == PublicPrincipal {
+			v = append(v, Violation{Code: CodePublicPrivilege, Section: "default_acls", ExpectedOrdinal: i})
+		}
+		if acl.GrantOption {
+			v = append(v, Violation{Code: CodeGrantOptionEnabled, Section: "default_acls", ExpectedOrdinal: i})
 		}
 	}
 
@@ -459,7 +480,7 @@ func Compare(manifest Manifest, snapshot Snapshot) error {
 	for _, role := range manifest.Roles {
 		expectedRoles = append(expectedRoles, RoleState{Name: role.Name, Binding: role.Binding, Properties: role.Properties})
 	}
-	compareKeyed(&v, "roles", expectedRoles, snapshot.Roles, roleStateIdentityKey, roleStateFullKey)
+	compareKeyed(&v, "roles", expectedRoles, snapshot.Roles, roleStateIdentityKey, roleStateEqual)
 
 	expectedMemberships := make([]MembershipState, 0, len(manifest.Memberships))
 	for _, edge := range manifest.Memberships {
@@ -483,7 +504,7 @@ func Compare(manifest Manifest, snapshot Snapshot) error {
 	for i, database := range snapshot.Databases {
 		checkActualPrincipal("databases", i, database.Owner)
 	}
-	compareKeyed(&v, "databases", expectedDatabases, snapshot.Databases, func(value DatabaseState) string { return value.Name }, databaseStateKey)
+	compareKeyed(&v, "databases", expectedDatabases, snapshot.Databases, func(value DatabaseState) string { return value.Name }, func(expected, actual DatabaseState) bool { return expected == actual })
 
 	expectedSchemas := make([]SchemaState, 0, len(manifest.Schemas))
 	for _, schema := range manifest.Schemas {
@@ -492,7 +513,7 @@ func Compare(manifest Manifest, snapshot Snapshot) error {
 	for i, schema := range snapshot.Schemas {
 		checkActualPrincipal("schemas", i, schema.Owner)
 	}
-	compareKeyed(&v, "schemas", expectedSchemas, snapshot.Schemas, func(value SchemaState) string { return value.Name }, schemaStateKey)
+	compareKeyed(&v, "schemas", expectedSchemas, snapshot.Schemas, func(value SchemaState) string { return value.Name }, func(expected, actual SchemaState) bool { return expected == actual })
 
 	expectedObjects := make([]ObjectState, 0, len(manifest.Objects))
 	for _, object := range manifest.Objects {
@@ -501,7 +522,7 @@ func Compare(manifest Manifest, snapshot Snapshot) error {
 	for i, object := range snapshot.Objects {
 		checkActualPrincipal("objects", i, object.Owner)
 	}
-	compareKeyed(&v, "objects", expectedObjects, snapshot.Objects, objectStateIdentityKey, objectStateKey)
+	compareKeyed(&v, "objects", expectedObjects, snapshot.Objects, objectStateIdentityKey, func(expected, actual ObjectState) bool { return expected == actual })
 
 	convertACLs := func(specs []ACLSpec) []ACLState {
 		states := make([]ACLState, 0, len(specs))
@@ -541,7 +562,7 @@ func Compare(manifest Manifest, snapshot Snapshot) error {
 	return violationsError(v)
 }
 
-func compareKeyed[T any](violations *[]Violation, section string, expected, actual []T, identityKey, fullKey func(T) string) {
+func compareKeyed[T any](violations *[]Violation, section string, expected, actual []T, identityKey func(T) string, equal func(T, T) bool) {
 	expectedIdentity := indexKeys(violations, section, expected, identityKey, true)
 	actualIdentity := indexKeys(violations, section, actual, identityKey, false)
 	for identity, expectedOrdinal := range expectedIdentity {
@@ -550,7 +571,7 @@ func compareKeyed[T any](violations *[]Violation, section string, expected, actu
 			*violations = append(*violations, Violation{Code: CodeMissingState, Section: section, ExpectedOrdinal: expectedOrdinal})
 			continue
 		}
-		if fullKey(expected[expectedOrdinal]) != fullKey(actual[actualOrdinal]) {
+		if !equal(expected[expectedOrdinal], actual[actualOrdinal]) {
 			*violations = append(*violations, Violation{Code: CodePropertyDrift, Section: section, ExpectedOrdinal: expectedOrdinal, ActualOrdinal: actualOrdinal})
 		}
 	}
@@ -644,11 +665,21 @@ func validObjectIdentity(kind, name string) bool {
 func joinKey(values ...any) string { return fmt.Sprint(values...) }
 
 func roleStateIdentityKey(value RoleState) string { return value.Name }
-func roleStateFullKey(value RoleState) string {
-	properties := value.Properties
-	configuration := append([]string(nil), properties.Configuration...)
-	sort.Strings(configuration)
-	return joinKey(value.Name, "\x00", value.Binding, "\x00", properties.Superuser, properties.Inherit, properties.CreateRole, properties.CreateDatabase, properties.Login, properties.Replication, properties.BypassRLS, properties.ConnectionLimit, properties.PasswordPresent, properties.ValidUntilUTC, strings.Join(configuration, "\x1f"))
+func roleStateEqual(expected, actual RoleState) bool {
+	expectedProperties, actualProperties := expected.Properties, actual.Properties
+	return expected.Name == actual.Name &&
+		expected.Binding == actual.Binding &&
+		expectedProperties.Superuser == actualProperties.Superuser &&
+		expectedProperties.Inherit == actualProperties.Inherit &&
+		expectedProperties.CreateRole == actualProperties.CreateRole &&
+		expectedProperties.CreateDatabase == actualProperties.CreateDatabase &&
+		expectedProperties.Login == actualProperties.Login &&
+		expectedProperties.Replication == actualProperties.Replication &&
+		expectedProperties.BypassRLS == actualProperties.BypassRLS &&
+		expectedProperties.ConnectionLimit == actualProperties.ConnectionLimit &&
+		expectedProperties.PasswordPresent == actualProperties.PasswordPresent &&
+		expectedProperties.ValidUntilUTC == actualProperties.ValidUntilUTC &&
+		slices.Equal(expectedProperties.Configuration, actualProperties.Configuration)
 }
 func membershipSpecKey(value MembershipSpec) string {
 	return joinKey(value.Role, "\x00", value.Member, "\x00", value.Grantor, "\x00", value.AdminOption, value.InheritOption, value.SetOption)
@@ -660,17 +691,12 @@ func databaseSpecKey(value DatabaseSpec) string { return joinKey(value.Name, "\x
 func principalSpecKey(value PrincipalSpec) string {
 	return joinKey(value.SemanticID, "\x00", value.Name)
 }
-func databaseStateKey(value DatabaseState) string { return joinKey(value.Name, "\x00", value.Owner) }
-func schemaSpecKey(value SchemaSpec) string       { return joinKey(value.Name, "\x00", value.Owner) }
-func schemaStateKey(value SchemaState) string     { return joinKey(value.Name, "\x00", value.Owner) }
+func schemaSpecKey(value SchemaSpec) string { return joinKey(value.Name, "\x00", value.Owner) }
 func objectSpecKey(value ObjectSpec) string {
 	return joinKey(value.Schema, "\x00", value.Name, "\x00", value.Kind, "\x00", value.Owner)
 }
 func objectStateIdentityKey(value ObjectState) string {
 	return joinKey(value.Schema, "\x00", value.Name, "\x00", value.Kind)
-}
-func objectStateKey(value ObjectState) string {
-	return joinKey(value.Schema, "\x00", value.Name, "\x00", value.Kind, "\x00", value.Owner)
 }
 func aclSpecKey(value ACLSpec) string {
 	return joinKey(value.Database, "\x00", value.Schema, "\x00", value.Object, "\x00", value.ObjectKind, "\x00", value.Grantor, "\x00", value.Grantee, "\x00", value.Privilege, "\x00", value.GrantOption)

@@ -8,31 +8,31 @@
     {
       "semantic_id": "database_owner",
       "name": "sd_0123456789abcdef_own_db",
-      "binding": "stead-role:v1:00000000-0000-4000-8000-000000000001:database-owner",
+      "binding": "stead-role:v1:00000000-0000-4000-8000-000000000001:database_owner",
       "properties": {"superuser": false, "inherit": false, "create_role": false, "create_database": false, "login": false, "replication": false, "bypass_rls": false, "connection_limit": -1, "password_present": false, "valid_until_utc": "", "configuration": []}
     },
     {
       "semantic_id": "core_outbox_owner",
       "name": "sd_0123456789abcdef_own_core_outbox",
-      "binding": "stead-role:v1:00000000-0000-4000-8000-000000000001:core-outbox-owner",
+      "binding": "stead-role:v1:00000000-0000-4000-8000-000000000001:core_outbox_owner",
       "properties": {"superuser": false, "inherit": false, "create_role": false, "create_database": false, "login": false, "replication": false, "bypass_rls": false, "connection_limit": -1, "password_present": false, "valid_until_utc": "", "configuration": []}
     },
     {
       "semantic_id": "core_outbox_read_write",
       "name": "sd_0123456789abcdef_rw_core_outbox",
-      "binding": "stead-role:v1:00000000-0000-4000-8000-000000000001:core-outbox-read-write",
+      "binding": "stead-role:v1:00000000-0000-4000-8000-000000000001:core_outbox_read_write",
       "properties": {"superuser": false, "inherit": false, "create_role": false, "create_database": false, "login": false, "replication": false, "bypass_rls": false, "connection_limit": -1, "password_present": false, "valid_until_utc": "", "configuration": []}
     },
     {
       "semantic_id": "core_outbox_execution",
       "name": "sd_0123456789abcdef_x_core_outbox",
-      "binding": "stead-role:v1:00000000-0000-4000-8000-000000000001:core-outbox-execution",
+      "binding": "stead-role:v1:00000000-0000-4000-8000-000000000001:core_outbox_execution",
       "properties": {"superuser": false, "inherit": true, "create_role": false, "create_database": false, "login": false, "replication": false, "bypass_rls": false, "connection_limit": -1, "password_present": false, "valid_until_utc": "", "configuration": []}
     },
     {
       "semantic_id": "api_login",
       "name": "sd_0123456789abcdef_login_api",
-      "binding": "stead-role:v1:00000000-0000-4000-8000-000000000001:api-login",
+      "binding": "stead-role:v1:00000000-0000-4000-8000-000000000001:api_login",
       "properties": {"superuser": false, "inherit": false, "create_role": false, "create_database": false, "login": true, "replication": false, "bypass_rls": false, "connection_limit": 20, "password_present": true, "valid_until_utc": "", "configuration": []}
     }
   ],

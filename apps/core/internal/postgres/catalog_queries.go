@@ -29,12 +29,12 @@ func CatalogQueryContracts() []QueryContract {
        r.rolreplication, r.rolbypassrls, r.rolconnlimit,
        r.rolpassword IS NOT NULL AS password_present,
        COALESCE(to_char(r.rolvaliduntil AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'), '') AS valid_until_utc,
-       COALESCE((SELECT string_agg(setting, E'\x1f' ORDER BY setting)
-                 FROM unnest(r.rolconfig) AS configured(setting)), '') AS configuration
+       COALESCE((SELECT json_agg(setting ORDER BY setting)::text
+                 FROM unnest(r.rolconfig) AS configured(setting)), '[]') AS configuration_json
 FROM pg_catalog.pg_roles AS r
 WHERE left(r.rolname, length($1)) = $1
 ORDER BY r.rolname`,
-			Columns: []string{"rolname", "identity_binding", "rolsuper", "rolinherit", "rolcreaterole", "rolcreatedb", "rolcanlogin", "rolreplication", "rolbypassrls", "rolconnlimit", "password_present", "valid_until_utc", "configuration"},
+			Columns: []string{"rolname", "identity_binding", "rolsuper", "rolinherit", "rolcreaterole", "rolcreatedb", "rolcanlogin", "rolreplication", "rolbypassrls", "rolconnlimit", "password_present", "valid_until_utc", "configuration_json"},
 			Args:    []string{"deployment_role_prefix"},
 		},
 		{

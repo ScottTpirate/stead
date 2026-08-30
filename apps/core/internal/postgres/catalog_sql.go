@@ -3,10 +3,18 @@ package postgres
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"sort"
 	"strings"
+)
+
+const (
+	catalogSearchPathSQL             = `SET LOCAL search_path = pg_catalog, pg_temp`
+	catalogSearchPathVerificationSQL = `SELECT pg_catalog.current_setting('search_path')`
+	catalogSearchPath                = "pg_catalog, pg_temp"
 )
 
 // SQLCollector executes CatalogQueryContracts through database/sql. The
@@ -31,6 +39,13 @@ func (collector *SQLCollector) Collect(ctx context.Context, manifest Manifest) (
 			_ = tx.Rollback()
 		}
 	}()
+	if _, execErr := tx.ExecContext(ctx, catalogSearchPathSQL); execErr != nil {
+		return Snapshot{}, errors.New("postgres catalog search path setup failed")
+	}
+	var observedSearchPath string
+	if queryErr := tx.QueryRowContext(ctx, catalogSearchPathVerificationSQL).Scan(&observedSearchPath); queryErr != nil || observedSearchPath != catalogSearchPath {
+		return Snapshot{}, errors.New("postgres catalog search path verification failed")
+	}
 
 	prefix := "sd_" + manifest.DeploymentKey + "_"
 	for _, contract := range CatalogQueryContracts() {
@@ -70,15 +85,16 @@ func scanContract(name string, rows *sql.Rows, snapshot *Snapshot) error {
 			}
 		case "roles":
 			var value RoleState
-			var configuration string
+			var configurationJSON string
 			properties := &value.Properties
-			if err := rows.Scan(&value.Name, &value.Binding, &properties.Superuser, &properties.Inherit, &properties.CreateRole, &properties.CreateDatabase, &properties.Login, &properties.Replication, &properties.BypassRLS, &properties.ConnectionLimit, &properties.PasswordPresent, &properties.ValidUntilUTC, &configuration); err != nil {
+			if err := rows.Scan(&value.Name, &value.Binding, &properties.Superuser, &properties.Inherit, &properties.CreateRole, &properties.CreateDatabase, &properties.Login, &properties.Replication, &properties.BypassRLS, &properties.ConnectionLimit, &properties.PasswordPresent, &properties.ValidUntilUTC, &configurationJSON); err != nil {
 				return err
 			}
-			if configuration != "" {
-				properties.Configuration = strings.Split(configuration, "\x1f")
-				sort.Strings(properties.Configuration)
+			configuration, err := decodeRoleConfiguration(configurationJSON)
+			if err != nil {
+				return err
 			}
+			properties.Configuration = configuration
 			snapshot.Roles = append(snapshot.Roles, value)
 		case "memberships":
 			var value MembershipState
@@ -139,4 +155,21 @@ func scanContract(name string, rows *sql.Rows, snapshot *Snapshot) error {
 		}
 	}
 	return rows.Err()
+}
+
+func decodeRoleConfiguration(encoded string) ([]string, error) {
+	decoder := json.NewDecoder(strings.NewReader(encoded))
+	decoder.DisallowUnknownFields()
+	var configuration []string
+	if err := decoder.Decode(&configuration); err != nil || configuration == nil {
+		return nil, errors.New("postgres role configuration decode failed")
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); err != io.EOF {
+		return nil, errors.New("postgres role configuration has trailing data")
+	}
+	if !sort.StringsAreSorted(configuration) || hasAdjacentDuplicate(configuration) {
+		return nil, errors.New("postgres role configuration is not canonical")
+	}
+	return configuration, nil
 }

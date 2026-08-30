@@ -1,11 +1,17 @@
 {
   "scope": "STEAD-P1-015 core_outbox-only catalog conformance contribution",
   "cases": [
-    {"mutation": "membership_option_inversion", "expected_code": "missing_state"},
-    {"mutation": "membership_reversal", "expected_code": "missing_state"},
-    {"mutation": "membership_admin_true", "expected_code": "membership_admin_enabled"},
-    {"mutation": "unknown_grantor", "expected_code": "unknown_principal"},
-    {"mutation": "extra_schema_grant", "expected_code": "extra_state"},
-    {"mutation": "persistent_column_acl", "expected_code": "column_acl_present"}
+    {"mutation": "membership_inherit_inversion", "edge": 0, "expected_code": "missing_state"},
+    {"mutation": "membership_set_inversion", "edge": 0, "expected_code": "missing_state"},
+    {"mutation": "membership_admin_true", "edge": 0, "expected_code": "membership_admin_enabled"},
+    {"mutation": "membership_reversal", "edge": 0, "expected_code": "missing_state"},
+    {"mutation": "membership_unknown_grantor", "edge": 0, "expected_code": "unknown_principal"},
+    {"mutation": "membership_inherit_inversion", "edge": 1, "expected_code": "missing_state"},
+    {"mutation": "membership_set_inversion", "edge": 1, "expected_code": "missing_state"},
+    {"mutation": "membership_admin_true", "edge": 1, "expected_code": "membership_admin_enabled"},
+    {"mutation": "membership_reversal", "edge": 1, "expected_code": "missing_state"},
+    {"mutation": "membership_unknown_grantor", "edge": 1, "expected_code": "unknown_principal"},
+    {"mutation": "extra_schema_grant", "edge": -1, "expected_code": "extra_state"},
+    {"mutation": "persistent_column_acl", "edge": -1, "expected_code": "column_acl_present"}
   ]
 }
