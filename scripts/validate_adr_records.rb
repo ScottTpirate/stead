@@ -28,17 +28,25 @@ EXPECTED_P1_006_ADR_CANDIDATES = %w[
 ].freeze
 EXPECTED_P1_006_ADR_GATE_CLAUSE =
   "Only after ADR-CAND-002, ADR-CAND-003, ADR-CAND-004, ADR-CAND-005, ADR-CAND-007, and ADR-CAND-021 are accepted,".freeze
+P1_006_RAW_ISSUES_KEY_LINE = "issues:".freeze
 P1_006_RAW_ISSUE_ID_LINE = '  - id: "STEAD-P1-006"'.freeze
 P1_006_RAW_ACCEPTANCE_PREFIX =
   %(    acceptance_criteria: ["#{EXPECTED_P1_006_ADR_GATE_CLAUSE}).freeze
+P1_006_FRAGMENT_NORMALIZATION_ROUNDS = 4
+P1_006_FRAGMENT_MAX_BYTES = 8192
+P1_006_INVALID_ENCODED_FRAGMENT = "invalid-encoded-ADR-fragment".freeze
+P1_006_NON_ASCII_FRAGMENT = "non-ASCII-ADR-fragment".freeze
 EXPECTED_P1_006_GATE_MUTATION_GROUPS = {
   paired_boundary: 2,
   candidate_boundary: 12,
-  raw_yaml_source: 11,
+  raw_yaml_source: 12,
   named_noncanonical: 33,
   unicode_dash: 25,
   escaped_code_run: 32,
   residual_fragment: 30,
+  unicode_compatibility: 8,
+  encoded_composition: 14,
+  named_entity: 16,
   acceptance_structure: 8,
   continuation_control: 4,
   cross_item: 5
@@ -278,23 +286,112 @@ end
 # The P1-006 approval prerequisite is intentionally a strict raw-source clause,
 # not rendered Markdown. Escapes, entities, formatting delimiters, links, HTML,
 # and cross-item composition cannot stand in for the machine-reviewed wording.
+def percent_decode_utf8_once(source)
+  binary = source.b
+  return [nil, true] if binary.match?(/%(?![0-9A-Fa-f]{2})/)
+
+  decoded = binary.gsub(/%([0-9A-Fa-f]{2})/) { [Regexp.last_match(1).to_i(16)].pack("C") }
+  decoded.force_encoding(Encoding::UTF_8)
+  return [nil, true] unless decoded.valid_encoding?
+
+  [decoded, false]
+end
+
+def decode_numeric_character_references(source)
+  return [nil, true] if source.match?(/&#x[0-9A-F]{7,}/i) || source.match?(/&#[0-9]{8,}/)
+
+  invalid = false
+  decoded = source.gsub(/&#(?:x([0-9A-F]+)|([0-9]+));?/i) do |reference|
+    codepoint = Regexp.last_match(1) ? Regexp.last_match(1).to_i(16) : Regexp.last_match(2).to_i(10)
+    begin
+      character = codepoint.chr(Encoding::UTF_8)
+      if !character.valid_encoding? || codepoint.zero? || codepoint.between?(0xD800, 0xDFFF)
+        invalid = true
+        reference
+      else
+        character
+      end
+    rescue RangeError
+      invalid = true
+      reference
+    end
+  end
+  invalid = true if decoded.match?(/&#/)
+
+  [invalid ? nil : decoded, invalid]
+end
+
+def normalize_adr_candidate_fragment_once(source)
+  # Literal YAML/Markdown layout whitespace is collapsed by the raw contract;
+  # encoded controls are decoded only after this step and are rejected below.
+  normalized, invalid = percent_decode_utf8_once(source.gsub(/[\t\n\f\r]/, ""))
+  return [nil, true] if invalid
+
+  normalized, invalid = decode_numeric_character_references(normalized)
+  return [nil, true] if invalid
+
+  normalized = normalized
+               .gsub(/&(?:Tab);/, "\t")
+               .gsub(/&(?:NewLine);/, "\n")
+               .gsub(/&(?:nbsp);?/, " ")
+               .gsub(/&(?:shy);?/, "\u00AD")
+               .gsub(/&(?:NonBreakingSpace|ensp|emsp|thinsp|ThinSpace|hairsp|VeryThinSpace);/, " ")
+               .gsub(/&(?:NegativeThinSpace|NegativeMediumSpace|NegativeThickSpace|NegativeVeryThinSpace|ZeroWidthSpace);/, "\u200B")
+               .gsub(/&(?:dash|hyphen|minus|ndash|mdash|horbar);?/i, "-")
+  # CommonMark uses HTML5 named references, including legacy names that render
+  # without a semicolon. Reject any remaining entity-shaped name rather than
+  # maintaining a partial decoder whose omissions can compose a hidden token.
+  return [nil, true] if normalized.match?(/&[A-Za-z][A-Za-z0-9]*/)
+  return [nil, true] if normalized.match?(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u)
+
+  begin
+    normalized = normalized.unicode_normalize(:nfkc)
+  rescue ArgumentError
+    return [nil, true]
+  end
+
+  normalized = normalized
+               .gsub(/<!--.*?-->/m, "")
+               .gsub(%r{</?[A-Za-z][^>\n]*>}, "")
+               .gsub("\\-", "-")
+               .tr("֊־᐀᠆‐‑‒–—―⁃⸗⸚⸺⸻⹀⹝〜〰゠︱︲﹘﹣－𐺭−", "-")
+               .gsub(/[\p{Zs}\p{M}\t\n\f\r*_`\[\](){}"']/u, "")
+  [normalized, false]
+end
+
+def normalize_adr_candidate_fragment(source)
+  source_text = source.to_s
+  return [nil, true] if source_text.bytesize > P1_006_FRAGMENT_MAX_BYTES
+
+  begin
+    normalized = source_text.encode(Encoding::UTF_8)
+  rescue EncodingError
+    return [nil, true]
+  end
+  return [nil, true] unless normalized.valid_encoding?
+
+  P1_006_FRAGMENT_NORMALIZATION_ROUNDS.times do
+    transformed, invalid = normalize_adr_candidate_fragment_once(normalized)
+    return [nil, true] if invalid
+    return [transformed, false] if transformed == normalized
+
+    normalized = transformed
+  end
+
+  # A bounded fixed point prevents nested percent/entity encodings from turning
+  # validation into an unbounded decoder. Anything requiring another pass is
+  # rejected instead of being compared in a partially decoded form.
+  transformed, invalid = normalize_adr_candidate_fragment_once(normalized)
+  return [nil, true] if invalid || transformed != normalized
+
+  [normalized, false]
+end
+
 def noncanonical_adr_candidate_fragments(criteria)
   criteria.flat_map do |criterion|
-    source = criterion.to_s
-    collapsed = source
-                .gsub(/&#(?:x([0-9A-F]+)|([0-9]+));?/i) do |reference|
-                  codepoint = Regexp.last_match(1) ? Regexp.last_match(1).to_i(16) : Regexp.last_match(2).to_i(10)
-                  codepoint.chr(Encoding::UTF_8)
-                rescue RangeError
-                  reference
-                end
-                .gsub(/&(?:dash|hyphen|minus|ndash|mdash|horbar);?/i, "-")
-                .gsub(/%([0-9A-F]{2})/i) { Regexp.last_match(1).to_i(16).chr }
-                .gsub(/<!--.*?-->/m, "")
-                .gsub(%r{</?[A-Za-z][^>\n]*>}, "")
-                .gsub("\\-", "-")
-                .tr("֊־᐀᠆‐‑‒–—―⸗⸚⸺⸻⹀⹝〜〰゠︱︲﹘﹣－𐺭−", "-")
-                .gsub(/[\p{Zs}\p{M}\t\n\f\r*_`\[\](){}"']/u, "")
+    collapsed, invalid = normalize_adr_candidate_fragment(criterion)
+    next [P1_006_INVALID_ENCODED_FRAGMENT] if invalid
+    next [P1_006_NON_ASCII_FRAGMENT] unless collapsed.ascii_only?
     next [] unless collapsed.include?("ADR-")
 
     exact_candidates = collapsed.scan(/ADR-CAND-\d{3}/)
@@ -302,12 +399,16 @@ def noncanonical_adr_candidate_fragments(criteria)
   end
 end
 
-def yaml_mapping_values(node, key)
+def yaml_mapping_entries(node, key)
   return [] unless node.is_a?(Psych::Nodes::Mapping)
 
   node.children.each_slice(2).filter_map do |key_node, value_node|
-    value_node if key_node.is_a?(Psych::Nodes::Scalar) && key_node.value == key
+    [key_node, value_node] if key_node.is_a?(Psych::Nodes::Scalar) && key_node.value == key
   end
+end
+
+def yaml_mapping_values(node, key)
+  yaml_mapping_entries(node, key).map(&:last)
 end
 
 def p1_006_raw_gate_failures(issue_catalog_source)
@@ -323,13 +424,18 @@ def p1_006_raw_gate_failures(issue_catalog_source)
     return failures
   end
 
-  issues_values = yaml_mapping_values(documents.first.root, "issues")
-  unless issues_values.length == 1 && issues_values.first.is_a?(Psych::Nodes::Sequence)
+  issues_entries = yaml_mapping_entries(documents.first.root, "issues")
+  unless issues_entries.length == 1 && issues_entries.first.last.is_a?(Psych::Nodes::Sequence)
     failures << "implementation issue catalog raw source must contain one direct issues sequence"
     return failures
   end
+  issues_key_node, issues_value = issues_entries.first
+  unless lines.fetch(issues_key_node.start_line, "").chomp == P1_006_RAW_ISSUES_KEY_LINE
+    failures << "implementation issue catalog raw issues key must use the canonical direct one-line representation"
+    return failures
+  end
 
-  issue_nodes = issues_values.first.children.select do |node|
+  issue_nodes = issues_value.children.select do |node|
     yaml_mapping_values(node, "id").any? do |id_node|
       id_node.is_a?(Psych::Nodes::Scalar) && id_node.value == "STEAD-P1-006"
     end
@@ -400,6 +506,9 @@ def p1_006_adr_gate_failures(adr_gates:, security_issue:)
     criteria = raw_criteria.is_a?(Array) ? raw_criteria.select { |criterion| criterion.is_a?(String) } : []
     if criteria.any? { |criterion| criterion.match?(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u) }
       failures << "STEAD-P1-006 acceptance criteria contain prohibited control, format, or line-separator characters"
+    end
+    if criteria.any? { |criterion| !criterion.ascii_only? }
+      failures << "STEAD-P1-006 acceptance criteria contain prohibited non-ASCII characters"
     end
     canonical_clause_present = criteria.first&.start_with?(EXPECTED_P1_006_ADR_GATE_CLAUSE)
     unless canonical_clause_present
@@ -726,6 +835,10 @@ if security_issue && adr_gates["ADR-CAND-002"]
     end
 
     raw_binding_mutations = {
+      "YAML escaped top-level issues key" => issue_catalog_source.sub(
+        "#{P1_006_RAW_ISSUES_KEY_LINE}\n",
+        '"\\x69ssues":' + "\n"
+      ),
       "YAML escaped P1-006 issue ID" => issue_catalog_source.sub(
         P1_006_RAW_ISSUE_ID_LINE,
         '  - id: "STEAD-P1-\\x30\\x30\\x36"'
@@ -898,6 +1011,83 @@ if security_issue && adr_gates["ADR-CAND-002"]
     residual_failures = p1_006_adr_gate_failures(adr_gates: adr_gates, security_issue: residual_issue)
     unless residual_failures.any? { |failure| failure.start_with?("STEAD-P1-006 acceptance criteria contain noncanonical ADR fragments") }
       failures << "STEAD-P1-006 #{mutation_name} mutant survived residual-fragment validation"
+    end
+  end
+
+  unicode_compatibility_mutations = {
+    "fullwidth initial letter" => "ＡDR-CAND-001",
+    "mathematical-bold initial letter" => "𝐀DR-CAND-001",
+    "fully fullwidth identifier" => "ＡＤＲ－ＣＡＮＤ－００１",
+    "fullwidth candidate letters" => "ADR-ＣＡＮＤ-001",
+    "fullwidth digits" => "ADR-CAND-００１",
+    "mathematical-bold identifier" => "𝐀𝐃𝐑-𝐂𝐀𝐍𝐃-𝟎𝟎𝟏",
+    "fullwidth identifier hyphens" => "ADR－CAND－001",
+    "hyphen-bullet identifier" => "ADR⁃CAND⁃001"
+  }
+  unicode_compatibility_mutations.each do |mutation_name, fragment|
+    record_p1_006_mutation.call(:unicode_compatibility)
+    residual_issue = candidate_gate_fixture.merge(
+      "acceptance_criteria" => ["#{candidate_gate_fixture.fetch('acceptance_criteria').first} #{fragment}"]
+    )
+    residual_failures = p1_006_adr_gate_failures(adr_gates: adr_gates, security_issue: residual_issue)
+    unless residual_failures.any? { |failure| failure.start_with?("STEAD-P1-006 acceptance criteria contain noncanonical ADR fragments") }
+      failures << "STEAD-P1-006 #{mutation_name} mutant survived Unicode-compatibility validation"
+    end
+  end
+
+  encoded_composition_mutations = {
+    "double-percent encoded identifier" => "%2541%2544%2552%252D%2543%2541%254E%2544%252D001",
+    "percent-encoded numeric entities" => "%26%2365%3B%26%2368%3B%26%2382%3B-CAND-001",
+    "double-percent encoded numeric entities" => "%2526%252365%253B%2526%252368%253B%2526%252382%253B-CAND-001",
+    "invalid percent byte" => "%FFADR-CAND-001",
+    "invalid percent UTF-8 sequence" => "AD%C3%28R-CAND-001",
+    "truncated percent UTF-8 sequence" => "AD%E2%82R-CAND-001",
+    "malformed percent escape" => "AD%G1R-CAND-001",
+    "percent-encoded null control" => "AD%00R-CAND-001",
+    "percent-encoded vertical-tab control" => "AD%0BR-CAND-001",
+    "percent-encoded delete control" => "AD%7FR-CAND-001",
+    "overlong decimal numeric entity" => "&#99999999;ADR-CAND-001",
+    "overlong hexadecimal numeric entity" => "&#xFFFFFFF;ADR-CAND-001",
+    "oversized encoded fragment" => "#{'A' * (P1_006_FRAGMENT_MAX_BYTES + 1)}ADR-CAND-001",
+    "over-nested percent encoding" => "%2525252541DR-CAND-001"
+  }
+  encoded_composition_mutations.each do |mutation_name, fragment|
+    record_p1_006_mutation.call(:encoded_composition)
+    residual_issue = candidate_gate_fixture.merge(
+      "acceptance_criteria" => ["#{candidate_gate_fixture.fetch('acceptance_criteria').first} #{fragment}"]
+    )
+    residual_failures = p1_006_adr_gate_failures(adr_gates: adr_gates, security_issue: residual_issue)
+    unless residual_failures.any? { |failure| failure.start_with?("STEAD-P1-006 acceptance criteria contain noncanonical ADR fragments") }
+      failures << "STEAD-P1-006 #{mutation_name} mutant survived encoded-composition validation"
+    end
+  end
+
+  named_entity_mutations = {
+    "HTML5 Tab entity" => "AD&Tab;R-CAND-001",
+    "HTML5 NewLine entity" => "AD&NewLine;R-CAND-001",
+    "HTML5 ThinSpace entity" => "AD&ThinSpace;R-CAND-001",
+    "HTML5 emsp entity" => "AD&emsp;R-CAND-001",
+    "HTML5 NegativeThinSpace entity" => "AD&NegativeThinSpace;R-CAND-001",
+    "HTML5 legacy semicolonless nbsp entity" => "AD&nbspR-CAND-001",
+    "HTML5 legacy semicolonless shy entity" => "AD&shyR-CAND-001",
+    "HTML5 legacy semicolonless acute entity" => "AD&acuteR-CAND-001",
+    "HTML5 legacy semicolonless cedil entity" => "AD&cedilR-CAND-001",
+    "HTML5 legacy semicolonless macr entity" => "AD&macrR-CAND-001",
+    "HTML5 legacy semicolonless uml entity" => "AD&umlR-CAND-001",
+    "HTML5 legacy semicolonless quot entity" => "AD&quotR-CAND-001",
+    "HTML5 legacy semicolonless QUOT entity" => "AD&QUOTR-CAND-001",
+    "HTML5 legacy semicolonless lt tag composition" => "AD&ltspan>R-CAND-001&lt/span>",
+    "HTML5 legacy semicolonless LT tag composition" => "AD&LTspan>R-CAND-001&LT/span>",
+    "HTML5 legacy semicolonless lt comment composition" => "AD&lt!--split--&gtR-CAND-001"
+  }
+  named_entity_mutations.each do |mutation_name, fragment|
+    record_p1_006_mutation.call(:named_entity)
+    residual_issue = candidate_gate_fixture.merge(
+      "acceptance_criteria" => ["#{candidate_gate_fixture.fetch('acceptance_criteria').first} #{fragment}"]
+    )
+    residual_failures = p1_006_adr_gate_failures(adr_gates: adr_gates, security_issue: residual_issue)
+    unless residual_failures.any? { |failure| failure.start_with?("STEAD-P1-006 acceptance criteria contain noncanonical ADR fragments") }
+      failures << "STEAD-P1-006 #{mutation_name} mutant survived named-entity validation"
     end
   end
 
