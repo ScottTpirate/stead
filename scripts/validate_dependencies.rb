@@ -30,7 +30,8 @@ PROHIBITED_DIRECT_PACKAGES = Set.new(["@asyncapi/cli", "ajv-cli"]).freeze
 PROHIBITED_SETUP_ACTIONS = Set.new(["actions/setup-node", "actions/setup-go", "ruby/setup-ruby"]).freeze
 FOUNDATION_ROLLBACK_TARGET = "git:e24a4d9d05ad6df19c5bcaa9c385ee74fd5d8c31"
 EXACT_GO_VERSION = /\Av\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?\z/
-GO_H1_DIGEST = /\Ah1:[A-Za-z0-9+\/=]+\z/
+GO_H1_DIGEST = /\Ah1:[A-Za-z0-9+\/]{43}=\z/
+PROHIBITED_GO_DIRECTIVES = Set.new(%w[exclude godebug replace retract tool toolchain]).freeze
 
 def allowed_lock_license?(license)
   license.is_a?(String) && DEFAULT_PERMISSIVE_NPM_LICENSES.include?(license)
@@ -182,15 +183,22 @@ rescue JSON::ParserError => e
   []
 end
 
-def direct_go_dependencies(source, errors, label = "go.mod")
-  dependencies = []
+def go_requirements(source, errors, label = "go.mod")
+  requirements = []
   require_block = false
 
   source.each_line.with_index(1) do |raw_line, line_number|
     line = raw_line.strip
     next if line.empty? || line.start_with?("//")
 
+    directive = line[/\A([A-Za-z]+)\b/, 1]
+    if PROHIBITED_GO_DIRECTIVES.include?(directive)
+      errors << "#{label}:#{line_number}: #{directive} directives are prohibited; approve the exact source through the dependency registry"
+      next
+    end
+
     if line.match?(/\Arequire\s*\(\s*\z/)
+      errors << "#{label}:#{line_number}: nested require block" if require_block
       require_block = true
       next
     end
@@ -207,22 +215,26 @@ def direct_go_dependencies(source, errors, label = "go.mod")
     next unless declaration
 
     requirement, comment = declaration.split(%r{\s+//\s*}, 2)
-    next if comment&.strip == "indirect"
+    indirect = comment&.strip == "indirect"
+    if comment && !indirect
+      errors << "#{label}:#{line_number}: require annotation must be exactly // indirect"
+    end
 
     module_name, version, extra = requirement.split(/\s+/, 3)
     if module_name.nil? || version.nil? || extra
-      errors << "#{label}:#{line_number}: malformed direct require declaration"
+      errors << "#{label}:#{line_number}: malformed require declaration"
       next
     end
     unless version.match?(EXACT_GO_VERSION)
       errors << "#{label}:#{line_number}: #{module_name} must use an exact Go module version, got #{version.inspect}"
     end
-    dependencies << { "name" => module_name, "version" => version }
+    requirements << { "name" => module_name, "version" => version, "indirect" => indirect }
   end
 
-  names = dependencies.map { |entry| entry["name"] }
-  errors << "#{label}: direct module paths must be unique" unless names.uniq.length == names.length
-  dependencies
+  errors << "#{label}: unterminated require block" if require_block
+  names = requirements.map { |entry| entry["name"] }
+  errors << "#{label}: required module paths must be unique" unless names.uniq.length == names.length
+  requirements
 end
 
 def go_sum_entries(source, errors, label = "go.sum")
@@ -244,8 +256,9 @@ def go_sum_entries(source, errors, label = "go.sum")
   entries
 end
 
-def validate_go_dependencies(mod_source, sum_source, components, errors, mod_label: "go.mod", sum_label: "go.sum")
-  dependencies = direct_go_dependencies(mod_source, errors, mod_label)
+def validate_go_dependencies(mod_source, sum_source, components, errors, allowed_indirect: {}, mod_label: "go.mod", sum_label: "go.sum")
+  requirements = go_requirements(mod_source, errors, mod_label)
+  dependencies = requirements.reject { |entry| entry["indirect"] }
   sums = go_sum_entries(sum_source, errors, sum_label)
 
   dependencies.each do |entry|
@@ -269,7 +282,34 @@ def validate_go_dependencies(mod_source, sum_source, components, errors, mod_lab
       errors << "#{name}: registry go.mod checksum differs from #{sum_label}"
     end
   end
-  dependencies
+  indirect = requirements.select { |entry| entry["indirect"] }
+  indirect.each do |entry|
+    expected = allowed_indirect[entry["name"]]
+    if expected.nil?
+      errors << "dependency evidence: indirect Go module #{entry["name"]}@#{entry["version"]} is outside every reviewed runtime closure"
+      next
+    end
+    expected_version, expected_sum, expected_go_mod_sum = expected
+    errors << "#{entry["name"]}: indirect version differs from reviewed closure" unless entry["version"] == expected_version
+    module_sum = sums[[entry["name"], entry["version"]]]
+    go_mod_sum = sums[[entry["name"], "#{entry["version"]}/go.mod"]]
+    errors << "#{sum_label}: missing module checksum for #{entry["name"]} #{entry["version"]}" if module_sum.nil?
+    errors << "#{sum_label}: missing go.mod checksum for #{entry["name"]} #{entry["version"]}" if go_mod_sum.nil?
+    errors << "#{entry["name"]}: module checksum differs from reviewed closure" if module_sum && module_sum != expected_sum
+    errors << "#{entry["name"]}: go.mod checksum differs from reviewed closure" if go_mod_sum && go_mod_sum != expected_go_mod_sum
+  end
+
+  active_names = requirements.map { |entry| entry["name"] }.to_set
+  expected_names = allowed_indirect.keys.to_set
+  if active_names.include?("github.com/jackc/pgx/v5")
+    errors << "go.mod: github.com/jackc/pgx/v5 must be a direct dependency" unless dependencies.any? { |entry| entry["name"] == "github.com/jackc/pgx/v5" }
+    missing = expected_names - active_names
+    errors << "go.mod: pgxpool reviewed runtime closure is incomplete: #{missing.to_a.sort.join(', ')}" unless missing.empty?
+  elsif !(active_names & expected_names).empty?
+    errors << "go.mod: pgxpool transitive modules may not be active without direct github.com/jackc/pgx/v5"
+  end
+
+  { "direct" => dependencies, "requirements" => requirements }
 end
 
 def oci_workflow_references(source, errors, label)
@@ -327,8 +367,8 @@ def run_validator_self_tests
   pending_go = {
     "component" => {
       "name" => "example.com/db", "kind" => "go_module", "ecosystem" => "go", "version" => "v1.2.3",
-      "digest" => { "algorithm" => "go-h1", "value" => "h1:correct=" },
-      "module_file_digest" => { "algorithm" => "go-h1", "value" => "h1:modcorrect=" }
+      "digest" => { "algorithm" => "go-h1", "value" => "h1:#{'a' * 43}=" },
+      "module_file_digest" => { "algorithm" => "go-h1", "value" => "h1:#{'b' * 43}=" }
     },
     "decision" => { "status" => "REVIEWED_PENDING_INDEPENDENT_APPROVAL" }
   }
@@ -347,12 +387,27 @@ def run_validator_self_tests
   failures << "missing Go sum mutation was accepted" unless missing_errors.any? { |error| error.include?("missing module checksum") } && missing_errors.any? { |error| error.include?("missing go.mod checksum") }
 
   wrong_errors = []
-  wrong_sum = "example.com/db v1.2.3 h1:wrong=\nexample.com/db v1.2.3/go.mod h1:modwrong=\n"
+  wrong_sum = "example.com/db v1.2.3 h1:#{'c' * 43}=\nexample.com/db v1.2.3/go.mod h1:#{'d' * 43}=\n"
   validate_go_dependencies("module fixture\nrequire example.com/db v1.2.3\n", wrong_sum, components, wrong_errors, mod_label: "wrong.mod", sum_label: "wrong.sum")
   failures << "wrong Go sum mutation was accepted" unless wrong_errors.any? { |error| error.include?("registry module checksum differs") } && wrong_errors.any? { |error| error.include?("registry go.mod checksum differs") }
 
   approval_errors = release_approval_errors(Set.new(["example.com/db"]), components, ["APPROVED"])
   failures << "unapproved active Go module mutation was accepted" unless approval_errors.any? { |error| error.include?("not independently approved") }
+
+  replacement_errors = []
+  go_requirements("module fixture\nreplace example.com/db => ./unreviewed\n", replacement_errors, "replace.mod")
+  failures << "Go replace mutation was accepted" unless replacement_errors.any? { |error| error.include?("replace directives are prohibited") }
+
+  indirect_errors = []
+  validate_go_dependencies(
+    "module fixture\nrequire example.com/transitive v1.0.0 // indirect\n",
+    "example.com/transitive v1.0.0 h1:#{'e' * 43}=\nexample.com/transitive v1.0.0/go.mod h1:#{'f' * 43}=\n",
+    components,
+    indirect_errors,
+    mod_label: "indirect.mod",
+    sum_label: "indirect.sum"
+  )
+  failures << "unreviewed indirect Go module mutation was accepted" unless indirect_errors.any? { |error| error.include?("outside every reviewed runtime closure") }
 
   unpinned_errors = []
   validate_oci_workflow_images({ "unpinned.yml" => "services:\n  db:\n    image: postgres:16-bookworm\n" }, components, unpinned_errors)
@@ -367,7 +422,7 @@ def run_validator_self_tests
     failures.each { |failure| warn "- #{failure}" }
     exit 1
   end
-  puts "dependency validator self-tests passed: 5/5 mutation guards"
+  puts "dependency validator self-tests passed: 7/7 mutation guards"
 end
 
 if ARGV.first == "--self-test"
@@ -488,14 +543,14 @@ expected_postgresql_evidence.each do |path, expected|
 end
 
 expected_pgxpool_closure = {
-  "github.com/jackc/pgpassfile" => ["v1.0.0", "h1:/6Hmqy13Ss2zCq62VdNG8tM1wchn8zjSGOBJ6icpsIM=", "99d8e8e28945ffceaf75b0299fcb2bb656b8a683", "MIT"],
-  "github.com/jackc/pgservicefile" => ["v0.0.0-20240606120523-5a60cdf6a761", "h1:iCEnooe7UlwOQYpKFhBabPMi4aNAfoODPEFNiAnClxo=", "5a60cdf6a76120dc3d5152b95f3b5fd8aa7cc9eb", "MIT"],
-  "github.com/jackc/puddle/v2" => ["v2.2.2", "h1:PR8nw+E/1w0GLuRFSmiioY6UooMp6KJv0/61nB7icHo=", "bd09d14bd4018b6d65a9d7770e2f3ddf8b00af1c", "MIT"],
-  "golang.org/x/sync" => ["v0.17.0", "h1:l60nONMj9l5drqw6jlhIELNv9I0A4OFgRsG9k2oT9Ug=", "04914c200cb38d4ea960ee6a4c314a028c632991", "BSD-3-Clause"],
-  "golang.org/x/text" => ["v0.29.0", "h1:1neNs90w9YzJ9BocxfsQNHKuAT4pkghyXc4nhZ6sJvk=", "e69f31bf9cf2f46bd3325bc9bad37fe9001731c2", "BSD-3-Clause"]
+  "github.com/jackc/pgpassfile" => ["v1.0.0", "h1:/6Hmqy13Ss2zCq62VdNG8tM1wchn8zjSGOBJ6icpsIM=", "h1:CEx0iS5ambNFdcRtxPj5JhEz+xB6uRky5eyVu/W2HEg=", "99d8e8e28945ffceaf75b0299fcb2bb656b8a683", "MIT"],
+  "github.com/jackc/pgservicefile" => ["v0.0.0-20240606120523-5a60cdf6a761", "h1:iCEnooe7UlwOQYpKFhBabPMi4aNAfoODPEFNiAnClxo=", "h1:5TJZWKEWniPve33vlWYSoGYefn3gLQRzjfDlhSJ9ZKM=", "5a60cdf6a76120dc3d5152b95f3b5fd8aa7cc9eb", "MIT"],
+  "github.com/jackc/puddle/v2" => ["v2.2.2", "h1:PR8nw+E/1w0GLuRFSmiioY6UooMp6KJv0/61nB7icHo=", "h1:vriiEXHvEE654aYKXXjOvZM39qJ0q+azkZFrfEOc3H4=", "bd09d14bd4018b6d65a9d7770e2f3ddf8b00af1c", "MIT"],
+  "golang.org/x/sync" => ["v0.17.0", "h1:l60nONMj9l5drqw6jlhIELNv9I0A4OFgRsG9k2oT9Ug=", "h1:9KTHXmSnoGruLpwFjVSX0lNNA75CykiMECbovNTZqGI=", "04914c200cb38d4ea960ee6a4c314a028c632991", "BSD-3-Clause"],
+  "golang.org/x/text" => ["v0.29.0", "h1:1neNs90w9YzJ9BocxfsQNHKuAT4pkghyXc4nhZ6sJvk=", "h1:7MhJOA9CD2qZyOKYazxdYMF85OwPdEr9jTtBpO7ydH4=", "e69f31bf9cf2f46bd3325bc9bad37fe9001731c2", "BSD-3-Clause"]
 }
 actual_closure = Array(postgresql_evidence.dig("go_candidate", "pgxpool_module_closure")).to_h do |entry|
-  [entry["module"], [entry["version"], entry["module_sum"], entry["upstream_commit"], entry["license_expression"]]]
+  [entry["module"], [entry["version"], entry["module_sum"], entry["go_mod_sum"], entry["upstream_commit"], entry["license_expression"]]]
 end
 errors << "dependency-evidence/stead-p1-015-postgresql.yaml: pgxpool module closure differs from the reviewed intake" unless actual_closure == expected_pgxpool_closure
 
@@ -540,7 +595,17 @@ registered_npm = records.select { |record| record.dig("component", "kind") == "n
 
 go_mod_source = File.read(GO_MOD_PATH)
 go_sum_source = File.file?(GO_SUM_PATH) ? File.read(GO_SUM_PATH) : ""
-direct_go = validate_go_dependencies(go_mod_source, go_sum_source, components, errors)
+errors << "go.work: workspace overrides are prohibited in release input" if File.file?(File.join(ROOT, "go.work"))
+errors << "vendor: vendored Go source requires separate provenance and approval" if File.directory?(File.join(ROOT, "vendor"))
+allowed_pgxpool_indirect = expected_pgxpool_closure.transform_values { |values| values.first(3) }
+go_validation = validate_go_dependencies(
+  go_mod_source,
+  go_sum_source,
+  components,
+  errors,
+  allowed_indirect: allowed_pgxpool_indirect
+)
+direct_go = go_validation["direct"]
 direct_go_names = direct_go.map { |entry| entry["name"] }.to_set
 
 review_licenses = Set.new

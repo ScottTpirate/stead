@@ -248,7 +248,7 @@ _dependency_self_test_stdout, dependency_self_test_stderr, dependency_self_test_
 assert.call(
   "T-SEC-001-ACCEPTANCE",
   dependency_self_test_status.success?,
-  "dependency mutation guards must reject missing/wrong Go sums, unapproved active modules, and unpinned/wrong OCI digests: #{dependency_self_test_stderr.strip}"
+  "dependency mutation guards must reject missing/wrong Go sums, source overrides, unreviewed transitive modules, unapproved active modules, and unpinned/wrong OCI digests: #{dependency_self_test_stderr.strip}"
 )
 lock_license_failures = lockfile.fetch("packages").filter_map do |path, entry|
   next if path.empty? || entry["link"]

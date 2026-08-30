@@ -31,6 +31,7 @@ go_candidate:
     - module: github.com/jackc/pgpassfile
       version: v1.0.0
       module_sum: "h1:/6Hmqy13Ss2zCq62VdNG8tM1wchn8zjSGOBJ6icpsIM="
+      go_mod_sum: "h1:CEx0iS5ambNFdcRtxPj5JhEz+xB6uRky5eyVu/W2HEg="
       upstream_repository: https://github.com/jackc/pgpassfile
       upstream_commit: 99d8e8e28945ffceaf75b0299fcb2bb656b8a683
       license_expression: MIT
@@ -38,6 +39,7 @@ go_candidate:
     - module: github.com/jackc/pgservicefile
       version: v0.0.0-20240606120523-5a60cdf6a761
       module_sum: "h1:iCEnooe7UlwOQYpKFhBabPMi4aNAfoODPEFNiAnClxo="
+      go_mod_sum: "h1:5TJZWKEWniPve33vlWYSoGYefn3gLQRzjfDlhSJ9ZKM="
       upstream_repository: https://github.com/jackc/pgservicefile
       upstream_commit: 5a60cdf6a76120dc3d5152b95f3b5fd8aa7cc9eb
       license_expression: MIT
@@ -45,6 +47,7 @@ go_candidate:
     - module: github.com/jackc/puddle/v2
       version: v2.2.2
       module_sum: "h1:PR8nw+E/1w0GLuRFSmiioY6UooMp6KJv0/61nB7icHo="
+      go_mod_sum: "h1:vriiEXHvEE654aYKXXjOvZM39qJ0q+azkZFrfEOc3H4="
       upstream_repository: https://github.com/jackc/puddle
       upstream_commit: bd09d14bd4018b6d65a9d7770e2f3ddf8b00af1c
       license_expression: MIT
@@ -52,6 +55,7 @@ go_candidate:
     - module: golang.org/x/sync
       version: v0.17.0
       module_sum: "h1:l60nONMj9l5drqw6jlhIELNv9I0A4OFgRsG9k2oT9Ug="
+      go_mod_sum: "h1:9KTHXmSnoGruLpwFjVSX0lNNA75CykiMECbovNTZqGI="
       upstream_repository: https://github.com/golang/sync
       upstream_commit: 04914c200cb38d4ea960ee6a4c314a028c632991
       license_expression: BSD-3-Clause
@@ -59,6 +63,7 @@ go_candidate:
     - module: golang.org/x/text
       version: v0.29.0
       module_sum: "h1:1neNs90w9YzJ9BocxfsQNHKuAT4pkghyXc4nhZ6sJvk="
+      go_mod_sum: "h1:7MhJOA9CD2qZyOKYazxdYMF85OwPdEr9jTtBpO7ydH4="
       upstream_repository: https://github.com/golang/text
       upstream_commit: e69f31bf9cf2f46bd3325bc9bad37fe9001731c2
       license_expression: BSD-3-Clause
