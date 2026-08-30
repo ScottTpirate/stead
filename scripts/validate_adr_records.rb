@@ -17,50 +17,73 @@ EXPECTED_RECORDS = {
   "0007" => { candidate: "ADR-CAND-002", state: "PROPOSED", owner_approval: false }
 }.freeze
 
-DECISION_REVISION = "24c74d52ef0a78840ab147da48c3d66589e49e3e"
-ACCEPTED_AT = "2026-08-30"
-APPROVAL_RECORD_PATH = "docs/governance/phase1-foundation-approval-record.md"
-EXPECTED_APPROVAL_RECORDS = {
-  "0002" => [
-    { "role" => "WS-06-security-contract", "identity" => "/root/contract_owner_review", "disposition" => "APPROVED" },
-    { "role" => "WS-01-architecture", "identity" => "/root/architecture_standards_review/profile_contract_audit", "disposition" => "APPROVED" },
-    { "role" => "WS-13-independent-qa", "identity" => "/root/precommit_scope_audit", "disposition" => "APPROVED" },
-    { "role" => "WS-13-independent-security", "identity" => "/root/revocation_mode_impact", "disposition" => "APPROVED" },
-    { "role" => "project-owner", "identity" => "explicit 2026-08-30 project-owner instruction", "disposition" => "APPROVED" }
-  ],
-  "0003" => [
-    { "role" => "WS-06-security-contract", "identity" => "/root/contract_owner_review", "disposition" => "APPROVED" },
-    { "role" => "WS-01-architecture", "identity" => "/root/architecture_standards_review/profile_contract_audit", "disposition" => "APPROVED" },
-    { "role" => "WS-13-independent-qa", "identity" => "/root/precommit_scope_audit", "disposition" => "APPROVED" },
-    { "role" => "WS-13-independent-security", "identity" => "/root/revocation_mode_impact", "disposition" => "APPROVED" },
-    { "role" => "project-owner", "identity" => "explicit 2026-08-30 project-owner instruction", "disposition" => "APPROVED" }
-  ],
-  "0004" => [
-    { "role" => "WS-06-security-contract", "identity" => "/root/contract_owner_review", "disposition" => "APPROVED" },
-    { "role" => "WS-02-team-domain", "identity" => "/root/core_owner_review", "disposition" => "APPROVED" },
-    { "role" => "WS-01-architecture", "identity" => "/root/architecture_standards_review/profile_contract_audit", "disposition" => "APPROVED" },
-    { "role" => "WS-13-independent-qa", "identity" => "/root/precommit_scope_audit", "disposition" => "APPROVED" },
-    { "role" => "WS-13-independent-security", "identity" => "/root/revocation_mode_impact", "disposition" => "APPROVED" },
-    { "role" => "project-owner", "identity" => "explicit 2026-08-30 project-owner instruction", "disposition" => "APPROVED" }
-  ],
-  "0005" => [
-    { "role" => "WS-06-security-contract", "identity" => "/root/contract_owner_review", "disposition" => "APPROVED" },
-    { "role" => "WS-01-architecture", "identity" => "/root/architecture_standards_review/profile_contract_audit", "disposition" => "APPROVED" },
-    { "role" => "WS-02-core-composition", "identity" => "/root/core_owner_review", "disposition" => "APPROVED" },
-    { "role" => "WS-13-independent-qa", "identity" => "/root/precommit_scope_audit", "disposition" => "APPROVED" },
-    { "role" => "WS-13-independent-security", "identity" => "/root/revocation_mode_impact", "disposition" => "APPROVED" },
-    { "role" => "project-owner", "identity" => "explicit 2026-08-30 project-owner concurrence", "disposition" => "CONCURRED_NOT_REQUIRED" }
-  ],
-  "0006" => [
-    { "role" => "WS-06-security-contract", "identity" => "/root/contract_owner_review", "disposition" => "APPROVED" },
-    { "role" => "WS-01-architecture", "identity" => "/root/architecture_standards_review/profile_contract_audit", "disposition" => "APPROVED" },
-    { "role" => "WS-02-core-composition", "identity" => "/root/core_owner_review", "disposition" => "APPROVED" },
-    { "role" => "WS-09-build-signing", "identity" => "/root/build_owner_review", "disposition" => "APPROVED" },
-    { "role" => "WS-13-independent-qa", "identity" => "/root/precommit_scope_audit", "disposition" => "APPROVED" },
-    { "role" => "WS-13-independent-security", "identity" => "/root/revocation_mode_impact", "disposition" => "APPROVED" },
-    { "role" => "project-owner", "identity" => "explicit 2026-08-30 project-owner instruction", "disposition" => "APPROVED" }
-  ]
+ACCEPTED_RECORD_METADATA = {
+  "0002" => {
+    immutable_revision: "24c74d52ef0a78840ab147da48c3d66589e49e3e",
+    accepted_at: "2026-08-30",
+    approval_record_path: "docs/governance/phase1-foundation-approval-record.md",
+    approval_records: [
+      { "role" => "WS-06-security-contract", "identity" => "/root/contract_owner_review", "disposition" => "APPROVED" },
+      { "role" => "WS-01-architecture", "identity" => "/root/architecture_standards_review/profile_contract_audit", "disposition" => "APPROVED" },
+      { "role" => "WS-13-independent-qa", "identity" => "/root/precommit_scope_audit", "disposition" => "APPROVED" },
+      { "role" => "WS-13-independent-security", "identity" => "/root/revocation_mode_impact", "disposition" => "APPROVED" },
+      { "role" => "project-owner", "identity" => "explicit 2026-08-30 project-owner instruction", "disposition" => "APPROVED" }
+    ]
+  },
+  "0003" => {
+    immutable_revision: "24c74d52ef0a78840ab147da48c3d66589e49e3e",
+    accepted_at: "2026-08-30",
+    approval_record_path: "docs/governance/phase1-foundation-approval-record.md",
+    approval_records: [
+      { "role" => "WS-06-security-contract", "identity" => "/root/contract_owner_review", "disposition" => "APPROVED" },
+      { "role" => "WS-01-architecture", "identity" => "/root/architecture_standards_review/profile_contract_audit", "disposition" => "APPROVED" },
+      { "role" => "WS-13-independent-qa", "identity" => "/root/precommit_scope_audit", "disposition" => "APPROVED" },
+      { "role" => "WS-13-independent-security", "identity" => "/root/revocation_mode_impact", "disposition" => "APPROVED" },
+      { "role" => "project-owner", "identity" => "explicit 2026-08-30 project-owner instruction", "disposition" => "APPROVED" }
+    ]
+  },
+  "0004" => {
+    immutable_revision: "24c74d52ef0a78840ab147da48c3d66589e49e3e",
+    accepted_at: "2026-08-30",
+    approval_record_path: "docs/governance/phase1-foundation-approval-record.md",
+    approval_records: [
+      { "role" => "WS-06-security-contract", "identity" => "/root/contract_owner_review", "disposition" => "APPROVED" },
+      { "role" => "WS-02-team-domain", "identity" => "/root/core_owner_review", "disposition" => "APPROVED" },
+      { "role" => "WS-01-architecture", "identity" => "/root/architecture_standards_review/profile_contract_audit", "disposition" => "APPROVED" },
+      { "role" => "WS-13-independent-qa", "identity" => "/root/precommit_scope_audit", "disposition" => "APPROVED" },
+      { "role" => "WS-13-independent-security", "identity" => "/root/revocation_mode_impact", "disposition" => "APPROVED" },
+      { "role" => "project-owner", "identity" => "explicit 2026-08-30 project-owner instruction", "disposition" => "APPROVED" }
+    ]
+  },
+  "0005" => {
+    immutable_revision: "24c74d52ef0a78840ab147da48c3d66589e49e3e",
+    accepted_at: "2026-08-30",
+    approval_record_path: "docs/governance/phase1-foundation-approval-record.md",
+    approval_records: [
+      { "role" => "WS-06-security-contract", "identity" => "/root/contract_owner_review", "disposition" => "APPROVED" },
+      { "role" => "WS-01-architecture", "identity" => "/root/architecture_standards_review/profile_contract_audit", "disposition" => "APPROVED" },
+      { "role" => "WS-02-core-composition", "identity" => "/root/core_owner_review", "disposition" => "APPROVED" },
+      { "role" => "WS-13-independent-qa", "identity" => "/root/precommit_scope_audit", "disposition" => "APPROVED" },
+      { "role" => "WS-13-independent-security", "identity" => "/root/revocation_mode_impact", "disposition" => "APPROVED" },
+      { "role" => "project-owner", "identity" => "explicit 2026-08-30 project-owner concurrence", "disposition" => "CONCURRED_NOT_REQUIRED" }
+    ]
+  },
+  "0006" => {
+    immutable_revision: "24c74d52ef0a78840ab147da48c3d66589e49e3e",
+    accepted_at: "2026-08-30",
+    approval_record_path: "docs/governance/phase1-foundation-approval-record.md",
+    approval_records: [
+      { "role" => "WS-06-security-contract", "identity" => "/root/contract_owner_review", "disposition" => "APPROVED" },
+      { "role" => "WS-01-architecture", "identity" => "/root/architecture_standards_review/profile_contract_audit", "disposition" => "APPROVED" },
+      { "role" => "WS-02-core-composition", "identity" => "/root/core_owner_review", "disposition" => "APPROVED" },
+      { "role" => "WS-09-build-signing", "identity" => "/root/build_owner_review", "disposition" => "APPROVED" },
+      { "role" => "WS-13-independent-qa", "identity" => "/root/precommit_scope_audit", "disposition" => "APPROVED" },
+      { "role" => "WS-13-independent-security", "identity" => "/root/revocation_mode_impact", "disposition" => "APPROVED" },
+      { "role" => "project-owner", "identity" => "explicit 2026-08-30 project-owner instruction", "disposition" => "APPROVED" }
+    ]
+  }
 }.freeze
+LEGACY_ACCEPTED_WITHOUT_IMMUTABLE_METADATA = Set["0001"].freeze
 
 REQUIRED_SECTIONS = [
   "Context and decision scope",
@@ -92,11 +115,20 @@ issues = issue_catalog.fetch("issues").to_h { |issue| [issue.fetch("id"), issue]
 adr_index = ROOT.join("docs/adr/INDEX.md").read(encoding: "UTF-8")
 candidate_index = ROOT.join("docs/governance/adr-candidate-index.md").read(encoding: "UTF-8")
 choice_queue = ROOT.join("docs/adr/unresolved-implementation-choices.md").read(encoding: "UTF-8")
-approval_record = ROOT.join(APPROVAL_RECORD_PATH).read(encoding: "UTF-8")
+accepted_numbers = EXPECTED_RECORDS.select { |_number, record| record.fetch(:state) == "ACCEPTED" }.keys.to_set
+expected_metadata_numbers = accepted_numbers - LEGACY_ACCEPTED_WITHOUT_IMMUTABLE_METADATA
+unless ACCEPTED_RECORD_METADATA.keys.to_set == expected_metadata_numbers
+  failures << "accepted ADR metadata mismatch: expected #{expected_metadata_numbers.to_a.sort.join(', ')}, found #{ACCEPTED_RECORD_METADATA.keys.sort.join(', ')}"
+end
 
-failures << "#{APPROVAL_RECORD_PATH}: missing exact immutable decision revision" unless approval_record.include?(DECISION_REVISION)
-EXPECTED_APPROVAL_RECORDS.values.flatten.map { |record| record.fetch("identity") }.uniq.each do |identity|
-  failures << "#{APPROVAL_RECORD_PATH}: missing reviewer identity #{identity}" unless approval_record.include?(identity)
+ACCEPTED_RECORD_METADATA.each do |number, metadata|
+  approval_record_path = metadata.fetch(:approval_record_path)
+  approval_record = ROOT.join(approval_record_path).read(encoding: "UTF-8")
+  immutable_revision = metadata.fetch(:immutable_revision)
+  failures << "#{approval_record_path}: ADR-#{number} missing exact immutable decision revision #{immutable_revision}" unless approval_record.include?(immutable_revision)
+  metadata.fetch(:approval_records).map { |record| record.fetch("identity") }.uniq.each do |identity|
+    failures << "#{approval_record_path}: ADR-#{number} missing reviewer identity #{identity}" unless approval_record.include?(identity)
+  end
 end
 
 paths = Dir.glob(ROOT.join("docs/adr/0[0-9][0-9][1-9]-*.md")).sort.map { |path| Pathname.new(path) }
@@ -159,13 +191,22 @@ paths.each do |path|
   failures << "implementation issue catalog: #{candidate} decision_record must be #{relative}" unless gate["decision_record"] == relative
   failures << "implementation issue catalog: #{candidate} project-owner flag mismatch" unless gate["project_owner_approval_required"] == expected.fetch(:owner_approval)
 
-  next unless EXPECTED_APPROVAL_RECORDS.key?(number)
+  acceptance = ACCEPTED_RECORD_METADATA[number]
+  unless acceptance
+    premature_fields = %w[immutable_revision accepted_at approval_record approval_records].select { |field| gate.key?(field) }
+    failures << "implementation issue catalog: proposed #{candidate} carries premature acceptance fields #{premature_fields.join(', ')}" unless premature_fields.empty?
+    next
+  end
 
-  failures << "#{relative}: accepted record must name exact decision revision #{DECISION_REVISION}" unless source.include?(DECISION_REVISION)
-  failures << "implementation issue catalog: #{candidate} immutable revision mismatch" unless gate["immutable_revision"] == DECISION_REVISION
-  failures << "implementation issue catalog: #{candidate} accepted_at must be #{ACCEPTED_AT}" unless gate["accepted_at"] == ACCEPTED_AT
-  failures << "implementation issue catalog: #{candidate} approval_record mismatch" unless gate["approval_record"] == APPROVAL_RECORD_PATH
-  unless gate["approval_records"] == EXPECTED_APPROVAL_RECORDS.fetch(number)
+  immutable_revision = acceptance.fetch(:immutable_revision)
+  accepted_at = acceptance.fetch(:accepted_at)
+  approval_record_path = acceptance.fetch(:approval_record_path)
+  expected_approval_records = acceptance.fetch(:approval_records)
+  failures << "#{relative}: accepted record must name exact decision revision #{immutable_revision}" unless source.include?(immutable_revision)
+  failures << "implementation issue catalog: #{candidate} immutable revision mismatch" unless gate["immutable_revision"] == immutable_revision
+  failures << "implementation issue catalog: #{candidate} accepted_at must be #{accepted_at}" unless gate["accepted_at"] == accepted_at
+  failures << "implementation issue catalog: #{candidate} approval_record mismatch" unless gate["approval_record"] == approval_record_path
+  unless gate["approval_records"] == expected_approval_records
     failures << "implementation issue catalog: #{candidate} approval_records do not match the exact required decision-time dispositions"
   end
 
@@ -319,25 +360,80 @@ implementation_assignments = {
   },
   "0007" => {
     "STEAD-P1-002" => %w[
+      T-ADR-0007-NAMESPACE-ROLES
+      T-ADR-0007-FOREIGN-WRITE-DENIAL
+      T-ADR-0007-TRANSACTION-PORTS
+      T-ADR-0007-OUTBOX-ATOMICITY
       T-ADR-0007-CROSS-MODULE-READS
+      T-ADR-0007-MIGRATION-ORDERING
+      T-ADR-0007-UPGRADE-ROLLBACK
+      T-ADR-0007-OBSERVABILITY-PERFORMANCE
+    ],
+    "STEAD-P1-003" => %w[
+      T-ADR-0007-NAMESPACE-ROLES
+      T-ADR-0007-FOREIGN-WRITE-DENIAL
+      T-ADR-0007-MIGRATION-ORDERING
+      T-ADR-0007-UPGRADE-ROLLBACK
+    ],
+    "STEAD-P1-004" => %w[
+      T-ADR-0007-NAMESPACE-ROLES
+      T-ADR-0007-FOREIGN-WRITE-DENIAL
+      T-ADR-0007-MIGRATION-ORDERING
+      T-ADR-0007-UPGRADE-ROLLBACK
     ],
     "STEAD-P1-006" => %w[
+      T-ADR-0007-NAMESPACE-ROLES
+      T-ADR-0007-FOREIGN-WRITE-DENIAL
+      T-ADR-0007-TRANSACTION-PORTS
+      T-ADR-0007-OUTBOX-ATOMICITY
       T-ADR-0007-DURABLE-EFFECTS
+      T-ADR-0007-MIGRATION-ORDERING
+      T-ADR-0007-UPGRADE-ROLLBACK
+      T-ADR-0007-FAILURE-INJECTION
+      T-ADR-0007-OBSERVABILITY-PERFORMANCE
     ],
     "STEAD-P1-007" => %w[
+      T-ADR-0007-NAMESPACE-ROLES
+      T-ADR-0007-FOREIGN-WRITE-DENIAL
+      T-ADR-0007-TRANSACTION-PORTS
       T-ADR-0007-OUTBOX-ATOMICITY
+      T-ADR-0007-CROSS-MODULE-READS
+      T-ADR-0007-MIGRATION-ORDERING
+      T-ADR-0007-UPGRADE-ROLLBACK
+      T-ADR-0007-FAILURE-INJECTION
+      T-ADR-0007-OBSERVABILITY-PERFORMANCE
+    ],
+    "STEAD-P1-008" => %w[
+      T-ADR-0007-NAMESPACE-ROLES
+      T-ADR-0007-FOREIGN-WRITE-DENIAL
+      T-ADR-0007-CROSS-MODULE-READS
+      T-ADR-0007-MIGRATION-ORDERING
+      T-ADR-0007-UPGRADE-ROLLBACK
+    ],
+    "STEAD-P1-009" => %w[
+      T-ADR-0007-NAMESPACE-ROLES
+      T-ADR-0007-FOREIGN-WRITE-DENIAL
+      T-ADR-0007-MIGRATION-ORDERING
+      T-ADR-0007-UPGRADE-ROLLBACK
     ],
     "STEAD-P1-011" => %w[
+      T-ADR-0007-NAMESPACE-ROLES
+      T-ADR-0007-FOREIGN-WRITE-DENIAL
       T-ADR-0007-MIGRATION-ORDERING
       T-ADR-0007-UPGRADE-ROLLBACK
       T-ADR-0007-BACKUP-RESTORE
       T-ADR-0007-FAILURE-INJECTION
+      T-ADR-0007-OBSERVABILITY-PERFORMANCE
     ],
     "STEAD-P1-015" => %w[
       T-ADR-0007-NAMESPACE-ROLES
       T-ADR-0007-FOREIGN-WRITE-DENIAL
       T-ADR-0007-TRANSACTION-PORTS
       T-ADR-0007-OUTBOX-ATOMICITY
+      T-ADR-0007-DURABLE-EFFECTS
+      T-ADR-0007-MIGRATION-ORDERING
+      T-ADR-0007-UPGRADE-ROLLBACK
+      T-ADR-0007-FAILURE-INJECTION
       T-ADR-0007-OBSERVABILITY-PERFORMANCE
     ]
   }
