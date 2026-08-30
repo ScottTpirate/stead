@@ -5,13 +5,14 @@ scope:
   summary: "Synthetic profile proving that Stead accepts a new vocabulary without application changes."
   coverage_statement: "Contract fixture only; covers its three invented sensitivity values."
   limitations: ["Not an implementation or claim for any real regulatory or classification regime."]
-authoritative_sources: []
+authoritative_sources:
+  - {source_kind: authoritative_snapshot, source_id: synthetic_registry, title: "Synthetic profile registry fixture", uri: "urn:stead:test:regulated-example-registry", source_version_or_date: "fixture-v1", retrieved_at: "2026-08-29T00:00:00Z", snapshot_digest: "sha256:fe0a085d9e0e067e20f018bd27adb17b2b67ba6fc96465053ca5d1eba95f9e49", payload_path: "tests/contract/fixtures/security-label-profiles/regulated-example-registry.json", mapped_scope: "Synthetic category fixture only"}
 sensitivity_order: [open, controlled, highly_controlled]
 handling_regimes: [review_required]
 allowed_categories:
   - {id: synthetic_category, subcategories: [synthetic_subcategory]}
 allowed_compartments: [synthetic_compartment]
-dissemination_controls: [named_audience_only]
+dissemination_controls: [named_audience_only, public_release]
 releasability_groups: [synthetic_staff]
 export_controls: []
 normalization: {identifier_case: exact, set_order: lexicographic, unknown_value: deny}
@@ -20,7 +21,34 @@ join: least_upper_bound_plus_union_of_handling_restrictions
 releasable_to_join: intersection_fail_on_empty
 cross_profile_composition: deny_without_signed_approved_bridge
 lowering: deny_by_default_authorized_reasoned_audited
-lowering_approval: {minimum_approvers: 2, distinct_approvers: true, human_approvers_required: true}
+lowering_approval: {minimum_approvers: 3, distinct_approvers: true, human_approvers_required: true}
+semantics:
+  rule_contract: stead.security-profile-rules.v1
+  representability: closed_profile_semantics_v1
+  unmapped_behavior: deny
+  implications:
+    - {rule_id: synthetic_category_requires_review, when_all: [{dimension: category, id: synthetic_category}], require_all: [{dimension: handling_regime, id: review_required}]}
+  incompatibilities:
+    - {rule_id: review_cannot_be_public_release, all_of: [{dimension: handling_regime, id: review_required}, {dimension: dissemination_control, id: public_release}]}
+  sensitivity_constraints:
+    - {rule_id: synthetic_category_sensitivity, when_any: [{dimension: category, id: synthetic_category}], allowed_sensitivity_levels: [controlled, highly_controlled]}
+  dimension_requirements:
+    - {rule_id: synthetic_review_requires_audience, when_all: [{dimension: handling_regime, id: review_required}], required_nonempty_dimensions: [releasability_group]}
+  context_requirements:
+    - {rule_id: synthetic_review_context, when_all: [{dimension: handling_regime, id: review_required}], requirement_type: verified_unexpired_presence, trusted_attribute_names: [synthetic_review_authority], authority_classes: [synthetic_trust_authority]}
+  registry_mappings:
+    - mapping_id: synthetic_category_mapping
+      dimension: category
+      internal_id: synthetic_category
+      source_id: synthetic_registry
+      external_id: SYN-CAT-001
+      mapping_provenance:
+        mapping_version: "1.0.0"
+        source_revision: fixture-v1
+        produced_by: stead-contract-fixture
+        reviewed_at: "2026-08-29T00:00:00Z"
+        tested_coverage:
+          - {test_id: T-ADR-0002-PROFILE-NEUTRALITY, evidence_path: "tests/contract/fixtures/security-label-profiles/regulated-example-rule-evidence.json", evidence_digest: "sha256:a6ca273676065d14b7a3246a40b658d24fd7e1696f5ea8d7ae4e30915ac7d5bf"}
 presentation:
   renderer_id: stead.security_markings.v1
   renderer_version: "1.0.0"

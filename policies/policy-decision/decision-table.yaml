@@ -11,12 +11,14 @@ cases:
   - {id: POLICY-005, condition: trusted_attribute_expired_unverified_or_wrong_authority, expect: deny, reason: trusted_attribute_invalid}
   - {id: POLICY-006, condition: resource_capability_inactive, expect: deny, reason: capability_inactive}
   - {id: POLICY-007, condition: dissemination_or_releasability_constraint_not_satisfied, expect: deny, reason: dissemination_denied}
-  - {id: POLICY-008, condition: cui_category_or_subcategory_handling_not_satisfied, expect: deny, reason: cui_handling_denied}
+  - {id: POLICY-008, condition: active_profile_category_handling_semantics_not_satisfied, expect: deny, reason: profile_handling_denied}
   - {id: POLICY-009, condition: citizenship_or_organization_affiliation_not_authorized, expect: deny, reason: affiliation_denied}
   - {id: POLICY-010, condition: authentication_device_network_or_time_constraint_not_satisfied, expect: deny, reason: context_denied}
   - {id: POLICY-011, condition: export_share_or_external_channel_not_authorized, expect: deny, reason: export_or_share_denied}
   - {id: POLICY-011A, condition: data_flow_context_required_but_missing_or_destination_unverifiable, expect: deny, reason: data_flow_context_invalid}
-  - {id: POLICY-012, condition: lowering_downgrade_or_decontrol_lacks_authority_reason_source_or_required_second_approver, expect: deny, reason: lowering_denied}
+  - {id: POLICY-012, condition: lowering_downgrade_or_decontrol_lacks_authority_reason_source_or_effective_approval_requirement, expect: deny, reason: lowering_denied}
+  - {id: POLICY-012A, condition: lowering_approval_count_below_effective_profile_and_deployment_threshold, expect: deny, reason: lowering_approval_threshold_unsatisfied}
+  - {id: POLICY-012B, condition: lowering_approval_separation_distinctness_human_or_custody_requirement_unsatisfied, expect: deny, reason: lowering_approval_separation_unsatisfied}
   - {id: POLICY-013, condition: ci_runner_domain_image_network_or_secret_constraint_not_satisfied, expect: deny, reason: ci_policy_denied}
   - {id: POLICY-013A, condition: ci_context_required_but_missing_or_unverifiable, expect: deny, reason: ci_context_invalid}
   - {id: POLICY-014, condition: infrastructure_admission_backup_storage_or_integration_constraint_not_satisfied, expect: deny, reason: infrastructure_policy_denied}
@@ -42,3 +44,4 @@ coverage_rules:
   stale_consistency_fence: deny
   evaluator_timeout_or_unavailable: deny
   malformed_result_or_unsupported_obligation: deny
+  approval_thresholds: effective_profile_and_deployment_policy_supports_1_2_3_or_higher

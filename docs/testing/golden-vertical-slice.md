@@ -10,7 +10,7 @@ Phase 1 must prove two paths in one product and canonical model. The general-wor
 - `ORG-ALPHA`; parent `TEAM-OPERATIONS`; child `TEAM-PEOPLE`; contributing `TEAM-LEGAL`.
 - `ID-AUTHOR`, `ID-REVIEWER`, `ID-LOW`, `ID-NO-NTK`, and `ID-SECURITY-OFFICER` with synthetic trusted attributes.
 - `AGENT-BACKEND` and contract-only `AGENT-RUN-SHAPE`; no runtime or execution endpoint.
-- one starter/reference profile label below that profile's deployment-domain ceiling, a synthetic third-profile fixture proving profile-ID neutrality, and negative compartment, wrong-profile, cross-profile-without-bridge, and ceiling fixtures.
+- one starter/reference profile label below that profile's deployment-domain ceiling, a synthetic third-profile fixture proving profile-ID neutrality, and negative compartment, wrong-profile, every v0.1 cross-profile operation/non-empty bridge set, and ceiling fixtures.
 - clean local install with pinned Gitea, PostgreSQL, NATS, OpenFGA, the policy-decision layer, filesystem BlobStore, and PostgreSQL SearchProvider.
 
 The harness records source revision; component/image/provider/schema/model/policy/profile versions and digests; fixture versions; OpenTelemetry correlation; safe state hashes; test results; retries; and reviewer identities.

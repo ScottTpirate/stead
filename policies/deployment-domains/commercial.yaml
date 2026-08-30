@@ -5,7 +5,7 @@ scope:
   summary: "Starter deployment-domain policy for ordinary connected business examples and conformance tests."
   limitations: ["Not an exhaustive definition of commercial, privacy, financial, healthcare, export-control, operational, or assurance requirements."]
 label_profile_ceilings:
-  - {profile_id: commercial, profile_version: "1.0.0", classification_ceiling: restricted}
+  commercial: {profile_version: "1.0.0", classification_ceiling: restricted}
 trusted_attribute_authorities: [stead_local_identity, configured_oidc, configured_scim]
 approved_profile_bridges: []
 allowed_integrations: [gitea, oidc, scim, smtp, approved_webhook]
@@ -14,4 +14,4 @@ storage: {providers: [filesystem, s3, azure, gcs], encryption_profile: commercia
 backup: {enabled: true, domains: [commercial-backup], encryption_profile: commercial-backup-managed}
 runner: {pools: [commercial-ephemeral], ephemeral: true, allowed_images: [signed_approved]}
 network: {zones: [corporate, approved_remote, runner], egress_policy: allowlisted}
-assurance: {policy_signature_threshold: 1, distinct_signing_custodians: false, trust_recovery_approval_threshold: 1, distinct_trust_recovery_approvers: false, lowering_approval_threshold: 1, approved_cryptographic_boundary: deployment_approved_standard, validated_cryptographic_module_required: false, evidence_profile: baseline}
+assurance: {policy_signature_threshold: 1, distinct_signing_custodians: false, trust_recovery_approval_threshold: 1, distinct_trust_recovery_approvers: false, lowering_approval_threshold: 1, distinct_lowering_approvers: true, human_lowering_approvers_required: false, approved_cryptographic_boundary: deployment_approved_standard, validated_cryptographic_module_required: false, evidence_profile: baseline}

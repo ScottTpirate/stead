@@ -47,8 +47,8 @@ The deployable unit is a **Stead Policy Activation Set v1**. It binds all policy
 
 - the policy input and output schema IDs and SHA-256 digests;
 - the canonical decision-table and rule-data digests;
-- every included security-label profile ID, version, digest, scope/provenance metadata, and presentation-renderer contract;
-- included deployment security-domain policy ID, version, digest, every profile-qualified ceiling, trust/signing and recovery threshold, custody/separation requirement, approved cryptographic boundary/evidence requirement, and the evaluated assurance result;
+- every included security-label profile ID, version, digest, closed semantic-rule tables, scope/provenance metadata, authoritative snapshot payload/digest, registry-mapping/test-evidence binding, and presentation-renderer contract;
+- included deployment security-domain policy ID, version, digest, the profile-ID-keyed ceiling map, the v0.1 empty bridge set, trust/signing and recovery threshold, custody/separation requirement, approved cryptographic boundary/evidence requirement, and the evaluated assurance result;
 - evaluator ABI/contract version and supported Stead versions;
 - the exact OpenFGA 1.1 model source path, SHA-256 digest, compatibility identifier, and tuple-migration identifier;
 - required context, reason-code, obligation, and explicit-deny registries;
@@ -188,7 +188,7 @@ Partial distribution, missing replica acknowledgment, failed OpenFGA read-back, 
 
 ### Compatibility and model migration
 
-Every activation set declares the exact Stead/evaluator contract range, policy schema majors, label profiles, profile-qualified deployment-domain ceilings and assurance policy, OpenFGA schema/model digest, tuple migration, and compatible predecessor activation-set IDs. Compatibility is an allowlist, not a best-effort parse. Unknown fields, rules, relations, types, obligations, profile IDs/versions, ceiling bindings, renderer directives, or schema majors fail staging.
+Every activation set declares the exact Stead/evaluator contract range, policy schema majors, label profiles and their snapshot/evidence inputs, profile-qualified deployment-domain ceiling map and assurance policy, v0.1 empty bridge set, OpenFGA schema/model digest, tuple migration, and compatible predecessor activation-set IDs. Compatibility is an allowlist, not a best-effort parse. Unknown fields, rules, relations, types, obligations, profile IDs/versions, ceiling bindings, non-empty bridges, renderer directives, or schema majors fail staging.
 
 OpenFGA changes use expand/migrate/contract. New tuple types or relations are introduced without invalidating current reads; writers produce the compatible form; existing tuples are migrated and verified; both model suites pass; only then may the pointer select the new model. Contract/removal waits until the supported rollback window no longer needs the old representation. Agent, service-account, delegation, task-scope, and independent-revocation tuples receive explicit migration assertions and may not be inferred from requester or Team hierarchy data.
 

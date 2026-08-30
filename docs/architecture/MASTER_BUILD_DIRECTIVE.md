@@ -343,6 +343,7 @@ The initial repository MUST use this logical layout. Names may be adjusted only 
   /openfga
   /policy-decision        # implementation-neutral deterministic policy contract
   /security-label-profiles
+  /deployment-domains     # profile-qualified ceilings and environment assurance policy
 
 /specs
   /openapi
@@ -1273,7 +1274,7 @@ version
 
 Security-label profiles are signed, versioned policy bundles. They are not free-form administrator fields.
 
-Profiles MUST be declarative, schema-validated, deterministic, and offline-verifiable. They MUST define or reference their sensitivity vocabulary, handling regimes, categories/subcategories, compartments, dissemination controls, releasability, export controls, presentation/marking rules where applicable, normalization, dominance and join semantics, lowering/declassification/decontrol requirements, and mapping provenance. They MUST NOT be arbitrary executable plugins or a user-defined policy language.
+Profiles MUST be declarative, schema-validated, deterministic, and offline-verifiable. They MUST define or reference their sensitivity vocabulary, handling regimes, categories/subcategories, compartments, dissemination controls, releasability, export controls, presentation/marking rules where applicable, normalization, dominance and join semantics, lowering/declassification/decontrol requirements, and mapping provenance. Semantic extensions are limited to the closed Stead profile-rule contract: typed monotone implications, incompatibilities, sensitivity and required-dimension constraints, trusted-context requirements, and registry mappings. Unknown rule kinds, fields, operators, references, contradictions, or non-monotone effects deny activation. Profiles MUST NOT be arbitrary executable plugins or a user-defined policy language.
 
 Stead code MUST treat `profile_id` as a stable data identifier and MUST NOT give a particular profile ID privileged semantics. Approved profiles appropriate to an installation MAY be installed without changing the canonical ontology or application code. Maintained starter/reference profiles MAY be shipped for testing and evaluation, but they are not exhaustive definitions of an industry, government, regulatory, or classified-information regime.
 
@@ -1281,7 +1282,7 @@ Stead code MUST treat `profile_id` as a stable data identifier and MUST NOT give
 
 The generic profile mechanism MUST support ordinary business sensitivity, regulated and CUI environments, and high-assurance, classified, or specialized vocabularies without a Stead fork or profile-specific authorization branch.
 
-A maintained profile that claims to represent an external regulatory, handling, or classification regime MUST identify authoritative sources, scope, mapping version, provenance, tested coverage, and known limitations. It MUST NOT imply coverage beyond the mappings and tests actually supplied. Framework expressiveness or installation of a profile MUST NOT itself be described as completeness, compliance, accreditation, authorization to operate, cross-domain approval, or cryptographic validation.
+A maintained profile that claims to represent an external regulatory, handling, or classification regime MUST identify authoritative sources, scope, mapping version, provenance, tested coverage, and known limitations. Every claimed mapping MUST bind an exact source version/snapshot and content digest, mapping provenance identity, and digest-bound test evidence included in the signed activation material; a live URI is only a locator. It MUST NOT imply coverage beyond the mappings and tests actually supplied. Framework expressiveness or installation of a profile MUST NOT itself be described as completeness, compliance, accreditation, authorization to operate, cross-domain approval, or cryptographic validation.
 
 Completing every possible external vocabulary is not a prerequisite for the core product. New approved profiles MUST remain data governed by the same closed schemas, signed activation, central evaluator, UI rendering contract, and release gates.
 
@@ -1300,7 +1301,7 @@ Every installation MUST define:
 - required signature threshold, custody/separation rules, and approved cryptographic boundary; and
 - other environment-specific assurance controls needed by the deployment.
 
-A resource whose label exceeds the ceiling for its own profile MUST be rejected. An unknown profile, missing or ambiguous profile ceiling, or cross-profile composition MUST fail closed. Cross-profile composition remains prohibited unless an explicitly signed and approved compatibility/bridge rule covers the exact profiles, versions, direction, and operation; such a rule never creates a built-in cross-domain or write-down path.
+A resource whose label exceeds the ceiling for its own profile MUST be rejected. An unknown profile, missing or ambiguous profile ceiling, or cross-profile composition MUST fail closed. Cross-profile composition remains prohibited unless an explicitly signed and approved compatibility/bridge rule covers the exact profiles, versions, direction, operation, mapping semantics, trust binding, and non-weakening evidence; such a rule never creates a built-in cross-domain or write-down path. The v0.1 deployment-domain contract accepts no bridges; a non-empty bridge set requires a separately approved contract/ADR and complete negative evidence before any consumer may accept it.
 
 ## CLS-004 — Container boundary rules
 

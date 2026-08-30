@@ -319,7 +319,7 @@ end
 failures << "Provider common contract omits operation semantics" unless providers.dig("common_contract", "operation_semantics").is_a?(Hash)
 
 label_schema = documents["policies/security-label-profiles/profile-v0.1.schema.json"] || {}
-required_label_fields = %w[profile_purpose scope authoritative_sources allowed_categories allowed_compartments dissemination_controls releasability_groups export_controls normalization dominance join releasable_to_join cross_profile_composition lowering lowering_approval presentation bundle_signing]
+required_label_fields = %w[profile_purpose scope authoritative_sources allowed_categories allowed_compartments dissemination_controls releasability_groups export_controls normalization dominance join releasable_to_join cross_profile_composition lowering lowering_approval semantics presentation bundle_signing]
 missing_label_fields = required_label_fields - Array(label_schema["required"])
 failures << "Security-label profile schema omits: #{missing_label_fields.join(', ')}" unless missing_label_fields.empty?
 profiles_by_id = {}
@@ -339,6 +339,7 @@ PROFILE_SOURCE_DOCUMENTS.each do |path|
   if profile["profile_purpose"] == "external_regime_mapping" && Array(profile["authoritative_sources"]).empty?
     failures << "#{name} external-regime profile must identify authoritative sources"
   end
+  failures << "#{name} label profile must use the closed Stead semantic-rule contract" unless profile.dig("semantics", "rule_contract") == "stead.security-profile-rules.v1" && profile.dig("semantics", "representability") == "closed_profile_semantics_v1" && profile.dig("semantics", "unmapped_behavior") == "deny"
   failures << "#{name} label profile must be activated only through the Stead Policy Activation Set" unless profile.dig("bundle_signing", "format") == "stead-policy-activation-set-dsse-v1"
 end
 %w[commercial us_government].each do |reference_profile_id|
@@ -347,35 +348,30 @@ end
 government_reference = profiles_by_id["us_government"] || {}
 government_categories = Array(government_reference["allowed_categories"])
 failures << "US-government starter profile must enumerate its limited CUI test mappings" unless government_categories.any? { |entry| entry["id"].to_s.start_with?("CUI_") && Array(entry["subcategories"]).any? }
-failures << "US-government starter profile must declare mapping limitations and authoritative provenance" if Array(government_reference.dig("scope", "limitations")).empty? || Array(government_reference["authoritative_sources"]).empty?
+failures << "US-government-oriented starter must remain reference-only until exact mapping evidence exists" unless government_reference["profile_purpose"] == "starter_reference"
+failures << "US-government starter profile must declare limitations and reference provenance" if Array(government_reference.dig("scope", "limitations")).empty? || Array(government_reference["authoritative_sources"]).empty?
 
 deployment_schema = documents["policies/deployment-domains/domain-profile-v0.1.schema.json"] || {}
+failures << "Deployment-domain v0.1 must reject every non-empty bridge set" unless deployment_schema.dig("properties", "approved_profile_bridges", "maxItems") == 0
+failures << "Deployment-domain v0.1 bridge item schema must accept no latent bridge shape" unless deployment_schema.dig("properties", "approved_profile_bridges", "items") == false
 DEPLOYMENT_DOMAIN_DOCUMENTS.each do |path|
   name = File.basename(path, ".yaml")
   domain = documents[path] || {}
   missing = Array(deployment_schema["required"]) - domain.keys
   failures << "#{name} deployment-domain profile omits: #{missing.join(', ')}" unless missing.empty?
   validate_instance(domain, deployment_schema, "#{name} deployment-domain profile", failures)
-  bindings = Array(domain["label_profile_ceilings"])
-  binding_ids = bindings.map { |binding| binding["profile_id"] }
-  failures << "#{name} deployment domain must declare exactly one ceiling per profile" unless binding_ids.uniq.length == binding_ids.length
-  bindings.each do |binding|
-    profile = profiles_by_id[binding["profile_id"]]
+  bindings = domain["label_profile_ceilings"] || {}
+  failures << "#{name} deployment domain ceilings must be a profile-ID-keyed map" unless bindings.is_a?(Hash) && !bindings.empty?
+  bindings.each do |profile_id, binding|
+    profile = profiles_by_id[profile_id]
     unless profile
-      failures << "#{name} deployment domain references unknown profile #{binding['profile_id']}"
+      failures << "#{name} deployment domain references unknown profile #{profile_id}"
       next
     end
-    failures << "#{name} deployment domain profile version mismatch for #{binding['profile_id']}" unless binding["profile_version"] == profile["version"]
-    failures << "#{name} deployment domain ceiling #{binding['classification_ceiling']} is foreign or unknown for #{binding['profile_id']}" unless Array(profile["sensitivity_order"]).include?(binding["classification_ceiling"])
+    failures << "#{name} deployment domain profile version mismatch for #{profile_id}" unless binding["profile_version"] == profile["version"]
+    failures << "#{name} deployment domain ceiling #{binding['classification_ceiling']} is foreign or unknown for #{profile_id}" unless Array(profile["sensitivity_order"]).include?(binding["classification_ceiling"])
   end
-  Array(domain["approved_profile_bridges"]).each do |bridge|
-    failures << "#{name} profile bridge #{bridge['bridge_id']} must reference two installed profile ceilings" unless [bridge["from_profile_id"], bridge["to_profile_id"]].all? { |id| binding_ids.include?(id) }
-    failures << "#{name} profile bridge #{bridge['bridge_id']} must cross distinct profiles" if bridge["from_profile_id"] == bridge["to_profile_id"]
-    from_binding = bindings.find { |binding| binding["profile_id"] == bridge["from_profile_id"] }
-    to_binding = bindings.find { |binding| binding["profile_id"] == bridge["to_profile_id"] }
-    failures << "#{name} profile bridge #{bridge['bridge_id']} from-version must match the installed ceiling binding" if from_binding && bridge["from_profile_version"] != from_binding["profile_version"]
-    failures << "#{name} profile bridge #{bridge['bridge_id']} to-version must match the installed ceiling binding" if to_binding && bridge["to_profile_version"] != to_binding["profile_version"]
-  end
+  failures << "#{name} deployment domain must not activate a v0.1 profile bridge" unless Array(domain["approved_profile_bridges"]).empty?
 end
 
 policy_input = documents["policies/policy-decision/input-v0.1.schema.json"] || {}
@@ -388,14 +384,19 @@ failures << "policy-decision input omits agent authorization intersection terms"
 end
 required_policy_context = policy_input.dig("properties", "policy_context", "required") || []
 failures << "policy-decision input must declare required policy contexts" unless required_policy_context.include?("required_contexts")
-profile_ceiling_ref = "../deployment-domains/domain-profile-v0.1.schema.json#/$defs/ProfileCeiling"
+profile_ceiling_ref = "../deployment-domains/domain-profile-v0.1.schema.json#/$defs/ProfileCeilingMap"
 profile_ceiling_locations = [
-  policy_input.dig("properties", "agent_context", "properties", "classification_ceilings", "items", "$ref"),
-  policy_input.dig("properties", "session", "properties", "classification_ceilings", "items", "$ref"),
-  policy_input.dig("properties", "data_flow_context", "properties", "destination", "properties", "label_profile_ceilings", "items", "$ref"),
-  policy_input.dig("properties", "infrastructure_context", "properties", "profile_ceiling", "$ref")
+  policy_input.dig("properties", "agent_context", "properties", "classification_ceilings", "$ref"),
+  policy_input.dig("properties", "session", "properties", "classification_ceilings", "$ref"),
+  policy_input.dig("properties", "data_flow_context", "properties", "destination", "properties", "label_profile_ceilings", "$ref"),
+  policy_input.dig("properties", "infrastructure_context", "properties", "label_profile_ceilings", "$ref")
 ]
 failures << "Every policy-decision ceiling context must use the shared profile-qualified ceiling contract" unless profile_ceiling_locations.all? { |reference| reference == profile_ceiling_ref }
+policy_output = documents["policies/policy-decision/output-v0.1.schema.json"] || {}
+output_obligations = Array(policy_output.dig("properties", "obligations", "items", "enum"))
+failures << "Policy output must use a parameterized approval-threshold obligation" unless output_obligations.include?("require_approval_threshold") && !output_obligations.include?("require_two_person_approval")
+approval_fields = Array(policy_output.dig("properties", "approval_requirement", "required"))
+failures << "Policy output approval requirement must carry threshold, separation, human-principal, and policy-basis data" unless %w[minimum_approvers distinct_approvers human_approvers_required policy_basis].all? { |field| approval_fields.include?(field) }
 policy_cases = Array(documents.dig("policies/policy-decision/decision-table.yaml", "cases"))
 policy_ids = policy_cases.filter_map { |entry| entry["id"] }
 failures << "policy decision case IDs must use the implementation-neutral POLICY prefix" unless policy_ids.all? { |id| id.start_with?("POLICY-") }
@@ -404,7 +405,7 @@ policy_table = documents["policies/policy-decision/decision-table.yaml"] || {}
 expected_combining_rule = "allow = authorization.relationship.allowed AND policy decision allow AND authorization.provider_path.allowed AND no explicit deny; agents additionally require every authorization.agent_intersection term"
 failures << "policy decision table must preserve the central combining rule" unless policy_table["combining_rule"] == expected_combining_rule
 failures << "policy decision table must default to deny" unless policy_table["default"] == "deny"
-%w[POLICY-001B POLICY-007 POLICY-008 POLICY-009 POLICY-010 POLICY-011 POLICY-011A POLICY-012 POLICY-013 POLICY-013A POLICY-014 POLICY-014A POLICY-AGENT-008 POLICY-HIERARCHY-001 POLICY-LEAK-001].each do |id|
+%w[POLICY-001B POLICY-007 POLICY-008 POLICY-009 POLICY-010 POLICY-011 POLICY-011A POLICY-012 POLICY-012A POLICY-012B POLICY-013 POLICY-013A POLICY-014 POLICY-014A POLICY-AGENT-008 POLICY-HIERARCHY-001 POLICY-LEAK-001].each do |id|
   failures << "policy decision table omits #{id}" unless policy_ids.include?(id)
 end
 policy_coverage = documents.dig("policies/policy-decision/decision-table.yaml", "coverage_rules") || {}
@@ -417,7 +418,8 @@ expected_policy_coverage = {
   "unknown_profile_or_bundle" => "deny",
   "stale_consistency_fence" => "deny",
   "evaluator_timeout_or_unavailable" => "deny",
-  "malformed_result_or_unsupported_obligation" => "deny"
+  "malformed_result_or_unsupported_obligation" => "deny",
+  "approval_thresholds" => "effective_profile_and_deployment_policy_supports_1_2_3_or_higher"
 }
 expected_policy_coverage.each do |rule, expected|
   failures << "policy decision coverage rule #{rule} must be #{expected}" unless policy_coverage[rule] == expected

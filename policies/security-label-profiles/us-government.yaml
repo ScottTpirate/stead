@@ -1,13 +1,13 @@
 profile_id: us_government
 version: "1.0.0"
-profile_purpose: external_regime_mapping
+profile_purpose: starter_reference
 scope:
-  summary: "Limited US-government-oriented reference mapping for Stead schema and fail-closed compatibility tests."
-  coverage_statement: "Maps the sensitivity values, CUI handling examples, and controls explicitly declared in this file against the cited source snapshots."
+  summary: "Limited US-government-oriented starter vocabulary for Stead schema and fail-closed compatibility tests."
+  coverage_statement: "Illustrates only the identifiers and generic rules declared here; it does not claim an authoritative or tested external-regime mapping."
   limitations: ["Not a complete US Government classification or CUI vocabulary.", "Does not establish compliance, accreditation, authorization to operate, cross-domain approval, or FIPS validation."]
 authoritative_sources:
-  - {source_id: eo_13526, title: "Executive Order 13526 - Classified National Security Information", uri: "https://www.archives.gov/isoo/policy-documents/cnsi-eo.html", source_version_or_date: "2009-12-29", mapped_scope: "UNCLASSIFIED through TOP_SECRET sensitivity ordering used by this starter profile"}
-  - {source_id: nara_cui_registry, title: "NARA CUI Registry Category List", uri: "https://www.archives.gov/cui/registry/category-list", source_version_or_date: "retrieved-2026-08-29", mapped_scope: "Only the CUI category/subcategory examples declared in this starter profile"}
+  - {source_kind: reference, source_id: eo_13526, title: "Executive Order 13526 - Classified National Security Information", uri: "https://www.archives.gov/isoo/policy-documents/cnsi-eo.html", source_version_or_date: "2009-12-29", mapped_scope: "Terminology reference only; not an authoritative mapped snapshot"}
+  - {source_kind: reference, source_id: nara_cui_registry, title: "NARA CUI Registry Category List", uri: "https://www.archives.gov/cui/registry/category-list", source_version_or_date: "retrieved-2026-08-29", mapped_scope: "Example-category reference only; not an authoritative mapped snapshot"}
 sensitivity_order: [UNCLASSIFIED, CONFIDENTIAL, SECRET, TOP_SECRET]
 handling_regimes: [CUI_BASIC, CUI_SPECIFIED, export_control]
 allowed_categories:
@@ -20,8 +20,8 @@ allowed_compartments: [program, mission, contract, special_access_boundary]
 dissemination_controls: [NOFORN, FEDCON, FEDONLY, NOCON, DL_ONLY]
 releasability_groups: [USA, FVEY, named_foreign_governments]
 export_controls:
-  - {id: EAR, rule: "Validate citizenship, destination, end use, license, and technical-data restrictions."}
-  - {id: ITAR, rule: "Validate US-person status, registration, license or exemption, destination, and technical-data restrictions."}
+  - {id: EAR, display_text: "EAR review required", source_ids: []}
+  - {id: ITAR, display_text: "ITAR review required", source_ids: []}
 join: least_upper_bound_plus_union_of_handling_restrictions
 normalization: {identifier_case: exact, set_order: lexicographic, unknown_value: deny}
 dominance: profile_partial_order_v1
@@ -29,6 +29,21 @@ releasable_to_join: intersection_fail_on_empty
 cross_profile_composition: deny_without_signed_approved_bridge
 lowering: deny_by_default_authorized_reasoned_audited
 lowering_approval: {minimum_approvers: 2, distinct_approvers: true, human_approvers_required: true}
+semantics:
+  rule_contract: stead.security-profile-rules.v1
+  representability: closed_profile_semantics_v1
+  unmapped_behavior: deny
+  implications: []
+  incompatibilities: []
+  sensitivity_constraints:
+    - {rule_id: cui_handling_is_unclassified_only, when_any: [{dimension: handling_regime, id: CUI_BASIC}, {dimension: handling_regime, id: CUI_SPECIFIED}], allowed_sensitivity_levels: [UNCLASSIFIED]}
+  dimension_requirements:
+    - {rule_id: cui_handling_requires_category, when_all: [{dimension: handling_regime, id: CUI_BASIC}], required_nonempty_dimensions: [category]}
+    - {rule_id: cui_specified_handling_requires_category, when_all: [{dimension: handling_regime, id: CUI_SPECIFIED}], required_nonempty_dimensions: [category]}
+  context_requirements:
+    - {rule_id: cui_authority_context_required, when_all: [{dimension: handling_regime, id: CUI_BASIC}], requirement_type: verified_unexpired_presence, trusted_attribute_names: [classification_authority, handling_authority], authority_classes: [deployment_approved_classification_authority]}
+    - {rule_id: cui_specified_authority_context_required, when_all: [{dimension: handling_regime, id: CUI_SPECIFIED}], requirement_type: verified_unexpired_presence, trusted_attribute_names: [classification_authority, handling_authority], authority_classes: [deployment_approved_classification_authority]}
+  registry_mappings: []
 presentation:
   renderer_id: stead.security_markings.v1
   renderer_version: "1.0.0"

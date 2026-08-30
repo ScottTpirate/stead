@@ -6,8 +6,8 @@ scope:
   coverage_statement: "Covers only the identifiers and rules declared in this file."
   limitations: ["Not an exhaustive definition of commercial, privacy, financial, healthcare, export-control, or other regulated obligations."]
 authoritative_sources:
-  - {source_id: bis_ear, title: "Export Administration Regulations", uri: "https://www.bis.gov/regulations/ear", source_version_or_date: "retrieved-2026-08-29", mapped_scope: "EAR identifier and review reminder only"}
-  - {source_id: ddtc_itar, title: "International Traffic in Arms Regulations", uri: "https://www.pmddtc.state.gov/ddtc_public/ddtc_public?id=ddtc_public_portal_itar_landing", source_version_or_date: "retrieved-2026-08-29", mapped_scope: "ITAR identifier and review reminder only"}
+  - {source_kind: reference, source_id: bis_ear, title: "Export Administration Regulations", uri: "https://www.bis.gov/regulations/ear", source_version_or_date: "retrieved-2026-08-29", mapped_scope: "Locator and terminology reference only; not an authoritative mapped snapshot"}
+  - {source_kind: reference, source_id: ddtc_itar, title: "International Traffic in Arms Regulations", uri: "https://www.pmddtc.state.gov/ddtc_public/ddtc_public?id=ddtc_public_portal_itar_landing", source_version_or_date: "retrieved-2026-08-29", mapped_scope: "Locator and terminology reference only; not an authoritative mapped snapshot"}
 sensitivity_order: [public, internal, confidential, restricted]
 handling_regimes: [privacy, legal_hold, export_control]
 allowed_categories:
@@ -18,8 +18,8 @@ allowed_compartments: [need_to_know, deal_team, investigation]
 dissemination_controls: [no_external_share, named_recipients_only]
 releasability_groups: [employees, approved_contractors, named_partners]
 export_controls:
-  - {id: EAR, rule: "Recipient, destination, technology, and license authorization must be validated before export."}
-  - {id: ITAR, rule: "US-person and authorized-destination checks are mandatory before access or export."}
+  - {id: EAR, display_text: "EAR review required", source_ids: [bis_ear]}
+  - {id: ITAR, display_text: "ITAR review required", source_ids: [ddtc_itar]}
 join: least_upper_bound_plus_union_of_handling_restrictions
 normalization: {identifier_case: exact, set_order: lexicographic, unknown_value: deny}
 dominance: profile_partial_order_v1
@@ -27,6 +27,18 @@ releasable_to_join: intersection_fail_on_empty
 cross_profile_composition: deny_without_signed_approved_bridge
 lowering: deny_by_default_authorized_reasoned_audited
 lowering_approval: {minimum_approvers: 1, distinct_approvers: true, human_approvers_required: false}
+semantics:
+  rule_contract: stead.security-profile-rules.v1
+  representability: closed_profile_semantics_v1
+  unmapped_behavior: deny
+  implications: []
+  incompatibilities: []
+  sensitivity_constraints: []
+  dimension_requirements: []
+  context_requirements:
+    - {rule_id: ear_authorization_required, when_all: [{dimension: export_control, id: EAR}], requirement_type: export_authorization, trusted_attribute_names: [export_destination, export_end_use, export_license_authorization], authority_classes: [deployment_approved_export_authority]}
+    - {rule_id: itar_authorization_required, when_all: [{dimension: export_control, id: ITAR}], requirement_type: export_authorization, trusted_attribute_names: [export_destination, export_person_status, export_license_authorization], authority_classes: [deployment_approved_export_authority]}
+  registry_mappings: []
 presentation:
   renderer_id: stead.security_markings.v1
   renderer_version: "1.0.0"

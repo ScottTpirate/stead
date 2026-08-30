@@ -24,6 +24,7 @@
     "cross_profile_composition",
     "lowering",
     "lowering_approval",
+    "semantics",
     "presentation",
     "bundle_signing"
   ],
@@ -43,42 +44,35 @@
     },
     "authoritative_sources": {
       "type": "array",
-      "items": {
-        "type": "object",
-        "required": ["source_id", "title", "uri", "source_version_or_date", "mapped_scope"],
-        "properties": {
-          "source_id": {"type": "string", "pattern": "^[a-z][a-z0-9_.-]{0,127}$"},
-          "title": {"type": "string", "minLength": 1},
-          "uri": {"type": "string", "format": "uri"},
-          "source_version_or_date": {"type": "string", "minLength": 1},
-          "mapped_scope": {"type": "string", "minLength": 1}
-        },
-        "additionalProperties": false
-      }
+      "items": {"oneOf": [{"$ref": "#/$defs/ReferenceSource"}, {"$ref": "#/$defs/AuthoritativeSnapshotSource"}]}
     },
-    "sensitivity_order": {"type": "array", "items": {"type": "string"}, "minItems": 1, "uniqueItems": true},
-    "handling_regimes": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "sensitivity_order": {"type": "array", "items": {"$ref": "#/$defs/VocabularyId"}, "minItems": 1, "uniqueItems": true},
+    "handling_regimes": {"type": "array", "items": {"$ref": "#/$defs/VocabularyId"}, "uniqueItems": true},
     "allowed_categories": {
       "type": "array",
       "items": {
         "type": "object",
         "required": ["id", "subcategories"],
         "properties": {
-          "id": {"type": "string"},
-          "subcategories": {"type": "array", "items": {"type": "string"}, "uniqueItems": true}
+          "id": {"$ref": "#/$defs/VocabularyId"},
+          "subcategories": {"type": "array", "items": {"$ref": "#/$defs/VocabularyId"}, "uniqueItems": true}
         },
         "additionalProperties": false
       }
     },
-    "allowed_compartments": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
-    "dissemination_controls": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
-    "releasability_groups": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "allowed_compartments": {"type": "array", "items": {"$ref": "#/$defs/VocabularyId"}, "uniqueItems": true},
+    "dissemination_controls": {"type": "array", "items": {"$ref": "#/$defs/VocabularyId"}, "uniqueItems": true},
+    "releasability_groups": {"type": "array", "items": {"$ref": "#/$defs/VocabularyId"}, "uniqueItems": true},
     "export_controls": {
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["id", "rule"],
-        "properties": {"id": {"type": "string"}, "rule": {"type": "string", "minLength": 1}},
+        "required": ["id", "display_text", "source_ids"],
+        "properties": {
+          "id": {"$ref": "#/$defs/VocabularyId"},
+          "display_text": {"type": "string", "minLength": 1},
+          "source_ids": {"type": "array", "items": {"$ref": "#/$defs/StableId"}, "uniqueItems": true}
+        },
         "additionalProperties": false
       }
     },
@@ -107,11 +101,103 @@
       },
       "additionalProperties": false
     },
+    "semantics": {
+      "type": "object",
+      "required": ["rule_contract", "representability", "unmapped_behavior", "implications", "incompatibilities", "sensitivity_constraints", "dimension_requirements", "context_requirements", "registry_mappings"],
+      "properties": {
+        "rule_contract": {"const": "stead.security-profile-rules.v1"},
+        "representability": {"const": "closed_profile_semantics_v1"},
+        "unmapped_behavior": {"const": "deny"},
+        "implications": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["rule_id", "when_all", "require_all"],
+            "properties": {
+              "rule_id": {"$ref": "#/$defs/StableId"},
+              "when_all": {"type": "array", "items": {"$ref": "#/$defs/TermRef"}, "minItems": 1, "uniqueItems": true},
+              "require_all": {"type": "array", "items": {"$ref": "#/$defs/MonotoneRestrictionTermRef"}, "minItems": 1, "uniqueItems": true}
+            },
+            "additionalProperties": false
+          }
+        },
+        "incompatibilities": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["rule_id", "all_of"],
+            "properties": {
+              "rule_id": {"$ref": "#/$defs/StableId"},
+              "all_of": {"type": "array", "items": {"$ref": "#/$defs/TermRef"}, "minItems": 2, "uniqueItems": true}
+            },
+            "additionalProperties": false
+          }
+        },
+        "sensitivity_constraints": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["rule_id", "when_any", "allowed_sensitivity_levels"],
+            "properties": {
+              "rule_id": {"$ref": "#/$defs/StableId"},
+              "when_any": {"type": "array", "items": {"$ref": "#/$defs/TermRef"}, "minItems": 1, "uniqueItems": true},
+              "allowed_sensitivity_levels": {"type": "array", "items": {"$ref": "#/$defs/VocabularyId"}, "minItems": 1, "uniqueItems": true}
+            },
+            "additionalProperties": false
+          }
+        },
+        "dimension_requirements": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["rule_id", "when_all", "required_nonempty_dimensions"],
+            "properties": {
+              "rule_id": {"$ref": "#/$defs/StableId"},
+              "when_all": {"type": "array", "items": {"$ref": "#/$defs/TermRef"}, "minItems": 1, "uniqueItems": true},
+              "required_nonempty_dimensions": {"type": "array", "items": {"enum": ["handling_regime", "category", "compartment_namespace", "dissemination_control", "releasability_group", "export_control"]}, "minItems": 1, "uniqueItems": true}
+            },
+            "additionalProperties": false
+          }
+        },
+        "context_requirements": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["rule_id", "when_all", "requirement_type", "trusted_attribute_names", "authority_classes"],
+            "properties": {
+              "rule_id": {"$ref": "#/$defs/StableId"},
+              "when_all": {"type": "array", "items": {"$ref": "#/$defs/TermRef"}, "minItems": 1, "uniqueItems": true},
+              "requirement_type": {"enum": ["verified_unexpired_presence", "audience_membership", "registry_membership", "export_authorization"]},
+              "trusted_attribute_names": {"type": "array", "items": {"$ref": "#/$defs/StableId"}, "minItems": 1, "uniqueItems": true},
+              "authority_classes": {"type": "array", "items": {"$ref": "#/$defs/StableId"}, "minItems": 1, "uniqueItems": true}
+            },
+            "additionalProperties": false
+          }
+        },
+        "registry_mappings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["mapping_id", "dimension", "internal_id", "source_id", "external_id", "mapping_provenance"],
+            "properties": {
+              "mapping_id": {"$ref": "#/$defs/StableId"},
+              "dimension": {"$ref": "#/$defs/TermDimension"},
+              "internal_id": {"$ref": "#/$defs/TermId"},
+              "source_id": {"$ref": "#/$defs/StableId"},
+              "external_id": {"type": "string", "minLength": 1, "maxLength": 512},
+              "mapping_provenance": {"$ref": "#/$defs/MappingProvenance"}
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
     "presentation": {
       "type": "object",
       "required": ["renderer_id", "renderer_version", "text_authoritative", "color_supplemental_only", "sensitivity_markings", "required_surfaces", "action_warnings"],
       "properties": {
-        "renderer_id": {"type": "string", "pattern": "^[a-z][a-z0-9_.-]{0,127}$"},
+        "renderer_id": {"$ref": "#/$defs/StableId"},
         "renderer_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
         "text_authoritative": {"const": true},
         "color_supplemental_only": {"const": true},
@@ -120,7 +206,7 @@
           "items": {
             "type": "object",
             "required": ["id", "display_text"],
-            "properties": {"id": {"type": "string"}, "display_text": {"type": "string", "minLength": 1}},
+            "properties": {"id": {"$ref": "#/$defs/VocabularyId"}, "display_text": {"type": "string", "minLength": 1}},
             "additionalProperties": false
           },
           "minItems": 1
@@ -141,10 +227,90 @@
       "additionalProperties": false
     }
   },
+  "$defs": {
+    "StableId": {"type": "string", "pattern": "^[a-z][a-z0-9_.-]{0,127}$"},
+    "VocabularyId": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_]{0,127}$"},
+    "TermId": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_]{0,127}(?:/[A-Za-z][A-Za-z0-9_]{0,127})?$"},
+    "TermDimension": {"enum": ["sensitivity", "handling_regime", "category", "compartment_namespace", "dissemination_control", "releasability_group", "export_control"]},
+    "TermRef": {
+      "type": "object",
+      "required": ["dimension", "id"],
+      "properties": {"dimension": {"$ref": "#/$defs/TermDimension"}, "id": {"$ref": "#/$defs/TermId"}},
+      "additionalProperties": false
+    },
+    "MonotoneRestrictionTermRef": {
+      "type": "object",
+      "required": ["dimension", "id"],
+      "properties": {
+        "dimension": {"enum": ["handling_regime", "category", "compartment_namespace", "dissemination_control", "export_control"]},
+        "id": {"$ref": "#/$defs/TermId"}
+      },
+      "additionalProperties": false
+    },
+    "ReferenceSource": {
+      "type": "object",
+      "required": ["source_kind", "source_id", "title", "uri", "source_version_or_date", "mapped_scope"],
+      "properties": {
+        "source_kind": {"const": "reference"},
+        "source_id": {"$ref": "#/$defs/StableId"},
+        "title": {"type": "string", "minLength": 1},
+        "uri": {"type": "string", "format": "uri"},
+        "source_version_or_date": {"type": "string", "minLength": 1},
+        "mapped_scope": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": false
+    },
+    "AuthoritativeSnapshotSource": {
+      "type": "object",
+      "required": ["source_kind", "source_id", "title", "uri", "source_version_or_date", "retrieved_at", "snapshot_digest", "payload_path", "mapped_scope"],
+      "properties": {
+        "source_kind": {"const": "authoritative_snapshot"},
+        "source_id": {"$ref": "#/$defs/StableId"},
+        "title": {"type": "string", "minLength": 1},
+        "uri": {"type": "string", "format": "uri"},
+        "source_version_or_date": {"type": "string", "minLength": 1},
+        "retrieved_at": {"type": "string", "format": "date-time"},
+        "snapshot_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "payload_path": {"type": "string", "pattern": "^(policies|tests)/[A-Za-z0-9_./-]+$"},
+        "mapped_scope": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": false
+    },
+    "MappingProvenance": {
+      "type": "object",
+      "required": ["mapping_version", "source_revision", "produced_by", "reviewed_at", "tested_coverage"],
+      "properties": {
+        "mapping_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+        "source_revision": {"type": "string", "minLength": 1},
+        "produced_by": {"$ref": "#/$defs/StableId"},
+        "reviewed_at": {"type": "string", "format": "date-time"},
+        "tested_coverage": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["test_id", "evidence_path", "evidence_digest"],
+            "properties": {
+              "test_id": {"type": "string", "pattern": "^T-[A-Z0-9-]+$"},
+              "evidence_path": {"type": "string", "pattern": "^(policies|tests)/[A-Za-z0-9_./-]+$"},
+              "evidence_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+            },
+            "additionalProperties": false
+          },
+          "minItems": 1
+        }
+      },
+      "additionalProperties": false
+    }
+  },
   "allOf": [
     {
       "if": {"properties": {"profile_purpose": {"const": "external_regime_mapping"}}, "required": ["profile_purpose"]},
-      "then": {"properties": {"authoritative_sources": {"minItems": 1}}}
+      "then": {
+        "properties": {
+          "authoritative_sources": {"minItems": 1, "items": {"$ref": "#/$defs/AuthoritativeSnapshotSource"}},
+          "semantics": {"properties": {"registry_mappings": {"minItems": 1}}}
+        }
+      }
     }
   ],
   "additionalProperties": false

@@ -69,7 +69,7 @@
         "agent_authority_revision": {"type": "string"},
         "runtime_identity": {"type": "string"},
         "runtime_security_domain": {"type": "string"},
-        "classification_ceilings": {"type": "array", "items": {"$ref": "../deployment-domains/domain-profile-v0.1.schema.json#/$defs/ProfileCeiling"}, "minItems": 1},
+        "classification_ceilings": {"$ref": "../deployment-domains/domain-profile-v0.1.schema.json#/$defs/ProfileCeilingMap"},
         "compartments": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
         "model_provider": {"type": "string"},
         "tool_scope": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
@@ -98,7 +98,7 @@
       "properties": {
         "authentication_strength": {"type": "string"},
         "security_domain": {"type": "string"},
-        "classification_ceilings": {"type": "array", "items": {"$ref": "../deployment-domains/domain-profile-v0.1.schema.json#/$defs/ProfileCeiling"}, "minItems": 1},
+        "classification_ceilings": {"$ref": "../deployment-domains/domain-profile-v0.1.schema.json#/$defs/ProfileCeilingMap"},
         "network_zone": {"type": "string"},
         "device_trust": {"type": "string"},
         "environment": {"type": "string"},
@@ -129,7 +129,7 @@
           "required": ["security_domain", "label_profile_ceilings", "organization_ids", "releasability_groups", "channel"],
           "properties": {
             "security_domain": {"type": "string"},
-            "label_profile_ceilings": {"type": "array", "items": {"$ref": "../deployment-domains/domain-profile-v0.1.schema.json#/$defs/ProfileCeiling"}, "minItems": 1},
+            "label_profile_ceilings": {"$ref": "../deployment-domains/domain-profile-v0.1.schema.json#/$defs/ProfileCeilingMap"},
             "organization_ids": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
             "releasability_groups": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
             "channel": {"type": "string"}
@@ -172,12 +172,12 @@
     },
     "infrastructure_context": {
       "type": "object",
-      "required": ["operation", "target_domain", "provider", "profile_ceiling", "allowed", "encryption_profile", "network_zone"],
+      "required": ["operation", "target_domain", "provider", "label_profile_ceilings", "allowed", "encryption_profile", "network_zone"],
       "properties": {
         "operation": {"enum": ["admission", "storage", "backup", "restore", "integration"]},
         "target_domain": {"type": "string"},
         "provider": {"type": "string"},
-        "profile_ceiling": {"$ref": "../deployment-domains/domain-profile-v0.1.schema.json#/$defs/ProfileCeiling"},
+        "label_profile_ceilings": {"$ref": "../deployment-domains/domain-profile-v0.1.schema.json#/$defs/ProfileCeilingMap"},
         "allowed": {"type": "boolean"},
         "encryption_profile": {"type": "string"},
         "network_zone": {"type": "string"},
