@@ -559,7 +559,7 @@ requirements:
     title: "NATS from the beginning"
     implementation_modules: ["apps/core", "apps/worker", "packages/event-schemas"]
     issue_ids: ["STEAD-P0-008", "STEAD-P1-007"]
-    test_ids: ["T-EVT-001-ACCEPTANCE", "T-ADR-0008-SUBJECT-PARTITION", "T-ADR-0008-SUBSCRIBER-ISOLATION", "T-ADR-0008-RETENTION"]
+    test_ids: ["T-EVT-001-ACCEPTANCE", "T-ADR-0008-SUBJECT-PARTITION", "T-ADR-0008-SUBSCRIBER-ISOLATION", "T-ADR-0008-RETENTION", "T-ADR-0008-AUTHORIZED-REPLAY"]
     documentation: ["docs/architecture/event-contract.md", "specs/asyncapi/stead.yaml"]
     status: DEPENDENCY_BLOCKED_PHASE_1
     release: "phase-1"
@@ -567,7 +567,7 @@ requirements:
     title: "Transactional outbox"
     implementation_modules: ["apps/core", "apps/worker", "packages/event-schemas"]
     issue_ids: ["STEAD-P0-003", "STEAD-P1-002", "STEAD-P1-007", "STEAD-P1-015"]
-    test_ids: ["T-EVT-002-ACCEPTANCE", "T-STEAD-P1-015-CONTRACT", "T-ADR-0007-OUTBOX-ATOMICITY", "T-ADR-0007-FAILURE-INJECTION", "T-ADR-0008-SUBJECT-PARTITION", "T-ADR-0008-RETENTION", "T-ADR-0008-IDEMPOTENCY", "T-ADR-0008-PROJECTION-REBUILD"]
+    test_ids: ["T-EVT-002-ACCEPTANCE", "T-STEAD-P1-015-CONTRACT", "T-ADR-0007-OUTBOX-ATOMICITY", "T-ADR-0007-FAILURE-INJECTION", "T-ADR-0008-SUBJECT-PARTITION", "T-ADR-0008-RETENTION", "T-ADR-0008-IDEMPOTENCY"]
     documentation: ["docs/architecture/event-contract.md", "specs/asyncapi/stead.yaml"]
     status: DEPENDENCY_BLOCKED_PHASE_1
     release: "phase-1"
@@ -575,7 +575,7 @@ requirements:
     title: "Event contract"
     implementation_modules: ["apps/core", "apps/worker", "packages/event-schemas"]
     issue_ids: ["STEAD-P0-008", "STEAD-P1-007"]
-    test_ids: ["T-EVT-003-ACCEPTANCE", "T-ADR-0001-KIND-ID", "T-ADR-0001-COMPAT", "T-ADR-0008-RESOURCE-ORDERING", "T-ADR-0008-SCHEMA-COMPATIBILITY", "T-ADR-0008-PAYLOAD-MINIMIZATION"]
+    test_ids: ["T-EVT-003-ACCEPTANCE", "T-ADR-0001-KIND-ID", "T-ADR-0001-COMPAT", "T-ADR-0008-SUBJECT-PARTITION", "T-ADR-0008-RESOURCE-ORDERING", "T-ADR-0008-RETENTION", "T-ADR-0008-IDEMPOTENCY", "T-ADR-0008-AUTHORIZED-REPLAY", "T-ADR-0008-SCHEMA-COMPATIBILITY", "T-ADR-0008-PAYLOAD-MINIMIZATION"]
     documentation: ["docs/architecture/event-contract.md", "specs/asyncapi/stead.yaml"]
     status: DEPENDENCY_BLOCKED_PHASE_1
     release: "phase-1"
@@ -879,7 +879,7 @@ requirements:
     title: "One composed, projection-backed request path"
     implementation_modules: ["apps/core", "modules", "providers/gitea", "packages/api-client", "tests/performance"]
     issue_ids: ["STEAD-P1-002", "STEAD-P1-003", "STEAD-P1-005", "STEAD-P1-007", "STEAD-P1-008", "STEAD-P1-015"]
-    test_ids: ["T-PERF-003-ACCEPTANCE", "T-ADR-0007-OUTBOX-ATOMICITY", "T-ADR-0007-CROSS-MODULE-READS", "T-ADR-0007-OBSERVABILITY-PERFORMANCE", "T-ADR-0008-RESOURCE-ORDERING", "T-ADR-0008-PROJECTION-REBUILD"]
+    test_ids: ["T-PERF-003-ACCEPTANCE", "T-ADR-0007-OUTBOX-ATOMICITY", "T-ADR-0007-CROSS-MODULE-READS", "T-ADR-0007-OBSERVABILITY-PERFORMANCE", "T-ADR-0008-RESOURCE-ORDERING", "T-ADR-0008-ASYNC-PERFORMANCE", "T-ADR-0008-PROJECTION-REBUILD"]
     documentation: ["docs/architecture/MASTER_BUILD_DIRECTIVE.md", "docs/architecture/constitution.md", "docs/architecture/provider-contracts/gitea.md"]
     status: DEPENDENCY_BLOCKED_PHASE_1
     release: "phase-1"
@@ -887,7 +887,7 @@ requirements:
     title: "Set-oriented authorization and bounded synchronous work"
     implementation_modules: ["apps/core", "modules/authorization", "modules/audit", "policies/openfga", "policies/policy-decision", "tests/performance"]
     issue_ids: ["STEAD-P1-006", "STEAD-P1-007", "STEAD-P1-008", "STEAD-P1-012", "STEAD-P1-015"]
-    test_ids: ["T-PERF-004-ACCEPTANCE", "T-ADR-0007-CROSS-MODULE-READS", "T-ADR-0007-DURABLE-EFFECTS", "T-ADR-0007-OBSERVABILITY-PERFORMANCE", "T-ADR-0008-SUBJECT-PARTITION", "T-ADR-0008-RETENTION"]
+    test_ids: ["T-PERF-004-ACCEPTANCE", "T-ADR-0007-CROSS-MODULE-READS", "T-ADR-0007-DURABLE-EFFECTS", "T-ADR-0007-OBSERVABILITY-PERFORMANCE", "T-ADR-0008-ASYNC-PERFORMANCE"]
     documentation: ["docs/architecture/MASTER_BUILD_DIRECTIVE.md", "docs/architecture/authorization-contract.md", "docs/architecture/audit-model.md"]
     status: DEPENDENCY_BLOCKED_PHASE_1
     release: "phase-1"
@@ -991,7 +991,7 @@ requirements:
     title: "Event tests"
     implementation_modules: ["tests", "specs/traceability"]
     issue_ids: ["STEAD-P0-014", "STEAD-P1-007", "STEAD-P1-012"]
-    test_ids: ["T-TEST-005-ACCEPTANCE", "T-ADR-0001-COMPAT", "T-ADR-0007-OUTBOX-ATOMICITY", "T-ADR-0007-FAILURE-INJECTION", "T-ADR-0008-SUBJECT-PARTITION", "T-ADR-0008-SUBSCRIBER-ISOLATION", "T-ADR-0008-RESOURCE-ORDERING", "T-ADR-0008-RETENTION", "T-ADR-0008-IDEMPOTENCY", "T-ADR-0008-DLQ", "T-ADR-0008-AUTHORIZED-REPLAY", "T-ADR-0008-SCHEMA-COMPATIBILITY", "T-ADR-0008-PAYLOAD-MINIMIZATION", "T-ADR-0008-PROJECTION-REBUILD"]
+    test_ids: ["T-TEST-005-ACCEPTANCE", "T-ADR-0001-COMPAT", "T-ADR-0007-OUTBOX-ATOMICITY", "T-ADR-0007-FAILURE-INJECTION", "T-ADR-0008-SUBJECT-PARTITION", "T-ADR-0008-SUBSCRIBER-ISOLATION", "T-ADR-0008-RESOURCE-ORDERING", "T-ADR-0008-RETENTION", "T-ADR-0008-IDEMPOTENCY", "T-ADR-0008-DLQ", "T-ADR-0008-AUTHORIZED-REPLAY", "T-ADR-0008-SCHEMA-COMPATIBILITY", "T-ADR-0008-PAYLOAD-MINIMIZATION", "T-ADR-0008-ASYNC-PERFORMANCE", "T-ADR-0008-PROJECTION-REBUILD"]
     documentation: ["docs/testing/golden-vertical-slice.md", "docs/governance/release-gates.md"]
     status: DEPENDENCY_BLOCKED_PHASE_1
     release: "phase-1"

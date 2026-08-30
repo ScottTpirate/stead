@@ -24,15 +24,19 @@ ADR_0008_REQUIREMENT_TEST_MAPPING = {
     T-ADR-0008-SUBJECT-PARTITION
     T-ADR-0008-SUBSCRIBER-ISOLATION
     T-ADR-0008-RETENTION
+    T-ADR-0008-AUTHORIZED-REPLAY
   ],
   "EVT-002" => %w[
     T-ADR-0008-SUBJECT-PARTITION
     T-ADR-0008-RETENTION
     T-ADR-0008-IDEMPOTENCY
-    T-ADR-0008-PROJECTION-REBUILD
   ],
   "EVT-003" => %w[
+    T-ADR-0008-SUBJECT-PARTITION
     T-ADR-0008-RESOURCE-ORDERING
+    T-ADR-0008-RETENTION
+    T-ADR-0008-IDEMPOTENCY
+    T-ADR-0008-AUTHORIZED-REPLAY
     T-ADR-0008-SCHEMA-COMPATIBILITY
     T-ADR-0008-PAYLOAD-MINIMIZATION
   ],
@@ -80,18 +84,19 @@ ADR_0008_REQUIREMENT_TEST_MAPPING = {
     T-ADR-0008-IDEMPOTENCY
     T-ADR-0008-DLQ
     T-ADR-0008-AUTHORIZED-REPLAY
-    T-ADR-0008-SCHEMA-COMPATIBILITY
-    T-ADR-0008-PAYLOAD-MINIMIZATION
-    T-ADR-0008-PROJECTION-REBUILD
-  ],
-  "PERF-003" => %w[
-    T-ADR-0008-RESOURCE-ORDERING
-    T-ADR-0008-PROJECTION-REBUILD
-  ],
-  "PERF-004" => %w[
-    T-ADR-0008-SUBJECT-PARTITION
-    T-ADR-0008-RETENTION
-  ]
+      T-ADR-0008-SCHEMA-COMPATIBILITY
+      T-ADR-0008-PAYLOAD-MINIMIZATION
+      T-ADR-0008-ASYNC-PERFORMANCE
+      T-ADR-0008-PROJECTION-REBUILD
+    ],
+    "PERF-003" => %w[
+      T-ADR-0008-RESOURCE-ORDERING
+      T-ADR-0008-ASYNC-PERFORMANCE
+      T-ADR-0008-PROJECTION-REBUILD
+    ],
+    "PERF-004" => %w[
+      T-ADR-0008-ASYNC-PERFORMANCE
+    ]
 }.freeze
 
 EXPECTED_P1_006_ADR_CANDIDATES = %w[
@@ -804,8 +809,8 @@ adr_0008_traceability_failures = adr_requirement_traceability_failures(
 failures.concat(adr_0008_traceability_failures)
 
 adr_0008_expected_edges = expected_adr_requirement_test_edges(ADR_0008_REQUIREMENT_TEST_MAPPING).freeze
-unless adr_0008_expected_edges.length == 48
-  failures << "ADR-0008 closed requirement mapping must contain exactly 48 edges, found #{adr_0008_expected_edges.length}"
+unless adr_0008_expected_edges.length == 53
+  failures << "ADR-0008 closed requirement mapping must contain exactly 53 edges, found #{adr_0008_expected_edges.length}"
 end
 failures.concat(
   exact_adr_requirement_mapping_failures(
