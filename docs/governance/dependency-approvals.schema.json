@@ -34,6 +34,30 @@
       "items": { "$ref": "#/$defs/nonEmptyString" },
       "uniqueItems": true
     },
+    "noticeQuarantine": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "marker",
+        "status",
+        "release_notice_input",
+        "begin_marker",
+        "section_heading",
+        "framing",
+        "end_marker",
+        "notice_ids"
+      ],
+      "properties": {
+        "marker": { "$ref": "#/$defs/nonEmptyString" },
+        "status": { "const": "REJECTED_EVIDENCE_ONLY" },
+        "release_notice_input": { "const": false },
+        "begin_marker": { "$ref": "#/$defs/nonEmptyString" },
+        "section_heading": { "$ref": "#/$defs/nonEmptyString" },
+        "framing": { "$ref": "#/$defs/nonEmptyString" },
+        "end_marker": { "$ref": "#/$defs/nonEmptyString" },
+        "notice_ids": { "$ref": "#/$defs/stringArray" }
+      }
+    },
     "approvalRecord": {
       "type": "object",
       "additionalProperties": false,
@@ -74,11 +98,12 @@
                 "oci_image",
                 "binary_toolchain",
                 "cli_binary",
-                "npm_package"
+                "npm_package",
+                "go_module"
               ]
             },
             "ecosystem": {
-              "enum": ["git", "github-actions", "oci", "go-toolchain", "binary", "npm"]
+              "enum": ["git", "github-actions", "oci", "go-toolchain", "binary", "npm", "go"]
             },
             "source_url": { "type": "string", "format": "uri" },
             "version": { "$ref": "#/$defs/nonEmptyString" },
@@ -87,7 +112,16 @@
               "additionalProperties": false,
               "required": ["algorithm", "value"],
               "properties": {
-                "algorithm": { "enum": ["git-sha1", "sha256", "sha512-sri"] },
+                "algorithm": { "enum": ["git-sha1", "sha256", "sha512-sri", "go-h1"] },
+                "value": { "$ref": "#/$defs/nonEmptyString" }
+              }
+            },
+            "module_file_digest": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["algorithm", "value"],
+              "properties": {
+                "algorithm": { "const": "go-h1" },
                 "value": { "$ref": "#/$defs/nonEmptyString" }
               }
             },
@@ -110,7 +144,7 @@
             "directories": { "$ref": "#/$defs/stringArray" },
             "purpose": { "$ref": "#/$defs/nonEmptyString" },
             "relationship": {
-              "enum": ["source-reference", "build", "test", "ci-action", "clean-room-build"]
+              "enum": ["source-reference", "build", "test", "ci-action", "clean-room-build", "runtime"]
             },
             "distributed_in": { "$ref": "#/$defs/stringArray" },
             "linkage_or_interface": { "$ref": "#/$defs/nonEmptyString" }
@@ -127,7 +161,7 @@
             "approved_at"
           ],
           "properties": {
-            "category": { "enum": ["ALLOW-PERMISSIVE", "REVIEW-NONRUNTIME"] },
+            "category": { "enum": ["ALLOW-PERMISSIVE", "REVIEW-NONRUNTIME", "UNKNOWN"] },
             "status": { "enum": ["REVIEWED_PENDING_INDEPENDENT_APPROVAL", "APPROVED", "REJECTED", "REVOKED"] },
             "independent_approval_required": { "const": true },
             "approvers": { "$ref": "#/$defs/stringArray" },
@@ -136,7 +170,9 @@
                 { "type": "null" },
                 { "type": "string", "format": "date-time" }
               ]
-            }
+            },
+            "reason_codes": { "$ref": "#/$defs/stringArray" },
+            "evidence_refs": { "$ref": "#/$defs/stringArray" }
           }
         },
         "obligations": {
@@ -145,6 +181,7 @@
           "required": ["notices", "source_or_offer", "modifications"],
           "properties": {
             "notices": { "$ref": "#/$defs/stringArray" },
+            "notice_quarantine": { "$ref": "#/$defs/noticeQuarantine" },
             "source_or_offer": { "$ref": "#/$defs/nonEmptyString" },
             "modifications": { "$ref": "#/$defs/nonEmptyString" }
           }

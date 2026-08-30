@@ -242,6 +242,14 @@ assert.call(
   rollback_status.success? && !floating_rollback_status.success?,
   "foundation rollback policy must accept only the immutable Phase 0 target"
 )
+_dependency_self_test_stdout, dependency_self_test_stderr, dependency_self_test_status = Open3.capture3(
+  "ruby", "scripts/validate_dependencies.rb", "--self-test", chdir: ROOT.to_s
+)
+assert.call(
+  "T-SEC-001-ACCEPTANCE",
+  dependency_self_test_status.success?,
+  "dependency mutation guards must reject missing/wrong Go sums, source overrides, unreviewed transitive modules, unapproved active modules, and unpinned/wrong OCI digests: #{dependency_self_test_stderr.strip}"
+)
 lock_license_failures = lockfile.fetch("packages").filter_map do |path, entry|
   next if path.empty? || entry["link"]
   next if ALLOWED_LOCK_LICENSES.include?(entry["license"])
