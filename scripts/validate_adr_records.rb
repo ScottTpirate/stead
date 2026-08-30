@@ -89,6 +89,9 @@ ADR_0008_REQUIREMENT_TEST_MAPPING = {
       T-ADR-0008-ASYNC-PERFORMANCE
       T-ADR-0008-PROJECTION-REBUILD
     ],
+    "PERF-002" => %w[
+      T-ADR-0008-ASYNC-PERFORMANCE
+    ],
     "PERF-003" => %w[
       T-ADR-0008-RESOURCE-ORDERING
       T-ADR-0008-ASYNC-PERFORMANCE
@@ -809,8 +812,8 @@ adr_0008_traceability_failures = adr_requirement_traceability_failures(
 failures.concat(adr_0008_traceability_failures)
 
 adr_0008_expected_edges = expected_adr_requirement_test_edges(ADR_0008_REQUIREMENT_TEST_MAPPING).freeze
-unless adr_0008_expected_edges.length == 53
-  failures << "ADR-0008 closed requirement mapping must contain exactly 53 edges, found #{adr_0008_expected_edges.length}"
+unless adr_0008_expected_edges.length == 54
+  failures << "ADR-0008 closed requirement mapping must contain exactly 54 edges, found #{adr_0008_expected_edges.length}"
 end
 failures.concat(
   exact_adr_requirement_mapping_failures(
@@ -1330,6 +1333,57 @@ unless Array(adr_0007_gate&.fetch("dependent_issues", nil)).include?("STEAD-P1-0
   failures << "implementation issue catalog: ADR-CAND-002 dependent issues omit STEAD-P1-017"
 end
 
+adr_0008_gate = adr_gates["ADR-CAND-006"]
+adr_0008_expected_dependents = %w[
+  STEAD-P1-015
+  STEAD-P1-007
+  STEAD-P1-008
+  STEAD-P1-011
+  STEAD-P1-012
+  STEAD-P2-005
+].to_set
+adr_0008_actual_dependents = Array(adr_0008_gate&.fetch("dependent_issues", nil)).to_set
+unless adr_0008_actual_dependents == adr_0008_expected_dependents
+  failures << "implementation issue catalog: ADR-CAND-006 exact dependent issues must be #{adr_0008_expected_dependents.to_a.sort.join(', ')}, found #{adr_0008_actual_dependents.to_a.sort.join(', ')}"
+end
+
+event_issue = issues["STEAD-P1-007"]
+unless Array(event_issue&.fetch("dependencies", nil)).include?("STEAD-P1-015")
+  failures << "STEAD-P1-007 dependencies omit the WS-02-owned STEAD-P1-015 outbox port"
+end
+if Array(event_issue&.fetch("dependencies", nil)).include?("STEAD-P1-011")
+  failures << "STEAD-P1-007 must consume the early WS-12 config/preflight child, not depend on downstream STEAD-P1-011 completion"
+end
+event_acceptance = Array(event_issue&.fetch("acceptance_criteria", nil)).join(" ")
+unless event_acceptance.include?("dependency-ready WS-12-owned child under STEAD-P1-011") && event_acceptance.include?("not completion of STEAD-P1-011")
+  failures << "STEAD-P1-007 acceptance must name the dependency-ready WS-12 config/preflight child without creating a STEAD-P1-011 completion dependency"
+end
+
+operations_issue = issues["STEAD-P1-011"]
+operations_acceptance = Array(operations_issue&.fetch("acceptance_criteria", nil)).join(" ")
+unless Array(operations_issue&.fetch("dependencies", nil)).include?("STEAD-P1-007")
+  failures << "STEAD-P1-011 must remain downstream of STEAD-P1-007"
+end
+unless operations_acceptance.include?("early dependency-ready WS-12 child under this issue") && operations_acceptance.include?("without claiming this parent complete")
+  failures << "STEAD-P1-011 acceptance must split its early config/preflight child from downstream parent completion"
+end
+
+adr_0008_owned_path_requirements = {
+  "STEAD-P1-015" => %w[apps/core/internal/outbox tests/integration/core packages/test-fixtures/core],
+  "STEAD-P1-007" => %w[apps/worker packages/event-schemas specs/asyncapi tests/contract/events packages/test-fixtures/events],
+  "STEAD-P1-011" => %w[apps/steadctl deploy/compose packages/domain-schemas/config docs/operator tests/contract/operations tests/performance/datasets tests/backup-restore packages/test-fixtures/operations]
+}.freeze
+adr_0008_owned_path_requirements.each do |issue_id, required_paths|
+  issue = issues[issue_id]
+  unless issue
+    failures << "implementation issue catalog: missing #{issue_id} for ADR-0008 owned-path split"
+    next
+  end
+
+  missing_paths = required_paths.to_set - Array(issue["owned_directories"]).to_set
+  failures << "#{issue_id} owned directories omit ADR-0008 contribution paths: #{missing_paths.to_a.sort.join(', ')}" unless missing_paths.empty?
+end
+
 %w[STEAD-P1-011 STEAD-P1-012].each do |dependent_issue_id|
   dependent_issue = issues[dependent_issue_id]
   if dependent_issue.nil?
@@ -1553,6 +1607,11 @@ implementation_assignments = {
     ]
   },
   "0008" => {
+    "STEAD-P1-015" => %w[
+      T-ADR-0008-SUBJECT-PARTITION
+      T-ADR-0008-RETENTION
+      T-ADR-0008-IDEMPOTENCY
+    ],
     "STEAD-P1-007" => tests_by_number.fetch("0008", []),
     "STEAD-P1-008" => %w[
       T-ADR-0008-RESOURCE-ORDERING
@@ -1561,6 +1620,15 @@ implementation_assignments = {
       T-ADR-0008-PAYLOAD-MINIMIZATION
       T-ADR-0008-PROJECTION-REBUILD
     ],
+    "STEAD-P1-011" => %w[
+      T-ADR-0008-SUBJECT-PARTITION
+      T-ADR-0008-RETENTION
+      T-ADR-0008-IDEMPOTENCY
+      T-ADR-0008-PAYLOAD-MINIMIZATION
+      T-ADR-0008-ASYNC-PERFORMANCE
+      T-ADR-0008-PROJECTION-REBUILD
+    ],
+    "STEAD-P1-012" => tests_by_number.fetch("0008", []),
     "STEAD-P2-005" => %w[
       T-ADR-0008-SUBSCRIBER-ISOLATION
       T-ADR-0008-AUTHORIZED-REPLAY
@@ -1587,6 +1655,25 @@ implementation_assignments.each do |number, issue_assignments|
   implementation_coverage = issue_assignments.values.flatten.to_set
   missing_implementation_tests = declared_tests - implementation_coverage
   failures << "ADR-#{number} owner-split implementation coverage omits: #{missing_implementation_tests.to_a.sort.join(', ')}" unless missing_implementation_tests.empty?
+end
+
+# ADR-0008 crosses fixed WS-02, WS-07, WS-08, WS-12, external-channel, and
+# independent-gate boundaries. Keep the complete cumulative issue assignment
+# closed in both directions so one owner cannot silently claim or shed another
+# owner's case contribution while the union still happens to cover every test.
+adr_0008_expected_issue_assignments = implementation_assignments.fetch("0008").transform_values(&:to_set)
+adr_0008_actual_issue_assignments = issues.each_with_object({}) do |(issue_id, issue), assignments|
+  adr_tests = Array(issue["automated_tests"]).grep(/^T-ADR-0008-/).to_set
+  assignments[issue_id] = adr_tests unless adr_tests.empty?
+end
+(adr_0008_expected_issue_assignments.keys | adr_0008_actual_issue_assignments.keys).sort.each do |issue_id|
+  expected_tests = adr_0008_expected_issue_assignments.fetch(issue_id, Set.new)
+  actual_tests = adr_0008_actual_issue_assignments.fetch(issue_id, Set.new)
+  next if actual_tests == expected_tests
+
+  missing_tests = expected_tests - actual_tests
+  unexpected_tests = actual_tests - expected_tests
+  failures << "#{issue_id} ADR-0008 exact owner assignment mismatch: missing [#{missing_tests.to_a.sort.join(', ')}], unexpected [#{unexpected_tests.to_a.sort.join(', ')}]"
 end
 
 phase_one_adr5_tests = tests_by_number.fetch("0005", []).reject { |test_id| test_id == "T-ADR-0005-COMMIT-BOUNDARY" }

@@ -870,8 +870,8 @@ requirements:
   - requirement_id: "PERF-002"
     title: "Standard reference targets"
     implementation_modules: ["apps/core", "apps/web", "modules", "providers", "tests/performance"]
-    issue_ids: ["STEAD-P1-005", "STEAD-P1-008", "STEAD-P1-011", "STEAD-P1-012"]
-    test_ids: ["T-PERF-002-ACCEPTANCE"]
+    issue_ids: ["STEAD-P1-005", "STEAD-P1-007", "STEAD-P1-008", "STEAD-P1-011", "STEAD-P1-012"]
+    test_ids: ["T-PERF-002-ACCEPTANCE", "T-ADR-0008-ASYNC-PERFORMANCE"]
     documentation: ["docs/architecture/MASTER_BUILD_DIRECTIVE.md", "docs/architecture/observability-contract.md", "docs/testing/golden-vertical-slice.md"]
     status: DEPENDENCY_BLOCKED_PHASE_1
     release: "phase-1"
