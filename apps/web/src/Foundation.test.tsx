@@ -4,6 +4,11 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { Foundation } from "./Foundation";
 
+const forbiddenCapabilityLinks = () =>
+  ["Code", "Delivery"].flatMap((name) =>
+    screen.queryAllByRole("link", { name }),
+  );
+
 afterEach(() => {
   cleanup();
   window.location.hash = "";
@@ -31,10 +36,23 @@ describe("Foundation", () => {
     expect(window.location.hash).toBe("#overview");
   });
 
-  it("fails a forbidden-capability lookup in the general shell fixture", () => {
+  it("contains no software-capability links in the general shell fixture", () => {
     render(<Foundation />);
 
-    expect(() => screen.getByRole("link", { name: "Code" })).toThrow();
-    expect(() => screen.getByRole("link", { name: "Delivery" })).toThrow();
+    expect(forbiddenCapabilityLinks()).toHaveLength(0);
+  });
+
+  it("detects duplicate forbidden-capability mutations", () => {
+    render(<Foundation />);
+
+    const navigation = screen.getByRole("navigation", { name: "Project areas" });
+    for (let index = 0; index < 2; index += 1) {
+      const link = document.createElement("a");
+      link.href = "#code";
+      link.textContent = "Code";
+      navigation.append(link);
+    }
+
+    expect(forbiddenCapabilityLinks()).toHaveLength(2);
   });
 });
