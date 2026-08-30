@@ -1,0 +1,66 @@
+{
+  "schema_version": "1.0",
+  "issue": "P1-005-FE-FOUNDATION",
+  "contract": "PERF-005",
+  "generated_by": "apps/web/scripts/measure-bundle.mjs",
+  "measurement_method": "Node zlib level 9 over Vite manifest JavaScript graph",
+  "scope": "Wave 0 original non-import foundation",
+  "mature_interface_perf005_complete": false,
+  "lazy_boundaries_are_placeholders": true,
+  "minimal_foundation_baseline_bytes_gzip": 60808,
+  "budget_bytes_gzip": 256000,
+  "eager_javascript": {
+    "gzip_bytes": 65687,
+    "delta_bytes_gzip": 4879,
+    "files": [
+      {
+        "file": "assets/index-BchPPHpP.js",
+        "gzip_bytes": 65687
+      }
+    ]
+  },
+  "lazy_capabilities": {
+    "docs_editor": {
+      "source": "src/capabilities/docs-editor.ts",
+      "file": "assets/docs-editor-MzfoGaDr.js",
+      "baseline_bytes_gzip": 0,
+      "gzip_bytes": 79,
+      "delta_bytes_gzip": 79
+    },
+    "code": {
+      "source": "src/capabilities/code.ts",
+      "file": "assets/code-B89Khe_K.js",
+      "baseline_bytes_gzip": 0,
+      "gzip_bytes": 72,
+      "delta_bytes_gzip": 72
+    },
+    "delivery": {
+      "source": "src/capabilities/delivery.ts",
+      "file": "assets/delivery-CyvOSHoh.js",
+      "baseline_bytes_gzip": 0,
+      "gzip_bytes": 76,
+      "delta_bytes_gzip": 76
+    },
+    "administration": {
+      "source": "src/capabilities/administration.ts",
+      "file": "assets/administration-DUBAxT-J.js",
+      "baseline_bytes_gzip": 0,
+      "gzip_bytes": 82,
+      "delta_bytes_gzip": 82
+    },
+    "migration": {
+      "source": "src/capabilities/migration.ts",
+      "file": "assets/migration-BtQwf3v_.js",
+      "baseline_bytes_gzip": 0,
+      "gzip_bytes": 77,
+      "delta_bytes_gzip": 77
+    },
+    "analytics": {
+      "source": "src/capabilities/analytics.ts",
+      "file": "assets/analytics-sfWqm0Iz.js",
+      "baseline_bytes_gzip": 0,
+      "gzip_bytes": 77,
+      "delta_bytes_gzip": 77
+    }
+  }
+}
