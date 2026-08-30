@@ -11,6 +11,17 @@ common_contract:
   compatibility: current_previous_two_minor_and_next_candidate_where_upstream_exists
   migration: capability_inventory_map_dry_run_idempotent_import_reconcile_cutover
   rollback: provider_state_never_replaces_canonical_state
+  ordinary_read_path:
+    source: local_rebuildable_postgresql_provider_projection
+    synchronous_provider_calls: 0
+    update_sources: authenticated_webhooks_plus_scheduled_reconciliation
+    authorization: fresh_set_oriented_central_decision
+    prohibited: [per_row_provider_waterfall, nats_request_reply, wait_for_projection_consumer]
+  authoritative_mutation_path:
+    provider_call: minimum_idempotent_adapter_operation
+    projection: update_or_reconcile_immediately_after_authoritative_success
+    response_order: authoritative_transaction_with_outbox_commit_then_response_then_outbox_relay_to_nats
+    evidence: provider_call_count_latency_revision_drift_and_reconciliation_audit
   operation_semantics:
     request: canonical_resource_ids_plus_opaque_adapter_context
     response: canonical_result_or_RFC_9457_problem

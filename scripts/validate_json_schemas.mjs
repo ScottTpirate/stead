@@ -36,8 +36,15 @@ try {
 
   const profileSchemaId = "https://stead.example/policies/security-label-profiles/profile-v0.1.schema.json";
   const domainSchemaId = "https://stead.example/policies/deployment-domains/domain-profile-v0.1.schema.json";
+  const domainSchema = schemas.find(({ $id }) => $id === domainSchemaId);
   const validateProfile = ajv.getSchema(profileSchemaId);
   const validateDomain = ajv.getSchema(domainSchemaId);
+  if (!domainSchema?.required?.includes("disclosure_revocation_mode")) {
+    throw new Error("deployment-domain schema must require disclosure_revocation_mode");
+  }
+  if (JSON.stringify(domainSchema?.properties?.disclosure_revocation_mode?.enum) !== JSON.stringify(["request_boundary", "commit_boundary"])) {
+    throw new Error("deployment-domain disclosure_revocation_mode must be the exact closed request_boundary/commit_boundary enum");
+  }
   const yamlFiles = async (directory) =>
     (await readdir(directory))
       .filter((name) => name.endsWith(".yaml"))
@@ -282,18 +289,38 @@ try {
     if (errors.length > 0) throw new Error(`${path}: ${errors.join("; ")}`);
   }
 
+  for (const starterName of ["commercial.yaml", "us-government.yaml"]) {
+    const starter = domainEntries.find(([path]) => path === `policies/deployment-domains/${starterName}`)?.[1];
+    if (starter?.disclosure_revocation_mode !== "request_boundary") {
+      throw new Error(`${starterName} must select request_boundary explicitly`);
+    }
+  }
+
   const multiProfileFixture = domainEntries.find(([path]) => path.endsWith("multi-profile-high-assurance.yaml"))?.[1];
   if (!multiProfileFixture || multiProfileFixture.approved_profile_bridges.length !== 0) {
     throw new Error("synthetic multi-profile domain must prove fail-closed composition without a bridge");
   }
   if (
     Object.hasOwn(multiProfileFixture.label_profile_ceilings, "us_government") ||
+    !Object.hasOwn(multiProfileFixture.label_profile_ceilings, "commercial") ||
+    multiProfileFixture.disclosure_revocation_mode !== "commit_boundary" ||
     multiProfileFixture.assurance.policy_signature_threshold < 2 ||
     !multiProfileFixture.assurance.validated_cryptographic_module_required ||
     multiProfileFixture.assurance.lowering_approval_threshold !== 3 ||
     syntheticProfile.lowering_approval.minimum_approvers !== 3
   ) {
     throw new Error("synthetic non-government domain must prove profile-neutral high-assurance and threshold-three controls");
+  }
+
+  const missingDisclosureMode = structuredClone(multiProfileFixture);
+  delete missingDisclosureMode.disclosure_revocation_mode;
+  if (validateDomain(missingDisclosureMode)) {
+    throw new Error("deployment-domain schema must reject a missing disclosure_revocation_mode");
+  }
+  const unknownDisclosureMode = structuredClone(multiProfileFixture);
+  unknownDisclosureMode.disclosure_revocation_mode = "profile_selected";
+  if (validateDomain(unknownDisclosureMode)) {
+    throw new Error("deployment-domain schema must reject an unknown disclosure_revocation_mode");
   }
 
   const validateCeilingMap = ajv.getSchema(`${domainSchemaId}#/$defs/ProfileCeilingMap`);

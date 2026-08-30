@@ -17,7 +17,11 @@ WORKSTREAM_OWNERSHIP_PATH = File.join(ROOT, "docs/architecture/workstream-owners
 ADR_CANDIDATE_INDEX_PATH = File.join(ROOT, "docs/governance/adr-candidate-index.md")
 
 EXPECTED_DIRECTIVE_VERSION = "0.2"
-EXPECTED_REQUIREMENT_COUNT = 128
+# Tag phase0 closed with 128 requirements. PERF-001..006 are the bounded,
+# post-baseline Phase 1 constitution and therefore use Phase 1 ownership.
+PHASE_ZERO_BASELINE_REQUIREMENT_COUNT = 128
+POST_BASELINE_REQUIREMENT_IDS = (1..6).map { |number| format("PERF-%03d", number) }.freeze
+EXPECTED_REQUIREMENT_COUNT = PHASE_ZERO_BASELINE_REQUIREMENT_COUNT + POST_BASELINE_REQUIREMENT_IDS.length
 EXPECTED_AGENT_IDS = (1..7).map { |number| format("AGENT-%03d", number) }.freeze
 EXPECTED_V02_IDS = %w[PRIN-013 PRIN-014 PRIN-015 DOM-008 DOM-009 DOM-010 DOM-011 UX-006 UX-007 UX-008 UX-009 AUTH-006 TEST-010].freeze
 EXPECTED_THREAT_IDS = (1..33).map { |number| format("TM-F%03d", number) }.freeze
@@ -202,6 +206,22 @@ ISSUE_TEXT_FIELDS = %w[
   observability_and_audit_requirements
   migration_and_backward_compatibility_implications
   upgrade_and_rollback_behavior
+].freeze
+
+PERFORMANCE_CONTRACT_FIELDS = %w[
+  expected_request_count
+  sql_query_behavior
+  external_provider_calls
+  authorization_strategy
+  synchronous_writes
+  frontend_bundle_impact
+  benchmark_or_not_sensitive_reason
+].freeze
+
+PERFORMANCE_PLACEHOLDER_FRAGMENTS = [
+  "User-facing primary surfaces normally use one composed BFF request",
+  "Provide the applicable T-PERF benchmark",
+  "or document why the issue has no runtime path"
 ].freeze
 
 def relative_path(path)
@@ -397,6 +417,16 @@ if directive_text
   missing_concrete_names = expected_concrete_names.reject { |name| directive_text.include?(name) }
   failures << "#{relative_path(DIRECTIVE_PATH)}: canonical header omits concrete Stead names: #{missing_concrete_names.join(', ')}" unless missing_concrete_names.empty?
   failures << "#{relative_path(DIRECTIVE_PATH)}: stale platform canonical-prefix header remains" if directive_text.include?("Canonical component prefix:")
+
+  naming_contract_fragments = [
+    "Semantic concepts, domain nouns, Go types, interfaces, and internal ports MUST use stable unversioned names.",
+    "Compatibility boundaries, serialized formats, schemas, APIs, protocols, media types, and events MUST carry explicit versions.",
+    "An implementation type MAY use a suffix such as `FooV2` only while two incompatible versions genuinely coexist in one migration path."
+  ]
+  missing_naming_contract = naming_contract_fragments.reject { |fragment| directive_text.include?(fragment) }
+  unless missing_naming_contract.empty?
+    failures << "#{relative_path(DIRECTIVE_PATH)}: ARCH-005 omits the stable semantic-name/versioned-contract rule"
+  end
 end
 
 inventory = load_yaml(INVENTORY_PATH, failures)
@@ -490,6 +520,26 @@ unless requirement_duplicates.empty?
   failures << "#{relative_path(REQUIREMENTS_PATH)}: duplicate requirement IDs: #{format_ids(requirement_duplicates)}"
 end
 
+requirements_coverage = requirements_document.is_a?(Hash) ? requirements_document["coverage"] : nil
+unless requirements_coverage.is_a?(Hash)
+  failures << "#{relative_path(REQUIREMENTS_PATH)}: coverage must be a mapping"
+else
+  expected_coverage = {
+    "phase_zero_baseline_requirement_count" => PHASE_ZERO_BASELINE_REQUIREMENT_COUNT,
+    "post_baseline_requirement_ids" => POST_BASELINE_REQUIREMENT_IDS,
+    "expected_requirement_count" => EXPECTED_REQUIREMENT_COUNT,
+    "registered_requirement_count" => requirement_ids.length,
+    "unique_requirement_count" => requirement_ids.uniq.length,
+    "duplicate_requirement_ids" => requirement_duplicates,
+    "missing_requirement_ids" => directive_ids - requirement_ids
+  }
+  expected_coverage.each do |field, expected|
+    unless requirements_coverage[field] == expected
+      failures << "#{relative_path(REQUIREMENTS_PATH)}: coverage.#{field} must be #{expected.inspect}"
+    end
+  end
+end
+
 unless directive_ids.empty?
   missing = directive_ids - requirement_ids
   unexpected = requirement_ids - directive_ids
@@ -544,6 +594,38 @@ issues_with_indexes.each do |issue, index|
   array_field(issue, "dependencies", context, failures, allow_empty: true)
   ISSUE_TEXT_FIELDS.each do |field|
     text_field(issue, field, context, failures)
+  end
+
+  next if phase == "phase-0"
+
+  performance_contract = issue["performance_contract"]
+  unless performance_contract.is_a?(Hash)
+    failures << "#{context}: performance_contract must be a mapping for Phase 1-3 implementation work"
+    next
+  end
+  unless performance_contract.keys == PERFORMANCE_CONTRACT_FIELDS
+    failures << "#{context}: performance_contract must contain exactly #{PERFORMANCE_CONTRACT_FIELDS.join(', ')} in canonical order"
+  end
+  PERFORMANCE_CONTRACT_FIELDS.each do |field|
+    unless nonempty_string?(performance_contract[field])
+      failures << "#{context}: performance_contract.#{field} must be a nonempty string"
+    end
+  end
+
+  PERFORMANCE_CONTRACT_FIELDS.first(6).each do |field|
+    value = performance_contract[field]
+    next unless nonempty_string?(value)
+    failures << "#{context}: performance_contract.#{field} must state the issue-specific expectation" unless value.start_with?("#{issue_id}:")
+  end
+
+  performance_text = performance_contract.values.grep(String).join(" ")
+  PERFORMANCE_PLACEHOLDER_FRAGMENTS.each do |fragment|
+    failures << "#{context}: performance_contract retains placeholder boilerplate: #{fragment}" if performance_text.include?(fragment)
+  end
+
+  benchmark_contract = performance_contract["benchmark_or_not_sensitive_reason"]
+  if nonempty_string?(benchmark_contract) && Array(issue["automated_tests"]).none? { |test_id| benchmark_contract.include?(test_id) }
+    failures << "#{context}: performance_contract.benchmark_or_not_sensitive_reason must name an automated test owned by the issue"
   end
 
 end
@@ -814,14 +896,15 @@ begin
     failures << "#{relative_path(WORKSTREAM_OWNERSHIP_PATH)}: accountable requirement coverage mismatch (missing: #{format_ids(missing_accountability)}; unexpected: #{format_ids(unexpected_accountability)})"
   end
 
-  phase_zero_issues = issues_with_indexes.map(&:first).select { |issue| issue["phase"] == "phase-0" }
+  issues_by_phase = issues_with_indexes.map(&:first).group_by { |issue| issue["phase"] }
   accountable_owners.each do |requirement_id, owners|
-    mapped_phase_zero_owners = phase_zero_issues.filter_map do |issue|
+    accountability_phase = POST_BASELINE_REQUIREMENT_IDS.include?(requirement_id) ? "phase-1" : "phase-0"
+    mapped_accountable_owners = Array(issues_by_phase[accountability_phase]).filter_map do |issue|
       issue["owner"] if issue["requirement_ids"].is_a?(Array) && issue["requirement_ids"].include?(requirement_id)
     end.uniq
-    next unless (owners & mapped_phase_zero_owners).empty?
+    next unless (owners & mapped_accountable_owners).empty?
 
-    failures << "ownership mismatch: #{requirement_id} accountable to #{owners.join(', ')}, but its Phase 0 issues are owned by #{mapped_phase_zero_owners.empty? ? 'none' : mapped_phase_zero_owners.join(', ')}"
+    failures << "ownership mismatch: #{requirement_id} accountable to #{owners.join(', ')}, but its #{accountability_phase} issues are owned by #{mapped_accountable_owners.empty? ? 'none' : mapped_accountable_owners.join(', ')}"
   end
 rescue Errno::ENOENT => error
   failures << "#{relative_path(WORKSTREAM_OWNERSHIP_PATH)}: cannot read file (#{error.message})"

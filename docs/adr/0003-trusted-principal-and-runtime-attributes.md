@@ -39,7 +39,7 @@ The accepted representation is implementable with the approved Go, PostgreSQL, O
 
 ### Canonical assertion representation
 
-Authorization-relevant principal evidence is represented as a versioned `TrustedAttributeAssertionV1`. It is an internal identity/authorization contract, not a new OWGP resource or configurable product concept. Every assertion contains:
+Authorization-relevant principal evidence is represented as the stable internal type `TrustedAttributeAssertion`. Its persisted or serialized contract carries an explicit schema version; the semantic type name does not. It is an internal identity/authorization contract, not a new OWGP resource or configurable product concept. Every assertion contains:
 
 - the canonical subject `PrincipalRef` and its acting/non-acting kind;
 - a system-registered, namespaced `attribute_key`;
@@ -53,7 +53,7 @@ Authorization-relevant principal evidence is represented as a versioned `Trusted
 
 The policy-decision input may omit the subject inside each assertion because the enclosing actor supplies it, but the identity store and resolver must bind every assertion to exactly one canonical subject. Authorization values may not be arbitrary JSON objects. External claim names and values are mapped through a versioned, system-owned attribute registry. A deployment profile configures authorities and required attributes; it cannot create a new attribute that grants authority or change a value's canonical meaning.
 
-`not_applicable` is not an attribute value and cannot be encoded as a `TrustedAttributeAssertionV1`. It is a separate, non-authorizing `TrustedAttributeCoverageResultV1` issued by the configured primary authority for exactly one canonical subject and registered attribute key. The result contains status exactly `not_applicable`, authority ID and revision, immutable subject binding, source kind, provenance reference, issued/last-synchronized/expiry times, synchronization and verification results, coverage-result revision, revocation revision, and revoked state. It is usable only while current, verified, successfully synchronized, non-revoked, and cryptographically or transport-bound to that authority. It grants nothing, is never returned as a policy attribute value, and exists solely to prove that the primary authority has authoritatively disclaimed coverage so an explicitly configured fallback may be considered.
+`not_applicable` is not an attribute value and cannot be encoded as a `TrustedAttributeAssertion`. It is a separate, non-authorizing `TrustedAttributeCoverageResult` issued by the configured primary authority for exactly one canonical subject and registered attribute key. The result contains status exactly `not_applicable`, authority ID and revision, immutable subject binding, source kind, provenance reference, issued/last-synchronized/expiry times, synchronization and verification results, coverage-result revision, revocation revision, and revoked state. It is usable only while current, verified, successfully synchronized, non-revoked, and cryptographically or transport-bound to that authority. It grants nothing, is never returned as a policy attribute value, and exists solely to prove that the primary authority has authoritatively disclaimed coverage so an explicitly configured fallback may be considered.
 
 Directory Groups remain non-acting `PrincipalRef` values. Their membership supplies explicit authorization relationships and provisioning context, not an acting identity or a substitute for the actor's trusted attributes.
 
@@ -62,7 +62,7 @@ Directory Groups remain non-acting `PrincipalRef` values. Their membership suppl
 Each registered attribute key has exactly one configured primary authority for a deployment security domain and may name an ordered list of explicit coverage fallbacks. Authorities may be primary for different keys. Selection is deterministic:
 
 1. use a current, verified, non-revoked primary assertion;
-2. use a fallback only when the primary authority has issued a current `TrustedAttributeCoverageResultV1` with status `not_applicable` for that exact subject/key and the profile explicitly permits that fallback;
+2. use a fallback only when the primary authority has issued a current `TrustedAttributeCoverageResult` with status `not_applicable` for that exact subject/key and the profile explicitly permits that fallback;
 3. do not fall back because of timeout, network failure, stale synchronization, expiry, verification failure, or revocation;
 4. if current candidate assertions conflict in subject binding, canonical value, authority revision, or revocation state, mark the attribute conflicted and deny every decision that requires it.
 
@@ -84,7 +84,7 @@ Every decision input includes principal ID/type, selected assertion and authorit
 
 ### Agent and runtime evidence
 
-Persistent Agent identity/authority assertions and per-execution runtime evidence are separate. `AgentRuntimeAttestationV1` is short-lived and binds all of the following:
+Persistent Agent identity/authority assertions and per-execution runtime evidence are separate. `AgentRuntimeAttestation` is short-lived and binds all of the following:
 
 - canonical Agent ID and Agent authority revision;
 - external workload/runtime identity;
@@ -150,7 +150,7 @@ Decision-record acceptance approves the normalization choice and the named verif
 
 | Test ID | Layer | Required evidence |
 |---|---|---|
-| `T-ADR-0003-NORMALIZATION` | schema/contract | Every supported source maps to the same typed `TrustedAttributeAssertionV1`; `not_applicable` is accepted only as a complete non-authorizing `TrustedAttributeCoverageResultV1`; unknown key/type/status/authority/provenance fails validation. |
+| `T-ADR-0003-NORMALIZATION` | schema/contract | Every supported source maps to the same typed `TrustedAttributeAssertion`; `not_applicable` is accepted only as a complete non-authorizing `TrustedAttributeCoverageResult`; unknown key/type/status/authority/provenance fails validation. |
 | `T-ADR-0003-AUTHORITY-PRECEDENCE` | policy contract | Valid primary wins; only a current verified primary-authority coverage result for the exact subject/key enables a configured fallback; forged/value-encoded, wrong-subject/key, timeout/stale/revoked primary and conflicting values deny. |
 | `T-ADR-0003-IDENTITY-CORRELATION` | integration | Exact configured OIDC issuer+subject and SCIM authority+resource ID map deterministically; issuer case/trailing-slash/encoding/alias variants remain distinct unless an explicit migration succeeds. Email/name collisions, recycled IDs, cross-Organization mappings, and ambiguous merges quarantine and deny. |
 | `T-ADR-0003-FRESHNESS-REVOCATION` | integration/security | The exact evidence-age, sync-age, explicit-expiry, and future-skew calculations pass boundary fixtures; a heartbeat/retry/re-read cannot refresh `issued_at` or extend authority. Expiry, failed/partial sync, suspension, authority remap, and revocation advance the fence and prevent reused or direct-path allows; a future cache implementation must pass the same case. |

@@ -426,6 +426,8 @@ The initial repository MUST use this logical layout. Names may be adjusted only 
 
 ## ARCH-005 — API and schema versioning
 
+- Semantic concepts, domain nouns, Go types, interfaces, and internal ports MUST use stable unversioned names. Compatibility boundaries, serialized formats, schemas, APIs, protocols, media types, and events MUST carry explicit versions.
+- An implementation type MAY use a suffix such as `FooV2` only while two incompatible versions genuinely coexist in one migration path. Versioned package or contract namespaces are preferred to permanent suffixes in ordinary application code.
 - Every public HTTP API MUST be documented in OpenAPI 3.1.1.
 - Every event channel and message MUST be documented in AsyncAPI 3.1.x.
 - Every JSON payload MUST have a JSON Schema 2020-12 definition.
@@ -1159,6 +1161,8 @@ The platform MUST use a central authorization service that combines:
 
 An access decision is allowed only when all required checks allow it and no deny rule applies.
 
+Every protected request MUST receive a fresh central decision; authorization-decision results MUST NOT be cached or reused. The coordinator MUST bind the active signed deployment security-domain policy, selected `disclosure_revocation_mode`, resource/label/policy/OpenFGA tuple/provider/revocation revisions, and one consistent principal/session/task/runtime context. It MUST revalidate the applicable current revisions at the selected disclosure/effect boundary. Composed lists and object surfaces MUST use set-oriented authorization and one logical request decision rather than sequential per-row policy calls.
+
 The authorization decision flow is:
 
 ```text
@@ -1202,7 +1206,7 @@ The policy-decision layer MUST evaluate:
 - sensitivity/classification dominance;
 - compartments/program access;
 - dissemination and releasability controls;
-- CUI handling regimes/categories;
+- profile-defined handling regimes/categories, including CUI where mapped by the active validated profile;
 - citizenship/organization restrictions where configured;
 - authentication strength;
 - device trust;
@@ -1298,10 +1302,15 @@ Every installation MUST define:
 - allowed storage and backup destinations;
 - allowed runner pools;
 - network-zone and egress requirements;
+- one closed `disclosure_revocation_mode` value, exactly `request_boundary` or `commit_boundary`;
 - required signature threshold, custody/separation rules, and approved cryptographic boundary; and
 - other environment-specific assurance controls needed by the deployment.
 
 A resource whose label exceeds the ceiling for its own profile MUST be rejected. An unknown profile, missing or ambiguous profile ceiling, or cross-profile composition MUST fail closed. Cross-profile composition remains prohibited unless an explicitly signed and approved compatibility/bridge rule covers the exact profiles, versions, direction, operation, mapping semantics, trust binding, and non-weakening evidence; such a rule never creates a built-in cross-domain or write-down path. The v0.1 deployment-domain contract accepts no bridges; a non-empty bridge set requires a separately approved contract/ADR and complete negative evidence before any consumer may accept it.
+
+Disclosure and revocation assurance MUST be selected only by the signed deployment security-domain policy, never by a security-label profile ID. `request_boundary` is the required Phase 1 and normal production mode: every protected request receives a fresh central authorization decision and current resource, label, policy, tuple, provider/path, and revocation checks; a finite response whose disclosure validly began before a concurrent committed security mutation may finish, while every subsequent operation observes the mutation. Ordinary composed metadata reads in this mode MUST NOT require replica-wide quiescence, a `DisclosureEgressFence`, transport/kernel/sidecar/proxy terminal-buffer proof, any durable issued/consumed/terminal permit lifecycle rows, or per-resource synchronous audit writes. Streams, content downloads, exports, print operations, credentials, provider calls, direct protocols, long-running disclosures, and ambiguous external effects retain durable effect controls and fail closed when their delivery or suppression cannot be proven.
+
+`commit_boundary` is the strict high-assurance mode. It preserves `BoundedReadGuard`, `DisclosureEgressFence`, serving-replica leases and quiescence, transport/buffer terminal proof, and the guarantee that no prior-authorized protected byte crosses the defined Stead egress boundary after the relevant security mutation commits. Phase 1 MUST preserve typed interfaces and selection tests for this mode without requiring its complete accredited production implementation. A later high-assurance release MUST complete its operational and failure evidence. Both modes preserve deny-by-default authorization, existence nondisclosure, direct-provider enforcement, credential revocation, and the prohibition on built-in cross-domain or write-down transfer.
 
 ## CLS-004 — Container boundary rules
 
@@ -1329,7 +1338,8 @@ Lowering, declassifying, decontrolling, or removing a compartment/handling restr
 - be fully audited;
 - require the signature/approval threshold and separation of duty selected by the applicable signed profile and deployment security-domain policy, including two-person approval where required;
 - invalidate caches, search projections, notifications, and exports;
-- trigger reindex/reconciliation.
+- trigger reindex/reconciliation; and
+- apply the signed deployment's disclosure/revocation ordering: prevent every new operation after commit, allow only an already-started finite response to finish in `request_boundary`, and require the stronger no-byte-after-commit terminal egress proof in `commit_boundary`.
 
 ## CLS-006 — No unauthorized existence leakage
 
@@ -1371,6 +1381,8 @@ The authorization design MUST account for every non-UI path:
 Repository-level permissions MUST be reconciled from the central authorization model to Gitea.
 
 Contextual restrictions that Gitea cannot evaluate directly MUST be enforced by an access gateway, network/security-domain controls, credential issuance, or a documented equivalent.
+
+Streams, content/downloads, exports, print, scoped credentials, provider calls, direct protocols, long-running disclosures, and ambiguous external effects MUST use durable one-use effect controls with revocation/fencing, audit-before-effect, suppression, and reconciliation as applicable in both disclosure modes. Ordinary finite metadata reads MAY use the deployment-selected request or commit boundary defined by CLS-003; provider limitations MUST NOT bypass either path.
 
 The product MUST NOT claim readiness for any regulated, classified, or specialized regime until the exact mapped profile, deployment controls, and bypass tests prove that direct provider paths cannot exceed the central policy. Framework capability alone is not such evidence.
 
@@ -1509,6 +1521,8 @@ Audit coverage includes:
 - backup/restore;
 - integration/webhook changes.
 
+One composed ordinary BFF read in `request_boundary` MUST produce at most one logical synchronous authorization/audit operation and one safe aggregate or containing-resource decision record. It MUST NOT produce a separate durable audit transaction for every returned row, relationship, panel, or internal subquery. Mutations, exports, credentials, provider/direct-protocol effects, and other externally visible or ambiguous effects retain their stronger individual audit requirements.
+
 ## AUD-002 — Audit record requirements
 
 Audit records MUST be append-only and contain:
@@ -1524,6 +1538,8 @@ Audit records MUST be append-only and contain:
 - policy/model versions;
 - before/after hashes or controlled deltas;
 - origin service/provider.
+
+Where one decision covers a composed authorized result set, the audit contract MUST permit a safe aggregate or containing-resource reference rather than copying every returned resource. It MUST record the selected disclosure/revocation mode and the current revision evidence needed to distinguish request-boundary from commit-boundary behavior without leaking protected existence.
 
 Sensitive content and secrets MUST NOT be copied into audit logs unnecessarily.
 
@@ -2011,6 +2027,64 @@ The performance workstream MUST publish exact benchmark datasets and load shapes
 
 ---
 
+# 17A. Performance constitution
+
+## PERF-001 — Performance is architecture
+
+Stead SHOULD feel local even when it is not. Performance is part of architecture and the Definition of Done, not deferred post-release optimization.
+
+No interaction SHOULD pay synchronously for work that can be safely prefetched, projected, batched, deferred, or performed asynchronously. Useful primary content and immediate visible acknowledgement take precedence over analytics and secondary panels. Optimization MUST improve the user-facing golden path rather than only a synthetic microbenchmark.
+
+## PERF-002 — Standard reference targets
+
+Under the published colocated standard deployment benchmark, the engineering targets are:
+
+- hot composed metadata API server time: p50 at or below 25 ms and p95 at or below 100 ms;
+- same-region end-to-end metadata API: p95 at or below 150 ms;
+- metadata mutation: p95 at or below 200 ms, excluding Git transfer, build execution, and other inherently long operations;
+- remote global search first useful results: p95 at or below 300 ms under the standard corpus;
+- Project route useful primary content after navigation: at or below 500 ms;
+- cold initial application interactive: at or below one second under the documented reference device and network;
+- event-to-visible-search/inbox projection: engineering target p95 at or below one second, while the release ceiling remains p95 at or below five seconds;
+- input-to-visible acknowledgement and cached/prefetched Peek opening: p95 at or below 50 ms; and
+- local command-palette results: p95 at or below 30 ms.
+
+The existing 300 ms metadata-read and 1.5 second scale-search release limits are maximum acceptable envelopes, not optimization targets. A `commit_boundary` deployment MAY publish a separate latency budget, but MUST retain immediate UI acknowledgement and MUST label its results separately rather than use the standard benchmark to conceal regressions.
+
+## PERF-003 — One composed, projection-backed request path
+
+After the application shell loads, each primary screen or object surface SHOULD normally obtain useful primary content through one composed Platform API/BFF request. Secondary analytics, optional panels, and safely prefetched adjacent content MAY load separately but MUST NOT block useful primary content. The browser MUST NOT fan out to Gitea, OpenFGA, NATS, Commonplace, storage, or multiple internal services.
+
+Ordinary UI reads MUST use local, rebuildable Stead projections. Normal rendering MUST NOT synchronously call Gitea for each issue, repository, comment, relationship, or property. Gitea remains authoritative for provider-owned data; webhooks plus scheduled reconciliation update the PostgreSQL provider projection, and an authoritative mutation MAY call Gitea through its adapter then immediately reconcile the projection after success. Provider drift remains detectable and auditable.
+
+NATS MUST NOT be a synchronous response dependency, request/reply mechanism, or projection-completion barrier for ordinary product operations. The transactional outbox record commits atomically with the authoritative PostgreSQL transaction; the response does not wait for its relay. The required flow is authoritative transaction plus outbox commit, response, outbox relay to NATS, then asynchronous projections and integrations. PostgreSQL is truth; NATS is distribution.
+
+## PERF-004 — Set-oriented authorization and bounded synchronous work
+
+List, search, inbox, activity, Team rollup, Project overview, and graph operations MUST NOT perform sequential per-row OpenFGA, policy, SQL, audit, or provider calls. They MUST use container/scope authorization, applicable batch or list-oriented OpenFGA operations, set-oriented policy evaluation, bounded SQL, pre-authorized partitioning, and one composed response. Query-count, authorization-call-count, provider-call-count, and synchronous-write tests MUST fail N+1 behavior.
+
+Every protected server operation remains freshly authorized; no authorization-decision cache is permitted. In `request_boundary` mode, one composed BFF read permits at most one logical synchronous authorization/audit operation and one safe aggregate or resource-set audit record. It MUST NOT write a durable audit or permit lifecycle per row, relationship, panel, or internal subquery. Mutations, exports, credentials, provider/direct-protocol effects, and externally visible or ambiguous effects retain their stronger individual audit and durable-effect requirements.
+
+Client caching, prefetching, and optimistic rendering MAY operate only on data already authorized for the current principal, session, and security domain. Client state MUST be invalidated on logout, principal change, security-domain change, or another relevant authorization-context change and MUST never become authority.
+
+## PERF-005 — Responsive, capability-driven frontend
+
+The Devlane-derived shell MUST acknowledge input immediately, preserve list state, filters, scroll, and selection, support context-preserving Peek/sheets, safely prefetch on hover/focus/selection, avoid full-page reloads and nested modal stacks, and render primary content before analytics or secondary panels. Optimistic updates require a safe rollback path and an authoritative server result. Skeletons are used only when no usable authorized content is available; layout shift is avoided; keyboard navigation remains first-class.
+
+Capability-driven UX also requires capability-driven delivery. The universal shell MUST NOT eagerly load diff viewers, CI/build visualizations, package/release/deployment tooling, migration/administrative tooling, the full Document editor, or heavy charting/analytics libraries. Docs editor, Code, Delivery, Administration, Migration, and heavy analytics MUST be separate lazy capability chunks. A user in a general HR or finance Project MUST NOT download software-development capability code merely because it exists elsewhere.
+
+The initial universal-shell JavaScript budget is 250 KiB gzip, excluding source maps and lazy capability chunks, and CI MUST enforce it. If measured Devlane dependencies make the budget infeasible, a focused ADR MUST publish the measured bundle analysis and approve a replacement; the implementation MUST NOT silently exceed the budget.
+
+## PERF-006 — Performance evidence and regression policy
+
+Performance evidence MUST include query-count, provider-call-count, authorization-call-count, Go microbenchmark, golden-slice end-to-end latency, browser performance, frontend bundle-size, and projection-lag tests. Results MUST label the standard benchmark separately from `commit_boundary` or other high-assurance benchmarks.
+
+At minimum, evidence records p50, p95, and p99 latency; database query count/time and write count; OpenFGA call count/time; provider call count/time; response size; frontend JavaScript size; Core Web Vitals or equivalent user-facing metrics; and event/projection lag. Benchmark device, network, topology, corpus, load shape, warm/cold state, security mode, and dataset version MUST be reproducible.
+
+After a critical golden-path metric is baselined, a regression greater than ten percent MUST fail review unless an explicit documented justification receives independent review. The existing release ceilings remain absolute failures even when a regression is smaller.
+
+---
+
 # 18. Security engineering and licensing requirements
 
 ## SEC-001 — License policy
@@ -2308,10 +2382,14 @@ Deliver:
 - basic activity/inbox;
 - PostgreSQL search;
 - audit;
+- the complete standard `request_boundary` protected-read path, with typed `commit_boundary` interfaces preserved for the later high-assurance implementation;
+- performance instrumentation, call/query/write counters, golden-path benchmarks, and the universal-shell JavaScript budget before feature expansion;
 - the complete TEST-009 general-work scenario;
 - the minimal TEST-010 software-capability path through Code + Pull Request + Build.
 
 Phase 1 MUST NOT implement agent runtime execution, orchestration, prompting, model hosting, agent memory, or A2A dispatch. Agent/Agent Run schemas, assignee rendering, authorization seams, and audit/event contracts MUST remain valid.
+
+Phase 1 MUST complete the general-work golden scenario before the additive software scenario and MUST follow the machine-readable dependency graph. `ADR-CAND-002` is resolved before dependent database/core/outbox implementation. Broad implementation remains blocked until this amended foundation receives project-owner approval and is merged; after approval, work uses short-lived branches, continuous integration, and one connected vertical slice rather than disconnected horizontal subsystems. The deferred high-assurance `commit_boundary` path MUST NOT consume the Phase 1 product build.
 
 This phase validates architecture and product coherence. It is not production complete.
 
@@ -2444,6 +2522,9 @@ These decisions are locked and require an ADR plus project-owner approval to cha
 28. MCP is the agent-to-platform tool/data boundary; A2A is the preferred external agent-runtime interoperability boundary.
 29. Project lifecycle states are planned, active, paused, completed, and canceled; archive is separate and reversible.
 30. Canonical document types use universal semantics; software-specific names are display labels only.
+31. Stable semantic concepts, domain types, interfaces, and internal ports are unversioned; compatibility boundaries and serialized contracts carry versions.
+32. Disclosure/revocation assurance is selected by signed deployment security-domain policy as `request_boundary` or `commit_boundary`, never by security-label profile ID.
+33. Primary UI reads use composed BFF responses over local rebuildable projections; NATS is never a synchronous response dependency; authorization, SQL, audit, and provider work is set-oriented and bounded.
 
 ---
 
@@ -2463,6 +2544,9 @@ A feature is done only when all applicable items are true:
 - installation/upgrade behavior is addressed;
 - backup/restore implications are addressed;
 - accessibility is addressed;
+- the issue's expected request count, SQL query behavior, external/provider calls, authorization strategy, synchronous writes, frontend bundle impact, and benchmark or concrete non-performance-sensitive reason are satisfied;
+- applicable query-count, authorization-call-count, provider-call-count, microbenchmark, browser, bundle-size, projection-lag, and end-to-end performance checks pass;
+- critical golden-path metrics do not regress by more than ten percent without explicit documented independent review;
 - general and software capability presentations are tested where applicable;
 - no irrelevant capability or unauthorized metadata is exposed;
 - documentation is complete;

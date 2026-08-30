@@ -7,6 +7,7 @@ scope:
 label_profile_ceilings:
   commercial: {profile_version: "1.0.0", classification_ceiling: confidential}
   regulated_example: {profile_version: "7.2.1", classification_ceiling: highly_controlled}
+disclosure_revocation_mode: commit_boundary
 trusted_attribute_authorities: [synthetic_oidc, synthetic_runtime_attestation]
 approved_profile_bridges: []
 allowed_integrations: [gitea]

@@ -79,6 +79,9 @@ The following decisions are locked. Changing any one requires an ADR and explici
 28. MCP is the agent-to-platform boundary and A2A is the preferred external-runtime interoperability boundary.
 29. Project lifecycle states are planned, active, paused, completed, and canceled; archive is separate and reversible.
 30. Canonical document types use universal semantics; software-specific names are display labels only.
+31. Stable semantic concepts, domain types, interfaces, and internal ports are unversioned; compatibility boundaries and serialized contracts carry versions.
+32. Signed deployment security-domain policy—not a security-label profile ID—selects `request_boundary` or `commit_boundary` disclosure/revocation assurance.
+33. Primary UI reads use composed BFF responses over local rebuildable projections; NATS is never a synchronous response dependency; authorization, SQL, audit, and provider work is set-oriented and bounded.
 
 The project/repository and deployable component names are **Stead**, `stead-web`, `stead-api`, `stead-worker`, and `steadctl`. These names are concrete interfaces; generic architectural uses of “platform” remain descriptive prose.
 
@@ -113,7 +116,7 @@ Git repositories, Git/Markdown/OKF documents, portable attachment manifests, ver
 
 A repository, tracker repository, docs repository, package namespace, runner pool, cache, artifact store, backup set, and deployment security domain are enforceable boundaries. Item labels may add markings but never grant access finer than the enclosing cloneable/provider container can enforce. Differing access requires a separate container.
 
-Security-label policy profiles are declarative, schema-validated, versioned, and signed. Stable profile IDs have no privileged product or authorization semantics; deployment security-domain policy uses a profile-ID-keyed map to bind each permitted profile/version to one ceiling and selects environment assurance controls. Cross-profile composition fails closed; v0.1 rejects every non-empty bridge set pending a separately approved signed mapping/non-weakening contract. Profile-driven text/markings remain authoritative over supplemental color in the UI.
+Security-label policy profiles are declarative, schema-validated, versioned, and signed. Stable profile IDs have no privileged product or authorization semantics; deployment security-domain policy uses a profile-ID-keyed map to bind each permitted profile/version to one ceiling and selects environment assurance controls plus one closed `disclosure_revocation_mode`. Cross-profile composition fails closed; v0.1 rejects every non-empty bridge set pending a separately approved signed mapping/non-weakening contract. Profile-driven text/markings remain authoritative over supplemental color in the UI.
 
 Derived resources take the defined join of all applicable source, explicit, container, and handling restrictions and never silently become less restrictive. Lowering or removing restrictions is denied by default, authorized and reasoned, fully audited, cache/projection invalidating, and subject to the approval threshold and custody/separation controls required by the active deployment security-domain policy. Core Stead never automates cross-domain or write-down transfer.
 
@@ -123,9 +126,19 @@ Audit and event contracts preserve the acting principal and type, a distinct ini
 
 Public HTTP APIs use OpenAPI 3.1.1, JSON Schema 2020-12 payloads, RFC 9457 errors, UUIDv7 identifiers, ETags/conditional writes, and explicit compatibility periods. Events use CloudEvents 1.0 and AsyncAPI 3.1.x. Breaking API or event changes require a major version and migration period.
 
+Semantic concepts, domain nouns, Go types, interfaces, and internal ports use stable unversioned names. Compatibility boundaries, serialized formats, schemas, APIs, protocols, media types, and events carry versions. A type suffix such as `FooV2` is reserved for a migration in which incompatible versions genuinely coexist; versioned packages or contract namespaces are preferred. This rule does not remove versions from `/api/v1`, `stead.*.v1`, schema IDs/paths and `schema_version`, media types, `POL-DECISION-IO-V0.1`, `stead.security-profile-rules.v1`, OWGP versions, provider/migration contracts, or Stead Policy Activation Set v1.
+
 The platform publishes profiles/mappings instead of adding unnecessary standards machinery. RDF databases, SPARQL, XACML, cloud-specific core dependencies, required outbound telemetry, and unbounded in-process plugins are outside the baseline architecture.
 
 Architecture remains compatible with external agent runtimes and does not require a model, model provider, agent SDK, or orchestration framework. MCP is the future agent-to-platform boundary; A2A and A2A Agent Card semantics are future interoperability profiles where applicable. Phase 0 builds no agent orchestration, prompting, model hosting, memory, AgentRun execution, A2A dispatch, or full MCP tool catalog unless another separately approved requirement already requires it.
+
+### 4.6 Fast request and disclosure boundaries
+
+The normal Phase 1 path is the signed deployment policy's `request_boundary` mode: one fresh central authorization decision and final revision check per composed protected request, one safe aggregate audit operation, and no per-row decision/audit/provider waterfall. A finite response that validly begins disclosure first may finish across a concurrent security mutation; every later operation observes the mutation. Streams, downloads, exports, print, credentials, provider/direct-protocol effects, long disclosures, and ambiguous external effects retain durable effect controls.
+
+`commit_boundary` is a separately benchmarked high-assurance mode that preserves `BoundedReadGuard`, `DisclosureEgressFence`, serving leases/quiescence, and terminal transport-buffer proof. Phase 1 preserves its typed seam; complete operational evidence remains high-assurance work. Neither mode may be inferred from a label profile ID, weaken fail-closed decisions or nondisclosure, or introduce cross-domain/write-down behavior.
+
+After the shell loads, useful primary content normally arrives through one composed BFF request backed by local rebuildable PostgreSQL projections. The browser never fans out to providers or policy infrastructure; ordinary reads never waterfall through Gitea; NATS is post-response distribution only. Lists, search, inbox, activity, rollups, overview, and graph paths are set-oriented and carry explicit request/query/authorization/provider/write budgets. The 250 KiB gzip universal-shell budget excludes source maps and lazy capability chunks and is enforced in CI. Performance targets, evidence, and the greater-than-ten-percent golden-path regression gate are those in `PERF-001` through `PERF-006`.
 
 ## 5. Contract and change control
 
@@ -157,9 +170,10 @@ Every implementation issue must declare:
 - observability and audit requirements;
 - migration and backward-compatibility implications;
 - upgrade and rollback behavior;
-- documentation obligations.
+- documentation obligations;
+- a performance contract stating expected request count, SQL query behavior, external/provider calls, authorization strategy, synchronous writes, frontend bundle impact, and the applicable benchmark or a concrete reason the work is not performance-sensitive.
 
-An issue is not complete until applicable contracts, server-side policy, direct-provider bypass coverage, tests, telemetry without sensitive leakage, audit, migration, compatibility, upgrade/rollback, backup/restore, accessibility, documentation, licenses/SBOM, and independent QA/security evidence are complete. An implementation author cannot grant final approval to their own release candidate.
+An issue is not complete until applicable contracts, server-side policy, direct-provider bypass coverage, tests, telemetry without sensitive leakage, audit, migration, compatibility, upgrade/rollback, backup/restore, accessibility, documentation, licenses/SBOM, performance budgets and regression evidence, and independent QA/security evidence are complete. An implementation author cannot grant final approval to their own release candidate.
 
 ## 7. Architecture approval record
 

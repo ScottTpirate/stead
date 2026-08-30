@@ -68,26 +68,26 @@ The rows are topologically ordered. Issues in the same wave may proceed concurre
 
 `STEAD-P1-001` is complete. All later Phase 1 issues remain dependency/ADR-gated; the ordering deliberately establishes central authorization before any provider-backed protected workflow.
 
-The Phase 1 records preserve the approved principal, assignment, authorization, audit/event, API/MCP, scoped-Git, and classification seams. They do not implicitly authorize agent orchestration, prompting, model hosting, agent memory, AgentRun execution, or A2A dispatch.
+The Phase 1 records preserve the approved principal, assignment, authorization, audit/event, API/MCP, scoped-Git, and classification seams. They implement the standard `request_boundary` vertical path, reserve typed `commit_boundary` seams, and establish performance instrumentation before feature expansion. They do not implicitly authorize agent orchestration, prompting, model hosting, agent memory, AgentRun execution, or A2A dispatch.
 
 | Order | Issue | Owner | Direct predecessors | Deliverable |
 |---:|---|---|---|---|
 | 1 | STEAD-P1-001 | WS-01 | GATE-P0-APPROVED | Root manifests, CI and contract-test foundation, schema/API lint, dependency approvals/notices, and Devlane provenance |
-| 2 | STEAD-P1-015 | WS-02, with WS-06/07 handoff | GATE-P0-APPROVED, P1-001, accepted ADR-CAND-002/003/007 | Owner-scoped core authorization composition, compare-and-use transaction hook, and `core_outbox` ports; no domain feature implementation |
+| 2 | STEAD-P1-015 | WS-02, with WS-06/07 handoff | GATE-P0-APPROVED, P1-001, accepted ADR-CAND-002/003/007 | Owner-scoped one-operation request-boundary authorization/audit composition, `core_outbox` and durable-effect ports, plus typed strict-mode coordination seams; no domain feature implementation or strict persistence prerequisite |
 | 2 | STEAD-P1-016 | WS-09 | GATE-P0-APPROVED, P1-001, accepted ADR-CAND-007 | Deterministic policy activation archive, pre-signing evidence, post-signing release attestation, and immutable writer/fixture handoff; no runtime activation authority |
-| 3 | STEAD-P1-006 | WS-06 | P1-001, P1-015, P1-016, accepted security ADRs | Bootstrap/OIDC identity and central OpenFGA + policy-decision runtime verification/activation path |
-| 4 | STEAD-P1-002 | WS-02 | P1-001, P1-006, P1-015, approved core/auth contracts | Canonical modular core, PrincipalRef-based User/Agent Work assignment, PostgreSQL ownership, optimistic concurrency and atomic outbox |
-| 5 | STEAD-P1-003 | WS-03 | P1-002, P1-006 | Stock Gitea adapter, hidden tracker/board, provider-neutral Work backing and docs Git; no general code repo |
+| 3 | STEAD-P1-006 | WS-06 | P1-001, P1-015, P1-016, accepted security ADRs | Bootstrap/OIDC identity; central set-oriented OpenFGA + policy path; signed profile-neutral mode selection; complete `request_boundary`; typed `commit_boundary` seam |
+| 4 | STEAD-P1-002 | WS-02 | P1-001, P1-006, P1-015, approved core/auth contracts | Canonical modular core, PrincipalRef-based User/Agent Work assignment, PostgreSQL ownership, bounded composed-read queries, optimistic concurrency and atomic outbox |
+| 5 | STEAD-P1-003 | WS-03 | P1-002, P1-006 | Stock Gitea adapter, hidden tracker/board, provider-neutral Work backing, docs Git, and local rebuildable provider projection; no general code repo or ordinary-read provider waterfall |
 | 5 | STEAD-P1-010 | WS-10 | P1-002, P1-006 | Filesystem BlobStore and authorized attachment path |
-| 5 | STEAD-P1-007 | WS-07 | P1-002, P1-006 | JetStream/outbox delivery and basic activity, inbox and audit |
+| 5 | STEAD-P1-007 | WS-07 | P1-002, P1-006 | Transactional outbox commit with post-response JetStream relay; set-oriented activity/inbox; one aggregate composed-read audit |
 | 6 | STEAD-P1-004 | WS-04 | P1-002, P1-003, P1-006, P1-010 | One deterministic Git/OKF document flow |
-| 6 | STEAD-P1-008 | WS-08 | P1-002, P1-006, P1-007 | PostgreSQL search and work-graph baseline with non-disclosure |
-| 7 | STEAD-P1-005 | WS-05 | P1-002, P1-003, P1-004, P1-006, P1-007, P1-008 | Universal shell and complete TEST-009 general Work+Docs path |
+| 6 | STEAD-P1-008 | WS-08 | P1-002, P1-006, P1-007 | PostgreSQL search/work-graph baseline with non-disclosure, set-oriented call-count tests, and 300 ms first-results target |
+| 7 | STEAD-P1-005 | WS-05 | P1-002, P1-003, P1-004, P1-006, P1-007, P1-008 | Responsive universal shell, one composed primary request, ≤250 KiB eager JavaScript, and complete TEST-009 general Work+Docs path |
 | 8 | STEAD-P1-013 | WS-03 | P1-003, P1-005, P1-006 | Additive software code repository, branch, commit and Pull Request path |
 | 9 | STEAD-P1-009 | WS-09 | P1-006, P1-007, P1-010, P1-013 | One pinned Action with build/SBOM/artifact/release trace |
 | 10 | STEAD-P1-014 | WS-05 | P1-004, P1-007…009, P1-013 | Present Code and Delivery in the same shell; complete TEST-010 UI path |
 | 11 | STEAD-P1-011 | WS-12 | P1-001…010, P1-013…016 | One-command local install, OTel/health/doctor, policy activation operations, and backup/restore baseline |
-| 12 | STEAD-P1-012 | WS-13 | P1-001…011, P1-013…016 | Independently gate TEST-009 and TEST-010, policy artifact/activation, bypass, restore and upgrade |
+| 12 | STEAD-P1-012 | WS-13 | P1-001…011, P1-013…016 | Independently gate TEST-009 before TEST-010; standard performance/call-count evidence; request-boundary security; strict seam; policy activation, bypass, restore and upgrade |
 
 No Phase 2 issue opens merely because its implementation dependency is merged. The Phase 1 candidate must pass STEAD-P1-012 and receive its recorded release decision.
 
@@ -116,12 +116,12 @@ These issues are `PHASE_GATED` and depend on the successful Pilot/Beta gate.
 | Order | Issue | Owner | Direct predecessors | Deliverable |
 |---:|---|---|---|---|
 | 1 | STEAD-P3-001 | WS-04 | P2-011 | Lossless Yjs real-time document collaboration |
-| 1 | STEAD-P3-002 | WS-06 | P2-011 | External-regime/high-assurance profiles, policy-selected assurance evidence, and cross-domain denial |
+| 1 | STEAD-P3-002 | WS-06 | P2-011 | External-regime/high-assurance profiles, WS-06 strict `commit_boundary` runtime, policy-selected assurance evidence, and cross-domain denial |
 | 1 | STEAD-P3-003 | WS-07 | P2-011 | Tamper-evident audit checkpoints and production exports |
 | 1 | STEAD-P3-004 | WS-08 | P2-011 | OpenSearch scale profile and production permission-aware MCP |
 | 1 | STEAD-P3-005 | WS-09 | P2-011 | Signed SBOM/provenance/checksum/notices/scanning release set |
 | 1 | STEAD-P3-006 | WS-11 | P2-011 | Delta sync, cutover, source transition and permanent redirects |
-| 1 | STEAD-P3-007 | WS-12 | P2-011 | High-assurance air-gap, HA, upgrade matrix and production SLO validation |
+| 1 | STEAD-P3-007 | WS-12 | P2-011 | High-assurance air-gap, HA, strict egress/quiescence operations, separate commit-boundary benchmark, upgrade matrix and production SLO validation |
 | 2 | STEAD-P3-008 | WS-13 | P3-001…007 | Independent Production 1.0 security and release decision |
 
 ## Mandatory issue contract
@@ -132,6 +132,7 @@ Every issue in the machine-readable catalog explicitly states:
 - dependencies, module, and owned directories;
 - prohibited boundaries;
 - measurable acceptance criteria and named automated tests;
+- expected request count, SQL behavior, provider calls, authorization strategy, synchronous writes, frontend bundle impact, and benchmark or concrete not-sensitive reason;
 - authorization and classification behavior;
 - observability and audit requirements;
 - migration and backward-compatibility implications;

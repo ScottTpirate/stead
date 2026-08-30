@@ -41,7 +41,7 @@ A maintained profile that claims to map an external classification, handling, or
 
 ### Option 1 — One total scalar classification order
 
-Map every label to a single rank and take the maximum. This is simple and cheap, with no new dependency, but it cannot safely express incomparable compartments, originator/dissemination rules, audience intersections, legal holds, export controls, or CUI handling. Encoding those dimensions into ever-larger scalar names would create a configurable ontology and still make composition opaque. Rejected.
+Map every label to a single rank and take the maximum. This is simple and cheap, with no new dependency, but it cannot safely express incomparable compartments, originator/dissemination rules, audience intersections, legal holds, export controls, or profile-defined handling regimes. Encoding those dimensions into ever-larger scalar names would create a configurable ontology and still make composition opaque. Rejected.
 
 ### Option 2 — Product partial order with profile-defined normalization and compatibility rules
 
@@ -156,7 +156,7 @@ join_B(L1...Ln) = normalize_B(
 )
 ```
 
-Profile normalization collapses an implication or dominated value only when the signed profile proves that the retained representation preserves every effect. `CUI_BASIC` and `CUI_SPECIFIED` are not globally ordered: category-specific Specified controls may differ, while Basic controls continue to apply where the governing authority does not specify a control. A join therefore retains and evaluates every applicable Basic and Specified obligation from the signed category mapping. The signed profile also validates combinations among handling, categories, dissemination, releasability, and export controls.
+Profile normalization collapses an implication or dominated value only when the signed profile proves that the retained representation preserves every effect. The core evaluator assigns no universal order to handling regimes: it follows only the active validated profile's typed implications, incompatibilities, and required-dimension constraints. A join retains and evaluates every applicable obligation unless that signed profile proves a semantics-preserving normalization. The signed profile also validates combinations among handling, categories, dissemination, releasability, and export controls. The limited CUI starter example below illustrates this rule without making it core evaluator vocabulary.
 
 The join is defined only when the normalized result is representable. It is unrepresentable when, at minimum:
 

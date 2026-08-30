@@ -3,8 +3,8 @@ schema_version: '1.0'
 directive:
   path: docs/architecture/MASTER_BUILD_DIRECTIVE.md
   version: '0.2'
-  sha256: 6ffbab5db5f7f036b5982195653dfc3fe22e2ff858d558c4441d98a824a2fd9d
-  named_requirement_count: 128
+  sha256: 48b977866fce6a98f964f05a07668020c038865b9086f5b17ab45c4ac3e69bbd
+  named_requirement_count: 134
 requirement_ids:
 - ACT-001
 - AGENT-001
@@ -80,6 +80,12 @@ requirement_ids:
 - OPS-003
 - OPS-004
 - OPS-005
+- PERF-001
+- PERF-002
+- PERF-003
+- PERF-004
+- PERF-005
+- PERF-006
 - PRIN-001
 - PRIN-002
 - PRIN-003

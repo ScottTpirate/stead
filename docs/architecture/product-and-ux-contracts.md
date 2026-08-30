@@ -42,6 +42,14 @@ One creation language, command palette, mention/reference grammar, editor behavi
 - Layout is stable while loading; primary authorized content precedes analytics/relationships.
 - Responsive priority is content and actions: side navigation collapses, peek becomes full-height, tables gain semantic list fallback, and no action is pointer-only.
 
+## Speed and capability delivery
+
+Stead should feel local even when it is not. The shell acknowledges input immediately, preserves list/filter/scroll/selection state, safely prefetches authorized Peek content on hover/focus/selection, and uses optimistic rendering only with a safe rollback to the authoritative server result. Primary content precedes optional analytics; full-page reloads, nested modal stacks, avoidable skeletons, and layout shift are prohibited on normal flows.
+
+After shell load, useful primary content normally comes from one composed Platform API/BFF request. Browser code never fans out to providers, OpenFGA, NATS, storage, or internal services. Cached/prefetched Peek and visible input acknowledgement target p95 at or below 50 ms; local command results target p95 at or below 30 ms; useful Project primary content targets 500 ms; and documented cold interactive targets one second. Client data is only a presentation optimization for the current authorized context and is cleared on logout, principal change, security-domain change, or another authorization-context change.
+
+The universal eager JavaScript graph is at most 250 KiB gzip, excluding source maps and lazy capability chunks. Docs editor, Code, Delivery, Administration, Migration, and heavy analytics are lazy boundaries; diff, CI/build, package/release/deployment, migration/admin, full-editor, and charting code is not downloaded by a general HR or finance user. CI measures the eager entry graph. A measured exception requires a focused ADR and replacement budget.
+
 ## Component and ownership inventory
 
 `WS-05` owns AppShell, CommandSearch, ResourceHeader, SecurityMarking, ContextStrip, ObjectPeek, CreateMenu, WorkView (List/Board/Timeline/Calendar/Triage presentations), DocumentEditorShell, ActivityThread, InboxThread, CapabilityNav, EmptyState, and generated API client binding. `WS-01` owns API/schema sources; `WS-06` owns policy semantics; domain owners own behavior behind Platform APIs. Icons are a single accessible set, never provider logos for canonical actions, and decorative icons are hidden from assistive technology.

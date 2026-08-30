@@ -15,6 +15,7 @@ end.freeze
 DEPLOYMENT_DOMAIN_DOCUMENTS = Dir.glob(ROOT.join("policies/deployment-domains/*.yaml")).sort.map do |path|
   Pathname.new(path).relative_path_from(ROOT).to_s
 end.freeze
+HIGH_ASSURANCE_DOMAIN_FIXTURE = "tests/contract/fixtures/deployment-domains/multi-profile-high-assurance.yaml"
 
 DOCUMENTS = %w[
   specs/schema-registry.yaml
@@ -33,7 +34,7 @@ DOCUMENTS = %w[
   policies/security-label-profiles/profile-v0.1.schema.json
   policies/deployment-domains/domain-profile-v0.1.schema.json
   policies/openfga/model-tests.yaml
-] + PROFILE_SOURCE_DOCUMENTS + DEPLOYMENT_DOMAIN_DOCUMENTS
+] + PROFILE_SOURCE_DOCUMENTS + DEPLOYMENT_DOMAIN_DOCUMENTS + [HIGH_ASSURANCE_DOMAIN_FIXTURE]
 DOCUMENTS.freeze
 
 JSON_SCHEMA_DOCUMENTS = %w[
@@ -354,6 +355,11 @@ failures << "US-government starter profile must declare limitations and referenc
 deployment_schema = documents["policies/deployment-domains/domain-profile-v0.1.schema.json"] || {}
 failures << "Deployment-domain v0.1 must reject every non-empty bridge set" unless deployment_schema.dig("properties", "approved_profile_bridges", "maxItems") == 0
 failures << "Deployment-domain v0.1 bridge item schema must accept no latent bridge shape" unless deployment_schema.dig("properties", "approved_profile_bridges", "items") == false
+expected_disclosure_modes = %w[request_boundary commit_boundary]
+failures << "Deployment-domain v0.1 must require disclosure_revocation_mode" unless Array(deployment_schema["required"]).include?("disclosure_revocation_mode")
+unless deployment_schema.dig("properties", "disclosure_revocation_mode", "enum") == expected_disclosure_modes
+  failures << "Deployment-domain v0.1 disclosure_revocation_mode must be the exact closed request_boundary/commit_boundary enum"
+end
 DEPLOYMENT_DOMAIN_DOCUMENTS.each do |path|
   name = File.basename(path, ".yaml")
   domain = documents[path] || {}
@@ -373,6 +379,29 @@ DEPLOYMENT_DOMAIN_DOCUMENTS.each do |path|
   end
   failures << "#{name} deployment domain must not activate a v0.1 profile bridge" unless Array(domain["approved_profile_bridges"]).empty?
 end
+
+starter_domains = DEPLOYMENT_DOMAIN_DOCUMENTS.to_h { |path| [File.basename(path, ".yaml"), documents[path] || {}] }
+%w[commercial us-government].each do |name|
+  failures << "#{name} starter domain must select request_boundary explicitly" unless starter_domains.dig(name, "disclosure_revocation_mode") == "request_boundary"
+end
+synthetic_high_assurance_domain = documents[HIGH_ASSURANCE_DOMAIN_FIXTURE] || {}
+validate_instance(synthetic_high_assurance_domain, deployment_schema, "synthetic high-assurance deployment-domain fixture", failures)
+unless synthetic_high_assurance_domain["disclosure_revocation_mode"] == "commit_boundary" &&
+       synthetic_high_assurance_domain.fetch("label_profile_ceilings", {}).key?("commercial") &&
+       !synthetic_high_assurance_domain.fetch("label_profile_ceilings", {}).key?("us_government")
+  failures << "Synthetic non-government high-assurance domain must select commit_boundary for a profile also used under request_boundary, without a privileged profile ID"
+end
+
+missing_mode_domain = starter_domains.fetch("commercial", {}).dup
+missing_mode_domain.delete("disclosure_revocation_mode")
+missing_mode_failures = []
+validate_instance(missing_mode_domain, deployment_schema, "missing-mode deployment domain", missing_mode_failures)
+failures << "Deployment-domain schema must reject a missing disclosure_revocation_mode" unless missing_mode_failures.any? { |failure| failure.end_with?("missing disclosure_revocation_mode") }
+
+unknown_mode_domain = starter_domains.fetch("commercial", {}).merge("disclosure_revocation_mode" => "profile_selected")
+unknown_mode_failures = []
+validate_instance(unknown_mode_domain, deployment_schema, "unknown-mode deployment domain", unknown_mode_failures)
+failures << "Deployment-domain schema must reject an unknown disclosure_revocation_mode" unless unknown_mode_failures.any? { |failure| failure.include?("disclosure_revocation_mode: value is outside enum") }
 
 policy_input = documents["policies/policy-decision/input-v0.1.schema.json"] || {}
 failures << "policy-decision input must use structured authorization" unless Array(policy_input["required"]).include?("authorization") && !policy_input.key?("relationship_authorized")

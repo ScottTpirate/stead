@@ -6,6 +6,7 @@ scope:
   limitations: ["Not an exhaustive definition of commercial, privacy, financial, healthcare, export-control, operational, or assurance requirements."]
 label_profile_ceilings:
   commercial: {profile_version: "1.0.0", classification_ceiling: restricted}
+disclosure_revocation_mode: request_boundary
 trusted_attribute_authorities: [stead_local_identity, configured_oidc, configured_scim]
 approved_profile_bridges: []
 allowed_integrations: [gitea, oidc, scim, smtp, approved_webhook]

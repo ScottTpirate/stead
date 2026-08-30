@@ -13,6 +13,7 @@
   "scripts": {
     "build": "npm run build --workspace=@stead/web",
     "typecheck": "npm run typecheck --workspace=@stead/web",
+    "validate:web-bundle": "node scripts/validate_web_bundle.mjs",
     "validate:openapi": "redocly lint specs/openapi/platform-v1.yaml --extends=minimal",
     "validate:asyncapi": "node scripts/validate_asyncapi.mjs",
     "validate:schemas": "node scripts/validate_json_schemas.mjs"

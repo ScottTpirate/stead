@@ -39,7 +39,7 @@ The accepted option adds no dependency. Its data and authorization changes are r
 
 ### Fixed Team roles
 
-The canonical, non-configurable `TeamRoleV1` enum is exactly:
+The canonical, non-configurable `TeamRole` enum is exactly:
 
 - `lead`: a human accountable for Team profile and role administration;
 - `member`: a principal that belongs to the Team and receives only the fixed Team-container permissions below; membership alone grants no Project or Project-scoped Work Item access;
@@ -76,7 +76,7 @@ Team roles do not confer security officer, classification manager, release appro
 
 ### Role bindings and source precedence
 
-`TeamRoleBindingV1` is a versioned internal relationship record, not a new OWGP entity. It records Team ID, subject `PrincipalRef`, role, source kind (`direct` or `directory_group`), source identifier, state, created/updated/revoked metadata, and binding/tuple revisions. WS-02 owns the Team transaction and lifecycle invariants; WS-06 owns subject resolution, provisioning, OpenFGA tuple semantics, and authorization projection. Neither owner writes the other's tables directly.
+`TeamRoleBinding` is a stable internal relationship type, not a new OWGP entity. Its persisted or serialized representation carries an explicit schema version. It records Team ID, subject `PrincipalRef`, role, source kind (`direct` or `directory_group`), source identifier, state, created/updated/revoked metadata, and binding/tuple revisions. WS-02 owns the Team transaction and lifecycle invariants; WS-06 owns subject resolution, provisioning, OpenFGA tuple semantics, and authorization projection. Neither owner writes the other's tables directly.
 
 A principal may receive roles from multiple sources. Permissions are the union of current explicit relations, while the UI's single summary label uses fixed dominance `lead` then `member` then `contributor`. Source-specific bindings remain visible only to authorized roster administrators. Removing one source does not pretend to revoke another current source; the mutation response and audit identify any remaining effective role. Redundant direct lower-role bindings for a direct lead are rejected, while unavoidable direct/group overlap is retained with source provenance.
 
@@ -104,7 +104,7 @@ Team pages, search, hierarchy navigation, rollups, mentions, activity, and notif
 
 | Contract | Owner | Permitted responsibility | Prohibited boundary |
 |---|---|---|---|
-| Team lifecycle and `TeamRoleBindingV1` transaction | WS-02, `/modules/organization/` | Team identity, lead cardinality/recovery condition, binding version, rename/reparent transaction, and identity-lifecycle coordination port | No local authorization evaluation or direct OpenFGA-store mutation outside the WS-06 port |
+| Team lifecycle and `TeamRoleBinding` transaction | WS-02, `/modules/organization/` | Team identity, lead cardinality/recovery condition, binding version, rename/reparent transaction, and identity-lifecycle coordination port | No local authorization evaluation or direct OpenFGA-store mutation outside the WS-06 port |
 | Principal/group resolution, OpenFGA model, role projection and revocation fence | WS-06 | Subject types, usersets, computed permissions, group freshness, tuple migration | No Team hierarchy/accountability inheritance or canonical Team writes |
 | Team API schemas | WS-01 contract integration with WS-02/06 approval | Versioned role/binding representations and conditional mutations | No configurable role value or provider group locator as canonical ID |
 | Team UI | WS-05 | Accessible fixed labels, source/status display, authorized actions | No client-side authorization or conflation of Team contributor and Project contributing Team |
@@ -119,7 +119,7 @@ The relation and permission matrix is closed and model-tested. Parent/child, own
 
 ### Data model, migration, and backward compatibility
 
-The first implementation adds versioned role-binding storage and OpenFGA relations without creating a first-class Role or Membership resource. Existing direct `viewer` and `editor` tuple semantics remain valid. Existing `member` tuples are not silently reinterpreted under the wider v1 computed permissions: before model activation, every non-test tuple is inventoried and linked to a verified `TeamRoleBindingV1`; ambiguous or provider-derived experimental tuples are quarantined and deny. The Phase 0 model has no production state, so clean installations seed only v1 bindings.
+The first implementation adds versioned role-binding storage and OpenFGA relations without creating a first-class Role or Membership resource. Existing direct `viewer` and `editor` tuple semantics remain valid. Existing `member` tuples are not silently reinterpreted under the wider v1 computed permissions: before model activation, every non-test tuple is inventoried and linked to a verified `TeamRoleBinding`; ambiguous or provider-derived experimental tuples are quarantined and deny. The Phase 0 model has no production state, so clean installations seed only v1 bindings.
 
 Exports preserve Team ID, fixed role, canonical subject, source category and canonical source ID where authorized, state, and revisions. They never export provider credentials. Imports validate Organization equality, subject kind, lead cardinality, group binding, and role enum and cannot extend the ontology through source role names.
 

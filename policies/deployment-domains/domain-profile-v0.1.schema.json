@@ -9,6 +9,7 @@
     "policy_purpose",
     "scope",
     "label_profile_ceilings",
+    "disclosure_revocation_mode",
     "trusted_attribute_authorities",
     "approved_profile_bridges",
     "allowed_integrations",
@@ -33,6 +34,10 @@
       "additionalProperties": false
     },
     "label_profile_ceilings": {"$ref": "#/$defs/ProfileCeilingMap"},
+    "disclosure_revocation_mode": {
+      "description": "Deployment-selected disclosure/revocation assurance. Profile IDs carry no semantics for this choice.",
+      "enum": ["request_boundary", "commit_boundary"]
+    },
     "trusted_attribute_authorities": {"type": "array", "items": {"type": "string", "minLength": 1}, "minItems": 1, "uniqueItems": true},
     "approved_profile_bridges": {
       "description": "Reserved compatibility seam. v0.1 accepts no bridge until a separate signed mapping and non-weakening contract is approved.",

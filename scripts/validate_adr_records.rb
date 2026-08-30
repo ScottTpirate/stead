@@ -165,19 +165,21 @@ implementation_assignments = {
     "STEAD-P1-006" => %w[
       T-ADR-0005-TOPOLOGY
       T-ADR-0005-FAIL-CLOSED
+      T-ADR-0005-MODE-SELECTION
+      T-ADR-0005-REQUEST-BOUNDARY
+      T-ADR-0005-COMMIT-BOUNDARY-SEAM
       T-ADR-0005-ZERO-CACHE
       T-ADR-0005-DETERMINISM
       T-ADR-0005-FENCE
-      T-ADR-0005-BOUNDED-READ-GUARD
       T-ADR-0005-AGENT-INTERSECTION
       T-ADR-0005-PRINCIPALS
     ],
     "STEAD-P1-007" => %w[
-      T-ADR-0005-BOUNDED-READ-GUARD
+      T-ADR-0005-REQUEST-BOUNDARY
       T-ADR-0005-OBSERVABILITY
     ],
     "STEAD-P1-008" => %w[
-      T-ADR-0005-BOUNDED-READ-GUARD
+      T-ADR-0005-REQUEST-BOUNDARY
       T-ADR-0005-NONDISCLOSURE
     ],
     "STEAD-P1-011" => %w[
@@ -187,7 +189,14 @@ implementation_assignments = {
     "STEAD-P1-015" => %w[
       T-ADR-0005-SEQUENCE
       T-ADR-0005-FENCE
-      T-ADR-0005-BOUNDED-READ-GUARD
+      T-ADR-0005-REQUEST-BOUNDARY
+      T-ADR-0005-COMMIT-BOUNDARY-SEAM
+    ],
+    "STEAD-P3-002" => %w[
+      T-ADR-0005-COMMIT-BOUNDARY
+    ],
+    "STEAD-P3-007" => %w[
+      T-ADR-0005-COMMIT-BOUNDARY
     ]
   },
   "0006" => {
@@ -263,7 +272,9 @@ implementation_assignments.each do |number, issue_assignments|
   failures << "ADR-#{number} owner-split implementation coverage omits: #{missing_implementation_tests.to_a.sort.join(', ')}" unless missing_implementation_tests.empty?
 end
 
-phase_one_independent_tests = tests_by_number.slice("0003", "0004", "0005").values.flatten.to_set
+phase_one_adr5_tests = tests_by_number.fetch("0005", []).reject { |test_id| test_id == "T-ADR-0005-COMMIT-BOUNDARY" }
+phase_one_independent_tests = tests_by_number.slice("0003", "0004").values.flatten.to_set
+phase_one_independent_tests.merge(phase_one_adr5_tests)
 phase_one_independent_tests.merge(
   tests_by_number.fetch("0002", []).reject { |test_id| test_id == "T-ADR-0002-CUI-PROFILE" }
 )
@@ -272,6 +283,7 @@ phase_one_independent_tests.merge(
 )
 phase_three_independent_tests = Set[
   "T-ADR-0002-CUI-PROFILE",
+  "T-ADR-0005-COMMIT-BOUNDARY",
   "T-ADR-0006-AIRGAP-EVIDENCE"
 ]
 
@@ -306,6 +318,14 @@ if phase_one_operations
 end
 
 catalog_test_ids = issues.values.flat_map { |issue| Array(issue["automated_tests"]) }.to_set
+catalog_adr_test_ids = ROOT.join("docs/planning/implementation-issue-catalog.yaml")
+                           .read(encoding: "UTF-8")
+                           .scan(/T-ADR-\d{4}-[A-Z0-9-]+/)
+                           .to_set
+undeclared_catalog_adr_tests = catalog_adr_test_ids - all_test_owners.keys.to_set
+unless undeclared_catalog_adr_tests.empty?
+  failures << "implementation issue catalog names undeclared or retired ADR tests: #{undeclared_catalog_adr_tests.to_a.sort.join(', ')}"
+end
 missing_accepted_tests = tests_by_number.fetch("0001", []).to_set - catalog_test_ids
 failures << "implementation issue catalog omits accepted ADR-0001 tests: #{missing_accepted_tests.to_a.sort.join(', ')}" unless missing_accepted_tests.empty?
 

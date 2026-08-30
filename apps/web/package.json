@@ -5,7 +5,7 @@
   "license": "Apache-2.0",
   "type": "module",
   "scripts": {
-    "build": "vite build",
+    "build": "vite build --manifest",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

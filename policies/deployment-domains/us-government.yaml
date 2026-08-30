@@ -6,6 +6,7 @@ scope:
   limitations: ["Not a complete security domain, control baseline, accreditation package, authorization to operate, classified-system approval, or cryptographic validation claim."]
 label_profile_ceilings:
   us_government: {profile_version: "1.0.0", classification_ceiling: SECRET}
+disclosure_revocation_mode: request_boundary
 trusted_attribute_authorities: [approved_federal_oidc, approved_scim, approved_runtime_attestation]
 approved_profile_bridges: []
 allowed_integrations: [gitea, approved_federal_oidc, approved_scim, approved_siem]

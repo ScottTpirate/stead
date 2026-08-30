@@ -9,13 +9,15 @@ status_semantics:
   DEPENDENCY_BLOCKED_PHASE_1: The requirement is assigned to Phase 1 but its implementing issue dependencies are not yet satisfied.
   PHASE_GATED: The requirement is assigned to Phase 2 or Phase 3 and remains blocked by the preceding phase release decision.
 coverage:
-  expected_requirement_count: 128
-  registered_requirement_count: 128
-  unique_requirement_count: 128
+  phase_zero_baseline_requirement_count: 128
+  post_baseline_requirement_ids: ["PERF-001", "PERF-002", "PERF-003", "PERF-004", "PERF-005", "PERF-006"]
+  expected_requirement_count: 134
+  registered_requirement_count: 134
+  unique_requirement_count: 134
   duplicate_requirement_ids: []
   missing_requirement_ids: []
   source_heading_pattern: "^## [A-Z]+-[0-9]{3}"
-  last_validated: "2026-08-29"
+  last_validated: "2026-08-30"
 requirements:
   - requirement_id: "PRIN-001"
     title: "One product experience"
@@ -507,12 +509,12 @@ requirements:
     release: "phase-3"
   - requirement_id: "CLS-003"
     title: "Deployment security domain"
-    implementation_modules: ["modules/classification", "modules/authorization", "policies/policy-decision", "policies/security-label-profiles"]
-    issue_ids: ["STEAD-P0-007", "STEAD-P1-006", "STEAD-P2-004"]
+    implementation_modules: ["modules/classification", "modules/authorization", "policies/policy-decision", "policies/security-label-profiles", "policies/deployment-domains"]
+    issue_ids: ["STEAD-P0-007", "STEAD-P1-006", "STEAD-P2-004", "STEAD-P3-002"]
     test_ids: ["T-CLS-003-ACCEPTANCE"]
-    documentation: ["docs/architecture/security-label-lattice.md", "docs/security/classification-bypass-inventory.md"]
-    status: PHASE_GATED
-    release: "phase-2"
+    documentation: ["docs/architecture/security-label-lattice.md", "docs/architecture/deployment-profiles.md", "docs/security/classification-bypass-inventory.md"]
+    status: DEPENDENCY_BLOCKED_PHASE_1
+    release: "phase-1"
   - requirement_id: "CLS-004"
     title: "Container boundary rules"
     implementation_modules: ["modules/classification", "modules/authorization", "policies/policy-decision", "policies/security-label-profiles"]
@@ -857,6 +859,54 @@ requirements:
     documentation: ["docs/architecture/observability-contract.md", "docs/operator/backup-restore.md", "docs/operator/reliability.md"]
     status: PHASE_GATED
     release: "phase-3"
+  - requirement_id: "PERF-001"
+    title: "Performance is architecture"
+    implementation_modules: ["cross-cutting", "apps", "modules", "providers", "packages", "tests/performance"]
+    issue_ids: ["STEAD-P1-005", "STEAD-P1-011", "STEAD-P1-012"]
+    test_ids: ["T-PERF-001-ACCEPTANCE"]
+    documentation: ["docs/architecture/MASTER_BUILD_DIRECTIVE.md", "docs/architecture/constitution.md", "docs/architecture/observability-contract.md"]
+    status: DEPENDENCY_BLOCKED_PHASE_1
+    release: "phase-1"
+  - requirement_id: "PERF-002"
+    title: "Standard reference targets"
+    implementation_modules: ["apps/core", "apps/web", "modules", "providers", "tests/performance"]
+    issue_ids: ["STEAD-P1-005", "STEAD-P1-008", "STEAD-P1-011", "STEAD-P1-012"]
+    test_ids: ["T-PERF-002-ACCEPTANCE"]
+    documentation: ["docs/architecture/MASTER_BUILD_DIRECTIVE.md", "docs/architecture/observability-contract.md", "docs/testing/golden-vertical-slice.md"]
+    status: DEPENDENCY_BLOCKED_PHASE_1
+    release: "phase-1"
+  - requirement_id: "PERF-003"
+    title: "One composed, projection-backed request path"
+    implementation_modules: ["apps/core", "modules", "providers/gitea", "packages/api-client", "tests/performance"]
+    issue_ids: ["STEAD-P1-002", "STEAD-P1-003", "STEAD-P1-005", "STEAD-P1-007", "STEAD-P1-008", "STEAD-P1-015"]
+    test_ids: ["T-PERF-003-ACCEPTANCE"]
+    documentation: ["docs/architecture/MASTER_BUILD_DIRECTIVE.md", "docs/architecture/constitution.md", "docs/architecture/provider-contracts/gitea.md"]
+    status: DEPENDENCY_BLOCKED_PHASE_1
+    release: "phase-1"
+  - requirement_id: "PERF-004"
+    title: "Set-oriented authorization and bounded synchronous work"
+    implementation_modules: ["apps/core", "modules/authorization", "modules/audit", "policies/openfga", "policies/policy-decision", "tests/performance"]
+    issue_ids: ["STEAD-P1-006", "STEAD-P1-007", "STEAD-P1-008", "STEAD-P1-012", "STEAD-P1-015"]
+    test_ids: ["T-PERF-004-ACCEPTANCE"]
+    documentation: ["docs/architecture/MASTER_BUILD_DIRECTIVE.md", "docs/architecture/authorization-contract.md", "docs/architecture/audit-model.md"]
+    status: DEPENDENCY_BLOCKED_PHASE_1
+    release: "phase-1"
+  - requirement_id: "PERF-005"
+    title: "Responsive, capability-driven frontend"
+    implementation_modules: ["apps/web", "packages/design-system", "packages/api-client", "tests/performance"]
+    issue_ids: ["STEAD-P1-005", "STEAD-P1-012", "STEAD-P1-014", "STEAD-P2-003"]
+    test_ids: ["T-PERF-005-ACCEPTANCE"]
+    documentation: ["docs/architecture/MASTER_BUILD_DIRECTIVE.md", "docs/architecture/product-and-ux-contracts.md", "docs/testing/golden-vertical-slice.md"]
+    status: DEPENDENCY_BLOCKED_PHASE_1
+    release: "phase-1"
+  - requirement_id: "PERF-006"
+    title: "Performance evidence and regression policy"
+    implementation_modules: ["tests/performance", "tests/integration", "tests/e2e", "tests/contract", "apps/web"]
+    issue_ids: ["STEAD-P1-011", "STEAD-P1-012", "STEAD-P2-010", "STEAD-P2-011", "STEAD-P3-007", "STEAD-P3-008"]
+    test_ids: ["T-PERF-006-ACCEPTANCE"]
+    documentation: ["docs/architecture/observability-contract.md", "docs/governance/release-gates.md", "docs/testing/golden-vertical-slice.md"]
+    status: DEPENDENCY_BLOCKED_PHASE_1
+    release: "phase-1"
   - requirement_id: "SEC-001"
     title: "License policy"
     implementation_modules: ["cross-cutting", "policies", "deploy", "tests/security"]
