@@ -13,7 +13,8 @@ EXPECTED_RECORDS = {
   "0003" => { candidate: "ADR-CAND-005", state: "ACCEPTED", owner_approval: true },
   "0004" => { candidate: "ADR-CAND-021", state: "ACCEPTED", owner_approval: true },
   "0005" => { candidate: "ADR-CAND-003", state: "ACCEPTED", owner_approval: false },
-  "0006" => { candidate: "ADR-CAND-007", state: "ACCEPTED", owner_approval: true }
+  "0006" => { candidate: "ADR-CAND-007", state: "ACCEPTED", owner_approval: true },
+  "0008" => { candidate: "ADR-CAND-006", state: "PROPOSED", owner_approval: false }
 }.freeze
 
 DECISION_REVISION = "24c74d52ef0a78840ab147da48c3d66589e49e3e"
@@ -180,7 +181,9 @@ end
 
 security_issue = issues["STEAD-P1-006"]
 if security_issue
-  required_candidates = EXPECTED_RECORDS.reject { |number, _record| number == "0001" }.values.map { |record| record.fetch(:candidate) }
+  required_candidates = adr_gates.values
+                                 .select { |gate| Array(gate["dependent_issues"]).include?("STEAD-P1-006") }
+                                 .map { |gate| gate.fetch("adr_id") }
   criteria = Array(security_issue["acceptance_criteria"]).join(" ")
   missing_candidates = required_candidates.reject { |candidate| criteria.include?(candidate) }
   failures << "STEAD-P1-006 acceptance criteria omit ADR gates: #{missing_candidates.join(', ')}" unless missing_candidates.empty?
@@ -315,6 +318,21 @@ implementation_assignments = {
     "STEAD-P3-007" => %w[
       T-ADR-0006-AIRGAP-EVIDENCE
     ]
+  },
+  "0008" => {
+    "STEAD-P1-007" => tests_by_number.fetch("0008", []),
+    "STEAD-P1-008" => %w[
+      T-ADR-0008-RESOURCE-ORDERING
+      T-ADR-0008-IDEMPOTENCY
+      T-ADR-0008-SCHEMA-COMPATIBILITY
+      T-ADR-0008-PAYLOAD-MINIMIZATION
+      T-ADR-0008-PROJECTION-REBUILD
+    ],
+    "STEAD-P2-005" => %w[
+      T-ADR-0008-SUBSCRIBER-ISOLATION
+      T-ADR-0008-AUTHORIZED-REPLAY
+      T-ADR-0008-PAYLOAD-MINIMIZATION
+    ]
   }
 }.freeze
 
@@ -347,6 +365,7 @@ phase_one_independent_tests.merge(
 phase_one_independent_tests.merge(
   tests_by_number.fetch("0006", []).reject { |test_id| test_id == "T-ADR-0006-AIRGAP-EVIDENCE" }
 )
+phase_one_independent_tests.merge(tests_by_number.fetch("0008", []))
 phase_three_independent_tests = Set[
   "T-ADR-0002-CUI-PROFILE",
   "T-ADR-0005-COMMIT-BOUNDARY",

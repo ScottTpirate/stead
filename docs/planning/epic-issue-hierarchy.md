@@ -79,9 +79,9 @@ The Phase 1 records preserve the approved principal, assignment, authorization, 
 | 4 | STEAD-P1-002 | WS-02 | P1-001, P1-006, P1-015, approved core/auth contracts | Canonical modular core, PrincipalRef-based User/Agent Work assignment, PostgreSQL ownership, bounded composed-read queries, optimistic concurrency and atomic outbox |
 | 5 | STEAD-P1-003 | WS-03 | P1-002, P1-006 | Stock Gitea adapter, hidden tracker/board, provider-neutral Work backing, docs Git, and local rebuildable provider projection; no general code repo or ordinary-read provider waterfall |
 | 5 | STEAD-P1-010 | WS-10 | P1-002, P1-006 | Filesystem BlobStore and authorized attachment path |
-| 5 | STEAD-P1-007 | WS-07 | P1-002, P1-006 | Transactional outbox commit with post-response JetStream relay; set-oriented activity/inbox; one aggregate composed-read audit |
+| 5 | STEAD-P1-007 | WS-07 | ADR-CAND-006, P1-002, P1-006 | Transactional outbox commit with post-response JetStream relay; set-oriented activity/inbox; one aggregate composed-read audit |
 | 6 | STEAD-P1-004 | WS-04 | P1-002, P1-003, P1-006, P1-010 | One deterministic Git/OKF document flow |
-| 6 | STEAD-P1-008 | WS-08 | P1-002, P1-006, P1-007 | PostgreSQL search/work-graph baseline with non-disclosure, set-oriented call-count tests, and 300 ms first-results target |
+| 6 | STEAD-P1-008 | WS-08 | ADR-CAND-006, P1-002, P1-006, P1-007 | PostgreSQL search/work-graph baseline with non-disclosure, set-oriented call-count tests, and 300 ms first-results target |
 | 7 | STEAD-P1-005 | WS-05 | P1-002, P1-003, P1-004, P1-006, P1-007, P1-008 | Responsive universal shell, one composed primary request, ≤250 KiB eager JavaScript, and complete TEST-009 general Work+Docs path |
 | 8 | STEAD-P1-013 | WS-03 | P1-003, P1-005, P1-006 | Additive software code repository, branch, commit and Pull Request path |
 | 9 | STEAD-P1-009 | WS-09 | P1-006, P1-007, P1-010, P1-013 | One pinned Action with build/SBOM/artifact/release trace |
