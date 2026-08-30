@@ -22,6 +22,29 @@ func copyFile(file File) File {
 	return File{Path: file.Path, MediaType: file.MediaType, Content: cloneSlice(file.Content)}
 }
 
+// preflightBuildFiles enforces caller-controlled writer ceilings before any
+// content is copied, decoded, or staged. The final generated evidence manifest
+// is checked again after construction because its exact size is not yet known.
+func preflightBuildFiles(payloadFiles, evidenceFiles []File) error {
+	if len(payloadFiles) > MaxArchiveFiles-2 || len(evidenceFiles) > MaxArchiveFiles-2-len(payloadFiles) {
+		return contractError("archive_content_limit", "files", nil)
+	}
+	var total uint64
+	for _, files := range [][]File{payloadFiles, evidenceFiles} {
+		for _, file := range files {
+			size := uint64(len(file.Content))
+			if size > MaxArchiveFileBytes {
+				return contractError("archive_file_size_limit", file.Path, nil)
+			}
+			if total > MaxArchiveContent-size {
+				return contractError("archive_content_limit", "files", nil)
+			}
+			total += size
+		}
+	}
+	return nil
+}
+
 // cloneSlice preserves the distinction between nil and a non-nil empty slice.
 // That distinction is material for the canonical JSON structures in this
 // package: collection fields are encoded as arrays, never null.
@@ -385,8 +408,8 @@ func validateAndSortBindings(input ManifestInput, payload map[string]File, profi
 // signing request. Calling it twice with byte-identical inputs yields identical
 // output bytes and identities.
 func PrepareUnsigned(input BuildInput) (UnsignedActivation, error) {
-	if len(input.PayloadFiles) > MaxArchiveFiles-2 || len(input.EvidenceFiles) > MaxArchiveFiles-2-len(input.PayloadFiles) {
-		return UnsignedActivation{}, contractError("archive_content_limit", "files", nil)
+	if err := preflightBuildFiles(input.PayloadFiles, input.EvidenceFiles); err != nil {
+		return UnsignedActivation{}, err
 	}
 	if err := validateManifestInput(input.Manifest); err != nil {
 		return UnsignedActivation{}, err

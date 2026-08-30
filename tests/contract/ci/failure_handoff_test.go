@@ -289,8 +289,13 @@ func TestPreSigningEvidenceUsesClosedPathMediaAndSchemaAdmission(t *testing.T) {
 		}, "signed_payload_contract_error"},
 		{"encoded material in nominal SPDX identifier", func(input *policyrelease.BuildInput) {
 			mutateEvidenceReport(t, input, "evidence/sbom.spdx.json", func(document map[string]any) {
-				packages := document["packages"].([]any)
-				packages[0].(map[string]any)["SPDXID"] = "SPDXRef-LS0tLS1CRUdJTiBQUklWQVRFIEtFWS0tLS0t="
+				graph := document["@graph"].([]any)
+				for _, item := range graph {
+					element := item.(map[string]any)
+					if element["type"] == "software_Package" {
+						element["spdxId"] = "SPDXRef-LS0tLS1CRUdJTiBQUklWQVRFIEtFWS0tLS0t="
+					}
+				}
 			})
 		}, "spdx_evidence_schema_mismatch"},
 		{"escaped private field", func(input *policyrelease.BuildInput) {

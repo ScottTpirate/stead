@@ -304,25 +304,94 @@ type licenseEvidenceV01 struct {
 	UnknownOrDisallowed int                            `json:"unknown_or_disallowed"`
 }
 
-type provenanceEvidenceV01 struct {
-	BuildType                string `json:"build_type"`
-	BuilderID                string `json:"builder_id"`
-	ExternalParametersDigest string `json:"external_parameters_digest"`
-	NetworkAccess            bool   `json:"network_access"`
+type slsaSubjectV1 struct {
+	Name   string            `json:"name"`
+	Digest map[string]string `json:"digest"`
 }
 
-type spdxPackageV01 struct {
-	SPDXID           string `json:"SPDXID"`
-	LicenseConcluded string `json:"licenseConcluded"`
-	Name             string `json:"name"`
+type slsaExternalParametersV1 struct {
+	DependencyLockDigest string `json:"dependencyLockDigest"`
+	SourceRevision       string `json:"sourceRevision"`
 }
 
-type spdxEvidenceV01 struct {
-	SPDXID      string           `json:"SPDXID"`
-	DataLicense string           `json:"dataLicense"`
-	Name        string           `json:"name"`
-	Packages    []spdxPackageV01 `json:"packages"`
-	SPDXVersion string           `json:"spdxVersion"`
+type slsaInternalParametersV1 struct {
+	NetworkAccess bool `json:"networkAccess"`
+}
+
+type slsaBuildDefinitionV1 struct {
+	BuildType          string                   `json:"buildType"`
+	ExternalParameters slsaExternalParametersV1 `json:"externalParameters"`
+	InternalParameters slsaInternalParametersV1 `json:"internalParameters"`
+}
+
+type slsaBuilderV1 struct {
+	ID string `json:"id"`
+}
+
+type slsaRunDetailsV1 struct {
+	Builder slsaBuilderV1 `json:"builder"`
+}
+
+type slsaPredicateV1 struct {
+	BuildDefinition slsaBuildDefinitionV1 `json:"buildDefinition"`
+	RunDetails      slsaRunDetailsV1      `json:"runDetails"`
+}
+
+type slsaProvenanceEvidenceV1 struct {
+	Type          string          `json:"_type"`
+	Subject       []slsaSubjectV1 `json:"subject"`
+	PredicateType string          `json:"predicateType"`
+	Predicate     slsaPredicateV1 `json:"predicate"`
+}
+
+type spdxGraphHeaderV301 struct {
+	Type string `json:"type"`
+}
+
+type spdxCreationInfoV301 struct {
+	ID          string   `json:"@id"`
+	Type        string   `json:"type"`
+	CreatedBy   []string `json:"createdBy"`
+	SpecVersion string   `json:"specVersion"`
+	Created     string   `json:"created"`
+}
+
+type spdxSoftwareAgentV301 struct {
+	Type         string `json:"type"`
+	SPDXID       string `json:"spdxId"`
+	CreationInfo string `json:"creationInfo"`
+	Name         string `json:"name"`
+}
+
+type spdxDocumentV301 struct {
+	Type               string   `json:"type"`
+	SPDXID             string   `json:"spdxId"`
+	CreationInfo       string   `json:"creationInfo"`
+	RootElement        []string `json:"rootElement"`
+	Element            []string `json:"element"`
+	ProfileConformance []string `json:"profileConformance"`
+}
+
+type spdxSBOMV301 struct {
+	Type             string   `json:"type"`
+	SPDXID           string   `json:"spdxId"`
+	CreationInfo     string   `json:"creationInfo"`
+	RootElement      []string `json:"rootElement"`
+	Element          []string `json:"element"`
+	SoftwareSBOMType []string `json:"software_sbomType"`
+}
+
+type spdxPackageV301 struct {
+	Type                   string `json:"type"`
+	SPDXID                 string `json:"spdxId"`
+	CreationInfo           string `json:"creationInfo"`
+	Name                   string `json:"name"`
+	SoftwarePackageVersion string `json:"software_packageVersion"`
+}
+
+type spdxEvidenceV301 struct {
+	Context string           `json:"@context"`
+	Graph   []map[string]any `json:"@graph"`
 }
 
 type vulnerabilityEvidenceV01 struct {
@@ -972,29 +1041,155 @@ func validateConformanceEvidence(data []byte) (ConformanceClaims, error) {
 	return claims, nil
 }
 
+func validAbsoluteURI(value string) bool {
+	parsed, err := url.ParseRequestURI(value)
+	return err == nil && parsed.IsAbs()
+}
+
+func exactStringSet(values []string, expected map[string]struct{}) bool {
+	if len(values) != len(expected) {
+		return false
+	}
+	seen := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		if _, duplicate := seen[value]; duplicate {
+			return false
+		}
+		if _, present := expected[value]; !present {
+			return false
+		}
+		seen[value] = struct{}{}
+	}
+	return true
+}
+
 func validateSPDXEvidence(data []byte) (ConformanceClaims, error) {
-	var report spdxEvidenceV01
+	var report spdxEvidenceV301
 	if err := decodeStrict(data, &report); err != nil {
 		return ConformanceClaims{}, err
 	}
-	if report.SPDXID != "SPDXRef-DOCUMENT" || report.DataLicense != "CC0-1.0" || report.SPDXVersion != "SPDX-2.3" || !stableIDPattern.MatchString(report.Name) || len(report.Packages) == 0 || len(report.Packages) > MaxArchiveFiles {
+	if report.Context != "https://spdx.org/rdf/3.0.1/spdx-context.jsonld" || len(report.Graph) < 5 || len(report.Graph) > MaxArchiveFiles {
 		return ConformanceClaims{}, contractError("spdx_evidence_schema_mismatch", "evidence/sbom.spdx.json", nil)
 	}
-	for _, item := range report.Packages {
-		if !spdxIDPattern.MatchString(item.SPDXID) || !stableIDPattern.MatchString(item.Name) || !stableIDPattern.MatchString(strings.ToLower(item.LicenseConcluded)) {
+	var creation *spdxCreationInfoV301
+	var agent *spdxSoftwareAgentV301
+	var document *spdxDocumentV301
+	var sbom *spdxSBOMV301
+	packages := make([]spdxPackageV301, 0, len(report.Graph)-4)
+	identities := make(map[string]struct{}, len(report.Graph))
+	registerIdentity := func(identity string) bool {
+		if !validAbsoluteURI(identity) {
+			return false
+		}
+		if _, duplicate := identities[identity]; duplicate {
+			return false
+		}
+		identities[identity] = struct{}{}
+		return true
+	}
+	for _, graphItem := range report.Graph {
+		kind, ok := graphItem["type"].(string)
+		if !ok {
 			return ConformanceClaims{}, contractError("spdx_evidence_schema_mismatch", "evidence/sbom.spdx.json", nil)
 		}
+		encoded, err := json.Marshal(graphItem)
+		if err != nil {
+			return ConformanceClaims{}, contractError("spdx_evidence_schema_mismatch", "evidence/sbom.spdx.json", nil)
+		}
+		switch kind {
+		case "CreationInfo":
+			if creation != nil {
+				return ConformanceClaims{}, contractError("spdx_evidence_schema_mismatch", "evidence/sbom.spdx.json", nil)
+			}
+			var item spdxCreationInfoV301
+			if err := decodeStrict(encoded, &item); err != nil {
+				return ConformanceClaims{}, err
+			}
+			creation = &item
+		case "SoftwareAgent":
+			if agent != nil {
+				return ConformanceClaims{}, contractError("spdx_evidence_schema_mismatch", "evidence/sbom.spdx.json", nil)
+			}
+			var item spdxSoftwareAgentV301
+			if err := decodeStrict(encoded, &item); err != nil || !registerIdentity(item.SPDXID) {
+				return ConformanceClaims{}, contractError("spdx_evidence_schema_mismatch", "evidence/sbom.spdx.json", nil)
+			}
+			agent = &item
+		case "SpdxDocument":
+			if document != nil {
+				return ConformanceClaims{}, contractError("spdx_evidence_schema_mismatch", "evidence/sbom.spdx.json", nil)
+			}
+			var item spdxDocumentV301
+			if err := decodeStrict(encoded, &item); err != nil || !registerIdentity(item.SPDXID) {
+				return ConformanceClaims{}, contractError("spdx_evidence_schema_mismatch", "evidence/sbom.spdx.json", nil)
+			}
+			document = &item
+		case "software_Sbom":
+			if sbom != nil {
+				return ConformanceClaims{}, contractError("spdx_evidence_schema_mismatch", "evidence/sbom.spdx.json", nil)
+			}
+			var item spdxSBOMV301
+			if err := decodeStrict(encoded, &item); err != nil || !registerIdentity(item.SPDXID) {
+				return ConformanceClaims{}, contractError("spdx_evidence_schema_mismatch", "evidence/sbom.spdx.json", nil)
+			}
+			sbom = &item
+		case "software_Package":
+			var item spdxPackageV301
+			if err := decodeStrict(encoded, &item); err != nil || !registerIdentity(item.SPDXID) {
+				return ConformanceClaims{}, contractError("spdx_evidence_schema_mismatch", "evidence/sbom.spdx.json", nil)
+			}
+			packages = append(packages, item)
+		default:
+			return ConformanceClaims{}, contractError("spdx_evidence_schema_mismatch", "evidence/sbom.spdx.json", nil)
+		}
+	}
+	if creation == nil || agent == nil || document == nil || sbom == nil || len(packages) == 0 {
+		return ConformanceClaims{}, contractError("spdx_evidence_schema_mismatch", "evidence/sbom.spdx.json", nil)
+	}
+	created, timeErr := time.Parse(time.RFC3339, creation.Created)
+	if creation.Type != "CreationInfo" || !strings.HasPrefix(creation.ID, "_:") || len(creation.ID) < 3 || creation.SpecVersion != "3.0.1" || timeErr != nil || created.UTC().Format(time.RFC3339) != creation.Created || len(creation.CreatedBy) != 1 || creation.CreatedBy[0] != agent.SPDXID {
+		return ConformanceClaims{}, contractError("spdx_evidence_schema_mismatch", "evidence/sbom.spdx.json", nil)
+	}
+	if agent.Type != "SoftwareAgent" || agent.CreationInfo != creation.ID || !stableIDPattern.MatchString(agent.Name) || document.Type != "SpdxDocument" || document.CreationInfo != creation.ID || sbom.Type != "software_Sbom" || sbom.CreationInfo != creation.ID {
+		return ConformanceClaims{}, contractError("spdx_evidence_schema_mismatch", "evidence/sbom.spdx.json", nil)
+	}
+	packageIDs := make(map[string]struct{}, len(packages))
+	for _, item := range packages {
+		if item.Type != "software_Package" || item.CreationInfo != creation.ID || !stableIDPattern.MatchString(item.Name) || !nonemptyText(item.SoftwarePackageVersion) {
+			return ConformanceClaims{}, contractError("spdx_evidence_schema_mismatch", "evidence/sbom.spdx.json", nil)
+		}
+		packageIDs[item.SPDXID] = struct{}{}
+	}
+	documentElements := make(map[string]struct{}, len(packageIDs)+2)
+	documentElements[agent.SPDXID] = struct{}{}
+	documentElements[sbom.SPDXID] = struct{}{}
+	for identity := range packageIDs {
+		documentElements[identity] = struct{}{}
+	}
+	if !exactStringSet(document.RootElement, map[string]struct{}{sbom.SPDXID: {}}) || !exactStringSet(document.Element, documentElements) || !exactStringSet(document.ProfileConformance, map[string]struct{}{"core": {}, "software": {}}) || !exactStringSet(sbom.RootElement, packageIDs) || !exactStringSet(sbom.Element, packageIDs) || !exactStringSet(sbom.SoftwareSBOMType, map[string]struct{}{"build": {}}) {
+		return ConformanceClaims{}, contractError("spdx_evidence_schema_mismatch", "evidence/sbom.spdx.json", nil)
 	}
 	return ConformanceClaims{}, nil
 }
 
 func validateProvenanceEvidence(data []byte) (ConformanceClaims, error) {
-	var report provenanceEvidenceV01
+	var report slsaProvenanceEvidenceV1
 	if err := decodeStrict(data, &report); err != nil {
 		return ConformanceClaims{}, err
 	}
-	if !stableIDPattern.MatchString(report.BuildType) || !identifierPattern.MatchString(report.BuilderID) || validateDigest("provenance.external_parameters_digest", report.ExternalParametersDigest) != nil || report.NetworkAccess {
+	if report.Type != "https://in-toto.io/Statement/v1" || report.PredicateType != "https://slsa.dev/provenance/v1" || len(report.Subject) == 0 || len(report.Subject) > MaxArchiveFiles || !validAbsoluteURI(report.Predicate.BuildDefinition.BuildType) || !validAbsoluteURI(report.Predicate.RunDetails.Builder.ID) || !nonemptyText(report.Predicate.BuildDefinition.ExternalParameters.SourceRevision) || validateDigest("provenance.dependency_lock_digest", report.Predicate.BuildDefinition.ExternalParameters.DependencyLockDigest) != nil || report.Predicate.BuildDefinition.InternalParameters.NetworkAccess {
 		return ConformanceClaims{}, contractError("provenance_evidence_schema_mismatch", "evidence/provenance.json", nil)
+	}
+	seenSubjects := make(map[string]struct{}, len(report.Subject))
+	for _, subject := range report.Subject {
+		sha256Value, present := subject.Digest["sha256"]
+		if !nonemptyText(subject.Name) || len(subject.Digest) != 1 || !present || validateDigest("provenance.subject.digest.sha256", "sha256:"+sha256Value) != nil {
+			return ConformanceClaims{}, contractError("provenance_evidence_schema_mismatch", "evidence/provenance.json", nil)
+		}
+		if _, duplicate := seenSubjects[subject.Name]; duplicate {
+			return ConformanceClaims{}, contractError("provenance_evidence_schema_mismatch", "evidence/provenance.json", nil)
+		}
+		seenSubjects[subject.Name] = struct{}{}
 	}
 	return ConformanceClaims{}, nil
 }

@@ -162,6 +162,36 @@ func TestArchiveResourceBoundaries(t *testing.T) {
 	})
 }
 
+// T-ADR-0006-ARCHIVE-SAFETY: caller-controlled writer input is rejected before
+// the builder copies or parses any file content.
+func TestWriterResourceBoundsArePreflighted(t *testing.T) {
+	t.Run("aggregate before JSON parsing", func(t *testing.T) {
+		input := fixtureBuildInput(t, "commercial", 1, false)
+		sharedMalformedJSON := bytes.Repeat([]byte{'{'}, policyrelease.MaxArchiveFileBytes)
+		for index := 0; index < 6; index++ {
+			input.EvidenceFiles = append(input.EvidenceFiles, policyrelease.File{
+				Path:      fmt.Sprintf("evidence/oversized-aggregate-%d.json", index),
+				MediaType: "application/json",
+				Content:   sharedMalformedJSON,
+			})
+		}
+		if _, err := policyrelease.PrepareUnsigned(input); policyrelease.ErrorCode(err) != "archive_content_limit" {
+			t.Fatalf("aggregate preflight error = %v (%s)", err, policyrelease.ErrorCode(err))
+		}
+	})
+
+	t.Run("per file before path and media validation", func(t *testing.T) {
+		input := fixtureBuildInput(t, "commercial", 1, false)
+		input.EvidenceFiles = append(input.EvidenceFiles, policyrelease.File{
+			Path: "not-an-evidence-path", MediaType: "application/x-unknown",
+			Content: make([]byte, policyrelease.MaxArchiveFileBytes+1),
+		})
+		if _, err := policyrelease.PrepareUnsigned(input); policyrelease.ErrorCode(err) != "archive_file_size_limit" {
+			t.Fatalf("per-file preflight error = %v (%s)", err, policyrelease.ErrorCode(err))
+		}
+	})
+}
+
 func TestArchivePathBoundaries(t *testing.T) {
 	exactPath := strings.Repeat("a", 69) + "/" + strings.Repeat("b", 69) + "/" + strings.Repeat("c", 100)
 	if len(exactPath) != policyrelease.MaxArchivePathBytes {
