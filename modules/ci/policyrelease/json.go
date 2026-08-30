@@ -98,6 +98,70 @@ func validateJSONValue(decoder *json.Decoder, depth, maxDepth int, rejectNonInte
 	return nil
 }
 
+// preflightJSONArrayCardinality walks JSON tokens without materializing arrays
+// and rejects the first element beyond the metadata ceiling. Security-profile
+// documents use this before decodeStrict so every nested caller-controlled
+// collection is bounded before reflection or struct decoding can allocate it.
+func preflightJSONArrayCardinality(data []byte, maxDepth, maxEntries int) error {
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.UseNumber()
+	if err := preflightJSONValueCardinality(decoder, 0, maxDepth, maxEntries); err != nil {
+		return err
+	}
+	if _, err := decoder.Token(); err != io.EOF {
+		return contractError("malformed_json", "json", nil)
+	}
+	return nil
+}
+
+func preflightJSONValueCardinality(decoder *json.Decoder, depth, maxDepth, maxEntries int) error {
+	token, err := decoder.Token()
+	if err != nil {
+		return contractError("malformed_json", "json", nil)
+	}
+	delim, compound := token.(json.Delim)
+	if !compound {
+		return nil
+	}
+	depth++
+	if depth > maxDepth {
+		return contractError("json_depth_limit", "json", nil)
+	}
+	switch delim {
+	case '{':
+		for decoder.More() {
+			if _, err := decoder.Token(); err != nil {
+				return contractError("malformed_json", "json", nil)
+			}
+			if err := preflightJSONValueCardinality(decoder, depth, maxDepth, maxEntries); err != nil {
+				return err
+			}
+		}
+		closing, err := decoder.Token()
+		if err != nil || closing != json.Delim('}') {
+			return contractError("malformed_json", "json", nil)
+		}
+	case '[':
+		count := 0
+		for decoder.More() {
+			if count >= maxEntries {
+				return contractError("metadata_cardinality_limit", "security_profile", nil)
+			}
+			count++
+			if err := preflightJSONValueCardinality(decoder, depth, maxDepth, maxEntries); err != nil {
+				return err
+			}
+		}
+		closing, err := decoder.Token()
+		if err != nil || closing != json.Delim(']') {
+			return contractError("malformed_json", "json", nil)
+		}
+	default:
+		return contractError("malformed_json", "json", nil)
+	}
+	return nil
+}
+
 func decodeJSONShape(data []byte) (any, error) {
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.UseNumber()

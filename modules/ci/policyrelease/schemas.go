@@ -773,6 +773,9 @@ func validateSecurityProfileDocument(file File, binding ProfileBinding) error {
 	if file.MediaType != securityProfileMediaType {
 		return contractError("bound_media_type_mismatch", binding.Path, nil)
 	}
+	if err := preflightJSONArrayCardinality(file.Content, MaxJSONDepth, MaxMetadataEntries); err != nil {
+		return err
+	}
 	var document securityProfileDocumentV01
 	if err := decodeStrict(file.Content, &document); err != nil {
 		return err
@@ -912,6 +915,9 @@ func validateSecurityProfileDocument(file File, binding ProfileBinding) error {
 }
 
 func profileArtifactRequirements(file File) (map[string]string, map[string]string, error) {
+	if err := preflightJSONArrayCardinality(file.Content, MaxJSONDepth, MaxMetadataEntries); err != nil {
+		return nil, nil, err
+	}
 	var document securityProfileDocumentV01
 	if err := decodeStrict(file.Content, &document); err != nil {
 		return nil, nil, err

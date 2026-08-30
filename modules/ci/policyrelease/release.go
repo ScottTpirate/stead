@@ -28,6 +28,9 @@ func validateFinalReviewState(reviews []ReviewReceipt, waivers []WaiverReceipt, 
 // PrepareReleaseAttestation constructs the post-signing payload only after the
 // exact activation envelope and archive identities exist.
 func PrepareReleaseAttestation(activation ActivationArchive, input ReleaseAttestationInput) (UnsignedReleaseAttestation, error) {
+	if err := preflightActivationArtifacts(activation); err != nil {
+		return UnsignedReleaseAttestation{}, err
+	}
 	if err := preflightReviewAndWaiverCounts(input.ReviewReceipts, input.WaiverReceipts); err != nil {
 		return UnsignedReleaseAttestation{}, err
 	}
@@ -123,6 +126,16 @@ func PrepareReleaseAttestation(activation ActivationArchive, input ReleaseAttest
 	}, nil
 }
 
+// preflightActivationArtifacts bounds caller-controlled activation bytes before
+// any identity hashing, archive inspection, or defensive copying occurs.
+func preflightActivationArtifacts(activation ActivationArchive) error {
+	if len(activation.EnvelopeBytes) == 0 || len(activation.EnvelopeBytes) > MaxEnvelopeBytes ||
+		len(activation.ArchiveBytes) == 0 || len(activation.ArchiveBytes) > MaxArchiveBytes {
+		return contractError("activation_artifact_size_limit", "activation", nil)
+	}
+	return nil
+}
+
 func manifestInputFromActivation(activation ActivationArchive) ManifestInput {
 	return ManifestInput{
 		DeploymentPolicy: activation.Unsigned.Manifest.DeploymentPolicy,
@@ -131,6 +144,12 @@ func manifestInputFromActivation(activation ActivationArchive) ManifestInput {
 }
 
 func validateUnsignedAttestation(activation ActivationArchive, unsigned UnsignedReleaseAttestation) error {
+	if err := preflightActivationArtifacts(activation); err != nil {
+		return err
+	}
+	if len(unsigned.PayloadBytes) > MaxDecodedPayloadBytes {
+		return contractError("release_attestation_payload_size_limit", "release_attestation", nil)
+	}
 	if SHA256Digest(unsigned.PayloadBytes) != unsigned.AttestationID {
 		return contractError("release_attestation_identity_mismatch", "release_attestation_id", nil)
 	}
@@ -164,12 +183,18 @@ func validateUnsignedAttestation(activation ActivationArchive, unsigned Unsigned
 	if !bytes.Equal(want.PayloadBytes, unsigned.PayloadBytes) {
 		return contractError("release_attestation_binding_mismatch", "release_attestation", nil)
 	}
+	if !reflect.DeepEqual(unsigned.SigningRequest, want.SigningRequest) || !bytes.Equal(unsigned.SigningRequestBytes, want.SigningRequestBytes) {
+		return contractError("signing_request_binding_mismatch", "signing_request", nil)
+	}
 	return nil
 }
 
 // FinalizeReleaseHandoff accepts the separately signed release attestation and
 // returns the exact immutable pair for independent WS-06 verification.
 func FinalizeReleaseHandoff(activation ActivationArchive, unsigned UnsignedReleaseAttestation, envelope []byte, signing PresentedSigningResult) (ImmutableReleaseHandoff, error) {
+	if err := preflightActivationArtifacts(activation); err != nil {
+		return ImmutableReleaseHandoff{}, err
+	}
 	if err := validateUnsignedAttestation(activation, unsigned); err != nil {
 		return ImmutableReleaseHandoff{}, err
 	}

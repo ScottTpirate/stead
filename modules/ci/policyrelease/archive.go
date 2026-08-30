@@ -25,21 +25,36 @@ type ArchiveInspection struct {
 
 const ustarBlockSize = 512
 
-func archiveEntries(envelope []byte, files []File) []archiveEntry {
-	entries := []archiveEntry{{name: "manifest.dsse.json", content: envelope}}
+func archiveEntries(envelope []byte, files []File) ([]archiveEntry, error) {
+	entryCount := 1 + len(files)
+	if entryCount > MaxArchiveEntries {
+		return nil, contractError("archive_entry_limit", "archive", nil)
+	}
 	directories := make(map[string]struct{})
 	for _, file := range files {
 		parts := strings.Split(file.Path, "/")
 		for i := 1; i < len(parts); i++ {
-			directories[strings.Join(parts[:i], "/")+"/"] = struct{}{}
+			directory := strings.Join(parts[:i], "/") + "/"
+			if _, exists := directories[directory]; exists {
+				continue
+			}
+			if entryCount >= MaxArchiveEntries {
+				return nil, contractError("archive_entry_limit", "archive", nil)
+			}
+			directories[directory] = struct{}{}
+			entryCount++
 		}
+	}
+	entries := make([]archiveEntry, 0, entryCount)
+	entries = append(entries, archiveEntry{name: "manifest.dsse.json", content: envelope})
+	for _, file := range files {
 		entries = append(entries, archiveEntry{name: file.Path, content: file.Content})
 	}
 	for directory := range directories {
 		entries = append(entries, archiveEntry{name: directory, directory: true})
 	}
 	sort.Slice(entries, func(i, j int) bool { return entries[i].name < entries[j].name })
-	return entries
+	return entries, nil
 }
 
 func writeArchive(envelope []byte, files []File) ([]byte, error) {
@@ -53,9 +68,9 @@ func writeArchive(envelope []byte, files []File) ([]byte, error) {
 		}
 		totalContent += uint64(len(file.Content))
 	}
-	entries := archiveEntries(envelope, files)
-	if len(entries) > MaxArchiveEntries {
-		return nil, contractError("archive_entry_limit", "archive", nil)
+	entries, err := archiveEntries(envelope, files)
+	if err != nil {
+		return nil, err
 	}
 	var buffer bytes.Buffer
 	writer := tar.NewWriter(&buffer)

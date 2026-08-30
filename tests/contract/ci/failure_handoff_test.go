@@ -449,6 +449,32 @@ func TestSigningAndReleaseWorkflowsRemainSeparatedFromBuilder(t *testing.T) {
 	}
 }
 
+func TestReleaseAttestationSigningRequestIsExactlyBound(t *testing.T) {
+	activation, attestation, _ := completeFixtureRelease(t, "commercial", 1, false)
+	releaseEnvelope, releaseSigning := externallySign(t, policyrelease.ReleaseAttestationPayloadType, attestation.PayloadBytes, 1, false)
+	testCases := []struct {
+		name   string
+		mutate func(*policyrelease.UnsignedReleaseAttestation)
+	}{
+		{"request purpose", func(candidate *policyrelease.UnsignedReleaseAttestation) {
+			candidate.SigningRequest.Purpose = "different-purpose"
+		}},
+		{"request bytes", func(candidate *policyrelease.UnsignedReleaseAttestation) {
+			candidate.SigningRequestBytes = append(append([]byte(nil), candidate.SigningRequestBytes...), ' ')
+		}},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			candidate := attestation
+			testCase.mutate(&candidate)
+			handoff, err := policyrelease.FinalizeReleaseHandoff(activation, candidate, releaseEnvelope, releaseSigning)
+			if policyrelease.ErrorCode(err) != "signing_request_binding_mismatch" || handoff.ArchiveBytes != nil || handoff.ReleaseAttestationEnvelopeBytes != nil {
+				t.Fatalf("signing request binding = %v (%s), archive=%d envelope=%d", err, policyrelease.ErrorCode(err), len(handoff.ArchiveBytes), len(handoff.ReleaseAttestationEnvelopeBytes))
+			}
+		})
+	}
+}
+
 func TestReleaseAttestationRejectsSelfReferenceSwapsAndIncompleteEvidence(t *testing.T) {
 	activation, attestation, _ := completeFixtureRelease(t, "commercial", 1, false)
 	releaseInput := func(reviewer, disposition string) policyrelease.ReleaseAttestationInput {

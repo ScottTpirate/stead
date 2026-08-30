@@ -6,6 +6,72 @@ import (
 	policyrelease "github.com/ScottTpirate/stead/modules/ci/policyrelease"
 )
 
+func repeatedJSONValue(value any, count int) []any {
+	result := make([]any, count)
+	for index := range result {
+		result[index] = value
+	}
+	return result
+}
+
+func TestSecurityProfileMetadataCollectionsAreStreamingPreflighted(t *testing.T) {
+	testCases := []struct {
+		name   string
+		mutate func(map[string]any, int)
+	}{
+		{"authoritative sources", func(document map[string]any, count int) {
+			document["authoritative_sources"] = repeatedJSONValue(map[string]any{}, count)
+		}},
+		{"allowed categories", func(document map[string]any, count int) {
+			document["allowed_categories"] = repeatedJSONValue(map[string]any{}, count)
+		}},
+		{"export controls", func(document map[string]any, count int) {
+			document["export_controls"] = repeatedJSONValue(map[string]any{}, count)
+		}},
+		{"implication rules", func(document map[string]any, count int) {
+			document["semantics"].(map[string]any)["implications"] = repeatedJSONValue(map[string]any{}, count)
+		}},
+		{"incompatibility rules", func(document map[string]any, count int) {
+			document["semantics"].(map[string]any)["incompatibilities"] = repeatedJSONValue(map[string]any{}, count)
+		}},
+		{"sensitivity constraint rules", func(document map[string]any, count int) {
+			document["semantics"].(map[string]any)["sensitivity_constraints"] = repeatedJSONValue(map[string]any{}, count)
+		}},
+		{"dimension requirement rules", func(document map[string]any, count int) {
+			document["semantics"].(map[string]any)["dimension_requirements"] = repeatedJSONValue(map[string]any{}, count)
+		}},
+		{"context requirement rules", func(document map[string]any, count int) {
+			document["semantics"].(map[string]any)["context_requirements"] = repeatedJSONValue(map[string]any{}, count)
+		}},
+		{"registry mappings", func(document map[string]any, count int) {
+			document["semantics"].(map[string]any)["registry_mappings"] = repeatedJSONValue(map[string]any{}, count)
+		}},
+		{"sensitivity markings", func(document map[string]any, count int) {
+			document["presentation"].(map[string]any)["sensitivity_markings"] = repeatedJSONValue(map[string]any{}, count)
+		}},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			exact := fixtureBuildInput(t, "commercial", 1, false)
+			mutateSecurityProfile(t, &exact, func(document map[string]any) {
+				testCase.mutate(document, policyrelease.MaxMetadataEntries)
+			})
+			if _, err := policyrelease.PrepareUnsigned(exact); policyrelease.ErrorCode(err) == "metadata_cardinality_limit" {
+				t.Fatalf("exact metadata ceiling rejected by preflight: %v", err)
+			}
+
+			oneOver := fixtureBuildInput(t, "commercial", 1, false)
+			mutateSecurityProfile(t, &oneOver, func(document map[string]any) {
+				testCase.mutate(document, policyrelease.MaxMetadataEntries+1)
+			})
+			result, err := policyrelease.PrepareUnsigned(oneOver)
+			if policyrelease.ErrorCode(err) != "metadata_cardinality_limit" || result.ManifestPayload != nil || result.SigningRequestBytes != nil {
+				t.Fatalf("one-over metadata preflight = %v (%s), manifest=%d request=%d", err, policyrelease.ErrorCode(err), len(result.ManifestPayload), len(result.SigningRequestBytes))
+			}
+		})
+	}
+}
+
 func installValidProfileRuleFixture(t testing.TB, input *policyrelease.BuildInput) {
 	t.Helper()
 	mutateSecurityProfile(t, input, func(document map[string]any) {

@@ -1,6 +1,7 @@
 package ci_test
 
 import (
+	"bytes"
 	"fmt"
 	"testing"
 
@@ -161,6 +162,93 @@ func TestReleaseAttestationReceiptCardinalityRejectsBeforeSigningRequest(t *test
 			t.Fatalf("one-over release waivers = %v (%s), payload=%d request=%d", err, policyrelease.ErrorCode(err), len(result.PayloadBytes), len(result.SigningRequestBytes))
 		}
 	})
+}
+
+func releaseInputForActivation(activation policyrelease.ActivationArchive) policyrelease.ReleaseAttestationInput {
+	return policyrelease.ReleaseAttestationInput{
+		ReleaseWorkflowIdentity: "stead-ci-policy-release-workflow-v1",
+		ReviewReceipts:          boundedReviews(1, activation.ArchiveDigest, "release-artifact-boundary"),
+		OfflineCheckReceipt: policyrelease.OfflineCheckReceipt{
+			ClaimedOutcome:       "pass",
+			SubjectArchiveDigest: activation.ArchiveDigest,
+			ReportDigest:         policyrelease.SHA256Digest([]byte("offline-check-report")),
+		},
+	}
+}
+
+func TestReleaseAttestationActivationArtifactsAreImmediatelyPreflighted(t *testing.T) {
+	unsigned, err := policyrelease.PrepareUnsigned(fixtureBuildInput(t, "commercial", 1, false))
+	if err != nil {
+		t.Fatal(err)
+	}
+	envelope, signing := externallySign(t, policyrelease.ActivationManifestPayloadType, unsigned.ManifestPayload, 1, false)
+	exactEnvelope := withUnknownPadding(t, envelope, policyrelease.MaxEnvelopeBytes)
+	exact, err := policyrelease.FinalizeActivationArchive(unsigned, exactEnvelope, signing)
+	if err != nil {
+		t.Fatalf("finalize exact envelope activation: %v (%s)", err, policyrelease.ErrorCode(err))
+	}
+	exact.ArchiveBytes = append(exact.ArchiveBytes, make([]byte, policyrelease.MaxArchiveBytes-len(exact.ArchiveBytes))...)
+	exact.ArchiveDigest = policyrelease.SHA256Digest(exact.ArchiveBytes)
+	result, err := policyrelease.PrepareReleaseAttestation(exact, releaseInputForActivation(exact))
+	if err != nil || len(result.PayloadBytes) == 0 || len(result.SigningRequestBytes) == 0 {
+		t.Fatalf("exact activation artifact ceilings: payload=%d request=%d err=%v (%s)", len(result.PayloadBytes), len(result.SigningRequestBytes), err, policyrelease.ErrorCode(err))
+	}
+
+	testCases := []struct {
+		name   string
+		mutate func(*policyrelease.ActivationArchive)
+	}{
+		{"envelope one over", func(activation *policyrelease.ActivationArchive) {
+			activation.EnvelopeBytes = bytes.Repeat([]byte{'x'}, policyrelease.MaxEnvelopeBytes+1)
+		}},
+		{"archive one over", func(activation *policyrelease.ActivationArchive) {
+			activation.ArchiveBytes = make([]byte, policyrelease.MaxArchiveBytes+1)
+		}},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			activation := fixtureActivation(t)
+			testCase.mutate(&activation)
+			// Invalid later inputs make the precedence guarantee observable: the
+			// byte ceiling must win before unsigned validation or receipt copying.
+			activation.Unsigned = policyrelease.UnsignedActivation{}
+			input := policyrelease.ReleaseAttestationInput{
+				ReviewReceipts: make([]policyrelease.ReviewReceipt, policyrelease.MaxReviewReceipts+1),
+			}
+			got, err := policyrelease.PrepareReleaseAttestation(activation, input)
+			if policyrelease.ErrorCode(err) != "activation_artifact_size_limit" || got.PayloadBytes != nil || got.SigningRequestBytes != nil {
+				t.Fatalf("activation preflight = %v (%s), payload=%d request=%d", err, policyrelease.ErrorCode(err), len(got.PayloadBytes), len(got.SigningRequestBytes))
+			}
+			gotHandoff, err := policyrelease.FinalizeReleaseHandoff(activation, policyrelease.UnsignedReleaseAttestation{}, nil, policyrelease.PresentedSigningResult{})
+			if policyrelease.ErrorCode(err) != "activation_artifact_size_limit" || gotHandoff.ArchiveBytes != nil || gotHandoff.ReleaseAttestationEnvelopeBytes != nil {
+				t.Fatalf("inherited activation preflight = %v (%s), archive=%d envelope=%d", err, policyrelease.ErrorCode(err), len(gotHandoff.ArchiveBytes), len(gotHandoff.ReleaseAttestationEnvelopeBytes))
+			}
+		})
+	}
+}
+
+func TestUnsignedReleaseAttestationPayloadIsImmediatelyPreflighted(t *testing.T) {
+	activation := fixtureActivation(t)
+	testCases := []struct {
+		name string
+		size int
+		code string
+	}{
+		{"exact", policyrelease.MaxDecodedPayloadBytes, "release_attestation_identity_mismatch"},
+		{"one over", policyrelease.MaxDecodedPayloadBytes + 1, "release_attestation_payload_size_limit"},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			unsigned := policyrelease.UnsignedReleaseAttestation{
+				PayloadBytes:  bytes.Repeat([]byte{'x'}, testCase.size),
+				AttestationID: policyrelease.SHA256Digest([]byte("different")),
+			}
+			handoff, err := policyrelease.FinalizeReleaseHandoff(activation, unsigned, nil, policyrelease.PresentedSigningResult{})
+			if policyrelease.ErrorCode(err) != testCase.code || handoff.ArchiveBytes != nil || handoff.ReleaseAttestationEnvelopeBytes != nil {
+				t.Fatalf("payload boundary = %v (%s), archive=%d envelope=%d", err, policyrelease.ErrorCode(err), len(handoff.ArchiveBytes), len(handoff.ReleaseAttestationEnvelopeBytes))
+			}
+		})
+	}
 }
 
 func TestArchiveManifestAndTransportCollectionsArePreflighted(t *testing.T) {
