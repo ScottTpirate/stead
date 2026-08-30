@@ -25,9 +25,9 @@ EXPECTED_P1_006_ADR_CANDIDATES = %w[
   ADR-CAND-007
   ADR-CAND-021
 ].freeze
-ADR_CANDIDATE_MENTION_PATTERN = /[A-Za-z0-9_-]*ADR-CAND-[A-Za-z0-9_-]+/.freeze
+ADR_CANDIDATE_PREFIX = "ADR-CAND-".freeze
 ADR_CANDIDATE_TOKEN_PATTERN = /\AADR-CAND-\d{3}\z/.freeze
-ADR_CANDIDATE_MARKDOWN_UNDERSCORE_PATTERN = /(?<![A-Za-z0-9_-])(?<delimiter>_{1,3})(?<candidate>ADR-CAND-\d{3})\k<delimiter>(?![A-Za-z0-9_-])/.freeze
+ADR_CANDIDATE_ADJACENT_CHARACTER_PATTERN = /[\p{L}\p{N}\p{M}\p{Pc}\p{C}]/u.freeze
 
 ACCEPTED_RECORD_METADATA = {
   "0002" => {
@@ -255,6 +255,139 @@ def exact_adr_requirement_mapping_failures(requirements:, adr_number:, expected_
   failures
 end
 
+def markdown_whitespace?(character)
+  character.nil? || character.match?(/\p{Space}/u)
+end
+
+def markdown_punctuation?(character)
+  !character.nil? && character.match?(/[\p{P}\p{S}]/u)
+end
+
+def markdown_escaped?(characters, index)
+  backslashes = 0
+  cursor = index - 1
+  while cursor >= 0 && characters[cursor] == "\\"
+    backslashes += 1
+    cursor -= 1
+  end
+  backslashes.odd?
+end
+
+def markdown_code_span_mask(characters)
+  protected = Array.new(characters.length, false)
+  cursor = 0
+
+  while cursor < characters.length
+    unless characters[cursor] == "`"
+      cursor += 1
+      next
+    end
+
+    opener_start = cursor
+    cursor += 1 while cursor < characters.length && characters[cursor] == "`"
+    opener_length = cursor - opener_start
+    next if markdown_escaped?(characters, opener_start)
+
+    search = cursor
+    closer_end = nil
+    while search < characters.length
+      unless characters[search] == "`"
+        search += 1
+        next
+      end
+
+      closer_start = search
+      search += 1 while search < characters.length && characters[search] == "`"
+      if search - closer_start == opener_length
+        closer_end = search
+        break
+      end
+    end
+
+    next unless closer_end
+
+    (opener_start...closer_end).each { |index| protected[index] = true }
+    cursor = closer_end
+  end
+
+  protected
+end
+
+def normalize_markdown_underscore_emphasis(text)
+  characters = text.each_char.to_a
+  protected = markdown_code_span_mask(characters)
+  delimiters = []
+  cursor = 0
+
+  while cursor < characters.length
+    unless characters[cursor] == "_" && !protected[cursor]
+      cursor += 1
+      next
+    end
+
+    delimiter_start = cursor
+    cursor += 1 while cursor < characters.length && characters[cursor] == "_" && !protected[cursor]
+    delimiter_end = cursor
+    next if markdown_escaped?(characters, delimiter_start)
+
+    previous_character = delimiter_start.zero? ? nil : characters[delimiter_start - 1]
+    next_character = delimiter_end == characters.length ? nil : characters[delimiter_end]
+    left_flanking = !markdown_whitespace?(next_character) &&
+      (!markdown_punctuation?(next_character) || markdown_whitespace?(previous_character) || markdown_punctuation?(previous_character))
+    right_flanking = !markdown_whitespace?(previous_character) &&
+      (!markdown_punctuation?(previous_character) || markdown_whitespace?(next_character) || markdown_punctuation?(next_character))
+
+    delimiters << {
+      start: delimiter_start,
+      finish: delimiter_end,
+      length: delimiter_end - delimiter_start,
+      can_open: left_flanking && (!right_flanking || markdown_punctuation?(previous_character)),
+      can_close: right_flanking && (!left_flanking || markdown_punctuation?(next_character))
+    }
+  end
+
+  open_delimiters = Hash.new { |hash, length| hash[length] = [] }
+  normalized_delimiters = []
+  delimiters.each do |delimiter|
+    opener = delimiter[:can_close] ? open_delimiters[delimiter[:length]].pop : nil
+    if opener
+      normalized_delimiters << opener << delimiter
+    elsif delimiter[:can_open]
+      open_delimiters[delimiter[:length]] << delimiter
+    end
+  end
+
+  normalized_delimiters.each do |delimiter|
+    (delimiter[:start]...delimiter[:finish]).each { |index| characters[index] = " " }
+  end
+  characters.join
+end
+
+def adr_candidate_identifier_adjacency?(character)
+  return false if markdown_whitespace?(character)
+
+  character == "-" || character.match?(ADR_CANDIDATE_ADJACENT_CHARACTER_PATTERN)
+end
+
+def adr_candidate_mentions(text)
+  normalized = normalize_markdown_underscore_emphasis(text)
+  characters = normalized.each_char.to_a
+  mentions = []
+  cursor = 0
+
+  while (candidate_start = normalized.index(ADR_CANDIDATE_PREFIX, cursor))
+    mention_start = candidate_start
+    mention_start -= 1 while mention_start.positive? && adr_candidate_identifier_adjacency?(characters[mention_start - 1])
+
+    mention_end = candidate_start + ADR_CANDIDATE_PREFIX.length
+    mention_end += 1 while mention_end < characters.length && adr_candidate_identifier_adjacency?(characters[mention_end])
+    mentions << characters[mention_start...mention_end].join
+    cursor = candidate_start + ADR_CANDIDATE_PREFIX.length
+  end
+
+  mentions
+end
+
 def p1_006_adr_gate_failures(adr_gates:, security_issue:)
   failures = []
   expected_candidates = EXPECTED_P1_006_ADR_CANDIDATES.to_set
@@ -272,10 +405,7 @@ def p1_006_adr_gate_failures(adr_gates:, security_issue:)
 
   if security_issue
     criteria = Array(security_issue["acceptance_criteria"]).join(" ")
-    criteria = criteria.gsub(ADR_CANDIDATE_MARKDOWN_UNDERSCORE_PATTERN) do
-      Regexp.last_match[:candidate]
-    end
-    candidate_mentions = criteria.scan(ADR_CANDIDATE_MENTION_PATTERN)
+    candidate_mentions = adr_candidate_mentions(criteria)
     malformed_candidate_mentions = candidate_mentions.reject { |candidate| candidate.match?(ADR_CANDIDATE_TOKEN_PATTERN) }
     unless malformed_candidate_mentions.empty?
       failures << "STEAD-P1-006 acceptance criteria contain non-exact ADR tokens: #{malformed_candidate_mentions.uniq.sort.join(', ')}"
@@ -466,6 +596,12 @@ failures.concat(p1_006_adr_gate_failures(adr_gates: adr_gates, security_issue: s
 # from both the decision-gate dependency list and the dependent issue text must
 # be caught independently at both boundaries.
 if security_issue && adr_gates["ADR-CAND-002"]
+  candidate_parser_fixture = {
+    "acceptance_criteria" => [
+      "Required gates: #{EXPECTED_P1_006_ADR_CANDIDATES.join(', ')}."
+    ]
+  }
+
   mutated_adr_gates = adr_gates.transform_values do |gate|
     gate.merge("dependent_issues" => Array(gate["dependent_issues"]).dup)
   end
@@ -511,13 +647,26 @@ if security_issue && adr_gates["ADR-CAND-002"]
   end
 
   {
-    "numeric suffix" => "ADR-CAND-0020",
-    "hyphen suffix" => "ADR-CAND-002-EXTRA",
-    "underscore suffix" => "ADR-CAND-002_EXTRA",
-    "embedded prefix" => "XADR-CAND-002"
-  }.each do |mutation_name, replacement|
-    nonexact_token_issue = security_issue.merge(
-      "acceptance_criteria" => Array(security_issue["acceptance_criteria"]).map do |criterion|
+    "numeric suffix" => ["ADR-CAND-0020", "ADR-CAND-0020"],
+    "hyphen suffix" => ["ADR-CAND-002-EXTRA", "ADR-CAND-002-EXTRA"],
+    "underscore suffix" => ["ADR-CAND-002_EXTRA", "ADR-CAND-002_EXTRA"],
+    "embedded prefix" => ["XADR-CAND-002", "XADR-CAND-002"],
+    "Unicode letter prefix" => ["éADR-CAND-002", "éADR-CAND-002"],
+    "Unicode letter suffix" => ["ADR-CAND-002界", "ADR-CAND-002界"],
+    "combining-mark suffix" => ["ADR-CAND-002\u0301", "ADR-CAND-002\u0301"],
+    "Unicode connector suffix" => ["ADR-CAND-002‿EXTRA", "ADR-CAND-002‿EXTRA"],
+    "zero-width suffix" => ["ADR-CAND-002\u200BEXTRA", "ADR-CAND-002\u200BEXTRA"],
+    "soft-hyphen suffix" => ["ADR-CAND-002\u00ADextra", "ADR-CAND-002\u00ADextra"],
+    "escaped emphasis literal" => ["\\_ADR-CAND-002_", "_ADR-CAND-002_"],
+    "code-span emphasis literal" => ["`_ADR-CAND-002_`", "_ADR-CAND-002_"],
+    "Unicode intraword emphasis" => ["é_ADR-CAND-002_", "é_ADR-CAND-002_"],
+    "unbalanced opening delimiter" => ["_ADR-CAND-002", "_ADR-CAND-002"],
+    "unbalanced closing delimiter" => ["ADR-CAND-002_", "ADR-CAND-002_"],
+    "mismatched one-two delimiters" => ["_ADR-CAND-002__", "_ADR-CAND-002__"],
+    "mismatched two-one delimiters" => ["__ADR-CAND-002_", "__ADR-CAND-002_"]
+  }.each do |mutation_name, (replacement, malformed_mention)|
+    nonexact_token_issue = candidate_parser_fixture.merge(
+      "acceptance_criteria" => Array(candidate_parser_fixture["acceptance_criteria"]).map do |criterion|
         criterion.gsub("ADR-CAND-002", replacement)
       end
     )
@@ -526,7 +675,7 @@ if security_issue && adr_gates["ADR-CAND-002"]
       security_issue: nonexact_token_issue
     )
     malformed_token_killed = nonexact_token_failures.any? do |failure|
-      failure.start_with?("STEAD-P1-006 acceptance criteria contain non-exact ADR tokens:") && failure.include?(replacement)
+      failure.start_with?("STEAD-P1-006 acceptance criteria contain non-exact ADR tokens:") && failure.include?(malformed_mention)
     end
     missing_token_killed = nonexact_token_failures.any? do |failure|
       failure.start_with?("STEAD-P1-006 acceptance criteria omit ADR gates:") && failure.include?("ADR-CAND-002")
@@ -536,13 +685,25 @@ if security_issue && adr_gates["ADR-CAND-002"]
     end
   end
 
-  {
-    "single underscore emphasis" => "_ADR-CAND-002_",
-    "double underscore emphasis" => "__ADR-CAND-002__",
-    "triple underscore emphasis" => "___ADR-CAND-002___"
-  }.each do |format_name, replacement|
-    formatted_security_issue = security_issue.merge(
-      "acceptance_criteria" => Array(security_issue["acceptance_criteria"]).map do |criterion|
+  valid_candidate_formats = {
+    "code span" => "`ADR-CAND-002`",
+    "asterisk emphasis" => "*ADR-CAND-002*",
+    "hyphen before emphasis" => "prefix-_ADR-CAND-002_",
+    "hyphen after emphasis" => "_ADR-CAND-002_-suffix"
+  }
+  [1, 2, 3, 4, 7].each do |delimiter_length|
+    delimiter = "_" * delimiter_length
+    valid_candidate_formats.merge!(
+      "#{delimiter_length}-underscore exact emphasis" => "#{delimiter}ADR-CAND-002#{delimiter}",
+      "#{delimiter_length}-underscore leading prose" => "#{delimiter}Require ADR-CAND-002#{delimiter}",
+      "#{delimiter_length}-underscore trailing prose" => "#{delimiter}ADR-CAND-002 is required#{delimiter}",
+      "#{delimiter_length}-underscore punctuation" => "#{delimiter}ADR-CAND-002,#{delimiter}"
+    )
+  end
+
+  valid_candidate_formats.each do |format_name, replacement|
+    formatted_security_issue = candidate_parser_fixture.merge(
+      "acceptance_criteria" => Array(candidate_parser_fixture["acceptance_criteria"]).map do |criterion|
         criterion.gsub("ADR-CAND-002", replacement)
       end
     )
