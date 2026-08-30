@@ -1,6 +1,6 @@
 # Unresolved implementation choices requiring ADRs
 
-**Status:** Active candidate queue; six candidates are resolved and the remaining entries are deferred to their named decision point<br>
+**Status:** Active candidate queue; six candidates are resolved, one is proposed, and the remaining entries are deferred to their named decision point<br>
 **Rule:** An ADR may select among conforming options; it may not silently change a locked decision.
 
 ## Admission test
@@ -24,13 +24,14 @@ Phase 0 fixed each candidate's non-negotiable boundary without selecting its phy
 
 ## Proposed decisions awaiting approval
 
-None.
+| Candidate | Proposed decision | Remaining gate |
+|---|---|---|
+| `ADR-CAND-002` PostgreSQL module isolation and cross-module reads | [ADR-0007](./0007-postgresql-module-isolation-and-transaction-coordination.md) proposes one Stead database with exact module schemas/roles, typed owner transaction participants, WS-02-only outbox access, owner-scoped migrations, and versioned read views/projections. | Required non-author architecture, module-owner, operations, independent QA, and independent security reviews must accept one immutable revision before `STEAD-P1-015` or `STEAD-P1-017` activates. Project-owner approval is not required unless review changes a locked or project-owner-controlled contract. |
 
 ## Deferred choices required before dependent implementation
 
 | Candidate | Decision genuinely left open | Non-negotiable constraints | Owner / reviewers | Blocks |
 |---|---|---|---|---|
-| `ADR-CAND-002` PostgreSQL module isolation and cross-module reads | Database-versus-schema layout, table namespace conventions, read-only contract views/API use, transaction coordination, and migration ordering inside the modular monolith | PostgreSQL authoritative; one owner per table/migration; no direct cross-module writes; Gitea/OpenFGA boundaries; projections rebuildable; Phase 1 stores durable permits for genuinely durable effects but does not pre-design strict guard/quiescence persistence | WS-01 / WS-02,07,12,13 | `STEAD-P1-015` core/outbox and one-operation request-boundary handoff, database ownership map, durable effect permits, domain storage, backup/upgrade; typed strict ports remain forward-compatible |
 | `ADR-CAND-006` Event tenant/domain partition and replay contract | NATS subject/account/stream partitioning, resource ordering key, retention classes, dead-letter naming, replay authorization, event payload minimization, and schema compatibility enforcement | JetStream from first slice; CloudEvents/AsyncAPI; transactional outbox; at-least-once/idempotent; no global-order assumption; protected subscriber isolation | WS-07 / WS-01,02,06,08,12,13 | AsyncAPI, outbox, projections, air-gap/security tests |
 | `ADR-CAND-008` Provider reconciliation conflict semantics | Per-capability source-of-truth precedence, webhook/version/idempotency tokens, scheduled full reconciliation, direct-change accept versus reset rules, and degraded-provider behavior | Stock supported Gitea APIs only; fixed SCM-003 mapping; canonical model cannot be expanded by provider values; violations produce clear audit | WS-03 / WS-01,02,06,07,13 | Provider interfaces, tracker workflow, golden scenario |
 
