@@ -17,6 +17,15 @@ EXPECTED_RECORDS = {
   "0007" => { candidate: "ADR-CAND-002", state: "PROPOSED", owner_approval: false }
 }.freeze
 
+EXPECTED_P1_006_ADR_CANDIDATES = %w[
+  ADR-CAND-002
+  ADR-CAND-003
+  ADR-CAND-004
+  ADR-CAND-005
+  ADR-CAND-007
+  ADR-CAND-021
+].freeze
+
 ACCEPTED_RECORD_METADATA = {
   "0002" => {
     immutable_revision: "24c74d52ef0a78840ab147da48c3d66589e49e3e",
@@ -243,6 +252,28 @@ def exact_adr_requirement_mapping_failures(requirements:, adr_number:, expected_
   failures
 end
 
+def p1_006_adr_gate_failures(adr_gates:, security_issue:)
+  failures = []
+  missing_gate_dependencies = EXPECTED_P1_006_ADR_CANDIDATES.reject do |candidate|
+    Array(adr_gates[candidate]&.fetch("dependent_issues", nil)).include?("STEAD-P1-006")
+  end
+  unless missing_gate_dependencies.empty?
+    failures << "ADR gates omit STEAD-P1-006 dependencies: #{missing_gate_dependencies.join(', ')}"
+  end
+
+  if security_issue
+    criteria = Array(security_issue["acceptance_criteria"]).join(" ")
+    missing_acceptance_candidates = EXPECTED_P1_006_ADR_CANDIDATES.reject { |candidate| criteria.include?(candidate) }
+    unless missing_acceptance_candidates.empty?
+      failures << "STEAD-P1-006 acceptance criteria omit ADR gates: #{missing_acceptance_candidates.join(', ')}"
+    end
+  else
+    failures << "implementation issue catalog: missing STEAD-P1-006"
+  end
+
+  failures
+end
+
 failures = []
 requirements = load_yaml("specs/traceability/requirements.yaml").fetch("requirements")
 known_requirement_ids = requirements.map { |record| record.fetch("requirement_id") }.to_set
@@ -407,17 +438,34 @@ unless adr_0007_mutation_survivors.empty?
 end
 
 security_issue = issues["STEAD-P1-006"]
-if security_issue
-  required_candidates = EXPECTED_RECORDS.values.filter_map do |record|
-    candidate = record.fetch(:candidate)
-    gate = adr_gates[candidate]
-    candidate if Array(gate&.fetch("dependent_issues", nil)).include?("STEAD-P1-006")
+failures.concat(p1_006_adr_gate_failures(adr_gates: adr_gates, security_issue: security_issue))
+
+# Exercise the coupled failure mode explicitly: deleting the same security ADR
+# from both the decision-gate dependency list and the dependent issue text must
+# be caught independently at both boundaries.
+if security_issue && adr_gates["ADR-CAND-002"]
+  mutated_adr_gates = adr_gates.transform_values do |gate|
+    gate.merge("dependent_issues" => Array(gate["dependent_issues"]).dup)
   end
-  criteria = Array(security_issue["acceptance_criteria"]).join(" ")
-  missing_candidates = required_candidates.reject { |candidate| criteria.include?(candidate) }
-  failures << "STEAD-P1-006 acceptance criteria omit ADR gates: #{missing_candidates.join(', ')}" unless missing_candidates.empty?
-else
-  failures << "implementation issue catalog: missing STEAD-P1-006"
+  mutated_adr_gates.fetch("ADR-CAND-002").fetch("dependent_issues").delete("STEAD-P1-006")
+  mutated_security_issue = security_issue.merge(
+    "acceptance_criteria" => Array(security_issue["acceptance_criteria"]).map do |criterion|
+      criterion.gsub("ADR-CAND-002", "ADR-CAND-REMOVED-BY-MUTANT")
+    end
+  )
+  mutation_failures = p1_006_adr_gate_failures(
+    adr_gates: mutated_adr_gates,
+    security_issue: mutated_security_issue
+  )
+  missing_dependency_killed = mutation_failures.any? do |failure|
+    failure.start_with?("ADR gates omit STEAD-P1-006 dependencies:") && failure.include?("ADR-CAND-002")
+  end
+  missing_acceptance_killed = mutation_failures.any? do |failure|
+    failure.start_with?("STEAD-P1-006 acceptance criteria omit ADR gates:") && failure.include?("ADR-CAND-002")
+  end
+  unless missing_dependency_killed && missing_acceptance_killed
+    failures << "STEAD-P1-006 paired ADR-CAND-002 deletion mutant survived one or both independent gate checks"
+  end
 end
 
 migration_namespace_issue = issues["STEAD-P1-017"]
