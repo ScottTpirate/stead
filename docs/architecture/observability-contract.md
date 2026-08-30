@@ -1,0 +1,7 @@
+# Observability, backup, and reliability contract
+
+Every boundary propagates OpenTelemetry trace/correlation/causation context and emits service/version/operation/error/latency plus outbox, replay, DLQ, projection, reconciliation, policy, provider, and migration health. Attributes never include protected bodies, secrets, credentials, prompts, or cardinalities that leak denied resources.
+
+Backup coordinates PostgreSQL module stores, Gitea/Git, OpenFGA, object data/manifests, policy/profile revisions, configuration, and audit/checkpoints. NATS and search are rebuildable and not sole recovery sources. Restore verifies stable IDs, Git hashes/history, labels, permissions, audit, canonical URLs, and replay parity.
+
+SLO datasets are reproducible and classification-safe. Standard `request_boundary` and high-assurance `commit_boundary` results are labeled separately. Performance evidence records p50/p95/p99, database query/time/write counts, OpenFGA and provider call count/time, synchronous audit writes, response bytes, eager frontend gzip bytes, Core Web Vitals or equivalent, and event/projection lag. Query/provider/authorization count tests reject N+1 behavior, and a greater-than-ten-percent regression in a baselined critical golden-path metric fails review without explicit documented independent justification. Health/doctor exposes dependencies and version compatibility without sensitive detail. Upgrade, restore, chaos, rollback, and applicable performance tests are release gates.

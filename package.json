@@ -1,0 +1,28 @@
+{
+  "name": "stead",
+  "version": "0.1.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "workspaces": [
+    "apps/web"
+  ],
+  "engines": {
+    "node": ">=26.5.0 <27",
+    "npm": ">=11 <12"
+  },
+  "scripts": {
+    "build": "npm run build --workspace=@stead/web",
+    "typecheck": "npm run typecheck --workspace=@stead/web",
+    "validate:web-bundle": "node scripts/validate_web_bundle.mjs",
+    "validate:openapi": "redocly lint specs/openapi/platform-v1.yaml --extends=minimal",
+    "validate:asyncapi": "node scripts/validate_asyncapi.mjs",
+    "validate:schemas": "node scripts/validate_json_schemas.mjs"
+  },
+  "devDependencies": {
+    "@asyncapi/specs": "6.11.1",
+    "@redocly/cli": "2.49.0",
+    "ajv": "8.20.0",
+    "ajv-formats": "3.0.1",
+    "yaml": "2.9.0"
+  }
+}

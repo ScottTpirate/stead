@@ -1,6 +1,6 @@
 schema_version: "1.0"
 scope: phase-0-security-findings-and-bypass-traceability
-normative_source: unified_open_work_platform_master_build_directive.md
+normative_source: docs/architecture/MASTER_BUILD_DIRECTIVE.md
 source_artifacts:
   - docs/security/threat-model.md
   - docs/security/classification-bypass-inventory.md
@@ -37,6 +37,11 @@ threat_findings:
   - { finding_id: TM-F026, owner: WS-06, requirement_ids: [AGENT-003, AGENT-005, AGENT-006], issue_ids: [STEAD-P0-007, STEAD-P0-009, STEAD-P0-013, STEAD-P0-014, STEAD-P0-015], test_ids: [T-TM-F026-CONTROL, SEC-BYP-040], status: OPEN_P0_CONTROL_AND_TEST_NOT_IMPLEMENTED }
   - { finding_id: TM-F027, owner: WS-07, requirement_ids: [AGENT-004, AUD-002, EVT-003], issue_ids: [STEAD-P0-008, STEAD-P0-014, STEAD-P0-015, STEAD-P1-007], test_ids: [T-TM-F027-CONTROL, SEC-BYP-042], status: OPEN_P0_CONTROL_AND_TEST_NOT_IMPLEMENTED }
   - { finding_id: TM-F028, owner: WS-08, requirement_ids: [AGENT-003, AGENT-005, CLS-007], issue_ids: [STEAD-P0-004, STEAD-P0-007, STEAD-P0-009, STEAD-P0-014, STEAD-P0-015, STEAD-P2-006], test_ids: [T-TM-F028-CONTROL, SEC-BYP-041], status: OPEN_P0_CONTROL_AND_TEST_NOT_IMPLEMENTED }
+  - { finding_id: TM-F029, owner: WS-06, requirement_ids: [PRIN-015, DOM-009, AUTH-006, CLS-006], issue_ids: [STEAD-P0-002, STEAD-P0-003, STEAD-P0-007, STEAD-P0-014, STEAD-P1-002, STEAD-P1-006, STEAD-P1-012], test_ids: [T-TM-F029-CONTROL, SEC-BYP-043], status: OPEN_P0_CONTROL_AND_TEST_NOT_IMPLEMENTED }
+  - { finding_id: TM-F030, owner: WS-05, requirement_ids: [DOM-008, UX-006, CLS-006, SRCH-003], issue_ids: [STEAD-P0-006, STEAD-P0-007, STEAD-P0-009, STEAD-P0-014, STEAD-P1-005, STEAD-P1-008, STEAD-P1-012], test_ids: [T-TM-F030-CONTROL, SEC-BYP-044], status: OPEN_P0_CONTROL_AND_TEST_NOT_IMPLEMENTED }
+  - { finding_id: TM-F031, owner: WS-04, requirement_ids: [DOM-003, DOC-001, DOC-004, CLS-004], issue_ids: [STEAD-P0-002, STEAD-P0-005, STEAD-P0-007, STEAD-P0-014, STEAD-P1-004, STEAD-P1-012], test_ids: [T-TM-F031-CONTROL, SEC-BYP-045], status: OPEN_P0_CONTROL_AND_TEST_NOT_IMPLEMENTED }
+  - { finding_id: TM-F032, owner: WS-01, requirement_ids: [PRIN-013, PRIN-014, UX-001, UX-006, TEST-009], issue_ids: [STEAD-P0-001, STEAD-P0-006, STEAD-P0-014, STEAD-P1-001, STEAD-P1-005, STEAD-P1-012], test_ids: [T-TM-F032-CONTROL, SEC-BYP-046], status: OPEN_P0_CONTROL_AND_TEST_NOT_IMPLEMENTED }
+  - { finding_id: TM-F033, owner: WS-08, requirement_ids: [DOM-010, GRAPH-002, AGENT-005, AGENT-007], issue_ids: [STEAD-P0-001, STEAD-P0-009, STEAD-P0-014, STEAD-P0-015], test_ids: [T-TM-F033-CONTROL, SEC-BYP-047], status: OPEN_P0_CONTROL_AND_TEST_NOT_IMPLEMENTED }
 
 bypass_controls:
   - { bypass_id: CBI-001, owner: WS-03, requirement_ids: [CLS-007, TEST-004], issue_ids: [STEAD-P0-004, STEAD-P0-007, STEAD-P0-014], test_ids: [SEC-BYP-001], status: OPEN_P0_CONTROL_AND_TEST_NOT_IMPLEMENTED }
@@ -66,7 +71,7 @@ bypass_controls:
   - { bypass_id: CBI-025, owner: WS-02, requirement_ids: [CLS-006, ARCH-005], issue_ids: [STEAD-P0-003, STEAD-P0-007, STEAD-P0-014], test_ids: [SEC-BYP-025], status: OPEN_P0_CONTROL_AND_TEST_NOT_IMPLEMENTED }
   - { bypass_id: CBI-026, owner: WS-12, requirement_ids: [CLS-006, OPS-003, OPS-004], issue_ids: [STEAD-P0-007, STEAD-P0-013, STEAD-P0-014], test_ids: [SEC-BYP-026], status: OPEN_P0_CONTROL_AND_TEST_NOT_IMPLEMENTED }
   - { bypass_id: CBI-027, owner: WS-12, requirement_ids: [CLS-006, OPS-001, SEC-006], issue_ids: [STEAD-P0-013, STEAD-P0-014], test_ids: [SEC-BYP-027], status: OPEN_P0_CONTROL_AND_TEST_NOT_IMPLEMENTED }
-  - { bypass_id: CBI-028, owner: WS-02, requirement_ids: [CLS-006, STOR-003], issue_ids: [STEAD-P0-003, STEAD-P0-006, STEAD-P0-007, STEAD-P0-009, STEAD-P0-011, STEAD-P0-014], test_ids: [SEC-BYP-028], status: OPEN_P0_CONTROL_AND_TEST_NOT_IMPLEMENTED }
+  - { bypass_id: CBI-028, owner: WS-02, requirement_ids: [AUTH-002, CLS-006, STOR-003, PERF-004], issue_ids: [STEAD-P0-003, STEAD-P0-006, STEAD-P0-007, STEAD-P0-009, STEAD-P0-011, STEAD-P0-014, STEAD-P1-005, STEAD-P1-006, STEAD-P1-008, STEAD-P1-012], test_ids: [SEC-BYP-028], status: OPEN_P0_CONTROL_AND_TEST_NOT_IMPLEMENTED }
   - { bypass_id: CBI-029, owner: WS-10, requirement_ids: [CLS-006, STOR-003], issue_ids: [STEAD-P0-005, STEAD-P0-010, STEAD-P0-011, STEAD-P0-013, STEAD-P0-014], test_ids: [SEC-BYP-029], status: OPEN_P0_CONTROL_AND_TEST_NOT_IMPLEMENTED }
   - { bypass_id: CBI-030, owner: WS-07, requirement_ids: [CLS-006, EVT-003, EVT-004], issue_ids: [STEAD-P0-007, STEAD-P0-008, STEAD-P0-014], test_ids: [SEC-BYP-030], status: OPEN_P0_CONTROL_AND_TEST_NOT_IMPLEMENTED }
   - { bypass_id: CBI-031, owner: WS-11, requirement_ids: [CLS-006, MIG-001, MIG-005], issue_ids: [STEAD-P0-007, STEAD-P0-012, STEAD-P0-014], test_ids: [SEC-BYP-031], status: OPEN_P0_CONTROL_AND_TEST_NOT_IMPLEMENTED }
@@ -75,9 +80,14 @@ bypass_controls:
   - { bypass_id: CBI-034, owner: WS-10, requirement_ids: [CLS-006, STOR-002, DOM-007], issue_ids: [STEAD-P0-005, STEAD-P0-007, STEAD-P0-011, STEAD-P0-014], test_ids: [SEC-BYP-034], status: OPEN_P0_CONTROL_AND_TEST_NOT_IMPLEMENTED }
   - { bypass_id: CBI-035, owner: WS-08, requirement_ids: [AGENT-003, AGENT-005, AGENT-006], issue_ids: [STEAD-P0-007, STEAD-P0-009, STEAD-P0-014, STEAD-P0-015], test_ids: [SEC-BYP-035], status: OPEN_P0_CONTROL_AND_TEST_NOT_IMPLEMENTED }
   - { bypass_id: CBI-036, owner: WS-06, requirement_ids: [AUTH-005, CLS-006], issue_ids: [STEAD-P0-007, STEAD-P0-014], test_ids: [SEC-BYP-036], status: OPEN_P0_CONTROL_AND_TEST_NOT_IMPLEMENTED }
-  - { bypass_id: CBI-037, owner: WS-06, requirement_ids: [CLS-005, CLS-007, EVT-004], issue_ids: [STEAD-P0-004, STEAD-P0-007, STEAD-P0-008, STEAD-P0-009, STEAD-P0-011, STEAD-P0-014], test_ids: [SEC-BYP-037], status: OPEN_P0_CONTROL_AND_TEST_NOT_IMPLEMENTED }
+  - { bypass_id: CBI-037, owner: WS-06, requirement_ids: [AUTH-002, CLS-003, CLS-005, CLS-007, AUD-001, EVT-004, PERF-004], issue_ids: [STEAD-P0-004, STEAD-P0-007, STEAD-P0-008, STEAD-P0-009, STEAD-P0-011, STEAD-P0-014, STEAD-P1-006, STEAD-P1-012, STEAD-P1-015, STEAD-P3-002, STEAD-P3-007, STEAD-P3-008], test_ids: [SEC-BYP-037], status: OPEN_P0_CONTROL_AND_TEST_NOT_IMPLEMENTED }
   - { bypass_id: CBI-038, owner: WS-01, requirement_ids: [AGENT-001, AGENT-002], issue_ids: [STEAD-P0-002, STEAD-P0-003, STEAD-P0-004, STEAD-P0-007, STEAD-P0-014, STEAD-P0-015], test_ids: [SEC-BYP-038], status: OPEN_P0_CONTROL_AND_TEST_NOT_IMPLEMENTED }
-  - { bypass_id: CBI-039, owner: WS-06, requirement_ids: [AGENT-003, AGENT-006], issue_ids: [STEAD-P0-007, STEAD-P0-014, STEAD-P0-015], test_ids: [SEC-BYP-039], status: OPEN_P0_CONTROL_AND_TEST_NOT_IMPLEMENTED }
+  - { bypass_id: CBI-039, owner: WS-06, requirement_ids: [AGENT-003, AGENT-006, AUTH-002, CLS-003], issue_ids: [STEAD-P0-007, STEAD-P0-014, STEAD-P0-015, STEAD-P1-006, STEAD-P1-012, STEAD-P1-015, STEAD-P3-007, STEAD-P3-008], test_ids: [SEC-BYP-039], status: OPEN_P0_CONTROL_AND_TEST_NOT_IMPLEMENTED }
   - { bypass_id: CBI-040, owner: WS-06, requirement_ids: [AGENT-003, AGENT-005, AGENT-006], issue_ids: [STEAD-P0-007, STEAD-P0-009, STEAD-P0-013, STEAD-P0-014, STEAD-P0-015], test_ids: [SEC-BYP-040], status: OPEN_P0_CONTROL_AND_TEST_NOT_IMPLEMENTED }
   - { bypass_id: CBI-041, owner: WS-03, requirement_ids: [AGENT-005, CLS-007], issue_ids: [STEAD-P0-004, STEAD-P0-007, STEAD-P0-009, STEAD-P0-014, STEAD-P0-015], test_ids: [SEC-BYP-041], status: OPEN_P0_CONTROL_AND_TEST_NOT_IMPLEMENTED }
   - { bypass_id: CBI-042, owner: WS-07, requirement_ids: [AGENT-004, AUD-002, EVT-003], issue_ids: [STEAD-P0-007, STEAD-P0-008, STEAD-P0-014, STEAD-P0-015], test_ids: [SEC-BYP-042], status: OPEN_P0_CONTROL_AND_TEST_NOT_IMPLEMENTED }
+  - { bypass_id: CBI-043, owner: WS-06, requirement_ids: [PRIN-015, DOM-009, AUTH-006, CLS-006], issue_ids: [STEAD-P0-002, STEAD-P0-003, STEAD-P0-007, STEAD-P0-014, STEAD-P1-002, STEAD-P1-006, STEAD-P1-012], test_ids: [SEC-BYP-043], status: OPEN_P0_CONTROL_AND_TEST_NOT_IMPLEMENTED }
+  - { bypass_id: CBI-044, owner: WS-05, requirement_ids: [DOM-008, UX-006, CLS-006, SRCH-003], issue_ids: [STEAD-P0-006, STEAD-P0-007, STEAD-P0-009, STEAD-P0-014, STEAD-P1-005, STEAD-P1-008, STEAD-P1-012], test_ids: [SEC-BYP-044], status: OPEN_P0_CONTROL_AND_TEST_NOT_IMPLEMENTED }
+  - { bypass_id: CBI-045, owner: WS-04, requirement_ids: [DOM-003, DOC-001, DOC-004, CLS-004], issue_ids: [STEAD-P0-002, STEAD-P0-005, STEAD-P0-007, STEAD-P0-014, STEAD-P1-004, STEAD-P1-012], test_ids: [SEC-BYP-045], status: OPEN_P0_CONTROL_AND_TEST_NOT_IMPLEMENTED }
+  - { bypass_id: CBI-046, owner: WS-02, requirement_ids: [PRIN-013, DOM-004, DOM-010, SCM-003], issue_ids: [STEAD-P0-002, STEAD-P0-003, STEAD-P0-004, STEAD-P0-006, STEAD-P0-014, STEAD-P1-002, STEAD-P1-003, STEAD-P1-005, STEAD-P1-012], test_ids: [SEC-BYP-046], status: OPEN_P0_CONTROL_AND_TEST_NOT_IMPLEMENTED }
+  - { bypass_id: CBI-047, owner: WS-08, requirement_ids: [DOM-010, GRAPH-002, AGENT-005, AGENT-007], issue_ids: [STEAD-P0-001, STEAD-P0-009, STEAD-P0-014, STEAD-P0-015], test_ids: [SEC-BYP-047], status: OPEN_P0_CONTROL_AND_TEST_NOT_IMPLEMENTED }

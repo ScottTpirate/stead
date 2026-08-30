@@ -4,21 +4,43 @@
 require "yaml"
 require "set"
 require "digest"
+require "json"
+require "open3"
 
 ROOT = File.expand_path("..", __dir__)
-DIRECTIVE_PATH = File.join(ROOT, "unified_open_work_platform_master_build_directive.md")
+DIRECTIVE_PATH = File.join(ROOT, "docs/architecture/MASTER_BUILD_DIRECTIVE.md")
 INVENTORY_PATH = File.join(ROOT, "specs/traceability/directive-inventory.yaml")
 REQUIREMENTS_PATH = File.join(ROOT, "specs/traceability/requirements.yaml")
 ISSUES_PATH = File.join(ROOT, "docs/planning/implementation-issue-catalog.yaml")
 SECURITY_FINDINGS_PATH = File.join(ROOT, "specs/traceability/security-findings.yaml")
 WORKSTREAM_OWNERSHIP_PATH = File.join(ROOT, "docs/architecture/workstream-ownership.md")
+ADR_CANDIDATE_INDEX_PATH = File.join(ROOT, "docs/governance/adr-candidate-index.md")
 
 EXPECTED_DIRECTIVE_VERSION = "0.2"
-EXPECTED_REQUIREMENT_COUNT = 115
+# Tag phase0 closed with 128 requirements. PERF-001..006 are the bounded,
+# post-baseline Phase 1 constitution and therefore use Phase 1 ownership.
+PHASE_ZERO_BASELINE_REQUIREMENT_COUNT = 128
+POST_BASELINE_REQUIREMENT_IDS = (1..6).map { |number| format("PERF-%03d", number) }.freeze
+EXPECTED_REQUIREMENT_COUNT = PHASE_ZERO_BASELINE_REQUIREMENT_COUNT + POST_BASELINE_REQUIREMENT_IDS.length
 EXPECTED_AGENT_IDS = (1..7).map { |number| format("AGENT-%03d", number) }.freeze
-EXPECTED_THREAT_IDS = (1..28).map { |number| format("TM-F%03d", number) }.freeze
-EXPECTED_BYPASS_IDS = (1..42).map { |number| format("CBI-%03d", number) }.freeze
+EXPECTED_V02_IDS = %w[PRIN-013 PRIN-014 PRIN-015 DOM-008 DOM-009 DOM-010 DOM-011 UX-006 UX-007 UX-008 UX-009 AUTH-006 TEST-010].freeze
+EXPECTED_THREAT_IDS = (1..33).map { |number| format("TM-F%03d", number) }.freeze
+EXPECTED_BYPASS_IDS = (1..47).map { |number| format("CBI-%03d", number) }.freeze
 EXPECTED_WORKSTREAM_IDS = (1..13).map { |number| format("WS-%02d", number) }.freeze
+EXPECTED_ADR_CANDIDATE_IDS = (1..21).map { |number| format("ADR-CAND-%03d", number) }.freeze
+EXPECTED_MACHINE_ADR_GATE_IDS = ((1..8).to_a + [21]).map { |number| format("ADR-CAND-%03d", number) }.freeze
+EXPECTED_GOLDEN_STEP_IDS = {
+  "GWS" => %w[
+    GWS-001-INSTALL GWS-002-IDENTITY GWS-003-TEAMS GWS-004-PROJECT GWS-005-PROVISION
+    GWS-006-WORK GWS-007-KNOWLEDGE GWS-008-CONNECT GWS-009-EVENTS GWS-010-ATTENTION
+    GWS-011-NONDISCLOSURE GWS-012-AGENT-SEAM GWS-013-RECOVERY GWS-014-UPGRADE
+  ],
+  "SWS" => %w[
+    SWS-001-CAPABILITIES SWS-002-WORK-DOC SWS-003-CODE SWS-004-REVIEW-EVENT
+    SWS-005-DELIVERY SWS-006-SEARCH SWS-007-PROVIDER SWS-008-RECOVERY
+    SWS-009-CAPABILITY-CHANGE
+  ]
+}.freeze
 APPROVAL_GATE_ID = "GATE-P0-APPROVED"
 EXPECTED_GATE_APPROVERS = %w[
   project-owner
@@ -27,9 +49,133 @@ EXPECTED_GATE_APPROVERS = %w[
   WS-13-independent-qa
   WS-13-independent-security
 ].freeze
+PHASE_ZERO_BASELINE_COMMIT = "e24a4d9d05ad6df19c5bcaa9c385ee74fd5d8c31"
+PHASE_ZERO_BASELINE_TAG = "phase0"
+EXPECTED_APPROVAL_RECORDS = [
+  { "role" => "project-owner", "identity" => "explicit 2026-08-29 instruction to tag and begin Phase 1 when green", "disposition" => "APPROVED" },
+  { "role" => "WS-01-architecture", "identity" => "/root/directive_audit", "disposition" => "APPROVED" },
+  { "role" => "WS-06-security-contract", "identity" => "/root/security_contract", "disposition" => "APPROVED" },
+  { "role" => "WS-13-independent-qa", "identity" => "/root/contract_audit", "disposition" => "APPROVED" },
+  { "role" => "WS-13-independent-security", "identity" => "/root/independent_security", "disposition" => "APPROVED" }
+].freeze
 VALID_PHASES = %w[phase-0 phase-1 phase-2 phase-3].freeze
-BLOCKED_PHASES = %w[phase-1 phase-2 phase-3].freeze
-BLOCKED_STATUS = "BLOCKED_PENDING_PHASE_0_APPROVAL"
+VALID_GATE_STATES = %w[PENDING APPROVED].freeze
+PENDING_PHASE_ZERO_STATUS = "READY_FOR_PHASE_0_APPROVAL"
+PENDING_LATER_STATUS = "BLOCKED_PENDING_PHASE_0_APPROVAL"
+APPROVED_PHASE_ZERO_STATUS = "BASELINED_PHASE_0"
+ACTIVE_FOUNDATION_ISSUE_ID = "STEAD-P1-001"
+ACTIVE_PHASE_ONE_STATUS = "COMPLETED_PHASE_1"
+BLOCKED_PHASE_ONE_STATUS = "DEPENDENCY_BLOCKED"
+LATER_PHASE_STATUS = "PHASE_GATED"
+ACTIVE_FOUNDATION_REQUIREMENT_IDS = %w[
+  PRIN-002 PRIN-005 PRIN-006 ARCH-001 ARCH-002 ARCH-005 STD-001 SEC-001 SEC-006
+].freeze
+PENDING_PHASE_ZERO_REQUIREMENT_STATUS = "READY_FOR_PHASE_0_APPROVAL"
+PENDING_LATER_REQUIREMENT_STATUS = "BLOCKED_PENDING_PHASE_0_APPROVAL"
+BASELINED_REQUIREMENT_STATUS = "BASELINED_PHASE_0"
+ACTIVE_REQUIREMENT_STATUS = "IMPLEMENTATION_IN_PROGRESS"
+BLOCKED_PHASE_ONE_REQUIREMENT_STATUS = "DEPENDENCY_BLOCKED_PHASE_1"
+LATER_PHASE_REQUIREMENT_STATUS = "PHASE_GATED"
+REQUIRED_FOUNDATION_OWNED_PATHS = %w[
+  .gitignore
+  .npmrc
+  .tool-versions
+  go.mod
+  go.sum
+  package.json
+  package-lock.json
+  tsconfig.base.json
+  Makefile
+  .github/workflows
+  scripts
+  tests/contract/architecture
+  packages/test-fixtures/architecture
+  docs/governance/dependency-approvals.schema.json
+  docs/governance/dependency-approvals.yaml
+  docs/governance/devlane-provenance.yaml
+  THIRD_PARTY_NOTICES.md
+  third_party/devlane
+  docs/contributor/development.md
+].freeze
+
+REQUIRED_PHASE_ZERO_FILES = %w[
+  README.md
+  docs/adr/INDEX.md
+  docs/adr/unresolved-implementation-choices.md
+  docs/architecture/MASTER_BUILD_DIRECTIVE.md
+  docs/architecture/PHASE0_RECONCILIATION_REPORT.md
+  docs/architecture/activity-model.md
+  docs/architecture/agent-access.md
+  docs/architecture/agent-ready-compatibility.md
+  docs/architecture/artifact-and-package-model.md
+  docs/architecture/constitution.md
+  docs/architecture/contract-ownership-matrix.md
+  docs/architecture/repository-layout-and-boundaries.md
+  docs/architecture/workstream-ownership.md
+  docs/architecture/canonical-domain-model.md
+  docs/architecture/product-and-ux-contracts.md
+  docs/architecture/authorization-contract.md
+  docs/architecture/blobstore-contract.md
+  docs/architecture/ci-runner-and-secrets-contract.md
+  docs/architecture/deployment-profiles.md
+  docs/architecture/security-label-lattice.md
+  docs/architecture/standards-matrix.md
+  docs/architecture/knowledge-contract.md
+  docs/architecture/provider-contracts/gitea.md
+  docs/architecture/search-resource-model.md
+  docs/architecture/search-contract.md
+  docs/architecture/search-graph/mcp-a2a-compatibility.md
+  docs/architecture/work-graph.md
+  docs/architecture/event-contract.md
+  docs/architecture/notification-contract.md
+  docs/architecture/audit-model.md
+  docs/architecture/observability-contract.md
+  docs/architecture/migration-contract.md
+  docs/architecture/unified-ux-contract.md
+  docs/governance/adr-candidate-index.md
+  docs/governance/license-and-dependency-approval.md
+  docs/governance/release-gates.md
+  docs/planning/epic-issue-hierarchy.md
+  docs/planning/implementation-issue-catalog.yaml
+  docs/planning/phase-0-artifact-backlog.md
+  docs/security/classification-bypass-inventory.md
+  docs/security/threat-model.md
+  docs/testing/golden-vertical-slice.md
+  docs/phase0/PHASE0_CLOSEOUT_PACKET.md
+  docs/phase0/VALIDATION_EVIDENCE.md
+  specs/traceability/directive-inventory.yaml
+  specs/traceability/requirements.yaml
+  specs/traceability/security-findings.yaml
+  specs/schema-registry.yaml
+  specs/oscal/README.md
+  scripts/generate_directive_inventory.rb
+  scripts/validate_contracts.rb
+  scripts/validate_owgp_examples.js
+  scripts/validate_json_schemas.sh
+  specs/work-graph-profile/owgp-v0.1.md
+  specs/work-graph-profile/owgp-v0.1.schema.json
+  specs/work-graph-profile/examples.yaml
+  specs/openapi/platform-v1.yaml
+  specs/asyncapi/stead.yaml
+  specs/provider-interfaces.yaml
+  specs/migration/migration-job-v0.1.schema.json
+  specs/migration/canonical-model-v0.1.yaml
+  specs/mcp/compatibility-v0.1.yaml
+  specs/a2a/compatibility-v0.1.yaml
+  packages/event-schemas/common/actor-context/actor-context-v0.1.schema.json
+  packages/event-schemas/stead/stead-event-v0.1.schema.json
+  policies/openfga/model.fga
+  policies/openfga/model-tests.yaml
+  policies/policy-decision/input-v0.1.schema.json
+  policies/policy-decision/output-v0.1.schema.json
+  policies/policy-decision/decision-table.yaml
+  policies/security-label-profiles/profile-v0.1.schema.json
+  policies/security-label-profiles/commercial.yaml
+  policies/security-label-profiles/us-government.yaml
+  policies/deployment-domains/domain-profile-v0.1.schema.json
+  policies/deployment-domains/commercial.yaml
+  policies/deployment-domains/us-government.yaml
+].freeze
 
 REQUIREMENT_ARRAY_FIELDS = %w[
   implementation_modules
@@ -60,6 +206,22 @@ ISSUE_TEXT_FIELDS = %w[
   observability_and_audit_requirements
   migration_and_backward_compatibility_implications
   upgrade_and_rollback_behavior
+].freeze
+
+PERFORMANCE_CONTRACT_FIELDS = %w[
+  expected_request_count
+  sql_query_behavior
+  external_provider_calls
+  authorization_strategy
+  synchronous_writes
+  frontend_bundle_impact
+  benchmark_or_not_sensitive_reason
+].freeze
+
+PERFORMANCE_PLACEHOLDER_FRAGMENTS = [
+  "User-facing primary surfaces normally use one composed BFF request",
+  "Provide the applicable T-PERF benchmark",
+  "or document why the issue has no runtime path"
 ].freeze
 
 def relative_path(path)
@@ -245,6 +407,26 @@ if directive_text
   unless missing_agent_ids.empty?
     failures << "#{relative_path(DIRECTIVE_PATH)}: missing agent-ready requirement IDs: #{format_ids(missing_agent_ids)}"
   end
+
+  missing_v02_ids = EXPECTED_V02_IDS - directive_ids
+  unless missing_v02_ids.empty?
+    failures << "#{relative_path(DIRECTIVE_PATH)}: missing v0.2 reconciliation requirement IDs: #{format_ids(missing_v02_ids)}"
+  end
+
+  expected_concrete_names = %w[stead-web stead-api stead-worker steadctl stead.<domain>.<action>.v<major>]
+  missing_concrete_names = expected_concrete_names.reject { |name| directive_text.include?(name) }
+  failures << "#{relative_path(DIRECTIVE_PATH)}: canonical header omits concrete Stead names: #{missing_concrete_names.join(', ')}" unless missing_concrete_names.empty?
+  failures << "#{relative_path(DIRECTIVE_PATH)}: stale platform canonical-prefix header remains" if directive_text.include?("Canonical component prefix:")
+
+  naming_contract_fragments = [
+    "Semantic concepts, domain nouns, Go types, interfaces, and internal ports MUST use stable unversioned names.",
+    "Compatibility boundaries, serialized formats, schemas, APIs, protocols, media types, and events MUST carry explicit versions.",
+    "An implementation type MAY use a suffix such as `FooV2` only while two incompatible versions genuinely coexist in one migration path."
+  ]
+  missing_naming_contract = naming_contract_fragments.reject { |fragment| directive_text.include?(fragment) }
+  unless missing_naming_contract.empty?
+    failures << "#{relative_path(DIRECTIVE_PATH)}: ARCH-005 omits the stable semantic-name/versioned-contract rule"
+  end
 end
 
 inventory = load_yaml(INVENTORY_PATH, failures)
@@ -338,6 +520,26 @@ unless requirement_duplicates.empty?
   failures << "#{relative_path(REQUIREMENTS_PATH)}: duplicate requirement IDs: #{format_ids(requirement_duplicates)}"
 end
 
+requirements_coverage = requirements_document.is_a?(Hash) ? requirements_document["coverage"] : nil
+unless requirements_coverage.is_a?(Hash)
+  failures << "#{relative_path(REQUIREMENTS_PATH)}: coverage must be a mapping"
+else
+  expected_coverage = {
+    "phase_zero_baseline_requirement_count" => PHASE_ZERO_BASELINE_REQUIREMENT_COUNT,
+    "post_baseline_requirement_ids" => POST_BASELINE_REQUIREMENT_IDS,
+    "expected_requirement_count" => EXPECTED_REQUIREMENT_COUNT,
+    "registered_requirement_count" => requirement_ids.length,
+    "unique_requirement_count" => requirement_ids.uniq.length,
+    "duplicate_requirement_ids" => requirement_duplicates,
+    "missing_requirement_ids" => directive_ids - requirement_ids
+  }
+  expected_coverage.each do |field, expected|
+    unless requirements_coverage[field] == expected
+      failures << "#{relative_path(REQUIREMENTS_PATH)}: coverage.#{field} must be #{expected.inspect}"
+    end
+  end
+end
+
 unless directive_ids.empty?
   missing = directive_ids - requirement_ids
   unexpected = requirement_ids - directive_ids
@@ -350,6 +552,7 @@ issues_document = load_yaml(ISSUES_PATH, failures)
 issue_records = records_field(issues_document, "issues", ISSUES_PATH, failures)
 epic_records = records_field(issues_document, "epics", ISSUES_PATH, failures)
 gate_records = records_field(issues_document, "gates", ISSUES_PATH, failures)
+adr_gate_records = records_field(issues_document, "adr_decision_gates", ISSUES_PATH, failures)
 
 issues_with_indexes = validate_records_are_mappings(
   issue_records,
@@ -364,6 +567,11 @@ epics_with_indexes = validate_records_are_mappings(
 gates_with_indexes = validate_records_are_mappings(
   gate_records,
   "#{relative_path(ISSUES_PATH)} gates",
+  failures
+)
+adr_gates_with_indexes = validate_records_are_mappings(
+  adr_gate_records,
+  "#{relative_path(ISSUES_PATH)} adr_decision_gates",
   failures
 )
 
@@ -387,6 +595,39 @@ issues_with_indexes.each do |issue, index|
   ISSUE_TEXT_FIELDS.each do |field|
     text_field(issue, field, context, failures)
   end
+
+  next if phase == "phase-0"
+
+  performance_contract = issue["performance_contract"]
+  unless performance_contract.is_a?(Hash)
+    failures << "#{context}: performance_contract must be a mapping for Phase 1-3 implementation work"
+    next
+  end
+  unless performance_contract.keys == PERFORMANCE_CONTRACT_FIELDS
+    failures << "#{context}: performance_contract must contain exactly #{PERFORMANCE_CONTRACT_FIELDS.join(', ')} in canonical order"
+  end
+  PERFORMANCE_CONTRACT_FIELDS.each do |field|
+    unless nonempty_string?(performance_contract[field])
+      failures << "#{context}: performance_contract.#{field} must be a nonempty string"
+    end
+  end
+
+  PERFORMANCE_CONTRACT_FIELDS.first(6).each do |field|
+    value = performance_contract[field]
+    next unless nonempty_string?(value)
+    failures << "#{context}: performance_contract.#{field} must state the issue-specific expectation" unless value.start_with?("#{issue_id}:")
+  end
+
+  performance_text = performance_contract.values.grep(String).join(" ")
+  PERFORMANCE_PLACEHOLDER_FRAGMENTS.each do |fragment|
+    failures << "#{context}: performance_contract retains placeholder boilerplate: #{fragment}" if performance_text.include?(fragment)
+  end
+
+  benchmark_contract = performance_contract["benchmark_or_not_sensitive_reason"]
+  if nonempty_string?(benchmark_contract) && Array(issue["automated_tests"]).none? { |test_id| benchmark_contract.include?(test_id) }
+    failures << "#{context}: performance_contract.benchmark_or_not_sensitive_reason must name an automated test owned by the issue"
+  end
+
 end
 
 issue_duplicates = duplicate_values(issue_ids)
@@ -447,8 +688,68 @@ requirements_with_indexes.each do |requirement, _index|
   requirement_by_id[requirement["requirement_id"]] ||= requirement if nonempty_string?(requirement["requirement_id"])
 end
 
+adr_gate_ids = []
+adr_gates_with_indexes.each do |adr_gate, index|
+  context = "#{relative_path(ISSUES_PATH)} adr_decision_gates[#{index}]"
+  adr_id = text_field(adr_gate, "adr_id", context, failures)
+  deadline_issue = text_field(adr_gate, "decide_before_issue", context, failures)
+  dependent_issues = array_field(adr_gate, "dependent_issues", context, failures)
+  adr_gate_ids << adr_id if adr_id
+
+  failures << "#{context}: unknown decide_before_issue #{deadline_issue}" if deadline_issue && !issue_by_id.key?(deadline_issue)
+  dependent_issues.each do |issue_id|
+    failures << "#{context}: unknown dependent issue #{issue_id}" unless issue_by_id.key?(issue_id)
+  end
+  if deadline_issue && !dependent_issues.include?(deadline_issue)
+    failures << "#{context}: dependent_issues must include decide_before_issue #{deadline_issue}"
+  end
+end
+
+adr_gate_duplicates = duplicate_values(adr_gate_ids)
+failures << "#{relative_path(ISSUES_PATH)}: duplicate ADR decision gates: #{format_ids(adr_gate_duplicates)}" unless adr_gate_duplicates.empty?
+missing_adr_gates = EXPECTED_MACHINE_ADR_GATE_IDS - adr_gate_ids
+unexpected_adr_gates = adr_gate_ids - EXPECTED_MACHINE_ADR_GATE_IDS
+unless missing_adr_gates.empty? && unexpected_adr_gates.empty? && adr_gate_ids.length == EXPECTED_MACHINE_ADR_GATE_IDS.length
+  failures << "#{relative_path(ISSUES_PATH)}: ADR decision-gate IDs mismatch (missing: #{format_ids(missing_adr_gates)}; unexpected: #{format_ids(unexpected_adr_gates)})"
+end
+
+begin
+  adr_index_text = File.read(ADR_CANDIDATE_INDEX_PATH, encoding: "UTF-8")
+  documented_adr_ids = adr_index_text.scan(/ADR-CAND-\d{3}/).uniq
+  missing_documented_adrs = EXPECTED_ADR_CANDIDATE_IDS - documented_adr_ids
+  unexpected_documented_adrs = documented_adr_ids - EXPECTED_ADR_CANDIDATE_IDS
+  unless missing_documented_adrs.empty? && unexpected_documented_adrs.empty?
+    failures << "#{relative_path(ADR_CANDIDATE_INDEX_PATH)}: ADR candidate IDs mismatch (missing: #{format_ids(missing_documented_adrs)}; unexpected: #{format_ids(unexpected_documented_adrs)})"
+  end
+
+  undocumented_machine_gates = adr_gate_ids - documented_adr_ids
+  unless undocumented_machine_gates.empty?
+    failures << "#{relative_path(ADR_CANDIDATE_INDEX_PATH)}: missing machine-gated candidates #{format_ids(undocumented_machine_gates)}"
+  end
+
+  adr_gate_records.each do |adr_gate|
+    next unless adr_gate.is_a?(Hash)
+
+    adr_id = adr_gate["adr_id"]
+    deadline_issue = adr_gate["decide_before_issue"]
+    next unless nonempty_string?(adr_id) && nonempty_string?(deadline_issue)
+
+    index_row = adr_index_text.lines.find { |line| line.start_with?("| `#{adr_id}` |") }
+    unless index_row&.include?("`#{deadline_issue}`")
+      failures << "#{relative_path(ADR_CANDIDATE_INDEX_PATH)}: #{adr_id} must document deadline #{deadline_issue}"
+    end
+  end
+rescue Errno::ENOENT => error
+  failures << "#{relative_path(ADR_CANDIDATE_INDEX_PATH)}: cannot read file (#{error.message})"
+end
+
 approval_gate = gates_with_indexes.map(&:first).find { |gate| gate["id"] == APPROVAL_GATE_ID }
+gate_state = approval_gate && approval_gate["state"]
 if approval_gate
+  unless VALID_GATE_STATES.include?(gate_state)
+    failures << "#{relative_path(ISSUES_PATH)}: #{APPROVAL_GATE_ID} state must be one of #{VALID_GATE_STATES.join(', ')}"
+  end
+
   approvers = approval_gate["approvers"].is_a?(Array) ? approval_gate["approvers"] : []
   missing_approvers = EXPECTED_GATE_APPROVERS - approvers
   unexpected_approvers = approvers - EXPECTED_GATE_APPROVERS
@@ -464,6 +765,97 @@ if approval_gate
   unexpected_dependencies = dependencies - expected_dependencies
   unless missing_dependencies.empty? && unexpected_dependencies.empty? && dependencies.length == expected_dependencies.length
     failures << "#{relative_path(ISSUES_PATH)}: #{APPROVAL_GATE_ID} dependencies must include every and only Phase 0 issue (missing: #{format_ids(missing_dependencies)}; unexpected: #{format_ids(unexpected_dependencies)})"
+  end
+
+  if gate_state == "APPROVED"
+    unless approval_gate["immutable_revision"] == PHASE_ZERO_BASELINE_COMMIT
+      failures << "#{relative_path(ISSUES_PATH)}: #{APPROVAL_GATE_ID} immutable_revision must be #{PHASE_ZERO_BASELINE_COMMIT}"
+    end
+    unless approval_gate["tag"] == PHASE_ZERO_BASELINE_TAG
+      failures << "#{relative_path(ISSUES_PATH)}: #{APPROVAL_GATE_ID} tag must be #{PHASE_ZERO_BASELINE_TAG.inspect}"
+    end
+    unless approval_gate["approved_at"] == "2026-08-29"
+      failures << "#{relative_path(ISSUES_PATH)}: #{APPROVAL_GATE_ID} approved_at must be \"2026-08-29\""
+    end
+
+    approval_records = approval_gate["approval_records"]
+    unless approval_records == EXPECTED_APPROVAL_RECORDS
+      failures << "#{relative_path(ISSUES_PATH)}: #{APPROVAL_GATE_ID} approval_records must contain the five exact approved reviewer identities in canonical order"
+    end
+
+    if Dir.exist?(File.join(ROOT, ".git"))
+      tag_revision, tag_error, tag_status = Open3.capture3("git", "rev-parse", "#{PHASE_ZERO_BASELINE_TAG}^{}", chdir: ROOT)
+      unless tag_status.success? && tag_revision.strip == PHASE_ZERO_BASELINE_COMMIT
+        diagnostic = tag_error.strip.gsub(/\s+/, " ")
+        failures << "#{relative_path(ISSUES_PATH)}: tag #{PHASE_ZERO_BASELINE_TAG} must resolve to #{PHASE_ZERO_BASELINE_COMMIT}#{diagnostic.empty? ? '' : " (#{diagnostic})"}"
+      end
+    end
+  end
+end
+
+if VALID_GATE_STATES.include?(gate_state)
+  expected_issue_status = lambda do |issue|
+    if gate_state == "PENDING"
+      issue["phase"] == "phase-0" ? PENDING_PHASE_ZERO_STATUS : PENDING_LATER_STATUS
+    elsif issue["phase"] == "phase-0"
+      APPROVED_PHASE_ZERO_STATUS
+    elsif issue["id"] == ACTIVE_FOUNDATION_ISSUE_ID
+      ACTIVE_PHASE_ONE_STATUS
+    elsif issue["phase"] == "phase-1"
+      BLOCKED_PHASE_ONE_STATUS
+    else
+      LATER_PHASE_STATUS
+    end
+  end
+
+  issues_with_indexes.each do |issue, index|
+    expected_status = expected_issue_status.call(issue)
+    next if issue["status"] == expected_status
+
+    failures << "#{relative_path(ISSUES_PATH)} issues[#{index}]: #{issue['id']} must have status #{expected_status} while #{APPROVAL_GATE_ID} is #{gate_state}"
+  end
+
+  expected_requirement_status = lambda do |requirement|
+    if gate_state == "PENDING"
+      requirement["release"] == "phase-0-contract" ? PENDING_PHASE_ZERO_REQUIREMENT_STATUS : PENDING_LATER_REQUIREMENT_STATUS
+    elsif requirement["release"] == "phase-0-contract"
+      BASELINED_REQUIREMENT_STATUS
+    elsif ACTIVE_FOUNDATION_REQUIREMENT_IDS.include?(requirement["requirement_id"])
+      ACTIVE_REQUIREMENT_STATUS
+    elsif requirement["release"] == "phase-1"
+      BLOCKED_PHASE_ONE_REQUIREMENT_STATUS
+    else
+      LATER_PHASE_REQUIREMENT_STATUS
+    end
+  end
+
+  requirements_with_indexes.each do |requirement, index|
+    expected_status = expected_requirement_status.call(requirement)
+    next if requirement["status"] == expected_status
+
+    failures << "#{relative_path(REQUIREMENTS_PATH)} requirements[#{index}]: #{requirement['requirement_id']} must have status #{expected_status} while #{APPROVAL_GATE_ID} is #{gate_state}"
+  end
+
+  expected_status_semantics = if gate_state == "PENDING"
+                                [PENDING_PHASE_ZERO_REQUIREMENT_STATUS, PENDING_LATER_REQUIREMENT_STATUS]
+                              else
+                                [BASELINED_REQUIREMENT_STATUS, ACTIVE_REQUIREMENT_STATUS, BLOCKED_PHASE_ONE_REQUIREMENT_STATUS, LATER_PHASE_REQUIREMENT_STATUS]
+                              end
+  actual_status_semantics = requirements_document.is_a?(Hash) && requirements_document["status_semantics"].is_a?(Hash) ? requirements_document["status_semantics"] : {}
+  unless actual_status_semantics.keys == expected_status_semantics && actual_status_semantics.values.all? { |value| nonempty_string?(value) }
+    failures << "#{relative_path(REQUIREMENTS_PATH)}: status_semantics must define exactly #{expected_status_semantics.join(', ')} in canonical order for #{gate_state} mode"
+  end
+
+  if gate_state == "APPROVED"
+    foundation_issue = issues_with_indexes.map(&:first).find { |issue| issue["id"] == ACTIVE_FOUNDATION_ISSUE_ID }
+    foundation_paths = foundation_issue && foundation_issue["owned_directories"].is_a?(Array) ? foundation_issue["owned_directories"] : []
+    missing_foundation_paths = REQUIRED_FOUNDATION_OWNED_PATHS - foundation_paths
+    unless missing_foundation_paths.empty?
+      failures << "#{relative_path(ISSUES_PATH)}: #{ACTIVE_FOUNDATION_ISSUE_ID} is missing foundation ownership paths: #{format_ids(missing_foundation_paths)}"
+    end
+    unless foundation_issue && foundation_issue["module"].is_a?(Array) && foundation_issue["module"].include?("repository-foundation")
+      failures << "#{relative_path(ISSUES_PATH)}: #{ACTIVE_FOUNDATION_ISSUE_ID} module must include repository-foundation"
+    end
   end
 end
 
@@ -504,14 +896,15 @@ begin
     failures << "#{relative_path(WORKSTREAM_OWNERSHIP_PATH)}: accountable requirement coverage mismatch (missing: #{format_ids(missing_accountability)}; unexpected: #{format_ids(unexpected_accountability)})"
   end
 
-  phase_zero_issues = issues_with_indexes.map(&:first).select { |issue| issue["phase"] == "phase-0" }
+  issues_by_phase = issues_with_indexes.map(&:first).group_by { |issue| issue["phase"] }
   accountable_owners.each do |requirement_id, owners|
-    mapped_phase_zero_owners = phase_zero_issues.filter_map do |issue|
+    accountability_phase = POST_BASELINE_REQUIREMENT_IDS.include?(requirement_id) ? "phase-1" : "phase-0"
+    mapped_accountable_owners = Array(issues_by_phase[accountability_phase]).filter_map do |issue|
       issue["owner"] if issue["requirement_ids"].is_a?(Array) && issue["requirement_ids"].include?(requirement_id)
     end.uniq
-    next unless (owners & mapped_phase_zero_owners).empty?
+    next unless (owners & mapped_accountable_owners).empty?
 
-    failures << "ownership mismatch: #{requirement_id} accountable to #{owners.join(', ')}, but its Phase 0 issues are owned by #{mapped_phase_zero_owners.empty? ? 'none' : mapped_phase_zero_owners.join(', ')}"
+    failures << "ownership mismatch: #{requirement_id} accountable to #{owners.join(', ')}, but its #{accountability_phase} issues are owned by #{mapped_accountable_owners.empty? ? 'none' : mapped_accountable_owners.join(', ')}"
   end
 rescue Errno::ENOENT => error
   failures << "#{relative_path(WORKSTREAM_OWNERSHIP_PATH)}: cannot read file (#{error.message})"
@@ -701,11 +1094,8 @@ issues_with_indexes.each do |issue, index|
     graph[issue_id] << dependency
   end
 
-  next unless BLOCKED_PHASES.include?(issue["phase"])
+  next if issue["phase"] == "phase-0"
 
-  unless issue["status"] == BLOCKED_STATUS
-    failures << "#{relative_path(ISSUES_PATH)} issues[#{index}]: #{issue_id} in #{issue['phase']} must have status #{BLOCKED_STATUS}"
-  end
   unless dependencies.include?(APPROVAL_GATE_ID)
     failures << "#{relative_path(ISSUES_PATH)} issues[#{index}]: #{issue_id} in #{issue['phase']} must directly depend on #{APPROVAL_GATE_ID}"
   end
@@ -714,9 +1104,245 @@ end
 cycle = find_cycle(graph)
 failures << "#{relative_path(ISSUES_PATH)}: dependency graph contains a cycle: #{cycle.join(' -> ')}" if cycle
 
+duplicate_required_files = duplicate_values(REQUIRED_PHASE_ZERO_FILES)
+unless duplicate_required_files.empty?
+  failures << "Phase 0 closeout artifact list contains duplicates: #{format_ids(duplicate_required_files)}"
+end
+
+REQUIRED_PHASE_ZERO_FILES.each do |path|
+  failures << "#{path}: missing required Phase 0 closeout artifact" unless File.file?(File.join(ROOT, path))
+end
+
+golden_path = File.join(ROOT, "docs/testing/golden-vertical-slice.md")
+release_gates_path = File.join(ROOT, "docs/governance/release-gates.md")
+closeout_path = File.join(ROOT, "docs/phase0/PHASE0_CLOSEOUT_PACKET.md")
+if File.file?(golden_path)
+  golden_source = File.read(golden_path, encoding: "UTF-8")
+  EXPECTED_GOLDEN_STEP_IDS.each do |prefix, expected_ids|
+    actual_ids = golden_source.scan(/^\| `((?:#{prefix})-[0-9]{3}-[A-Z0-9-]+)` \|/).flatten
+    failures << "#{relative_path(golden_path)}: #{prefix} step IDs mismatch" unless actual_ids == expected_ids
+  end
+end
+if File.file?(release_gates_path)
+  release_gates_source = File.read(release_gates_path, encoding: "UTF-8")
+  failures << "#{relative_path(release_gates_path)}: software golden gate must require SWS-001 through SWS-009" unless release_gates_source.include?("`SWS-001`–`SWS-009`")
+  failures << "#{relative_path(release_gates_path)}: TEST-010 coverage must require all nine additive steps" unless release_gates_source.include?("All nine additive steps")
+end
+if File.file?(closeout_path)
+  closeout_source = File.read(closeout_path, encoding: "UTF-8")
+  failures << "#{relative_path(closeout_path)}: closeout packet must describe TEST-010 as a nine-step path" unless closeout_source.include?("`TEST-010`: nine-step additive software path")
+  if gate_state == "APPROVED"
+    failures << "#{relative_path(closeout_path)}: approved closeout must name tag #{PHASE_ZERO_BASELINE_TAG} and immutable revision #{PHASE_ZERO_BASELINE_COMMIT}" unless closeout_source.include?(PHASE_ZERO_BASELINE_TAG) && closeout_source.include?(PHASE_ZERO_BASELINE_COMMIT)
+    EXPECTED_APPROVAL_RECORDS.each do |record|
+      failures << "#{relative_path(closeout_path)}: approved closeout must name reviewer identity #{record['identity'].inspect}" unless closeout_source.include?(record["identity"])
+    end
+  end
+end
+
+normalization_paths = Dir.glob(
+  File.join(ROOT, "{README.md,.github/**/*.yml,.github/**/*.yaml,docs/**/*.{md,yml,yaml},specs/**/*.{md,yml,yaml,json},packages/**/*.{md,yml,yaml,json},policies/**/*.{md,yml,yaml,json,fga},scripts/**/*.{rb,js,sh}}"),
+  File::FNM_EXTGLOB
+).select { |path| File.file?(path) }
+legacy_component_names = [
+  ["platform", "web"].join("-"),
+  ["platform", "core"].join("-"),
+  ["platform", "worker"].join("-"),
+  ["platform", "ctl"].join
+]
+legacy_component_pattern = Regexp.union(legacy_component_names.map { |name| /\b#{Regexp.escape(name)}\b/ })
+legacy_event_prefix = ["plat", "form"].join
+legacy_event_namespace_pattern = Regexp.new("\\b#{Regexp.escape(legacy_event_prefix)}\\.[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*\\.v[1-9][0-9]*\\b")
+legacy_opa_root = ["policies", "opa"].join("/")
+mandatory_opa_patterns = [
+  Regexp.new(Regexp.escape(legacy_opa_root)),
+  Regexp.new("\\bbundled " + "OPA\\b"),
+  Regexp.new("\\bOPA " + "MUST\\b"),
+  Regexp.new("OpenFGA\\s*(?:\\+|/|and)\\s*" + "OPA")
+]
+
+normalization_paths.each do |path|
+  source = File.read(path, encoding: "UTF-8")
+  relative = relative_path(path)
+  failures << "#{relative}: legacy deployable component name remains" if source.match?(legacy_component_pattern)
+  failures << "#{relative}: legacy platform event namespace remains" if source.match?(legacy_event_namespace_pattern)
+  if mandatory_opa_patterns.any? { |pattern| source.match?(pattern) }
+    failures << "#{relative}: OPA remains mandatory instead of an optional policy-decision implementation"
+  end
+rescue EncodingError => error
+  failures << "#{relative_path(path)}: invalid text encoding while checking naming normalization (#{error.message})"
+end
+
+markdown_paths = [File.join(ROOT, "README.md"), *Dir.glob(File.join(ROOT, "docs/**/*.md"))].uniq.sort
+markdown_paths.each do |markdown_path|
+  source = File.read(markdown_path, encoding: "UTF-8")
+  source.scan(/\[[^\]]*\]\(([^)\n]+)\)/).flatten.each do |raw_target|
+    target = raw_target.strip
+    target = target[1...target.index(">")].to_s if target.start_with?("<") && target.include?(">")
+    target = target.split(/\s+/, 2).first.to_s unless raw_target.strip.start_with?("<")
+
+    next if target.empty?
+    next if target.start_with?("#", "http://", "https://", "mailto:", "data:")
+
+    local_path = target.split("#", 2).first
+    next if local_path.empty?
+
+    resolved_path = File.expand_path(local_path, File.dirname(markdown_path))
+    unless File.exist?(resolved_path)
+      failures << "#{relative_path(markdown_path)}: broken local Markdown link #{target.inspect}"
+    end
+  end
+rescue EncodingError => error
+  failures << "#{relative_path(markdown_path)}: invalid text encoding while checking links (#{error.message})"
+end
+
+json_contract_paths = %w[
+  specs/work-graph-profile/owgp-v0.1.schema.json
+  packages/event-schemas/common/actor-context/actor-context-v0.1.schema.json
+  packages/event-schemas/stead/stead-event-v0.1.schema.json
+  policies/policy-decision/input-v0.1.schema.json
+  policies/policy-decision/output-v0.1.schema.json
+  policies/security-label-profiles/profile-v0.1.schema.json
+  policies/deployment-domains/domain-profile-v0.1.schema.json
+  specs/migration/migration-job-v0.1.schema.json
+]
+parsed_json = {}
+json_contract_paths.each do |path|
+  begin
+    parsed_json[path] = JSON.parse(File.read(File.join(ROOT, path), encoding: "UTF-8"))
+  rescue Errno::ENOENT
+    # Missing-file failure is already emitted above.
+  rescue JSON::ParserError => error
+    failures << "#{path}: invalid JSON (#{error.message.lines.first.strip})"
+  end
+end
+
+yaml_contract_paths = %w[
+  specs/openapi/platform-v1.yaml
+  specs/asyncapi/stead.yaml
+  specs/provider-interfaces.yaml
+  specs/mcp/compatibility-v0.1.yaml
+  specs/a2a/compatibility-v0.1.yaml
+  policies/openfga/model-tests.yaml
+  policies/policy-decision/decision-table.yaml
+  policies/security-label-profiles/commercial.yaml
+  policies/security-label-profiles/us-government.yaml
+  policies/deployment-domains/commercial.yaml
+  policies/deployment-domains/us-government.yaml
+  specs/migration/canonical-model-v0.1.yaml
+]
+yaml_contract_paths.each { |path| load_yaml(File.join(ROOT, path), failures) }
+
+begin
+  examples = YAML.safe_load(
+    File.read(File.join(ROOT, "specs/work-graph-profile/examples.yaml"), encoding: "UTF-8"),
+    permitted_classes: [],
+    permitted_symbols: [],
+    aliases: true
+  )
+  expected_examples = %w[Organization DirectoryGroup Team Project WorkItem Document Repository PrincipalRef Agent AgentRun SecurityLabel Comment Activity Notification Audit]
+  actual_examples = examples.is_a?(Hash) && examples["examples"].is_a?(Hash) ? examples["examples"].keys : []
+  missing_examples = expected_examples - actual_examples
+  failures << "specs/work-graph-profile/examples.yaml: missing closeout examples: #{missing_examples.join(', ')}" unless missing_examples.empty?
+
+  if examples.is_a?(Hash) && examples["examples"].is_a?(Hash)
+    common_fields = %w[kind id uri schema_version version organization_id container title created_at created_by updated_at updated_by security_label_id effective_security_label provenance external_references relationships]
+    expected_kinds = {
+      "Organization" => "organization",
+      "DirectoryGroup" => "directory_group",
+      "Team" => "team",
+      "Project" => "project",
+      "WorkItem" => "work_item",
+      "Document" => "document",
+      "Repository" => "repository",
+      "Agent" => "agent",
+      "AgentRun" => "agent_run",
+      "SecurityLabel" => "security_label",
+      "Comment" => "comment",
+      "Activity" => "activity",
+      "Notification" => "notification",
+      "Audit" => "audit_record"
+    }
+    expected_kinds.each do |name, kind|
+      example = examples["examples"][name]
+      next unless example.is_a?(Hash)
+
+      missing_fields = common_fields - example.keys
+      failures << "specs/work-graph-profile/examples.yaml: #{name} omits common envelope fields #{missing_fields.join(', ')}" unless missing_fields.empty?
+      failures << "specs/work-graph-profile/examples.yaml: #{name} kind must be #{kind}" unless example["kind"] == kind
+      container_kind = example.dig("container", "kind")
+      failures << "specs/work-graph-profile/examples.yaml: #{name} container kind is invalid" unless %w[organization team project].include?(container_kind)
+    end
+  end
+rescue Psych::Exception => error
+  failures << "specs/work-graph-profile/examples.yaml: invalid YAML (#{error.message.lines.first.strip})"
+end
+
+owgp = parsed_json["specs/work-graph-profile/owgp-v0.1.schema.json"]
+if owgp
+  definitions = owgp["$defs"].is_a?(Hash) ? owgp["$defs"] : {}
+  expected_definitions = %w[ResourceEnvelope ResourceRef ContainerRef Instance Organization User DirectoryGroup Agent AgentRun ServicePrincipal Team Initiative Project Cycle WorkItem Document Repository Branch Commit PullRequest Build Deployment Release Package Artifact Attachment PrincipalRef ActingPrincipalRef WorkAssigneeRef SecurityLabel SecurityLabelValue SecurityPresentation Comment Activity Notification AuditRecord]
+  missing_definitions = expected_definitions - definitions.keys
+  failures << "specs/work-graph-profile/owgp-v0.1.schema.json: missing definitions: #{missing_definitions.join(', ')}" unless missing_definitions.empty?
+
+  principal_types = definitions.dig("PrincipalRef", "properties", "type", "enum") || []
+  expected_principal_types = %w[user agent service_account directory_group]
+  failures << "specs/work-graph-profile/owgp-v0.1.schema.json: PrincipalRef kinds mismatch" unless principal_types == expected_principal_types
+
+  work_types = definitions.dig("WorkItem", "allOf", 1, "properties", "work_type", "enum") || []
+  failures << "specs/work-graph-profile/owgp-v0.1.schema.json: WorkItem kinds must be deliverable/task/problem" unless work_types == %w[deliverable task problem]
+
+  document_types = definitions.dig("Document", "allOf", 1, "properties", "document_type", "enum") || []
+  failures << "specs/work-graph-profile/owgp-v0.1.schema.json: Document kinds must use universal values" unless document_types == %w[page specification decision procedure policy]
+
+  envelope_required = definitions.dig("ResourceEnvelope", "required") || []
+  expected_envelope_fields = %w[kind id uri schema_version version organization_id container title created_at created_by updated_at updated_by security_label_id effective_security_label security_presentation provenance external_references relationships]
+  missing_envelope_fields = expected_envelope_fields - envelope_required
+  failures << "specs/work-graph-profile/owgp-v0.1.schema.json: common envelope omits #{missing_envelope_fields.join(', ')}" unless missing_envelope_fields.empty?
+
+  assignee_ref = definitions.dig("WorkItem", "allOf", 1, "properties", "assignees", "items", "$ref")
+  failures << "specs/work-graph-profile/owgp-v0.1.schema.json: Work Item assignees must use WorkAssigneeRef" unless assignee_ref == "#/$defs/WorkAssigneeRef"
+
+  resource_ref_required = definitions.dig("ResourceRef", "required") || []
+  failures << "specs/work-graph-profile/owgp-v0.1.schema.json: ResourceRef must use canonical kind/id/uri" unless resource_ref_required == %w[kind id uri]
+
+  repository_required = definitions.dig("Repository", "allOf", 1, "required") || []
+  failures << "specs/work-graph-profile/owgp-v0.1.schema.json: Repository must use a generic container" unless repository_required.include?("container") && !repository_required.include?("project_id")
+end
+
+begin
+  fga = File.read(File.join(ROOT, "policies/openfga/model.fga"), encoding: "UTF-8")
+  fga_without_comments = fga.lines.map { |line| line.split("#", 2).first }.join
+  %w[type\ user type\ agent type\ service_account type\ directory_group type\ team type\ project].each do |fragment|
+    failures << "policies/openfga/model.fga: missing #{fragment.tr('\\', '')}" unless fga.include?(fragment.tr("\\", ""))
+  end
+  team_block = fga_without_comments[/^type team\b.*?(?=^type\s|\z)/m] || ""
+  failures << "policies/openfga/model.fga: Team hierarchy must not define viewer inheritance from parent" if team_block.match?(/define\s+(viewer|member|editor):[^\n]*from parent/)
+rescue Errno::ENOENT
+  # Missing-file failure is already emitted above.
+end
+
+forbidden_agent_runtime_files = Dir.glob(File.join(ROOT, "{modules/agent,providers/agent-a2a}/**/*"), File::FNM_EXTGLOB).select do |path|
+  File.file?(path) && File.extname(path).match?(/\A\.(go|ts|tsx|js|jsx|py|rs|java|sh)\z/)
+end
+unless forbidden_agent_runtime_files.empty?
+  failures << "Phase 0 agent scope guard: executable runtime files found: #{forbidden_agent_runtime_files.map { |path| relative_path(path) }.join(', ')}"
+end
+
+owgp_stdout, owgp_stderr, owgp_status = Open3.capture3("node", File.join(ROOT, "scripts/validate_owgp_examples.js"), chdir: ROOT)
+unless owgp_status.success?
+  diagnostic = [owgp_stdout, owgp_stderr].join(" ").strip.gsub(/\s+/, " ")
+  failures << "scripts/validate_owgp_examples.js: #{diagnostic.empty? ? 'failed without diagnostic output' : diagnostic}"
+end
+
+contract_stdout, contract_stderr, contract_status = Open3.capture3("ruby", File.join(ROOT, "scripts/validate_contracts.rb"), chdir: ROOT)
+unless contract_status.success?
+  diagnostic = [contract_stdout, contract_stderr].join(" ").strip.gsub(/\s+/, " ")
+  failures << "scripts/validate_contracts.rb: #{diagnostic.empty? ? 'failed without diagnostic output' : diagnostic}"
+end
+
 if failures.empty?
   dependency_count = graph.values.sum(&:length)
-  puts "Phase 0 validation passed: requirements=#{directive_ids.length} issues=#{issue_ids.length} threat_findings=#{threat_ids.length} bypass_controls=#{bypass_ids.length} epics=#{epic_ids.length} gates=#{gate_ids.length} workstreams=#{actual_workstreams.length} dependency_links=#{dependency_count}"
+  puts "Phase 0 validation passed: gate_state=#{gate_state} requirements=#{directive_ids.length} issues=#{issue_ids.length} threat_findings=#{threat_ids.length} bypass_controls=#{bypass_ids.length} epics=#{epic_ids.length} gates=#{gate_ids.length} workstreams=#{actual_workstreams.length} dependency_links=#{dependency_count}"
   exit 0
 end
 

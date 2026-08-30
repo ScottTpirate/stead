@@ -1,11 +1,12 @@
 # Stead
 
-Stead is a new, open-source, self-hostable unified work platform. Its normative product and architecture specification is the [Master Build Directive](unified_open_work_platform_master_build_directive.md).
+Stead is an open-source, self-hostable, organization-wide open work and knowledge platform. Its single normative product and architecture specification is the [canonical Master Build Directive](docs/architecture/MASTER_BUILD_DIRECTIVE.md).
 
-The repository is currently in **Phase 0: architecture constitution and contracts**. It contains planning, governance, ownership, test, and security baselines only. Phase 1–3 feature implementation is blocked until the project owner approves the complete Phase 0 contract set against an immutable commit or tag.
+Phase 0 is approved and baselined at tag `phase0`, commit `e24a4d9d05ad6df19c5bcaa9c385ee74fd5d8c31`. Phase 1 is active: `STEAD-P1-001` is complete, and the next product implementation issue remains blocked only by its named pre-implementation ADR decisions. Phase 2–3 remain phase-gated.
 
 ## Phase 0 package
 
+- [Reconciliation report](docs/architecture/PHASE0_RECONCILIATION_REPORT.md)
 - [Architecture constitution](docs/architecture/constitution.md)
 - [Requirements traceability register](specs/traceability/requirements.yaml)
 - [Dependency-ordered epic and issue hierarchy](docs/planning/epic-issue-hierarchy.md)
@@ -21,20 +22,22 @@ The repository is currently in **Phase 0: architecture constitution and contract
 - [License and dependency approval workflow](docs/governance/license-and-dependency-approval.md)
 - [Release gates and independent approvals](docs/governance/release-gates.md)
 - [Unresolved ADR candidates](docs/adr/unresolved-implementation-choices.md)
+- [Phase 0 validation evidence](docs/phase0/VALIDATION_EVIDENCE.md)
 
 ## Current gate
 
-`GATE-P0-APPROVED` is **pending**. Repository publication, document merge, or elapsed time does not imply architecture approval. See the [Phase 0 backlog](docs/planning/phase-0-artifact-backlog.md) for the required evidence and approval record.
+`GATE-P0-APPROVED` is **approved** against tag `phase0` and immutable commit `e24a4d9d05ad6df19c5bcaa9c385ee74fd5d8c31`. The five required dispositions are recorded in the [Phase 0 Closeout Packet](docs/phase0/PHASE0_CLOSEOUT_PACKET.md). Approval opens dependency-ready work only; it does not waive ADR deadlines, issue acceptance criteria, independent review, or later release gates.
 
 Validate the machine-readable Phase 0 planning package with:
 
 ```bash
 ruby scripts/validate_phase0.rb
+scripts/validate_json_schemas.sh
 ```
 
 ## Naming
 
-**Stead** is the project and repository name. Directive-defined component contract names (`platform-web`, `platform-core`, `platform-worker`, and `platformctl`) remain in force unless an approved ADR supplies a compatibility and migration plan.
+**Stead** is the project and repository name. Directive-defined component contract names (`stead-web`, `stead-api`, `stead-worker`, and `steadctl`) remain in force unless an approved ADR supplies a compatibility and migration plan.
 
 ## License
 

@@ -1,0 +1,126 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stead.example/policies/deployment-domains/domain-profile-v0.1.schema.json",
+  "title": "Stead deployment security-domain policy",
+  "type": "object",
+  "required": [
+    "domain_id",
+    "version",
+    "policy_purpose",
+    "scope",
+    "label_profile_ceilings",
+    "disclosure_revocation_mode",
+    "trusted_attribute_authorities",
+    "approved_profile_bridges",
+    "allowed_integrations",
+    "allowed_notification_channels",
+    "storage",
+    "backup",
+    "runner",
+    "network",
+    "assurance"
+  ],
+  "properties": {
+    "domain_id": {"type": "string", "pattern": "^[a-z][a-z0-9_.-]{0,127}$"},
+    "version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+    "policy_purpose": {"enum": ["starter_reference", "maintained_deployment", "test_fixture"]},
+    "scope": {
+      "type": "object",
+      "required": ["summary", "limitations"],
+      "properties": {
+        "summary": {"type": "string", "minLength": 1},
+        "limitations": {"type": "array", "items": {"type": "string", "minLength": 1}, "minItems": 1, "uniqueItems": true}
+      },
+      "additionalProperties": false
+    },
+    "label_profile_ceilings": {"$ref": "#/$defs/ProfileCeilingMap"},
+    "disclosure_revocation_mode": {
+      "description": "Deployment-selected disclosure/revocation assurance. Profile IDs carry no semantics for this choice.",
+      "enum": ["request_boundary", "commit_boundary"]
+    },
+    "trusted_attribute_authorities": {"type": "array", "items": {"type": "string", "minLength": 1}, "minItems": 1, "uniqueItems": true},
+    "approved_profile_bridges": {
+      "description": "Reserved compatibility seam. v0.1 accepts no bridge until a separate signed mapping and non-weakening contract is approved.",
+      "type": "array",
+      "items": false,
+      "maxItems": 0
+    },
+    "allowed_integrations": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "allowed_notification_channels": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "storage": {
+      "type": "object",
+      "required": ["providers", "encryption_profile", "residency"],
+      "properties": {
+        "providers": {"type": "array", "items": {"type": "string"}, "minItems": 1, "uniqueItems": true},
+        "encryption_profile": {"type": "string"},
+        "residency": {"type": "array", "items": {"type": "string"}, "minItems": 1, "uniqueItems": true}
+      },
+      "additionalProperties": false
+    },
+    "backup": {
+      "type": "object",
+      "required": ["enabled", "domains", "encryption_profile"],
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "domains": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "encryption_profile": {"type": "string"}
+      },
+      "additionalProperties": false
+    },
+    "runner": {
+      "type": "object",
+      "required": ["pools", "ephemeral", "allowed_images"],
+      "properties": {
+        "pools": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "ephemeral": {"type": "boolean"},
+        "allowed_images": {"type": "array", "items": {"type": "string"}, "uniqueItems": true}
+      },
+      "additionalProperties": false
+    },
+    "network": {
+      "type": "object",
+      "required": ["zones", "egress_policy"],
+      "properties": {
+        "zones": {"type": "array", "items": {"type": "string"}, "minItems": 1, "uniqueItems": true},
+        "egress_policy": {"enum": ["deny_all", "allowlisted", "managed"]}
+      },
+      "additionalProperties": false
+    },
+    "assurance": {
+      "type": "object",
+      "required": ["policy_signature_threshold", "distinct_signing_custodians", "trust_recovery_approval_threshold", "distinct_trust_recovery_approvers", "lowering_approval_threshold", "distinct_lowering_approvers", "human_lowering_approvers_required", "approved_cryptographic_boundary", "validated_cryptographic_module_required", "evidence_profile"],
+      "properties": {
+        "policy_signature_threshold": {"type": "integer", "minimum": 1},
+        "distinct_signing_custodians": {"type": "boolean"},
+        "trust_recovery_approval_threshold": {"type": "integer", "minimum": 1},
+        "distinct_trust_recovery_approvers": {"type": "boolean"},
+        "lowering_approval_threshold": {"type": "integer", "minimum": 1},
+        "distinct_lowering_approvers": {"type": "boolean"},
+        "human_lowering_approvers_required": {"type": "boolean"},
+        "approved_cryptographic_boundary": {"type": "string", "minLength": 1},
+        "validated_cryptographic_module_required": {"type": "boolean"},
+        "evidence_profile": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": false
+    }
+  },
+  "$defs": {
+    "ProfileCeilingBinding": {
+      "type": "object",
+      "required": ["profile_version", "classification_ceiling"],
+      "properties": {
+        "profile_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+        "classification_ceiling": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": false
+    },
+    "ProfileCeilingMap": {
+      "description": "Map key is the exact profile_id. Object keys make duplicate or conflicting bindings structurally impossible.",
+      "type": "object",
+      "propertyNames": {"pattern": "^[a-z][a-z0-9_]{0,63}$"},
+      "additionalProperties": {"$ref": "#/$defs/ProfileCeilingBinding"},
+      "minProperties": 1
+    }
+  },
+  "additionalProperties": false
+}

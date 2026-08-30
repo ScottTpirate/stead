@@ -1,0 +1,257 @@
+schema_version: "0.1"
+note: "Bodies and secrets are intentionally absent; repeated IDs make the graph testable. YAML merge keys expand the common resource envelope in each example."
+shared:
+  instance_id: &instance 018f0000-0000-7000-8000-000000000000
+  organization_id: &org 018f0000-0000-7000-8000-000000000001
+  user_id: &alice 018f0000-0000-7000-8000-000000000002
+  agent_id: &agent 018f0000-0000-7000-8000-000000000003
+  team_id: &team 018f0000-0000-7000-8000-000000000004
+  project_id: &project 018f0000-0000-7000-8000-000000000005
+  work_id: &work 018f0000-0000-7000-8000-000000000006
+  label_id: &label_id 018f0000-0000-7000-8000-000000000016
+  configured_origin: https://stead.example
+  organization_container: &organization_container {kind: organization, id: *org, uri: "urn:uuid:018f0000-0000-7000-8000-000000000001", browser_url: "https://stead.example/r/organization/018f0000-0000-7000-8000-000000000001"}
+  project_container: &project_container {kind: project, id: *project, uri: "urn:uuid:018f0000-0000-7000-8000-000000000005", browser_url: "https://stead.example/r/project/018f0000-0000-7000-8000-000000000005"}
+  label: &label {profile_id: commercial, sensitivity_level: internal, handling_regimes: [], categories: [], compartments: [], dissemination_controls: [], releasable_to: [], export_controls: [], derivation_sources: [], version: 1}
+  security_presentation: &security_presentation {profile_id: commercial, profile_version: "1.0.0", policy_bundle_id: example-commercial-bundle-v1, label_revision: example-label-revision-1, renderer_id: stead.security_markings.v1, renderer_version: "1.0.0", markings: [{kind: sensitivity, text: Internal}], required_surfaces: [badge], warning_actions: [download, export, share], text_authoritative: true, color_supplemental_only: true}
+  provenance: &provenance {created_at: "2026-08-28T12:00:00Z", created_by: {type: user, id: *alice}, derived_from: [], source_metadata: {}}
+  envelope: &envelope
+    schema_version: "1.0"
+    version: 1
+    instance_id: *instance
+    scope_kind: organization
+    scope_id: *org
+    organization_id: *org
+    created_at: "2026-08-28T12:00:00Z"
+    created_by: {type: user, id: *alice}
+    updated_at: "2026-08-28T12:00:00Z"
+    updated_by: {type: user, id: *alice}
+    security_label_id: *label_id
+    effective_security_label: *label
+    security_presentation: *security_presentation
+    provenance: *provenance
+    external_references: []
+    relationships: []
+examples:
+  Instance:
+    <<: *envelope
+    kind: instance
+    id: *instance
+    uri: "urn:uuid:018f0000-0000-7000-8000-000000000000"
+    browser_url: "https://stead.example/r/instance/018f0000-0000-7000-8000-000000000000"
+    scope_kind: instance
+    scope_id: *instance
+    container: *organization_container
+    title: Stead example instance
+    name: Stead example instance
+  Organization:
+    <<: *envelope
+    kind: organization
+    id: *org
+    uri: "urn:uuid:018f0000-0000-7000-8000-000000000001"
+    browser_url: "https://stead.example/r/organization/018f0000-0000-7000-8000-000000000001"
+    scope_kind: instance
+    scope_id: *instance
+    container: *organization_container
+    title: Acme
+    key: ACME
+    name: Acme
+  DirectoryGroup:
+    <<: *envelope
+    kind: directory_group
+    id: 018f0000-0000-7000-8000-000000000007
+    uri: "urn:uuid:018f0000-0000-7000-8000-000000000007"
+    browser_url: "https://stead.example/r/directory_group/018f0000-0000-7000-8000-000000000007"
+    container: *organization_container
+    title: HR Directory Group
+    display_name: HR Directory Group
+    source: oidc
+    external_group_id: hr-42
+  Team:
+    <<: *envelope
+    kind: team
+    id: *team
+    uri: "urn:uuid:018f0000-0000-7000-8000-000000000004"
+    browser_url: "https://stead.example/r/team/018f0000-0000-7000-8000-000000000004"
+    container: *organization_container
+    title: People Operations
+    key: PEOPLE
+    name: People Operations
+    hierarchy_depth: 1
+    parent_team_id: 018f0000-0000-7000-8000-000000000008
+  Project:
+    <<: *envelope
+    kind: project
+    id: *project
+    uri: "urn:uuid:018f0000-0000-7000-8000-000000000005"
+    browser_url: "https://stead.example/r/project/018f0000-0000-7000-8000-000000000005"
+    container: *organization_container
+    title: Employee onboarding
+    key: ONB
+    purpose: Coordinate onboarding work and knowledge
+    owning_team_id: *team
+    contributing_team_ids: []
+    capabilities: {preset: general, active: [work, docs]}
+    lifecycle_state: active
+    start_date: "2026-09-01"
+    target_date: "2026-10-01"
+  WorkItem:
+    <<: *envelope
+    kind: work_item
+    id: *work
+    uri: "urn:uuid:018f0000-0000-7000-8000-000000000006"
+    browser_url: "https://stead.example/r/work_item/018f0000-0000-7000-8000-000000000006"
+    container: *project_container
+    project_id: *project
+    title: Prepare first-week schedule
+    body: Coordinate the schedule with the employee and contributing teams.
+    key: ONB-1
+    work_type: deliverable
+    status: in_progress
+    priority: high
+    estimate: 3
+    nesting_depth: 0
+    assignees: [{type: agent, id: *agent}]
+    responsible_team_id: *team
+  Document:
+    <<: *envelope
+    kind: document
+    id: 018f0000-0000-7000-8000-000000000009
+    uri: "urn:uuid:018f0000-0000-7000-8000-000000000009"
+    browser_url: "https://stead.example/r/document/018f0000-0000-7000-8000-000000000009"
+    container: {kind: team, id: *team, uri: "urn:uuid:018f0000-0000-7000-8000-000000000004", browser_url: "https://stead.example/r/team/018f0000-0000-7000-8000-000000000004"}
+    title: Onboarding procedure
+    body: "# Onboarding procedure"
+    document_type: procedure
+    state: approved
+    okf_id: doc-onboarding
+    git_revision: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    path: onboarding.md
+  Repository:
+    <<: *envelope
+    kind: repository
+    id: 018f0000-0000-7000-8000-000000000010
+    uri: "urn:uuid:018f0000-0000-7000-8000-000000000010"
+    browser_url: "https://stead.example/r/repository/018f0000-0000-7000-8000-000000000010"
+    container: *project_container
+    project_id: *project
+    title: ONB Work backing
+    purpose: tracker
+    default_branch: main
+  PrincipalRef: {type: agent, id: *agent}
+  Agent:
+    <<: *envelope
+    kind: agent
+    id: *agent
+    uri: "urn:uuid:018f0000-0000-7000-8000-000000000003"
+    browser_url: "https://stead.example/r/agent/018f0000-0000-7000-8000-000000000003"
+    container: *organization_container
+    title: Backend Agent
+    display_name: Backend Agent
+    status: registered
+    external_runtime_ref: "runtime://external/backend-agent"
+    a2a_card_uri: "https://agents.example/backend-agent/card"
+    authority_revision: authz-v1
+  AgentRun:
+    <<: *envelope
+    kind: agent_run
+    id: 018f0000-0000-7000-8000-000000000011
+    uri: "urn:uuid:018f0000-0000-7000-8000-000000000011"
+    browser_url: "https://stead.example/r/agent_run/018f0000-0000-7000-8000-000000000011"
+    container: *project_container
+    project_id: *project
+    title: Backend Agent run for ONB-1
+    agent_id: *agent
+    work_item_id: *work
+    requested_by: {type: user, id: *alice}
+    delegation_id: delegation-1
+    task_context_id: task-1
+    state: requested
+    external_runtime_ref: "runtime://external/runs/1"
+    correlation_id: corr-1
+    causation_id: cause-1
+  SecurityLabel:
+    <<: *envelope
+    kind: security_label
+    id: *label_id
+    uri: "urn:uuid:018f0000-0000-7000-8000-000000000016"
+    browser_url: "https://stead.example/r/security_label/018f0000-0000-7000-8000-000000000016"
+    container: *organization_container
+    title: Commercial internal
+    profile_id: commercial
+    sensitivity_level: internal
+    handling_regimes: []
+    categories: []
+    compartments: []
+    dissemination_controls: []
+    releasable_to: []
+    export_controls: []
+    derivation_sources: []
+  Comment:
+    <<: *envelope
+    kind: comment
+    id: 018f0000-0000-7000-8000-000000000012
+    uri: "urn:uuid:018f0000-0000-7000-8000-000000000012"
+    browser_url: "https://stead.example/r/comment/018f0000-0000-7000-8000-000000000012"
+    container: *project_container
+    project_id: *project
+    title: Comment on ONB-1
+    subject: {kind: work_item, id: *work, uri: "urn:uuid:018f0000-0000-7000-8000-000000000006", browser_url: "https://stead.example/r/work_item/018f0000-0000-7000-8000-000000000006"}
+    author: {type: user, id: *alice}
+    body_format: markdown
+    body: Schedule draft is ready for review.
+  Activity:
+    <<: *envelope
+    kind: activity
+    id: 018f0000-0000-7000-8000-000000000013
+    uri: "urn:uuid:018f0000-0000-7000-8000-000000000013"
+    browser_url: "https://stead.example/r/activity/018f0000-0000-7000-8000-000000000013"
+    container: *project_container
+    project_id: *project
+    title: Agent assigned to ONB-1
+    subject: {kind: work_item, id: *work, uri: "urn:uuid:018f0000-0000-7000-8000-000000000006", browser_url: "https://stead.example/r/work_item/018f0000-0000-7000-8000-000000000006"}
+    verb: assigned
+    actor_context: {actor: {type: agent, id: *agent}, requested_by: {type: user, id: *alice}, delegation_id: delegation-1, task_context_id: task-1, correlation_id: corr-1, causation_id: cause-1}
+    occurred_at: "2026-08-28T12:01:00Z"
+  Notification:
+    <<: *envelope
+    kind: notification
+    id: 018f0000-0000-7000-8000-000000000014
+    uri: "urn:uuid:018f0000-0000-7000-8000-000000000014"
+    browser_url: "https://stead.example/r/notification/018f0000-0000-7000-8000-000000000014"
+    container: *project_container
+    project_id: *project
+    title: ONB-1 assignment changed
+    recipient: {type: user, id: *alice}
+    subject: {kind: work_item, id: *work, uri: "urn:uuid:018f0000-0000-7000-8000-000000000006", browser_url: "https://stead.example/r/work_item/018f0000-0000-7000-8000-000000000006"}
+    source_event_id: event-14
+    actor_context: {actor: {type: agent, id: *agent}, requested_by: {type: user, id: *alice}, delegation_id: delegation-1, task_context_id: task-1, correlation_id: corr-1, causation_id: cause-1}
+    thread_key: work-item:ONB-1
+    reason: assignment_changed
+    state: unread
+    redaction: none
+  Audit:
+    <<: *envelope
+    kind: audit_record
+    id: 018f0000-0000-7000-8000-000000000015
+    uri: "urn:uuid:018f0000-0000-7000-8000-000000000015"
+    browser_url: "https://stead.example/r/audit_record/018f0000-0000-7000-8000-000000000015"
+    container: *project_container
+    project_id: *project
+    title: Work assignment update
+    action: work.assignment.update
+    subject: {kind: work_item, id: *work, uri: "urn:uuid:018f0000-0000-7000-8000-000000000006", browser_url: "https://stead.example/r/work_item/018f0000-0000-7000-8000-000000000006"}
+    actor_context: {actor: {type: agent, id: *agent}, requested_by: {type: user, id: *alice}, delegation_id: delegation-1, task_context_id: task-1, correlation_id: corr-1, causation_id: cause-1}
+    authentication_context: {method: agent_delegation, authenticated_at: "2026-08-28T12:00:59Z", identity_provider: local-bootstrap, session_reference_hash: session-hash-1, authentication_context_class: local, credential_revision: cred-1}
+    decision: allow
+    authorization_context: {relationship: editor, action: work.assignment.update, reason_codes: [relationship_allow, classification_allow]}
+    authorization_model_id: fga-v1
+    policy_bundle_id: policy-bundle-v1
+    request_id: request-1
+    source_ip: 192.0.2.10
+    network_zone: corporate
+    device_id: device-1
+    origin: {service: work-api, provider: gitea-adapter}
+    outcome: success
+    occurred_at: "2026-08-28T12:01:00Z"
+    change_context: {mode: hashes, before_hash: abc, after_hash: def}

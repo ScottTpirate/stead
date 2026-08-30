@@ -1,7 +1,7 @@
 # Phase 0 Workstream Ownership
 
-Status: **Draft for architecture, security, and project-owner approval**<br>
-Normative source: `unified_open_work_platform_master_build_directive.md` version 0.2<br>
+Status: **Ready for architecture, security, independent QA, and project-owner approval**<br>
+Normative source: `docs/architecture/MASTER_BUILD_DIRECTIVE.md` version 0.2<br>
 Scope: Phase 0 planning and contract work only
 
 This document allocates accountability to the thirteen required workstreams. It does not authorize Phase 1 feature implementation. If this document conflicts with the Master Build Directive, the directive governs. A locked architecture decision may change only through an approved ADR and project-owner approval.
@@ -15,7 +15,7 @@ This document allocates accountability to the thirteen required workstreams. It 
 - Shared application composition roots have one integration owner. Feature work remains in the owning module/provider and is wired into the composition root by that integration owner.
 - Module code may use another module only through a stable public module contract. It must not write another module's tables.
 - Browser code calls only the versioned platform API. Modules call provider interfaces, never provider-specific implementations or upstream databases.
-- Authorization is the common `OpenFGA allow AND OPA allow AND provider/path enforcement allow AND no deny` decision. No workstream may create a private alternative.
+- Authorization is the common `OpenFGA allow AND deterministic policy-decision allow AND provider/path enforcement allow AND no deny` decision. No workstream may create a private alternative.
 - Repository, tracker repository, docs repository, package namespace, runner pool, cache, artifact store, and backup set are security boundaries. Per-item markings cannot grant access beyond the enclosing provider/container boundary.
 - The exact path ledger and database ownership rules are in `repository-layout-and-boundaries.md`; contract authority is in `contract-ownership-matrix.md`.
 
@@ -26,7 +26,7 @@ This document allocates accountability to the thirteen required workstreams. It 
 | `M0-A — directive controlled` | Every directive requirement is in the machine-readable traceability register; locked decisions and non-goals are recorded; issue templates enforce all required fields. | `WS-13`, reviewed by `WS-01` and `WS-06` |
 | `M0-B — constitution bounded` | Product principles, repository/module boundaries, logical database namespaces, ADR policy, license policy, and ownership ledgers are approved. | `WS-01`, with `WS-06` security and `WS-13` conformance review |
 | `M0-C — contracts complete` | OWGP v0.1, canonical schemas, public API skeleton, event envelope/catalog, provider interfaces, OKF profile, and compatibility/deprecation rules are reviewable and have conformance-test plans. | `WS-01` plus the relevant contract owners |
-| `M0-D — security contracts complete` | Security-label schema/lattice, OpenFGA model v0.1, OPA input/output contract, trusted-attribute contract, deployment-domain contract, threat baseline, and bypass inventory are approved. | `WS-06`, independently reviewed by `WS-13` |
+| `M0-D — security contracts complete` | Security-label schema/lattice, OpenFGA model v0.1, policy-decision input/output contract, trusted-attribute contract, deployment-domain contract, threat baseline, and bypass inventory are approved. | `WS-06`, independently reviewed by `WS-13` |
 | `M0-E — verification contract complete` | Golden-scenario plan, requirements-to-tests matrix, release gates, license/dependency workflow, migration/rollback expectations, and all required test harness backlogs are approved. | `WS-13`, with `WS-12` for operational paths |
 | `M0-F — Phase 0 frozen` | `M0-A` through `M0-E` have architecture, security-contract, separate independent QA and security, and project-owner approval; contract versions are tagged; open ADRs are either resolved or explicitly block implementation. | Project owner; `WS-01`; `WS-06`; distinct independent `WS-13` QA and security identities |
 
@@ -38,7 +38,7 @@ Dependency order is `M0-A -> M0-B -> (M0-C and M0-D) -> M0-E -> M0-F`. Broad fea
 
 **Exclusive paths and contracts.** `/docs/architecture/constitution.md`, `/docs/architecture/agent-ready-compatibility.md`, `/docs/architecture/workstream-ownership.md`, `/docs/architecture/contract-ownership-matrix.md`, `/docs/architecture/repository-layout-and-boundaries.md`, planned `/docs/architecture/standards/` and `/docs/architecture/ontology/`, `/docs/adr/`, `/specs/openapi/`, `/specs/work-graph-profile/`, `/packages/domain-schemas/common/`, `/packages/domain-schemas/resources/` except the `work-assignment` leaf owned by `WS-02`, and `/packages/provider-sdk/core/`. Domain experts review resource schemas, but `WS-01` is the sole editor except for explicitly delegated leaf contracts.
 
-**Assigned requirements.** `PRIN-002`, `PRIN-003`, `PRIN-004`, `PRIN-005`, `PRIN-006`; `ARCH-001`, `ARCH-002`, `ARCH-005`; `STD-001`, `STD-002`; `DOM-001`, `DOM-002`, `DOM-003`, `DOM-006`; `AGENT-007`.
+**Assigned requirements.** `PRIN-002`, `PRIN-003`, `PRIN-004`, `PRIN-005`, `PRIN-006`, `PRIN-013`; `ARCH-001`, `ARCH-002`, `ARCH-005`; `STD-001`, `STD-002`; `DOM-001`, `DOM-002`, `DOM-003`, `DOM-006`; `AGENT-007`.
 
 **Required verification contracts.** JSON Schema 2020-12 validation and compatibility tests; OWGP export/import conformance; OSLC/PROV/OKF mapping fixtures; UUIDv7, RFC 9457, ETag/conditional request, canonical URI, cardinality, and deprecation tests; OpenAPI linting and breaking-change detection.
 
@@ -56,13 +56,13 @@ Dependency order is `M0-A -> M0-B -> (M0-C and M0-D) -> M0-E -> M0-F`. Broad fea
 
 **Exclusive paths and contracts.** `/apps/core/`, `/modules/organization/`, `/modules/project/`, `/modules/work/`, `/packages/domain-schemas/resources/work-assignment/`, their module-scoped integration tests, and the logical `organization.*`, `project.*`, `work.*`, and `core_outbox.*` relational namespaces. Other workstreams provide modules through ports; only `WS-02` edits core composition/wiring.
 
-**Assigned requirements.** `ARCH-003`, `ARCH-004`, `DOM-004`, `EVT-002`, `AGENT-002`.
+**Assigned requirements.** `ARCH-003`, `ARCH-004`; `DOM-004`, `DOM-008`, `DOM-009`, `DOM-011`; `EVT-002`; `PERF-003`; `AGENT-002`.
 
-**Required verification contracts.** Go unit/property tests with at least 80% line and branch coverage; module-boundary and forbidden-import tests; optimistic concurrency and conditional-write tests; migration forward/backward/expand-contract tests; atomic domain-write-plus-outbox tests; rollback/failure-injection tests; assignment contract tests proving `user`, `agent`, and `service_account` principals are provider-independent and that Gitea-native user limits do not leak into the canonical model.
+**Required verification contracts.** Go unit/property tests with at least 80% line and branch coverage; module-boundary and forbidden-import tests; optimistic concurrency and conditional-write tests; migration forward/backward/expand-contract tests; atomic domain-write-plus-outbox tests; rollback/failure-injection tests; assignment contract tests proving `user` and `agent` assignees are provider-independent and that Gitea-native user limits do not leak into the canonical model. Service accounts remain valid acting principals where a contract permits them, but are not Work assignees.
 
 **Dependencies and outputs.** Requires `M0-B`, canonical resource/API conventions from `WS-01`, authorization decision ports from `WS-06`, and event/outbox envelope semantics from `WS-07`. Its transaction and module-port contracts are inputs to `M0-C`.
 
-**Prohibited boundaries.** No provider-specific code in core, direct Gitea/Commonplace/OpenFGA/OPA/NATS/storage database access from domain modules, cross-module table writes, browser coupling, or `commit then publish` event flow. Core may invoke authorization and provider ports; it may not reproduce their policy logic.
+**Prohibited boundaries.** No provider-specific code in core, direct Gitea/Commonplace/OpenFGA/policy-decision/NATS/storage database access from domain modules, cross-module table writes, browser coupling, or `commit then publish` event flow. Core may invoke authorization and provider ports; it may not reproduce their policy logic.
 
 **Security/classification.** Every protected mutation must resolve authenticated acting principal and principal type, requesting/initiating principal when different, task/delegation context when present, canonical resource/container, effective label, central authorization decision, audit metadata, correlation/causation IDs, and transactional event intent. Work assignment accepts an `agent` principal without granting execution authority. Failures fail closed and use non-leaking Problem Details.
 
@@ -106,17 +106,17 @@ Dependency order is `M0-A -> M0-B -> (M0-C and M0-D) -> M0-E -> M0-F`. Broad fea
 
 ## WS-05 — Unified frontend/design system
 
-**Accountability.** Own the Devlane-derived primary shell, navigation and project-view information architecture, shared interaction vocabulary, design system, generated API client integration, accessibility, performance budgets, and classification/handling presentation.
+**Accountability.** Own the Devlane-derived visual foundation, universal navigation, capability-driven Project information architecture and JavaScript delivery, shared interaction vocabulary, design constitution/system, generated API client integration, accessibility, performance budgets, and classification/handling presentation. Devlane routes and ontology are explicitly noncanonical.
 
 **Exclusive paths and contracts.** `/apps/web/`, `/packages/design-system/`, `/packages/api-client/` (generated from the approved OpenAPI contract), frontend test fixtures/components, and user-facing UI documentation. Only generated code may mirror public schemas; the OpenAPI source remains owned by `WS-01`.
 
-**Assigned requirements.** `PRIN-001`; `UX-001`, `UX-002`, `UX-003`, `UX-004`, `UX-005`.
+**Assigned requirements.** `PRIN-001`, `PRIN-014`; `UX-001`, `UX-002`, `UX-003`, `UX-004`, `UX-005`, `UX-006`, `UX-007`, `UX-008`, `UX-009`; `PERF-005`.
 
-**Required verification contracts.** Browser E2E for all critical/golden flows; WCAG 2.2 AA automated and manual keyboard/screen-reader checks; contract-generated client tests; deep-link stability; performance budgets; persistent classification banners/markings; export/copy/share warnings; tests proving no direct provider or local-authorization calls.
+**Required verification contracts.** Browser E2E for all critical/golden flows; WCAG 2.2 AA automated and manual keyboard/screen-reader checks; contract-generated client tests; deep-link and state preservation; one-composed-request and authorized-prefetch/cache-invalidation tests; input/Peek/command/route/cold-interactive browser targets; Core Web Vitals; eager universal-shell gzip budget and lazy capability-chunk assertions; persistent classification banners/markings; export/copy/share warnings; tests proving no direct provider or local-authorization calls.
 
 **Dependencies and outputs.** May design shell prototypes after `M0-B`, but implementation waits for `M0-F`. It consumes the public API/schema contracts from `WS-01`, authorization/classification display contract from `WS-06`, and domain capabilities from all functional owners.
 
-**Prohibited boundaries.** No browser calls to Gitea, Commonplace, OpenFGA, OPA, NATS, object stores, or other providers; no local authorization decision; no hidden admin bypass; no user-configurable core navigation/workflow semantics; no separate upstream product branding in normal workflows.
+**Prohibited boundaries.** No browser calls to Gitea, Commonplace, OpenFGA, the policy-decision layer, NATS, object stores, or other providers; no local authorization decision; no hidden admin bypass; no user-configurable core navigation/workflow semantics; no separate upstream product branding in normal workflows. Code and Delivery must not appear for Projects lacking those capabilities, and Devlane Modules, Epics, Pages, Board, Intake, Archives, Drafts, or route structure must not become canonical contracts.
 
 **Security/classification.** UI hiding is supplemental only. Effective labels must remain visible wherever protected content is rendered; unauthorized content, identifiers, counts, snippets, autocomplete, relationship metadata, and errors must never be cached or displayed.
 
@@ -124,17 +124,17 @@ Dependency order is `M0-A -> M0-B -> (M0-C and M0-D) -> M0-E -> M0-F`. Broad fea
 
 ## WS-06 — Identity/authorization/classification
 
-**Accountability.** Own OIDC/SCIM and trusted identity/attribute interfaces, central authorization service contract, OpenFGA model, OPA input/output and Rego bundles, SecurityLabel schema/lattice/profiles, deployment security-domain decision rules, downgrade workflow, and provider-path bypass controls.
+**Accountability.** Own OIDC/SCIM and trusted identity/attribute interfaces, central authorization service contract, OpenFGA model, implementation-neutral policy-decision input/output and portable rule bundles, SecurityLabel schema/lattice/profiles, deployment security-domain decision rules including the closed disclosure/revocation mode, downgrade workflow, and provider-path bypass controls.
 
-**Exclusive paths and contracts.** `/modules/identity/`, `/modules/authorization/`, `/modules/classification/`, `/providers/identity-oidc/`, `/providers/identity-scim/`, `/policies/openfga/`, `/policies/opa/`, `/policies/security-label-profiles/`, `/packages/domain-schemas/identity/`, `/packages/domain-schemas/security/`, `/packages/provider-sdk/identity/`, and logical `identity.*`, `authorization.*`, and `classification.*` namespaces.
+**Exclusive paths and contracts.** `/modules/identity/`, `/modules/authorization/`, `/modules/classification/`, `/providers/identity-oidc/`, `/providers/identity-scim/`, `/policies/openfga/`, `/policies/policy-decision/`, `/policies/security-label-profiles/`, `/packages/domain-schemas/identity/`, `/packages/domain-schemas/security/`, `/packages/provider-sdk/identity/`, and logical `identity.*`, `authorization.*`, and `classification.*` namespaces.
 
-**Assigned requirements.** `PRIN-007`, `PRIN-011`, `PRIN-012`; `DOM-007`; `AUTH-001`, `AUTH-002`, `AUTH-003`, `AUTH-004`, `AUTH-005`; `CLS-001`, `CLS-002`, `CLS-003`, `CLS-004`, `CLS-005`, `CLS-006`, `CLS-007`, `CLS-008`; `AGENT-001`, `AGENT-003`, `AGENT-006`.
+**Assigned requirements.** `PRIN-007`, `PRIN-011`, `PRIN-012`, `PRIN-015`; `DOM-007`, `DOM-010`; `AUTH-001`, `AUTH-002`, `AUTH-003`, `AUTH-004`, `AUTH-005`, `AUTH-006`; `CLS-001`, `CLS-002`, `CLS-003`, `CLS-004`, `CLS-005`, `CLS-006`, `CLS-007`, `CLS-008`; `PERF-004`; `AGENT-001`, `AGENT-003`, `AGENT-006`.
 
-**Required verification contracts.** OIDC/SCIM/provider contract tests; OpenFGA model and migration tests including first-class `agent` principals; 100% Rego decision-table/rule coverage and at least 90% mutation score for critical policy; signed-bundle verification; property tests for lattice join/no-lowering; the complete `TEST-004` matrix; every direct-provider bypass path; cache/projection invalidation and non-disclosure tests. Future-agent seam fixtures must show delegation, task scope, independently revocable agent authority, and classification/environment intersection without implementing execution.
+**Required verification contracts.** OIDC/SCIM/provider contract tests; OpenFGA model and migration tests including first-class `agent` principals; 100% policy decision-row coverage and at least 90% mutation score for critical policy; deterministic replay and evaluator conformance tests; signed-bundle verification; property tests for lattice join/no-lowering; the complete `TEST-004` matrix; every direct-provider bypass path; cache/projection invalidation and non-disclosure tests; set-oriented authorization/count tests; complete Phase 1 `request_boundary` races and profile-neutral mode selection; typed `commit_boundary` seam tests followed by full high-assurance buffer/lease/epoch evidence in its gated phase. If multiple evaluators are supported, the same fixture corpus must produce equivalent decisions. Future-agent seam fixtures must show delegation, task scope, independently revocable agent authority, and classification/environment intersection without implementing execution.
 
 **Dependencies and outputs.** Requires canonical resource/relationship/schema conventions and repository-boundary map from `WS-01`; collaborates with every resource/provider owner. It produces `M0-D` and is a blocking reviewer for `M0-C`, `M0-E`, and `M0-F`.
 
-**Prohibited boundaries.** No administrator/role bypass, self-asserted trusted attribute, default allow, unlogged downgrade, built-in cross-domain/write-down transfer, claim of certification/validation, free-form label fields, or duplicate module-local policy logic. OpenFGA, OPA, and provider enforcement are complementary, not alternatives. An agent must not broadly inherit a delegating human's permissions; its future effective authority is the intersection of delegator, agent, task, runtime domain, session/environment, and resource classification/handling constraints.
+**Prohibited boundaries.** No administrator/role bypass, self-asserted trusted attribute, default allow, unlogged downgrade, built-in cross-domain/write-down transfer, claim of certification/validation, free-form label fields, or duplicate module-local policy logic. OpenFGA, the policy-decision layer, and provider enforcement are complementary, not alternatives. An agent must not broadly inherit a delegating human's permissions; its future effective authority is the intersection of delegator, agent, task, runtime domain, session/environment, and resource classification/handling constraints.
 
 **Security/classification.** This workstream owns the authoritative decision sequence and fail-closed behavior. Security officers may administer policy metadata without automatically reading content. Attributes have authority, provenance, issue/review/expiry metadata, and expired or unverifiable values deny.
 
@@ -160,9 +160,9 @@ Dependency order is `M0-A -> M0-B -> (M0-C and M0-D) -> M0-E -> M0-F`. Broad fea
 
 ## WS-08 — Search/work graph/AI access
 
-**Accountability.** Own the search module/providers, rebuildable search and work-graph projections, authorization-aware query protocol, canonical relationship traversal, and permission-aware MCP/API access.
+**Accountability.** Own the search module/providers, rebuildable multi-resource search and Work Graph projections, authorization-aware query protocol, canonical relationship traversal, and permission-aware MCP/A2A/Platform API compatibility boundary.
 
-**Exclusive paths and contracts.** `/modules/search/` (including graph projection), `/providers/search-postgres/`, `/providers/search-opensearch/`, `/packages/provider-sdk/search/`, `/docs/architecture/search-graph/mcp-a2a-compatibility.md`, search/graph/future-MCP compatibility fixtures, and logical `search.*` projection namespace.
+**Exclusive paths and contracts.** `/modules/search/` (including graph projection), contract-only `/modules/agent/`, `/providers/search-postgres/`, `/providers/search-opensearch/`, contract-only `/providers/agent-a2a/`, `/packages/provider-sdk/search/`, `/specs/mcp/`, `/specs/a2a/`, `/docs/architecture/search-graph/mcp-a2a-compatibility.md`, search/graph/future-agent compatibility fixtures, and logical `search.*` projection namespace.
 
 **Assigned requirements.** `SRCH-001`, `SRCH-002`, `SRCH-003`; `GRAPH-001`, `GRAPH-002`; `AGENT-005`.
 
@@ -172,7 +172,7 @@ Dependency order is `M0-A -> M0-B -> (M0-C and M0-D) -> M0-E -> M0-F`. Broad fea
 
 **Prohibited boundaries.** Search/graph are projections, never systems of record; no direct unrestricted repository/database/NATS/object-store access for agents; no provider-specific business API for agents; no post-filter-only design that leaks totals or metadata; no graph database requirement without ADR; no bypass of the Platform API for MCP. Direct Git protocol access is the only future provider exception and requires scoped credentials. Phase 0 does not implement an MCP tool catalog, agent registry, A2A dispatch, runtime, model, orchestration, or memory.
 
-**Security/classification.** Coarse organization/domain/container/label partition filtering precedes retrieval, followed by authoritative OpenFGA/OPA filtering before any result or aggregate. Edges inherit the maximum restrictions of endpoints and relationship metadata.
+**Security/classification.** Coarse organization/domain/container/label partition filtering precedes retrieval, followed by authoritative OpenFGA/policy-decision filtering before any result or aggregate. Edges inherit the maximum restrictions of endpoints and relationship metadata.
 
 **Phase 0 definition of done.** Provider interface, projection/event inputs, index partitions, authoritative filter sequence, rebuild/rollback, graph edge rules, MCP boundary, audit/telemetry rules, and leakage/performance tests are approved.
 
@@ -232,11 +232,11 @@ Dependency order is `M0-A -> M0-B -> (M0-C and M0-D) -> M0-E -> M0-F`. Broad fea
 
 ## WS-12 — Installation/operations
 
-**Accountability.** Own `platformctl`, Compose/Helm/air-gap packaging, configuration/profile contracts, install/doctor/upgrade/backup/restore/export/import flows, OpenTelemetry and health conventions, portability, reliability/load profiles, and recovery orchestration.
+**Accountability.** Own `steadctl`, Compose/Helm/air-gap packaging, configuration/profile contracts, install/doctor/upgrade/backup/restore/export/import flows, OpenTelemetry and health conventions, portability, reliability/load profiles, and recovery orchestration.
 
-**Exclusive paths and contracts.** `/apps/platformctl/`, `/deploy/compose/`, `/deploy/helm/`, `/deploy/airgap/`, `/deploy/examples/`, `/packages/domain-schemas/config/`, operator documentation, operational test fixtures, and deployment/backup metadata owned by the CLI rather than a domain module.
+**Exclusive paths and contracts.** `/apps/steadctl/`, `/deploy/compose/`, `/deploy/helm/`, `/deploy/airgap/`, `/deploy/examples/`, `/packages/domain-schemas/config/`, operator documentation, operational test fixtures, and deployment/backup metadata owned by the CLI rather than a domain module. The install profile carried by `/deploy/airgap/` is named `high-assurance-airgap`.
 
-**Assigned requirements.** `PRIN-008`, `PRIN-009`; `DEP-001`, `DEP-002`, `DEP-003`, `DEP-004`, `DEP-005`; `OPS-001`, `OPS-002`, `OPS-003`, `OPS-004`, `OPS-005`.
+**Assigned requirements.** `PRIN-008`, `PRIN-009`; `DEP-001`, `DEP-002`, `DEP-003`, `DEP-004`, `DEP-005`; `OPS-001`, `OPS-002`, `OPS-003`, `OPS-004`, `OPS-005`; `PERF-001`, `PERF-002`.
 
 **Required verification contracts.** All `TEST-007` profiles and upgrades; no-network air-gap test; Helm values schema/lint/tests and amd64/arm64 matrix; health/doctor dependency checks; OTel context and sensitive-data exclusion; representative consistent backup/restore; failure/chaos and rollback; published reproducible load datasets for all SLOs.
 
@@ -250,13 +250,13 @@ Dependency order is `M0-A -> M0-B -> (M0-C and M0-D) -> M0-E -> M0-F`. Broad fea
 
 ## WS-13 — QA/security/release
 
-**Accountability.** Own requirement traceability and test governance, independent QA/security approval, release gates, threat-model process/baseline, classification bypass inventory, license/dependency approval workflow, security/supply-chain scanning policy, OSCAL evidence, and cross-suite test harnesses.
+**Accountability.** Own requirement traceability and test governance, independent QA/security approval, release gates, threat-model process/baseline, classification bypass inventory, license/dependency approval workflow, security/supply-chain scanning policy, OSCAL evidence, performance regression policy, and cross-suite test harnesses.
 
 **Exclusive paths and contracts.** `/docs/security/`, `/docs/governance/`, `/docs/testing/`, `/specs/traceability/`, `/specs/oscal/`, `/tests/` harness and cross-system suites (module owners retain their named subtrees as specified in the layout ledger), `/docs/contributor/quality/`, release-gate configuration, and `/packages/test-fixtures/` shared fixture contracts. `/docs/planning/` has a separate project-manager integration owner and requires `WS-13` validation.
 
-**Assigned requirements.** `PRIN-010`; `SEC-001`, `SEC-002`, `SEC-003`, `SEC-004`, `SEC-005`, `SEC-006`; `TEST-001`, `TEST-002`, `TEST-003`, `TEST-004`, `TEST-005`, `TEST-006`, `TEST-007`, `TEST-008`, `TEST-009`.
+**Assigned requirements.** `PRIN-010`; `PERF-006`; `SEC-001`, `SEC-002`, `SEC-003`, `SEC-004`, `SEC-005`, `SEC-006`; `TEST-001`, `TEST-002`, `TEST-003`, `TEST-004`, `TEST-005`, `TEST-006`, `TEST-007`, `TEST-008`, `TEST-009`, `TEST-010`.
 
-**Required verification contracts.** All nineteen required test layers; traceability/schema validation; coverage/mutation floors; threat and bypass regression tests; SAST/secret/dependency/license/container/IaC scans; SBOM/signature/provenance checks; accessibility and load reviews; backup/restore/install/upgrade gates; golden scenario; release waiver expiration enforcement.
+**Required verification contracts.** All nineteen required test layers; traceability/schema validation; coverage/mutation floors; threat and bypass regression tests; SAST/secret/dependency/license/container/IaC scans; SBOM/signature/provenance checks; accessibility and load reviews; query/provider/authorization/write counts, Go microbenchmarks, browser/CWV, eager gzip, projection lag, p50/p95/p99, standard-versus-high-assurance labels, and the greater-than-ten-percent critical regression gate; backup/restore/install/upgrade gates; golden scenario; release waiver expiration enforcement.
 
 **Dependencies and outputs.** Begins with `M0-A`, independently reviews `M0-C` and `M0-D`, owns `M0-E`, and co-signs `M0-F`. Receives testable contracts and evidence from every workstream.
 
@@ -264,12 +264,12 @@ Dependency order is `M0-A -> M0-B -> (M0-C and M0-D) -> M0-E -> M0-F`. Broad fea
 
 **Security/classification.** Threat findings become tracked requirements/tests. Test data, logs, failure artifacts, SBOMs, waivers, vulnerability reports, and OSCAL statements are handled according to their contents and never imply certification, accreditation, FIPS validation, or compliance outcomes.
 
-**Phase 0 definition of done.** All 115 requirement IDs have owners and planned tests; the threat/bypass and license workflows are actionable; release gates have objective evidence; golden scenario and classification matrices are executable plans; independent approval identities and separation-of-duties rules are recorded; `M0-F` may be signed only with no unresolved blocking gap.
+**Phase 0 definition of done.** All 128 requirement IDs have owners and planned tests; the threat/bypass and license workflows are actionable; release gates have objective evidence; both golden scenarios and classification matrices are executable plans; independent approval identities and separation-of-duties rules are recorded; `M0-F` may be signed only with no unresolved blocking gap.
 
 ## Completeness check
 
 The allocation above assigns one accountable owner to every directive ID family:
 
-`PRIN-001..012`, `ARCH-001..005`, `STD-001..002`, `DOM-001..007`, `SCM-001..006`, `DOC-001..005`, `UX-001..005`, `AUTH-001..005`, `CLS-001..008`, `EVT-001..004`, `ACT-001`, `NOTIF-001..002`, `AUD-001..002`, `SRCH-001..003`, `GRAPH-001..002`, `STOR-001..003`, `ART-001`, `CICD-001..005`, `MIG-001..005`, `DEP-001..005`, `OPS-001..005`, `SEC-001..006`, `TEST-001..009`, and `AGENT-001..007`.
+`PRIN-001..015`, `ARCH-001..005`, `STD-001..002`, `DOM-001..011`, `SCM-001..006`, `DOC-001..005`, `UX-001..009`, `AUTH-001..006`, `CLS-001..008`, `EVT-001..004`, `ACT-001`, `NOTIF-001..002`, `AUD-001..002`, `SRCH-001..003`, `GRAPH-001..002`, `STOR-001..003`, `ART-001`, `CICD-001..005`, `MIG-001..005`, `DEP-001..005`, `OPS-001..005`, `PERF-001..006`, `SEC-001..006`, `TEST-001..010`, and `AGENT-001..007`.
 
 This is an accountability allocation, not permission to implement before Phase 0 approval.

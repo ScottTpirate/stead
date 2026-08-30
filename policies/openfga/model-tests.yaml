@@ -1,0 +1,379 @@
+name: Stead OpenFGA v0.1 authorization contract
+model_file: ./model.fga
+
+# Every OpenFGA allow remains subject to policy-decision layer and provider/path enforcement.
+# Resource-delegation tuples are written only after the delegator is authorized
+# for that action. The separate enabled tuple is the independently removable
+# revocation fence; the tuple lifecycle is audited by the platform.
+tests:
+  - name: Organization roles and explicit Directory Group grants
+    tuples:
+      - {user: "user:alice", relation: viewer, object: "organization:acme"}
+      - {user: "user:sec", relation: security_officer, object: "organization:acme"}
+      - {user: "user:casey", relation: classification_manager, object: "organization:acme"}
+      - {user: "user:alice", relation: member, object: "directory_group:hr"}
+      - {user: "directory_group:hr#member", relation: viewer, object: "team:people"}
+      - {user: "user:bob", relation: member, object: "directory_group:legal"}
+      - {user: "directory_group:legal#member", relation: member, object: "organization:acme"}
+    check:
+      - user: "user:alice"
+        object: "organization:acme"
+        assertions: {viewer: true}
+      - user: "user:sec"
+        object: "organization:acme"
+        assertions: {security_officer: true, viewer: false}
+      - user: "user:casey"
+        object: "organization:acme"
+        assertions: {classification_manager: true, viewer: false}
+      - user: "user:alice"
+        object: "team:people"
+        assertions: {viewer: true}
+      - user: "user:bob"
+        object: "organization:acme"
+        assertions: {member: true, viewer: false}
+
+  - name: Team hierarchy is organizational context only
+    tuples:
+      - {user: "team:parent", relation: parent, object: "team:child"}
+      - {user: "user:alice", relation: viewer, object: "team:parent"}
+      - {user: "user:bob", relation: member, object: "team:child"}
+      - {user: "organization:acme", relation: organization, object: "team:people"}
+      - {user: "user:carol", relation: viewer, object: "organization:acme"}
+      - {user: "service_account:team-sync", relation: editor, object: "team:people"}
+    check:
+      - user: "user:alice"
+        object: "team:child"
+        assertions: {viewer: false}
+      - user: "user:bob"
+        object: "team:parent"
+        assertions: {viewer: false, member: false}
+      - user: "user:carol"
+        object: "team:people"
+        assertions: {viewer: false}
+      - user: "service_account:team-sync"
+        object: "team:people"
+        assertions: {editor: true}
+
+  - name: Project accountability does not grant access
+    tuples:
+      - {user: "team:people", relation: owning_team, object: "project:onboarding"}
+      - {user: "user:alice", relation: member, object: "team:people"}
+      - {user: "team:legal", relation: contributing_team, object: "project:onboarding"}
+      - {user: "user:bob", relation: member, object: "team:legal"}
+      - {user: "user:carol", relation: viewer, object: "project:onboarding"}
+      - {user: "service_account:project-admin", relation: manager, object: "project:onboarding"}
+    check:
+      - user: "user:alice"
+        object: "project:onboarding"
+        assertions: {viewer: false}
+      - user: "user:bob"
+        object: "project:onboarding"
+        assertions: {viewer: false}
+      - user: "user:carol"
+        object: "project:onboarding"
+        assertions: {viewer: true}
+      - user: "service_account:project-admin"
+        object: "project:onboarding"
+        assertions: {manager: true, viewer: false}
+
+  - name: Project delegation is action scoped and independently revocable
+    tuples:
+      - {user: "user:alice", relation: delegator, object: "delegation:project-view"}
+      - {user: "agent:backend-agent", relation: delegate_agent, object: "delegation:project-view"}
+      - {user: "agent:backend-agent", relation: enabled_agent, object: "delegation:project-view"}
+      - {user: "delegation:project-view", relation: view_delegation, object: "project:onboarding"}
+      - {user: "user:alice", relation: delegator, object: "delegation:project-view-revoked"}
+      - {user: "agent:backend-agent", relation: delegate_agent, object: "delegation:project-view-revoked"}
+      - {user: "delegation:project-view-revoked", relation: view_delegation, object: "project:revoked"}
+      - {user: "user:alice", relation: delegator, object: "delegation:project-edit-service"}
+      - {user: "service_account:automation", relation: delegate_service_account, object: "delegation:project-edit-service"}
+      - {user: "service_account:automation", relation: enabled_service_account, object: "delegation:project-edit-service"}
+      - {user: "delegation:project-edit-service", relation: edit_delegation, object: "project:onboarding"}
+    check:
+      - user: "agent:backend-agent"
+        object: "project:onboarding"
+        assertions: {viewer: true, editor: false}
+      - user: "agent:other-agent"
+        object: "project:onboarding"
+        assertions: {viewer: false}
+      - user: "agent:backend-agent"
+        object: "project:revoked"
+        assertions: {viewer: false}
+      - user: "service_account:automation"
+        object: "project:onboarding"
+        assertions: {editor: true, manager: false}
+
+  - name: Work inherits explicit Project access but not assignment or responsibility
+    tuples:
+      - {user: "project:onboarding", relation: project, object: "work_item:ONB-1"}
+      - {user: "user:alice", relation: viewer, object: "project:onboarding"}
+      - {user: "service_account:automation", relation: editor, object: "project:onboarding"}
+      - {user: "agent:backend-agent", relation: assignee, object: "work_item:ONB-1"}
+      - {user: "team:people", relation: responsible_team, object: "work_item:ONB-1"}
+      - {user: "user:bob", relation: member, object: "team:people"}
+    check:
+      - user: "user:alice"
+        object: "work_item:ONB-1"
+        assertions: {viewer: true}
+      - user: "service_account:automation"
+        object: "work_item:ONB-1"
+        assertions: {editor: true}
+      - user: "agent:backend-agent"
+        object: "work_item:ONB-1"
+        assertions: {assignee: true, viewer: false, agent_executor: false}
+      - user: "user:bob"
+        object: "work_item:ONB-1"
+        assertions: {viewer: false}
+
+  - name: Work view delegation is scoped to the linked task
+    tuples:
+      - {user: "user:alice", relation: delegator, object: "delegation:task-view"}
+      - {user: "agent:backend-agent", relation: delegate_agent, object: "delegation:task-view"}
+      - {user: "agent:backend-agent", relation: enabled_agent, object: "delegation:task-view"}
+      - {user: "delegation:task-view", relation: view_delegation, object: "work_item:ONB-1"}
+    check:
+      - user: "agent:backend-agent"
+        object: "work_item:ONB-1"
+        assertions: {viewer: true, editor: false}
+      - user: "agent:backend-agent"
+        object: "work_item:ONB-2"
+        assertions: {viewer: false}
+
+  - name: Agent task execution intersects authority active delegation and identity
+    tuples:
+      - {user: "agent:backend-agent", relation: delegate_agent, object: "delegation:execute-valid"}
+      - {user: "agent:backend-agent", relation: enabled_agent, object: "delegation:execute-valid"}
+      - {user: "work_item:ONB-1", relation: task, object: "delegation:execute-valid"}
+      - {user: "delegation:execute-valid", relation: execute_delegation, object: "work_item:ONB-1"}
+      - {user: "agent:backend-agent", relation: agent_authority, object: "work_item:ONB-1"}
+      - {user: "agent:backend-agent", relation: delegate_agent, object: "delegation:execute-no-authority"}
+      - {user: "agent:backend-agent", relation: enabled_agent, object: "delegation:execute-no-authority"}
+      - {user: "delegation:execute-no-authority", relation: execute_delegation, object: "work_item:ONB-2"}
+      - {user: "agent:backend-agent", relation: delegate_agent, object: "delegation:execute-revoked"}
+      - {user: "delegation:execute-revoked", relation: execute_delegation, object: "work_item:ONB-3"}
+      - {user: "agent:backend-agent", relation: agent_authority, object: "work_item:ONB-3"}
+      - {user: "agent:other-agent", relation: delegate_agent, object: "delegation:execute-wrong-agent"}
+      - {user: "agent:other-agent", relation: enabled_agent, object: "delegation:execute-wrong-agent"}
+      - {user: "delegation:execute-wrong-agent", relation: execute_delegation, object: "work_item:ONB-4"}
+      - {user: "agent:backend-agent", relation: agent_authority, object: "work_item:ONB-4"}
+    check:
+      - user: "agent:backend-agent"
+        object: "work_item:ONB-1"
+        assertions: {agent_executor: true}
+      - user: "work_item:ONB-1"
+        object: "delegation:execute-valid"
+        assertions: {task: true}
+      - user: "agent:backend-agent"
+        object: "work_item:ONB-2"
+        assertions: {agent_executor: false}
+      - user: "agent:backend-agent"
+        object: "work_item:ONB-3"
+        assertions: {agent_executor: false}
+      - user: "agent:backend-agent"
+        object: "work_item:ONB-4"
+        assertions: {agent_executor: false}
+
+  - name: Service principal task execution uses the same revocable intersection
+    tuples:
+      - {user: "user:alice", relation: delegator, object: "delegation:service-valid"}
+      - {user: "service_account:automation", relation: delegate_service_account, object: "delegation:service-valid"}
+      - {user: "service_account:automation", relation: enabled_service_account, object: "delegation:service-valid"}
+      - {user: "delegation:service-valid", relation: execute_delegation, object: "work_item:ONB-5"}
+      - {user: "service_account:automation", relation: service_account_authority, object: "work_item:ONB-5"}
+      - {user: "user:alice", relation: delegator, object: "delegation:service-revoked"}
+      - {user: "service_account:automation", relation: delegate_service_account, object: "delegation:service-revoked"}
+      - {user: "delegation:service-revoked", relation: execute_delegation, object: "work_item:ONB-6"}
+      - {user: "service_account:automation", relation: service_account_authority, object: "work_item:ONB-6"}
+    check:
+      - user: "service_account:automation"
+        object: "work_item:ONB-5"
+        assertions: {service_account_executor: true}
+      - user: "service_account:automation"
+        object: "work_item:ONB-6"
+        assertions: {service_account_executor: false}
+
+  - name: Documents derive access from exactly one supported container scope
+    tuples:
+      - {user: "organization:acme", relation: parent_organization, object: "document:policy"}
+      - {user: "user:alice", relation: viewer, object: "organization:acme"}
+      - {user: "team:people", relation: parent_team, object: "document:onboarding"}
+      - {user: "user:bob", relation: viewer, object: "team:people"}
+      - {user: "project:onboarding", relation: parent_project, object: "document:spec"}
+      - {user: "service_account:automation", relation: editor, object: "project:onboarding"}
+      - {user: "team:parent", relation: parent, object: "team:child"}
+      - {user: "user:carol", relation: viewer, object: "team:parent"}
+      - {user: "team:child", relation: parent_team, object: "document:child-procedure"}
+      - {user: "agent:review-agent", relation: reviewer, object: "document:spec"}
+    check:
+      - user: "user:alice"
+        object: "document:policy"
+        assertions: {viewer: true}
+      - user: "user:bob"
+        object: "document:onboarding"
+        assertions: {viewer: true}
+      - user: "service_account:automation"
+        object: "document:spec"
+        assertions: {editor: true}
+      - user: "user:carol"
+        object: "document:child-procedure"
+        assertions: {viewer: false}
+      - user: "agent:review-agent"
+        object: "document:spec"
+        assertions: {reviewer: true, viewer: false}
+
+  - name: Repository parents are generic scope without implicit permission
+    tuples:
+      - {user: "organization:acme", relation: parent_organization, object: "repository:org-knowledge"}
+      - {user: "user:alice", relation: viewer, object: "organization:acme"}
+      - {user: "team:people", relation: parent_team, object: "repository:team-knowledge"}
+      - {user: "user:alice", relation: reader, object: "repository:team-knowledge"}
+      - {user: "project:stead", relation: parent_project, object: "repository:code"}
+      - {user: "service_account:ci", relation: writer, object: "repository:code"}
+      - {user: "user:maintainer", relation: maintainer, object: "repository:code"}
+    check:
+      - user: "user:alice"
+        object: "repository:org-knowledge"
+        assertions: {reader: false}
+      - user: "user:alice"
+        object: "repository:team-knowledge"
+        assertions: {reader: true}
+      - user: "service_account:ci"
+        object: "repository:code"
+        assertions: {writer: true, maintainer: false}
+      - user: "user:maintainer"
+        object: "repository:code"
+        assertions: {maintainer: true, reader: false}
+
+  - name: Repository delegation supports narrow Agent and service-principal actions
+    tuples:
+      - {user: "service_account:indexer", relation: delegate_service_account, object: "delegation:repo-read"}
+      - {user: "service_account:indexer", relation: enabled_service_account, object: "delegation:repo-read"}
+      - {user: "delegation:repo-read", relation: read_delegation, object: "repository:team-knowledge"}
+      - {user: "service_account:indexer", relation: delegate_service_account, object: "delegation:repo-read-revoked"}
+      - {user: "delegation:repo-read-revoked", relation: read_delegation, object: "repository:revoked"}
+      - {user: "agent:repo-agent", relation: delegate_agent, object: "delegation:repo-maintain"}
+      - {user: "agent:repo-agent", relation: enabled_agent, object: "delegation:repo-maintain"}
+      - {user: "delegation:repo-maintain", relation: maintain_delegation, object: "repository:code"}
+    check:
+      - user: "service_account:indexer"
+        object: "repository:team-knowledge"
+        assertions: {reader: true, writer: false}
+      - user: "service_account:indexer"
+        object: "repository:revoked"
+        assertions: {reader: false}
+      - user: "agent:repo-agent"
+        object: "repository:code"
+        assertions: {maintainer: true, reader: false, writer: false}
+
+  - name: Release view and approval remain separate relations
+    tuples:
+      - {user: "project:stead", relation: project, object: "release:v1"}
+      - {user: "user:alice", relation: viewer, object: "project:stead"}
+      - {user: "agent:release-agent", relation: approver, object: "release:v1"}
+      - {user: "user:approver", relation: approver, object: "release:v1"}
+    check:
+      - user: "user:alice"
+        object: "release:v1"
+        assertions: {viewer: true, approver: false}
+      - user: "agent:release-agent"
+        object: "release:v1"
+        assertions: {approver: true, viewer: false}
+      - user: "user:approver"
+        object: "release:v1"
+        assertions: {approver: true, viewer: false}
+
+  - name: Delegation activation requires matching delegate and enablement
+    tuples:
+      - {user: "user:alice", relation: delegator, object: "delegation:active-agent"}
+      - {user: "agent:backend-agent", relation: delegate_agent, object: "delegation:active-agent"}
+      - {user: "agent:backend-agent", relation: enabled_agent, object: "delegation:active-agent"}
+      - {user: "user:alice", relation: delegator, object: "delegation:revoked-agent"}
+      - {user: "agent:backend-agent", relation: delegate_agent, object: "delegation:revoked-agent"}
+      - {user: "service_account:indexer", relation: delegate_service_account, object: "delegation:active-service"}
+      - {user: "service_account:indexer", relation: enabled_service_account, object: "delegation:active-service"}
+    check:
+      - user: "agent:backend-agent"
+        object: "delegation:active-agent"
+        assertions: {active_agent: true}
+      - user: "agent:backend-agent"
+        object: "delegation:revoked-agent"
+        assertions: {active_agent: false}
+      - user: "service_account:indexer"
+        object: "delegation:active-service"
+        assertions: {active_service_account: true}
+      - user: "agent:backend-agent"
+        object: "delegation:active-service"
+        assertions: {active_agent: false}
+
+  - name: Agent Run view control and requester are independent
+    tuples:
+      - {user: "work_item:ONB-1", relation: work_item, object: "agent_run:run-viewable"}
+      - {user: "project:onboarding", relation: project, object: "work_item:ONB-1"}
+      - {user: "user:alice", relation: viewer, object: "project:onboarding"}
+      - {user: "user:bob", relation: requested_by, object: "agent_run:run-requested"}
+      - {user: "service_account:control-plane", relation: controller, object: "agent_run:run-requested"}
+      - {user: "agent:backend-agent", relation: direct_viewer, object: "agent_run:run-requested"}
+    check:
+      - user: "user:alice"
+        object: "agent_run:run-viewable"
+        assertions: {viewer: true}
+      - user: "user:bob"
+        object: "agent_run:run-requested"
+        assertions: {requested_by: true, viewer: false}
+      - user: "service_account:control-plane"
+        object: "agent_run:run-requested"
+        assertions: {controller: true, viewer: false}
+      - user: "agent:backend-agent"
+        object: "agent_run:run-requested"
+        assertions: {viewer: true}
+
+  - name: Agent Run execution intersects run identity task authority and active delegation
+    tuples:
+      - {user: "agent:backend-agent", relation: delegate_agent, object: "delegation:run-valid"}
+      - {user: "agent:backend-agent", relation: enabled_agent, object: "delegation:run-valid"}
+      - {user: "delegation:run-valid", relation: execute_delegation, object: "work_item:ONB-1"}
+      - {user: "agent:backend-agent", relation: agent_authority, object: "work_item:ONB-1"}
+      - {user: "agent:backend-agent", relation: agent, object: "agent_run:run-valid"}
+      - {user: "work_item:ONB-1", relation: work_item, object: "agent_run:run-valid"}
+      - {user: "delegation:run-valid", relation: delegation, object: "agent_run:run-valid"}
+      - {user: "delegation:run-valid", relation: execute_delegation, object: "work_item:ONB-2"}
+      - {user: "agent:backend-agent", relation: agent_authority, object: "work_item:ONB-2"}
+      - {user: "work_item:ONB-2", relation: work_item, object: "agent_run:run-missing-agent"}
+      - {user: "delegation:run-valid", relation: delegation, object: "agent_run:run-missing-agent"}
+      - {user: "agent:backend-agent", relation: delegate_agent, object: "delegation:run-revoked"}
+      - {user: "delegation:run-revoked", relation: execute_delegation, object: "work_item:ONB-3"}
+      - {user: "agent:backend-agent", relation: agent_authority, object: "work_item:ONB-3"}
+      - {user: "agent:backend-agent", relation: agent, object: "agent_run:run-revoked"}
+      - {user: "work_item:ONB-3", relation: work_item, object: "agent_run:run-revoked"}
+      - {user: "delegation:run-revoked", relation: delegation, object: "agent_run:run-revoked"}
+      - {user: "agent:other-agent", relation: delegate_agent, object: "delegation:run-wrong-agent"}
+      - {user: "agent:other-agent", relation: enabled_agent, object: "delegation:run-wrong-agent"}
+      - {user: "delegation:run-wrong-agent", relation: execute_delegation, object: "work_item:ONB-4"}
+      - {user: "agent:backend-agent", relation: agent_authority, object: "work_item:ONB-4"}
+      - {user: "agent:backend-agent", relation: agent, object: "agent_run:run-wrong-agent"}
+      - {user: "work_item:ONB-4", relation: work_item, object: "agent_run:run-wrong-agent"}
+      - {user: "delegation:run-wrong-agent", relation: delegation, object: "agent_run:run-wrong-agent"}
+    check:
+      - user: "agent:backend-agent"
+        object: "agent_run:run-valid"
+        assertions: {executor: true}
+      - user: "agent:backend-agent"
+        object: "agent_run:run-missing-agent"
+        assertions: {executor: false}
+      - user: "agent:backend-agent"
+        object: "agent_run:run-revoked"
+        assertions: {executor: false}
+      - user: "agent:backend-agent"
+        object: "agent_run:run-wrong-agent"
+        assertions: {executor: false}
+
+  - name: Requesting user authority is never copied to the acting Agent
+    tuples:
+      - {user: "user:alice", relation: editor, object: "project:onboarding"}
+      - {user: "project:onboarding", relation: project, object: "work_item:ONB-1"}
+      - {user: "user:alice", relation: requested_by, object: "agent_run:run-1"}
+      - {user: "agent:backend-agent", relation: agent, object: "agent_run:run-1"}
+    check:
+      - user: "agent:backend-agent"
+        object: "work_item:ONB-1"
+        assertions: {editor: false, agent_executor: false}

@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stead.example/policies/policy-decision/output-v0.1.schema.json",
+  "title": "Stead deterministic policy-decision output",
+  "description": "Implementation-neutral, reason-safe result consumed alongside OpenFGA and provider/path enforcement.",
+  "type": "object",
+  "required": ["allow", "decision_id", "policy_bundle_id", "reason_codes", "obligations", "cache"],
+  "properties": {
+    "allow": {"type": "boolean"},
+    "decision_id": {"type": "string", "description": "Opaque per-evaluation identifier for audit correlation; excluded from semantic determinism comparisons."},
+    "policy_bundle_id": {"type": "string"},
+    "reason_codes": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+    "obligations": {"type": "array", "items": {"enum": ["display_marking", "watermark_export", "redact_notification", "audit_access", "require_approval_threshold", "disable_download"]}, "uniqueItems": true},
+    "approval_requirement": {
+      "description": "Effective approval and separation obligation derived from signed profile and deployment-domain policy; never inferred from a profile ID.",
+      "type": "object",
+      "required": ["minimum_approvers", "distinct_approvers", "human_approvers_required", "policy_basis"],
+      "properties": {
+        "minimum_approvers": {"type": "integer", "minimum": 1},
+        "distinct_approvers": {"const": true},
+        "human_approvers_required": {"type": "boolean"},
+        "policy_basis": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["source_kind", "source_id", "source_version"],
+            "properties": {
+              "source_kind": {"enum": ["security_label_profile", "deployment_domain"]},
+              "source_id": {"type": "string", "minLength": 1},
+              "source_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"}
+            },
+            "additionalProperties": false
+          },
+          "minItems": 1,
+          "uniqueItems": true,
+          "allOf": [
+            {"contains": {"properties": {"source_kind": {"const": "security_label_profile"}}, "required": ["source_kind"]}},
+            {"contains": {"properties": {"source_kind": {"const": "deployment_domain"}}, "required": ["source_kind"]}}
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "cache": {"type": "object", "required": ["permitted", "max_age_seconds", "invalidation_keys"], "properties": {"permitted": {"type": "boolean"}, "max_age_seconds": {"type": "integer", "minimum": 0}, "invalidation_keys": {"type": "array", "items": {"type": "string"}}}, "additionalProperties": false}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"obligations": {"contains": {"const": "require_approval_threshold"}}}},
+      "then": {"required": ["approval_requirement"]},
+      "else": {"not": {"required": ["approval_requirement"]}}
+    }
+  ],
+  "additionalProperties": false
+}

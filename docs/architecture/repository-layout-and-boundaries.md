@@ -1,7 +1,7 @@
 # Phase 0 Repository Layout and Boundary Constitution
 
-Status: **Draft for Phase 0 approval**<br>
-Normative source: `unified_open_work_platform_master_build_directive.md` version 0.2
+Status: **Ready for Phase 0 approval**<br>
+Normative source: `docs/architecture/MASTER_BUILD_DIRECTIVE.md` version 0.2
 
 This document records the required monorepo shape, exclusive edit ownership, dependency direction, integration roots, and logical data ownership. It is a planning contract, not authorization to scaffold or implement Phase 1 features. Top-level names and boundaries may change only through an approved ADR.
 
@@ -9,10 +9,10 @@ This document records the required monorepo shape, exclusive edit ownership, dep
 
 ```text
 /apps
-  /web                    WS-05  Devlane-derived unified frontend
-  /core                   WS-02  Go public API/BFF and composition root
-  /worker                 WS-07  Go async composition root and eventing runtime
-  /platformctl            WS-12  install/upgrade/backup/restore/doctor CLI
+  /web                    WS-05  Devlane-derived unified frontend; deploys as stead-web
+  /core                   WS-02  Go public API/BFF and composition root; deploys as stead-api
+  /worker                 WS-07  Go async composition root and eventing runtime; deploys as stead-worker
+  /steadctl               WS-12  install/upgrade/backup/restore/doctor CLI
 
 /modules
   /organization           WS-02
@@ -29,6 +29,7 @@ This document records the required monorepo shape, exclusive edit ownership, dep
   /notification           WS-07
   /audit                  WS-07  includes activity and actor/requester/delegation context
   /migration              WS-11
+  /agent                  WS-08  contract-only future Agent Registry/run interoperability; no Phase 0 execution
 
 /providers
   /gitea                  WS-03
@@ -43,6 +44,7 @@ This document records the required monorepo shape, exclusive edit ownership, dep
   /identity-scim          WS-06
   /notifications-email    WS-07
   /notifications-webhook  WS-07
+  /agent-a2a              WS-08  compatibility contract only; no Phase 0 dispatch
 
 /packages
   /domain-schemas         WS-01 integration owner; WS-06 owns identity/security subtrees
@@ -54,8 +56,9 @@ This document records the required monorepo shape, exclusive edit ownership, dep
 
 /policies
   /openfga                WS-06
-  /opa                    WS-06
+  /policy-decision        WS-06  implementation-neutral classification/context/information-flow contracts
   /security-label-profiles WS-06
+  /deployment-domains     WS-06  profile-qualified ceilings and environment assurance controls; WS-12 operations review
 
 /specs
   /openapi                WS-01
@@ -64,11 +67,13 @@ This document records the required monorepo shape, exclusive edit ownership, dep
   /okf-profile            WS-04
   /oscal                  WS-13
   /traceability           WS-13  Phase 0 requirement inventory and matrix
+  /mcp                    WS-08  platform-wide compatibility seam; no Phase 0 tool catalog
+  /a2a                    WS-08  Agent Card/message compatibility seam; no Phase 0 dispatch
 
 /deploy
   /compose                WS-12
   /helm                   WS-12
-  /airgap                 WS-12
+  /airgap                WS-12  high-assurance-airgap install profile assets
   /examples               WS-12
 
 /tests
@@ -103,7 +108,7 @@ The following subpaths override only their parent integration owner. A path not 
 |---|---|---|
 | `/packages/domain-schemas/common/` | `WS-01` | common resource envelope, relationship, provenance, external reference, errors, exports |
 | `/packages/domain-schemas/resources/` | `WS-01` | canonical entity schemas; domain owners review but do not concurrently edit |
-| `/packages/domain-schemas/identity/` | `WS-06` | Principal (`user`, `agent`, `service_account`), User, Service Principal, trusted attributes |
+| `/packages/domain-schemas/identity/` | `WS-06` | PrincipalRef (`user`, `agent`, `service_account`, `directory_group`), User, Directory Group, Service Principal, Agent, Agent Run, trusted attributes; only user/agent/service_account may act |
 | `/packages/domain-schemas/security/` | `WS-06` | SecurityLabel and deployment-domain schemas |
 | `/packages/domain-schemas/config/` | `WS-12` | installation/effective configuration schema |
 | `/packages/domain-schemas/resources/work-assignment/` | `WS-02` | provider-independent Work Item assignee reference; leaf override under the WS-01 resource-schema integration tree |
@@ -114,6 +119,7 @@ The following subpaths override only their parent integration owner. A path not 
 | `/packages/provider-sdk/notifications/` | `WS-07` | NotificationChannel |
 | `/packages/provider-sdk/audit-export/` | `WS-07` | audit object-store/syslog/SIEM-webhook export |
 | `/packages/provider-sdk/search/` | `WS-08` | SearchProvider |
+| `/modules/agent/`, `/providers/agent-a2a/`, `/specs/mcp/`, `/specs/a2a/` | `WS-08` | contract-only future Agent Registry, MCP, and A2A seams; no execution, tool catalog, or dispatch in Phase 0 |
 | `/packages/provider-sdk/ci/` | `WS-09` | runner-pool/control contracts |
 | `/packages/provider-sdk/secrets/` | `WS-09` | SecretProvider |
 | `/packages/provider-sdk/blobstore/` | `WS-10` | BlobStore |
@@ -198,17 +204,17 @@ Implementation unit/property tests live beside owned module/provider code. Cross
 Allowed compile-time/runtime dependency direction is:
 
 ```text
-platform-web
+stead-web
   -> generated api-client + design-system
   -> versioned platform HTTP API only
 
-platform-core composition root
+stead-api composition root
   -> module public contracts
   -> central authorization/classification contract
   -> provider interfaces
   -> platform PostgreSQL through module-owned repositories
 
-platform-worker composition root
+stead-worker composition root
   -> event/outbox framework
   -> module-owned handlers/reconcilers/projectors through registered ports
   -> provider interfaces
@@ -225,7 +231,7 @@ provider implementation
   -> documented upstream API/protocol/client
   -> no domain table and no alternate authorization logic
 
-platformctl
+steadctl
   -> supported administrative platform API and deployment/backup interfaces
   -> never ad hoc writes to module or upstream tables
 
@@ -243,7 +249,7 @@ Cross-module cycles are prohibited. A proposed module dependency must be documen
 - `WS-02` alone edits `/apps/core` wiring. Other owners expose module/provider constructors and submit an integration request; `WS-02` binds them after contract and boundary tests pass.
 - `WS-07` alone edits `/apps/worker` wiring. Other owners expose idempotent handlers through module contracts and submit a registration request; `WS-07` binds subjects, queues, DLQ, telemetry, and shutdown behavior.
 - `WS-05` alone edits `/apps/web`; no backend owner may add a direct provider call to accelerate a feature.
-- `WS-12` alone edits `/apps/platformctl` and deployment composition; component owners contribute health/config/backup/upgrade contracts, not ad hoc CLI code.
+- `WS-12` alone edits `/apps/steadctl` and deployment composition; component owners contribute health/config/backup/upgrade contracts, not ad hoc CLI code.
 - `WS-08` alone edits the Phase 0 future-agent interoperability seam under `/docs/architecture/search-graph/mcp-a2a-compatibility.md`. It preserves MCP, A2A, and Agent Card compatibility without implementing a tool catalog, registry behavior, dispatch, runtime, model, orchestration, prompting, or memory.
 
 ## Database and system-of-record boundaries
@@ -253,7 +259,7 @@ Exact physical PostgreSQL schema naming is a Phase 0 implementation choice, but 
 | Logical namespace | Sole migration/write owner | System-of-record qualification |
 |---|---|---|
 | `organization.*` | `WS-02` | authoritative platform organization/team state |
-| `identity.*` | `WS-06` | authoritative platform principal-reference/linkage/sync state; trusted assertions remain sourced from configured authorities; no Phase 0 agent-runtime or Agent Registry tables |
+| `identity.*` | `WS-06` | authoritative platform principal-reference/linkage/sync state; trusted assertions remain sourced from configured authorities; Phase 0 defines Agent/AgentRun schemas but no runtime, dispatch, or execution tables |
 | `authorization.*` | `WS-06` | authoritative platform model/bundle/reconciliation metadata; OpenFGA supported datastore holds model/tuples |
 | `classification.*` | `WS-06` | authoritative label/profile/derivation/approval state |
 | `project.*` | `WS-02` | authoritative Initiative/Project/Cycle platform state |
@@ -287,7 +293,7 @@ The following are merge blockers, not style preferences:
 
 | Boundary ID | Prohibited behavior | Required automated guard |
 |---|---|---|
-| `BND-001` | web/browser calls Gitea, Commonplace, OpenFGA, OPA, NATS, object storage, or another provider directly | frontend import/URL allowlist plus E2E network assertion |
+| `BND-001` | web/browser calls Gitea, Commonplace, OpenFGA, the policy-decision layer, NATS, object storage, or another provider directly | frontend import/URL allowlist plus E2E network assertion |
 | `BND-002` | platform queries/writes Gitea or OpenFGA internal tables | SQL/import static rule, runtime least-privilege DB credentials, provider contract tests |
 | `BND-003` | module writes another module namespace | migration/path ownership check, DB role/privilege tests, integration mutation audit |
 | `BND-004` | module imports provider implementation rather than port | Go dependency/layer rule and architecture test |
@@ -299,11 +305,11 @@ The following are merge blockers, not style preferences:
 | `BND-010` | secret/protected body enters event, log, telemetry, search, frontend state, or audit unnecessarily | taint fixtures, log/event snapshot scans, secret scanning, telemetry assertions |
 | `BND-011` | provider-specific fields or locators become canonical behavior | schema/API compatibility check and provider-parity contract suite |
 | `BND-012` | source migration creates new ontology/workflow or silently drops data | canonical-enum validation and unsupported-construct completeness test |
-| `BND-013` | air-gap/government profile makes an unapproved network call | network-disabled install/runtime test and egress capture |
+| `BND-013` | network-restricted or high-assurance air-gap deployment makes an unapproved network call | network-disabled install/runtime test and egress capture |
 | `BND-014` | implementation owner changes shared contract/test/gate concurrently or self-approves | contract lock/CODEOWNERS check and approval identity/separation gate |
 | `BND-015` | unapproved license/dependency/action/image enters distributed output | dependency/SBOM/license/action pin/image digest gates |
-| `BND-016` | actor/assignee/reviewer/subscriber/request contracts assume a human user rather than a principal | schema lint and fixtures for `user`, `agent`, and `service_account` across assignment, API, event, and audit contracts |
-| `BND-017` | agent broadly inherits delegator authority or omits task/runtime/classification intersection seams | OpenFGA/OPA model tests for explicit delegation, independent revocation, task scope, principal type, and reserved runtime/environment attributes |
+| `BND-016` | actor/assignee/reviewer/subscriber/request contracts assume a human user rather than the principal kinds allowed at that field | schema lint and fixtures for acting `user`/`agent`/`service_account` contexts and the narrower `user`/`agent` Work-assignee union across API, event, and audit contracts |
+| `BND-017` | agent broadly inherits delegator authority or omits task/runtime/classification intersection seams | OpenFGA plus policy-decision contract tests for explicit delegation, independent revocation, task scope, principal type, and reserved runtime/environment attributes |
 | `BND-018` | future agent uses provider business API or unrestricted access instead of Platform API/MCP | agent-access architecture tests; only scoped direct Git protocol credentials are exempt |
 | `BND-019` | Phase 0 implements agent orchestration, prompting, model hosting, agent memory, AgentRun execution, Agent Registry behavior, A2A dispatch, or full MCP tool catalog | scope/backlog and dependency guard; such work requires later approved issue/phase and any applicable ADR |
 

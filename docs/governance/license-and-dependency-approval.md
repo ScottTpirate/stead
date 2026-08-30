@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | Draft Phase 0 governance contract; approval required before adding product dependencies |
+| Status | Phase 0 approval candidate; approval required before adding product dependencies |
 | Policy owner | Workstream 13 — QA/security/release |
 | Technical reviewers | Workstream 1 — Architecture/standards; owning implementation workstream; Workstream 9 for actions/build supply chain; Workstream 12 for distributed images/charts |
 | Exception authority | Legal reviewer + ADR approval + project-owner approval |
@@ -149,7 +149,7 @@ Architecture confirms that the dependency:
 - does not change a locked architecture decision or canonical ontology without an approved ADR;
 - does not access an upstream or another module’s database/internal files;
 - is behind the required provider/module interface where applicable;
-- remains replaceable, infrastructure-agnostic and usable offline where the profile requires;
+- remains replaceable, infrastructure-agnostic and usable offline where the deployment security-domain policy requires;
 - does not introduce an unbounded in-process plugin surface or required SaaS control plane;
 - does not couple future Platform API/MCP interoperability to one external agent runtime, model, SDK, orchestration framework or model provider;
 - does not expand Phase 0 into agent execution/orchestration/prompting/model hosting/memory/A2A dispatch/full MCP implementation;
@@ -177,7 +177,7 @@ An exception is narrow and does not add the license family to the general allowl
 
 After approval, the owner updates the appropriate manifest and deterministic lockfile, pins actions/images by immutable commit or digest, limits optional features to the approved set, and adds contract/security tests. Generated or vendored material retains provenance and is reproducibly refreshable. Runtime images contain only approved, required components.
 
-No module may download executable code or arbitrary public actions at runtime. Secure profiles use the approved internal action catalog. Air-gap inputs must come from the signed, inventoried bundle.
+No module may download executable code or arbitrary public actions at runtime. Deployments whose security-domain policy requires a controlled action catalog use the approved internal catalog. Air-gap inputs must come from the signed, inventoried bundle.
 
 ### 7. CI policy gates
 
@@ -201,7 +201,7 @@ Each official release provides SPDX 3.0 SBOMs covering the contents of every dis
 
 Third-party notices are generated from approved records and verified against the actual release contents. They include all required license texts, copyright attributions, upstream `NOTICE` material and modification statements. The Devlane MIT notices are an explicit regression fixture. Apache-2.0 `LICENSE` and any applicable platform/upstream `NOTICE` material ship in source and distribution locations required by the packaging contract.
 
-SBOM, notices, checksums, vulnerability/known-issue manifest, signatures and verification material are included in the government air-gap bundle. These artifacts contain no registry credentials, private source paths, secrets or protected customer data.
+SBOM, notices, checksums, vulnerability/known-issue manifest, signatures and verification material are included in every applicable high-assurance air-gap bundle. These artifacts contain no registry credentials, private source paths, secrets or protected customer data. Their contents and cryptographic-assurance evidence are selected by the deployment security-domain policy, not inferred from a label-profile name.
 
 ## Updates, rollback and revocation
 

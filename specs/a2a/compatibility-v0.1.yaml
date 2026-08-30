@@ -1,0 +1,7 @@
+schema_version: "0.1"
+status: contract_only
+purpose: external_agent_runtime_interoperability
+agent_card_compatible_fields: [canonical_agent_id, display_name, external_runtime_ref, card_uri, authority_revision, security_domains, profile_qualified_classification_ceilings, supported_task_types]
+run_context_fields: [canonical_agent_run_id, work_item_id, requested_by, delegation_id, task_context_id, correlation_id, causation_id, state]
+runtime_neutrality: [no_required_model, no_required_model_provider, no_required_agent_sdk, no_required_orchestrator]
+prohibited: [dispatch, registry_behavior, agent_run_execution, prompting, model_hosting, memory, tool_catalog]

@@ -7,7 +7,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Phase 1-3 work remains blocked until the immutable Phase 0 approval record unblocks it. Complete every field; use `not applicable` only with a concrete reason.
+        Complete every field; use `not applicable` only with a concrete reason. Work may begin only after its named architecture, dependency, and release gates are approved at the exact required revision.
   - type: input
     id: requirement_ids
     attributes:
@@ -59,10 +59,25 @@ body:
     validations:
       required: true
   - type: textarea
+    id: performance_contract
+    attributes:
+      label: Performance contract
+      description: State expected request count, SQL query behavior, external/provider calls, authorization strategy, synchronous writes, frontend bundle impact, and the benchmark to run or a concrete reason the work is not performance-sensitive.
+      placeholder: |
+        Expected requests: one composed BFF request
+        SQL: bounded set-oriented queries; asserted count
+        Provider calls: zero on ordinary reads
+        Authorization: fresh set-oriented decision
+        Synchronous writes: one logical authorization/audit operation
+        Bundle impact: no eager capability code
+        Benchmark: T-PERF-003-ACCEPTANCE
+    validations:
+      required: true
+  - type: textarea
     id: auth_classification
     attributes:
       label: Authorization and classification behavior
-      description: Principal types and requester/actor context; server-side OpenFGA/OPA/provider checks; label propagation; non-disclosure; direct paths; fail-closed cases.
+      description: Principal types and requester/actor context; server-side OpenFGA/policy-decision/provider checks; label propagation; non-disclosure; direct paths; fail-closed cases.
     validations:
       required: true
   - type: textarea
@@ -98,7 +113,7 @@ body:
     attributes:
       label: Gate acknowledgements
       options:
-        - label: The issue is blocked until all named Phase 0 contracts are approved.
+        - label: The issue is blocked until all named architecture and dependency gates are approved at their required revisions.
           required: true
         - label: Dependencies and licenses will follow the approval workflow before merge.
           required: true

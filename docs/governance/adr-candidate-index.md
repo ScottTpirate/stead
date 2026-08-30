@@ -1,0 +1,49 @@
+# ADR candidate implementation-gate index
+
+Status: **Phase 1 active; six candidates are resolved and the remaining candidates stay deferred to their named gates**
+
+This index converts the narrative ADR queue into enforceable issue-activation deadlines. [ADR-0001](../adr/0001-canonical-uri-and-compatibility-profile.md) records the accepted `ADR-CAND-001` decision. ADR-0002 through ADR-0006 resolve `ADR-CAND-004`, `ADR-CAND-005`, `ADR-CAND-021`, `ADR-CAND-003`, and `ADR-CAND-007` respectively at immutable decision revision `24c74d52ef0a78840ab147da48c3d66589e49e3e`. `GATE-P0-APPROVED` and each applicable unresolved ADR gate must both pass before a dependent issue becomes active. The machine-readable mirror for the first-slice and Team-relation gates is `adr_decision_gates` in [`implementation-issue-catalog.yaml`](../planning/implementation-issue-catalog.yaml).
+
+Candidates `ADR-CAND-001`–`ADR-CAND-021` and their dispositions are described in [the implementation-choice queue](../adr/unresolved-implementation-choices.md). The detail below makes the new Team-relation deadline explicit for reviewers.
+
+## Issue activation deadlines
+
+| Candidate | Decision must be accepted before | Known dependent issues | Enforcement note |
+|---|---|---|---|
+| `ADR-CAND-001` | **RESOLVED by [ADR-0001](../adr/0001-canonical-uri-and-compatibility-profile.md); accepted before `STEAD-P1-001` activation** | `STEAD-P1-001`, `STEAD-P1-002`, `STEAD-P2-009`, `STEAD-P3-006` | Registered `urn:uuid` identity, explicit scope fields, trusted-origin browser derivation, compatibility, redirect, migration, and rollback rules now govern dependent work. |
+| `ADR-CAND-002` | `STEAD-P1-015` becomes active | `STEAD-P1-015`, `STEAD-P1-006`, `STEAD-P1-002`, `STEAD-P1-007`, `STEAD-P1-011`, `STEAD-P2-010` | Physical namespace isolation and transaction coordination precede the WS-02 core/outbox and one-operation request-boundary handoff, durable effect-permit persistence, domain database work, and recovery implementation. Phase 1 does not make strict guard/quiescence persistence a prerequisite; it preserves typed ports. |
+| `ADR-CAND-003` | **RESOLVED by accepted [ADR-0005](../adr/0005-authorization-and-policy-decision-topology.md) at `24c74d52ef0a78840ab147da48c3d66589e49e3e`** | `STEAD-P1-015`, `STEAD-P1-006`, `STEAD-P1-003`, `STEAD-P1-007`, `STEAD-P1-008`, `STEAD-P1-012`, `STEAD-P2-006`, `STEAD-P3-002`, `STEAD-P3-007`, `STEAD-P3-008` | The native in-process evaluator, single coordinator, signed deployment-selected `request_boundary` implementation, typed `commit_boundary` seams, durable permits for stronger effects, zero decision cache, revision fence, provider enforcement, and later strict evidence govern dependent work; implementation evidence remains separately gated and OPA/Rego remains optional, not presumed. |
+| `ADR-CAND-004` | **RESOLVED by accepted [ADR-0002](../adr/0002-security-label-algebra-and-profile-identifiers.md) at `24c74d52ef0a78840ab147da48c3d66589e49e3e`** | `STEAD-P1-006`, `STEAD-P1-002`, `STEAD-P2-004`, `STEAD-P3-002` | The accepted profile-generic label algebra, stable identifier rules, and profile-qualified ceilings govern dependent policy and labeled-resource implementation; implementation evidence remains separately gated. |
+| `ADR-CAND-005` | **RESOLVED by accepted [ADR-0003](../adr/0003-trusted-principal-and-runtime-attributes.md) at `24c74d52ef0a78840ab147da48c3d66589e49e3e`** | `STEAD-P1-006`, `STEAD-P2-004`, `STEAD-P2-006` | The accepted trusted human/Agent/runtime normalization and bounded policy-input correction govern dependent identity and policy implementation; implementation evidence remains separately gated. |
+| `ADR-CAND-006` | `STEAD-P1-007` becomes active | `STEAD-P1-007`, `STEAD-P1-008`, `STEAD-P1-012`, `STEAD-P2-005` | NATS tenant/domain partition, replay, retention, ordering, and DLQ rules precede event transport. |
+| `ADR-CAND-007` | **RESOLVED by accepted [ADR-0006](../adr/0006-signed-policy-bundle-distribution-and-activation.md) at `24c74d52ef0a78840ab147da48c3d66589e49e3e`** | `STEAD-P1-016`, `STEAD-P1-015`, `STEAD-P1-006`, `STEAD-P1-011`, `STEAD-P2-004`, `STEAD-P2-010` | The accepted activation-set format, deployment-policy-driven signature/custody/cryptographic assurance, trust roots, offline verification, atomic activation, rollback, and v1 TUF non-authority govern the WS-09 artifact/attestation handoff, core/outbox activation seam, and executable classification policy; implementation evidence remains separately gated. |
+| `ADR-CAND-008` | `STEAD-P1-003` becomes active | `STEAD-P1-003`, `STEAD-P1-012`, `STEAD-P2-001` | Provider reconciliation source precedence and degraded/conflict behavior precede the Gitea adapter. |
+| `ADR-CAND-009` | `STEAD-P3-001` becomes active | `STEAD-P3-001` | Yjs persistence/compaction and deterministic Git projection precede collaboration implementation. |
+| `ADR-CAND-010` | `STEAD-P2-002` selects the native fallback | `STEAD-P2-002` | The ADR is conditional: the upstream/headless path may proceed, but fallback code may not begin without acceptance. |
+| `ADR-CAND-011` | `STEAD-P2-006` becomes active | `STEAD-P2-006`, `STEAD-P3-004` | Scale/search partition and semantic profile decisions precede the Beta search expansion. |
+| `ADR-CAND-012` | `STEAD-P2-008` becomes active | `STEAD-P2-008` | Non-filesystem delivery and partition topology precede provider implementation. |
+| `ADR-CAND-013` | `STEAD-P2-007` becomes active | `STEAD-P2-007` | Runner isolation/trust tiers precede runner-pool implementation. |
+| `ADR-CAND-014` | `STEAD-P3-003` becomes active | `STEAD-P3-003` | Tamper-evidence/checkpoint/export representation precedes production audit checkpoints. |
+| `ADR-CAND-015` | `STEAD-P3-002` becomes active | `STEAD-P3-002`, `STEAD-P3-007` | The deployment-policy-selected validated cryptographic boundary and evidence model precede any claimed high-assurance/FIPS-capable installation; no label-profile ID changes cryptographic behavior. |
+| `ADR-CAND-016` | `STEAD-P2-009` becomes active | `STEAD-P2-009`, `STEAD-P3-006` | Identity/collision/redirect precedence precedes any importer write to canonical state. |
+| `ADR-CAND-017` | `STEAD-P2-006` becomes active | `STEAD-P2-006`, `STEAD-P3-004` | Agent Registry, MCP/A2A execution surface, credential, cancellation, and compatibility choices precede executable agent integration. |
+| `ADR-CAND-018` | any typed-property implementation issue is admitted | No current issue | The proposed issue must add this ADR as a dependency before admission; Phase 1 has no user-defined fields. |
+| `ADR-CAND-019` | any scheduler/automation implementation issue is admitted | No current issue | The proposed issue must add this ADR as a dependency before admission. |
+| `ADR-CAND-020` | any external/guest collaboration issue is admitted | No current issue | The proposed issue must add this ADR as a dependency before admission. |
+| `ADR-CAND-021` | **RESOLVED by accepted [ADR-0004](../adr/0004-initial-team-role-and-authorization-semantics.md) at `24c74d52ef0a78840ab147da48c3d66589e49e3e`** | `STEAD-P1-006`, `STEAD-P1-002`, `STEAD-P1-005`, `STEAD-P2-003` | The accepted fixed Team lead/member/contributor relations govern authorization tuples, Team operations, and Team UI; the WS-05 implementation review and executable evidence remain later gates. |
+
+## ADR-CAND-021 — Initial Team relation model
+
+The directive locks hierarchical Team identity, owning/contributing Project accountability, and the rule that neither hierarchy nor accountability grants access. It does not select the first executable Team relation vocabulary or its exact mapping to authorization and UI responsibilities.
+
+[ADR-0004](../adr/0004-initial-team-role-and-authorization-semantics.md) selects distinct explicit `lead`, `member`, and `contributor` OpenFGA relations; their cardinality and grant semantics; bounded Directory Group participation; revocation and reparenting effects; provisioning behavior; and backward-compatible tuple/data migration. Its decision-time reviews and project-owner approval are recorded at immutable revision `24c74d52ef0a78840ab147da48c3d66589e49e3e`; WS-05 implementation review and executable evidence remain later gates.
+
+- Requirements: `PRIN-015`, `DOM-009`, `AUTH-002`, `AUTH-003`, `AUTH-006`, `UX-006`, `UX-007`.
+- Owner: `WS-06`.
+- Decision reviewers recorded: `WS-01`, `WS-02`, distinct independent `WS-13` QA/security identities, and project owner. `WS-05` reviews the product/frontend implementation before that consumer merges.
+- Locked constraints: no access from Team parent/child hierarchy; no access from Project ownership or contribution; no implicit organization-wide visibility; Directory Groups never act; security/classification policy may only restrict an explicit relationship allow; no configurable ontology or arbitrary role engine.
+- Compatibility obligations: document initial tuple materialization, SCIM/directory mapping, rename/reparent behavior, revocation, API/UX labels, migration, rollback, and negative hierarchy/accountability tests.
+
+## Gate behavior
+
+An issue with an unresolved deadline candidate remains `BLOCKED`, even if its ordinary issue dependencies and `GATE-P0-APPROVED` have passed. A proposed ADR is unresolved. Acceptance must record the ADR revision, required non-author reviews, and project-owner disposition where required. Decision-record acceptance adopts the decision and named future test obligations; executable implementation evidence is still required by the dependent issue and release gates. Superseding an ADR updates this index and every affected issue dependency in one reviewed change.
