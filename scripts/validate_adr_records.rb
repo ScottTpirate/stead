@@ -13,7 +13,72 @@ EXPECTED_RECORDS = {
   "0003" => { candidate: "ADR-CAND-005", state: "ACCEPTED", owner_approval: true },
   "0004" => { candidate: "ADR-CAND-021", state: "ACCEPTED", owner_approval: true },
   "0005" => { candidate: "ADR-CAND-003", state: "ACCEPTED", owner_approval: false },
-  "0006" => { candidate: "ADR-CAND-007", state: "ACCEPTED", owner_approval: true }
+  "0006" => { candidate: "ADR-CAND-007", state: "ACCEPTED", owner_approval: true },
+  "0009" => { candidate: "ADR-CAND-008", state: "DEFERRED", owner_approval: false }
+}.freeze
+
+EXPECTED_REQUIREMENT_TEST_LINKS = {
+  "0009" => {
+    "PRIN-002" => %w[T-ADR-0009-UPGRADE-ROLLBACK],
+    "ARCH-004" => %w[T-ADR-0009-DIRECT-CHANGE-ACCEPT T-ADR-0009-AMBIGUOUS-MUTATION],
+    "DOM-004" => %w[T-ADR-0009-PRECEDENCE],
+    "SCM-001" => %w[
+      T-ADR-0009-WEBHOOK-IDEMPOTENCY
+      T-ADR-0009-PROVIDER-OUTAGE
+      T-ADR-0009-FULL-RECONCILIATION
+      T-ADR-0009-UPGRADE-ROLLBACK
+    ],
+    "SCM-002" => %w[
+      T-ADR-0009-PRECEDENCE
+      T-ADR-0009-DIRECT-CHANGE-RESET
+      T-ADR-0009-FULL-RECONCILIATION
+    ],
+    "SCM-003" => %w[
+      T-ADR-0009-PRECEDENCE
+      T-ADR-0009-DIRECT-CHANGE-ACCEPT
+      T-ADR-0009-DIRECT-CHANGE-RESET
+      T-ADR-0009-CONFLICT-QUARANTINE
+      T-ADR-0009-AMBIGUOUS-MUTATION
+      T-ADR-0009-FULL-RECONCILIATION
+    ],
+    "SCM-004" => %w[
+      T-ADR-0009-WEBHOOK-IDEMPOTENCY
+      T-ADR-0009-DIRECT-CHANGE-ACCEPT
+      T-ADR-0009-DIRECT-CHANGE-RESET
+      T-ADR-0009-CONFLICT-QUARANTINE
+      T-ADR-0009-AMBIGUOUS-MUTATION
+    ],
+    "SCM-005" => %w[
+      T-ADR-0009-AMBIGUOUS-MUTATION
+      T-ADR-0009-FULL-RECONCILIATION
+      T-ADR-0009-UPGRADE-ROLLBACK
+    ],
+    "CLS-006" => %w[
+      T-ADR-0009-CONFLICT-QUARANTINE
+      T-ADR-0009-PERMISSION-DRIFT
+      T-ADR-0009-PROVIDER-OUTAGE
+    ],
+    "CLS-007" => %w[
+      T-ADR-0009-PERMISSION-DRIFT
+      T-ADR-0009-PROVIDER-OUTAGE
+    ],
+    "TEST-006" => %w[
+      T-ADR-0009-PRECEDENCE
+      T-ADR-0009-WEBHOOK-IDEMPOTENCY
+      T-ADR-0009-DIRECT-CHANGE-ACCEPT
+      T-ADR-0009-DIRECT-CHANGE-RESET
+      T-ADR-0009-CONFLICT-QUARANTINE
+      T-ADR-0009-PERMISSION-DRIFT
+      T-ADR-0009-PROVIDER-OUTAGE
+      T-ADR-0009-AMBIGUOUS-MUTATION
+      T-ADR-0009-FULL-RECONCILIATION
+      T-ADR-0009-UPGRADE-ROLLBACK
+    ],
+    "PERF-003" => %w[
+      T-ADR-0009-PROVIDER-OUTAGE
+      T-ADR-0009-FULL-RECONCILIATION
+    ]
+  }.freeze
 }.freeze
 
 DECISION_REVISION = "24c74d52ef0a78840ab147da48c3d66589e49e3e"
@@ -145,9 +210,15 @@ paths.each do |path|
   tests_by_number[number] = test_ids
   test_ids.each { |test_id| all_test_owners[test_id] << relative }
 
-  failures << "docs/adr/INDEX.md: missing #{basename}" unless adr_index.include?("./#{basename}")
-  failures << "docs/governance/adr-candidate-index.md: missing #{basename}" unless candidate_index.include?("../adr/#{basename}")
-  failures << "docs/adr/unresolved-implementation-choices.md: missing #{basename}" unless choice_queue.include?("./#{basename}")
+  if expected.fetch(:state) == "ACCEPTED"
+    failures << "docs/adr/INDEX.md: missing #{basename}" unless adr_index.include?("./#{basename}")
+    failures << "docs/governance/adr-candidate-index.md: missing #{basename}" unless candidate_index.include?("../adr/#{basename}")
+    failures << "docs/adr/unresolved-implementation-choices.md: missing #{basename}" unless choice_queue.include?("./#{basename}")
+  else
+    failures << "docs/adr/INDEX.md: missing deferred candidate #{candidate}" unless adr_index.include?(candidate)
+    failures << "docs/governance/adr-candidate-index.md: missing deferred candidate #{candidate}" unless candidate_index.include?(candidate)
+    failures << "docs/adr/unresolved-implementation-choices.md: missing deferred candidate #{candidate}" unless choice_queue.include?(candidate)
+  end
 
   gate = adr_gates[candidate]
   unless gate
@@ -155,8 +226,16 @@ paths.each do |path|
     next
   end
   failures << "implementation issue catalog: #{candidate} state must be #{expected.fetch(:state)}" unless gate["state"] == expected.fetch(:state)
-  failures << "implementation issue catalog: #{candidate} decision_record must be #{relative}" unless gate["decision_record"] == relative
-  failures << "implementation issue catalog: #{candidate} project-owner flag mismatch" unless gate["project_owner_approval_required"] == expected.fetch(:owner_approval)
+  if expected.fetch(:state) == "ACCEPTED"
+    failures << "implementation issue catalog: #{candidate} decision_record must be #{relative}" unless gate["decision_record"] == relative
+    failures << "implementation issue catalog: #{candidate} project-owner flag mismatch" unless gate["project_owner_approval_required"] == expected.fetch(:owner_approval)
+  else
+    acceptance_fields = %w[decision_record immutable_revision accepted_at approval_record approval_records]
+    present_acceptance_fields = acceptance_fields.select { |field| gate.key?(field) }
+    unless present_acceptance_fields.empty?
+      failures << "implementation issue catalog: deferred #{candidate} must not carry acceptance fields: #{present_acceptance_fields.join(', ')}"
+    end
+  end
 
   next unless EXPECTED_APPROVAL_RECORDS.key?(number)
 
@@ -178,9 +257,81 @@ all_test_owners.each do |test_id, owners|
   failures << "#{test_id}: declared by multiple ADR records: #{owners.join(', ')}" unless owners.length == 1
 end
 
+EXPECTED_REQUIREMENT_TEST_LINKS.each do |number, expected_links|
+  expected = EXPECTED_RECORDS.fetch(number)
+  path = paths.find { |candidate_path| candidate_path.basename.to_s.start_with?("#{number}-") }
+  next unless path
+
+  source = path.read(encoding: "UTF-8")
+  relative = path.relative_path_from(ROOT).to_s
+  claimed_requirements = source[/^- \*\*Requirement IDs:\*\*\s*(.+)$/, 1].to_s.scan(/`([A-Z]+-\d{3})`/).flatten
+  declared_tests = tests_by_number.fetch(number, [])
+  expected_requirements = expected_links.keys
+  missing_expected_requirements = expected_requirements.to_set - claimed_requirements.to_set
+  unexpected_claimed_requirements = claimed_requirements.to_set - expected_requirements.to_set
+  unless missing_expected_requirements.empty?
+    failures << "#{relative}: #{expected.fetch(:candidate)} requirement-test map expects unclaimed requirements: #{missing_expected_requirements.to_a.sort.join(', ')}"
+  end
+  unless unexpected_claimed_requirements.empty?
+    failures << "#{relative}: claimed requirements lack an exact requirement-test map: #{unexpected_claimed_requirements.to_a.sort.join(', ')}"
+  end
+
+  expected_declared_tests = expected_links.values.flatten.to_set
+  missing_declared_tests = expected_declared_tests - declared_tests.to_set
+  unexpected_declared_tests = declared_tests.to_set - expected_declared_tests
+  unless missing_declared_tests.empty?
+    failures << "#{relative}: requirement-test map names undeclared tests: #{missing_declared_tests.to_a.sort.join(', ')}"
+  end
+  unless unexpected_declared_tests.empty?
+    failures << "#{relative}: declared tests lack an exact requirement-test map: #{unexpected_declared_tests.to_a.sort.join(', ')}"
+  end
+
+  actual_links = {}
+  requirements.each do |requirement|
+    requirement_id = requirement.fetch("requirement_id")
+    linked_tests = Array(requirement["test_ids"]).grep(/\AT-ADR-#{number}-/)
+    failures << "specs/traceability/requirements.yaml: #{requirement_id} duplicates ADR-#{number} test links" unless linked_tests.uniq.length == linked_tests.length
+    actual_links[requirement_id] = linked_tests unless linked_tests.empty?
+  end
+
+  unexpected_linked_requirements = actual_links.keys.to_set - claimed_requirements.to_set
+  unless unexpected_linked_requirements.empty?
+    failures << "specs/traceability/requirements.yaml: ADR-#{number} tests map to unclaimed requirements: #{unexpected_linked_requirements.to_a.sort.join(', ')}"
+  end
+  claimed_without_tests = claimed_requirements.reject { |requirement_id| actual_links.key?(requirement_id) }
+  unless claimed_without_tests.empty?
+    failures << "specs/traceability/requirements.yaml: ADR-#{number} claimed requirements have no declared ADR test: #{claimed_without_tests.sort.join(', ')}"
+  end
+
+  linked_tests = actual_links.values.flatten.to_set
+  undeclared_linked_tests = linked_tests - declared_tests.to_set
+  unless undeclared_linked_tests.empty?
+    failures << "specs/traceability/requirements.yaml: ADR-#{number} requirement links use undeclared tests: #{undeclared_linked_tests.to_a.sort.join(', ')}"
+  end
+  unlinked_declared_tests = declared_tests.to_set - linked_tests
+  unless unlinked_declared_tests.empty?
+    failures << "specs/traceability/requirements.yaml: ADR-#{number} declared tests map to no claimed requirement: #{unlinked_declared_tests.to_a.sort.join(', ')}"
+  end
+
+  (expected_links.keys | actual_links.keys).each do |requirement_id|
+    expected_tests = Array(expected_links[requirement_id]).to_set
+    actual_tests = Array(actual_links[requirement_id]).to_set
+    missing_links = expected_tests - actual_tests
+    extra_links = actual_tests - expected_tests
+    unless missing_links.empty?
+      failures << "specs/traceability/requirements.yaml: #{requirement_id} omits exact ADR-#{number} links: #{missing_links.to_a.sort.join(', ')}"
+    end
+    unless extra_links.empty?
+      failures << "specs/traceability/requirements.yaml: #{requirement_id} has unexpected ADR-#{number} links: #{extra_links.to_a.sort.join(', ')}"
+    end
+  end
+end
+
 security_issue = issues["STEAD-P1-006"]
 if security_issue
-  required_candidates = EXPECTED_RECORDS.reject { |number, _record| number == "0001" }.values.map { |record| record.fetch(:candidate) }
+  required_candidates = EXPECTED_RECORDS.filter_map do |number, record|
+    record.fetch(:candidate) if number != "0001" && record.fetch(:state) == "ACCEPTED"
+  end
   criteria = Array(security_issue["acceptance_criteria"]).join(" ")
   missing_candidates = required_candidates.reject { |candidate| criteria.include?(candidate) }
   failures << "STEAD-P1-006 acceptance criteria omit ADR gates: #{missing_candidates.join(', ')}" unless missing_candidates.empty?

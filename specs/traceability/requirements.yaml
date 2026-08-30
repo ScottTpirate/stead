@@ -31,7 +31,7 @@ requirements:
     title: "Upstream engines remain replaceable and upgradeable"
     implementation_modules: ["cross-cutting", "docs/architecture", "docs/adr"]
     issue_ids: ["STEAD-P0-001", "STEAD-P1-001", "STEAD-P1-003", "STEAD-P2-002"]
-    test_ids: ["T-PRIN-002-ACCEPTANCE", "T-ADR-0001-URI-GRAMMAR", "T-ADR-0001-HOST-INDEPENDENCE", "T-ADR-0001-ALIAS"]
+    test_ids: ["T-PRIN-002-ACCEPTANCE", "T-ADR-0001-URI-GRAMMAR", "T-ADR-0001-HOST-INDEPENDENCE", "T-ADR-0001-ALIAS", "T-ADR-0009-UPGRADE-ROLLBACK"]
     documentation: ["docs/architecture/constitution.md", "docs/contributor/architecture-governance.md"]
     status: IMPLEMENTATION_IN_PROGRESS
     release: "phase-1"
@@ -167,7 +167,7 @@ requirements:
     title: "Database ownership"
     implementation_modules: ["apps", "modules", "providers", "packages", "policies", "specs", "deploy", "tests"]
     issue_ids: ["STEAD-P0-001", "STEAD-P0-003", "STEAD-P1-002", "STEAD-P1-003", "STEAD-P1-013"]
-    test_ids: ["T-ARCH-004-ACCEPTANCE"]
+    test_ids: ["T-ARCH-004-ACCEPTANCE", "T-ADR-0009-DIRECT-CHANGE-ACCEPT", "T-ADR-0009-AMBIGUOUS-MUTATION"]
     documentation: ["docs/architecture/constitution.md", "docs/architecture/repository-layout-and-boundaries.md"]
     status: DEPENDENCY_BLOCKED_PHASE_1
     release: "phase-1"
@@ -223,7 +223,7 @@ requirements:
     title: "Work-item model"
     implementation_modules: ["modules/organization", "modules/project", "modules/work", "modules/knowledge", "packages/domain-schemas"]
     issue_ids: ["STEAD-P0-002", "STEAD-P0-003", "STEAD-P1-002", "STEAD-P1-003", "STEAD-P1-013"]
-    test_ids: ["T-DOM-004-ACCEPTANCE"]
+    test_ids: ["T-DOM-004-ACCEPTANCE", "T-ADR-0009-PRECEDENCE"]
     documentation: ["specs/work-graph-profile/owgp-v0.1.md", "docs/architecture/canonical-domain-model.md"]
     status: DEPENDENCY_BLOCKED_PHASE_1
     release: "phase-1"
@@ -287,7 +287,7 @@ requirements:
     title: "Stock Gitea integration"
     implementation_modules: ["modules/scm", "providers/gitea"]
     issue_ids: ["STEAD-P0-004", "STEAD-P1-003", "STEAD-P1-013"]
-    test_ids: ["T-SCM-001-ACCEPTANCE"]
+    test_ids: ["T-SCM-001-ACCEPTANCE", "T-ADR-0009-WEBHOOK-IDEMPOTENCY", "T-ADR-0009-PROVIDER-OUTAGE", "T-ADR-0009-FULL-RECONCILIATION", "T-ADR-0009-UPGRADE-ROLLBACK"]
     documentation: ["docs/architecture/provider-contracts/gitea.md", "docs/operator/gitea-compatibility.md"]
     status: DEPENDENCY_BLOCKED_PHASE_1
     release: "phase-1"
@@ -295,7 +295,7 @@ requirements:
     title: "Project tracker repository"
     implementation_modules: ["modules/scm", "providers/gitea"]
     issue_ids: ["STEAD-P0-004", "STEAD-P1-003", "STEAD-P1-013"]
-    test_ids: ["T-SCM-002-ACCEPTANCE"]
+    test_ids: ["T-SCM-002-ACCEPTANCE", "T-ADR-0009-PRECEDENCE", "T-ADR-0009-DIRECT-CHANGE-RESET", "T-ADR-0009-FULL-RECONCILIATION"]
     documentation: ["docs/architecture/provider-contracts/gitea.md", "docs/operator/gitea-compatibility.md"]
     status: DEPENDENCY_BLOCKED_PHASE_1
     release: "phase-1"
@@ -303,7 +303,7 @@ requirements:
     title: "Canonical mapping to Gitea"
     implementation_modules: ["modules/scm", "providers/gitea"]
     issue_ids: ["STEAD-P0-004", "STEAD-P1-003", "STEAD-P1-013"]
-    test_ids: ["T-SCM-003-ACCEPTANCE"]
+    test_ids: ["T-SCM-003-ACCEPTANCE", "T-ADR-0009-PRECEDENCE", "T-ADR-0009-DIRECT-CHANGE-ACCEPT", "T-ADR-0009-DIRECT-CHANGE-RESET", "T-ADR-0009-CONFLICT-QUARANTINE", "T-ADR-0009-AMBIGUOUS-MUTATION", "T-ADR-0009-FULL-RECONCILIATION"]
     documentation: ["docs/architecture/provider-contracts/gitea.md", "docs/operator/gitea-compatibility.md"]
     status: DEPENDENCY_BLOCKED_PHASE_1
     release: "phase-1"
@@ -311,7 +311,7 @@ requirements:
     title: "Direct-provider changes"
     implementation_modules: ["modules/scm", "providers/gitea"]
     issue_ids: ["STEAD-P0-004", "STEAD-P1-003", "STEAD-P1-013"]
-    test_ids: ["T-SCM-004-ACCEPTANCE"]
+    test_ids: ["T-SCM-004-ACCEPTANCE", "T-ADR-0009-WEBHOOK-IDEMPOTENCY", "T-ADR-0009-DIRECT-CHANGE-ACCEPT", "T-ADR-0009-DIRECT-CHANGE-RESET", "T-ADR-0009-CONFLICT-QUARANTINE", "T-ADR-0009-AMBIGUOUS-MUTATION"]
     documentation: ["docs/architecture/provider-contracts/gitea.md", "docs/operator/gitea-compatibility.md"]
     status: DEPENDENCY_BLOCKED_PHASE_1
     release: "phase-1"
@@ -319,7 +319,7 @@ requirements:
     title: "Compatibility and upgrades"
     implementation_modules: ["modules/scm", "providers/gitea"]
     issue_ids: ["STEAD-P0-004", "STEAD-P1-003", "STEAD-P1-013", "STEAD-P2-001"]
-    test_ids: ["T-SCM-005-ACCEPTANCE"]
+    test_ids: ["T-SCM-005-ACCEPTANCE", "T-ADR-0009-AMBIGUOUS-MUTATION", "T-ADR-0009-FULL-RECONCILIATION", "T-ADR-0009-UPGRADE-ROLLBACK"]
     documentation: ["docs/architecture/provider-contracts/gitea.md", "docs/operator/gitea-compatibility.md"]
     status: PHASE_GATED
     release: "phase-2"
@@ -535,7 +535,7 @@ requirements:
     title: "No unauthorized existence leakage"
     implementation_modules: ["modules/classification", "modules/authorization", "policies/policy-decision", "policies/security-label-profiles"]
     issue_ids: ["STEAD-P0-007", "STEAD-P1-006", "STEAD-P2-004"]
-    test_ids: ["T-CLS-006-ACCEPTANCE"]
+    test_ids: ["T-CLS-006-ACCEPTANCE", "T-ADR-0009-CONFLICT-QUARANTINE", "T-ADR-0009-PERMISSION-DRIFT", "T-ADR-0009-PROVIDER-OUTAGE"]
     documentation: ["docs/architecture/security-label-lattice.md", "docs/security/classification-bypass-inventory.md"]
     status: DEPENDENCY_BLOCKED_PHASE_1
     release: "phase-1"
@@ -543,7 +543,7 @@ requirements:
     title: "Direct Git and provider paths"
     implementation_modules: ["modules/classification", "modules/authorization", "policies/policy-decision", "policies/security-label-profiles"]
     issue_ids: ["STEAD-P0-007", "STEAD-P1-003", "STEAD-P2-001", "STEAD-P2-004"]
-    test_ids: ["T-CLS-007-ACCEPTANCE"]
+    test_ids: ["T-CLS-007-ACCEPTANCE", "T-ADR-0009-PERMISSION-DRIFT", "T-ADR-0009-PROVIDER-OUTAGE"]
     documentation: ["docs/architecture/security-label-lattice.md", "docs/security/classification-bypass-inventory.md"]
     status: PHASE_GATED
     release: "phase-2"
@@ -879,7 +879,7 @@ requirements:
     title: "One composed, projection-backed request path"
     implementation_modules: ["apps/core", "modules", "providers/gitea", "packages/api-client", "tests/performance"]
     issue_ids: ["STEAD-P1-002", "STEAD-P1-003", "STEAD-P1-005", "STEAD-P1-007", "STEAD-P1-008", "STEAD-P1-015"]
-    test_ids: ["T-PERF-003-ACCEPTANCE"]
+    test_ids: ["T-PERF-003-ACCEPTANCE", "T-ADR-0009-PROVIDER-OUTAGE", "T-ADR-0009-FULL-RECONCILIATION"]
     documentation: ["docs/architecture/MASTER_BUILD_DIRECTIVE.md", "docs/architecture/constitution.md", "docs/architecture/provider-contracts/gitea.md"]
     status: DEPENDENCY_BLOCKED_PHASE_1
     release: "phase-1"
@@ -999,7 +999,7 @@ requirements:
     title: "Provider tests"
     implementation_modules: ["tests", "specs/traceability"]
     issue_ids: ["STEAD-P0-014", "STEAD-P1-003", "STEAD-P2-001", "STEAD-P2-002", "STEAD-P2-011"]
-    test_ids: ["T-TEST-006-ACCEPTANCE"]
+    test_ids: ["T-TEST-006-ACCEPTANCE", "T-ADR-0009-PRECEDENCE", "T-ADR-0009-WEBHOOK-IDEMPOTENCY", "T-ADR-0009-DIRECT-CHANGE-ACCEPT", "T-ADR-0009-DIRECT-CHANGE-RESET", "T-ADR-0009-CONFLICT-QUARANTINE", "T-ADR-0009-PERMISSION-DRIFT", "T-ADR-0009-PROVIDER-OUTAGE", "T-ADR-0009-AMBIGUOUS-MUTATION", "T-ADR-0009-FULL-RECONCILIATION", "T-ADR-0009-UPGRADE-ROLLBACK"]
     documentation: ["docs/testing/golden-vertical-slice.md", "docs/governance/release-gates.md"]
     status: PHASE_GATED
     release: "phase-2"
