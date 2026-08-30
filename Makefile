@@ -1,6 +1,6 @@
-.PHONY: foundation-check go-check contract-check
+.PHONY: foundation-check go-check contract-check performance-foundation-check
 
-foundation-check: go-check contract-check
+foundation-check: go-check contract-check performance-foundation-check
 	scripts/run_pinned_node.sh npm run typecheck
 	scripts/run_pinned_node.sh npm run test:unit --workspace=@stead/web
 	scripts/run_pinned_node.sh npm run build
@@ -25,3 +25,8 @@ contract-check:
 	ruby scripts/validate_adr_records.rb
 	scripts/run_pinned_node.sh node scripts/validate_owgp_examples.js
 	scripts/validate_openfga.sh
+
+performance-foundation-check:
+	ruby tests/performance/harness/performance_foundation_test.rb
+	ruby tests/performance/harness/verify_evidence.rb packages/test-fixtures/harness/performance/standard-request-boundary-valid.json
+	scripts/run_pinned_node.sh node tests/performance/harness/performance_schema_test.mjs
