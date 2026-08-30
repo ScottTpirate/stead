@@ -1,0 +1,11 @@
+{
+  "scope": "STEAD-P1-015 core_outbox-only catalog conformance contribution",
+  "cases": [
+    {"mutation": "membership_option_inversion", "expected_code": "missing_state"},
+    {"mutation": "membership_reversal", "expected_code": "missing_state"},
+    {"mutation": "membership_admin_true", "expected_code": "membership_admin_enabled"},
+    {"mutation": "unknown_grantor", "expected_code": "unknown_principal"},
+    {"mutation": "extra_schema_grant", "expected_code": "extra_state"},
+    {"mutation": "persistent_column_acl", "expected_code": "column_acl_present"}
+  ]
+}
