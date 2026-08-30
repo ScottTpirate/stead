@@ -2,8 +2,11 @@ package postgres
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"reflect"
@@ -302,19 +305,50 @@ func TestCatalogACLObjectCodeMappingsAreClosedAndCaseSensitive(t *testing.T) {
 	if err := validateACLObjectCodeMappings(objectACLs, defaultACLs); err != nil {
 		t.Fatalf("catalog ACL object-code mapping rejected: %v", err)
 	}
+	objectSequenceUpper := replaceOnce(t, objectACLs, `THEN 's'::"char"`, `THEN 'S'::"char"`)
+	defaultSequenceUpper := replaceOnce(t, defaultACLs, `('S'::"char", 's'::"char", 'sequence')`, `('S'::"char", 'S'::"char", 'sequence')`)
+	defaultFallbackUsesCatalogCode := replaceOnce(t, defaultACLs, `acldefault(kinds.acldefault_code,`, `acldefault(kinds.defaclobjtype_code,`)
+	defaultCatalogMatchUsesFallbackCode := replaceOnce(t, defaultACLs, `defaclobjtype = kinds.defaclobjtype_code`, `defaclobjtype = kinds.acldefault_code`)
+	objectDeadBranchDecoy := replaceOnce(t, objectSequenceUpper,
+		`WHERE c.relkind IN ('r', 'p', 'S', 'v', 'm', 'f')`,
+		`WHERE c.relkind IN ('r', 'p', 'S', 'v', 'm', 'f')
+    AND (true OR `+sequenceObjectFallbackSQL+` IS NULL)`)
+	defaultAllWrong := replaceOnce(t, defaultSequenceUpper, `acldefault(kinds.acldefault_code,`, `acldefault(kinds.defaclobjtype_code,`)
+	defaultAllWrong = replaceOnce(t, defaultAllWrong, `defaclobjtype = kinds.defaclobjtype_code`, `defaclobjtype = kinds.acldefault_code`)
+	defaultUnusedCTEDecoy := replaceOnce(t, defaultAllWrong, `), effective_defaults AS (`, `), expected_mapping_decoy AS (
+  SELECT owners.owner_oid
+  FROM deployment_schema_owners AS owners
+  `+defaultObjectPairsSQL+`
+  LEFT JOIN pg_catalog.pg_default_acl AS defaults
+    ON defaults.defaclrole = owners.owner_oid
+   AND `+defaultACLCatalogUseSQL+`
+  WHERE `+defaultACLFallbackUseSQL+` IS NOT NULL
+), effective_defaults AS (`)
+	assertLocalizedACLSequencesPresent(t, objectDeadBranchDecoy, defaultUnusedCTEDecoy)
 
 	mutations := []struct {
 		name        string
 		objectACLs  string
 		defaultACLs string
 	}{
-		{"object_sequence_fallback_S_to_S", replaceOnce(t, objectACLs, `THEN 's'::"char"`, `THEN 'S'::"char"`), defaultACLs},
+		{"object_sequence_fallback_S_to_S", objectSequenceUpper, defaultACLs},
 		{"default_table_fallback_r_to_s", objectACLs, replaceOnce(t, defaultACLs, `('r'::"char", 'r'::"char", 'table')`, `('r'::"char", 's'::"char", 'table')`)},
-		{"default_sequence_fallback_s_to_S", objectACLs, replaceOnce(t, defaultACLs, `('S'::"char", 's'::"char", 'sequence')`, `('S'::"char", 'S'::"char", 'sequence')`)},
+		{"default_sequence_fallback_s_to_S", objectACLs, defaultSequenceUpper},
 		{"default_routine_fallback_f_to_r", objectACLs, replaceOnce(t, defaultACLs, `('f'::"char", 'f'::"char", 'routine')`, `('f'::"char", 'r'::"char", 'routine')`)},
 		{"default_type_fallback_T_to_r", objectACLs, replaceOnce(t, defaultACLs, `('T'::"char", 'T'::"char", 'type')`, `('T'::"char", 'r'::"char", 'type')`)},
-		{"fallback_uses_catalog_code", objectACLs, replaceOnce(t, defaultACLs, `acldefault(kinds.acldefault_code,`, `acldefault(kinds.defaclobjtype_code,`)},
-		{"catalog_match_uses_fallback_code", objectACLs, replaceOnce(t, defaultACLs, `defaclobjtype = kinds.defaclobjtype_code`, `defaclobjtype = kinds.acldefault_code`)},
+		{"default_pair_split_typecast", objectACLs, replaceOnce(t, defaultACLs, `'r'::"char"`, `'r':/**/:"char"`)},
+		{"fallback_uses_catalog_code", objectACLs, defaultFallbackUsesCatalogCode},
+		{"catalog_match_uses_fallback_code", objectACLs, defaultCatalogMatchUsesFallbackCode},
+		{"object_sequence_line_comment_decoy", objectSequenceUpper + "\n" + lineCommentSQL(sequenceObjectFallbackSQL), defaultACLs},
+		{"object_sequence_block_comment_decoy", objectSequenceUpper + "\n" + blockCommentSQL(sequenceObjectFallbackSQL), defaultACLs},
+		{"default_sequence_line_comment_decoy", objectACLs, defaultSequenceUpper + "\n" + lineCommentSQL(defaultObjectPairsSQL)},
+		{"default_sequence_block_comment_decoy", objectACLs, defaultSequenceUpper + "\n" + blockCommentSQL(defaultObjectPairsSQL)},
+		{"fallback_use_line_comment_decoy", objectACLs, defaultFallbackUsesCatalogCode + "\n" + lineCommentSQL(defaultACLFallbackUseSQL)},
+		{"fallback_use_block_comment_decoy", objectACLs, defaultFallbackUsesCatalogCode + "\n" + blockCommentSQL(defaultACLFallbackUseSQL)},
+		{"catalog_use_line_comment_decoy", objectACLs, defaultCatalogMatchUsesFallbackCode + "\n" + lineCommentSQL(defaultACLCatalogUseSQL)},
+		{"catalog_use_block_comment_decoy", objectACLs, defaultCatalogMatchUsesFallbackCode + "\n" + blockCommentSQL(defaultACLCatalogUseSQL)},
+		{"object_active_dead_branch_decoy", objectDeadBranchDecoy, defaultACLs},
+		{"default_active_unused_cte_decoy", objectACLs, defaultUnusedCTEDecoy},
 	}
 	for _, mutation := range mutations {
 		t.Run(mutation.name, func(t *testing.T) {
@@ -325,23 +359,369 @@ func TestCatalogACLObjectCodeMappingsAreClosedAndCaseSensitive(t *testing.T) {
 	}
 }
 
-func validateACLObjectCodeMappings(objectACLs, defaultACLs string) error {
-	const sequenceObjectFallback = `pg_catalog.acldefault(CASE WHEN c.relkind = 'S' THEN 's'::"char" ELSE 'r'::"char" END, c.relowner)`
-	const defaultObjectPairs = `CROSS JOIN (VALUES
+const maximumCatalogGuardSQLBytes = 1 << 20
+
+const sequenceObjectFallbackSQL = `pg_catalog.acldefault(CASE WHEN c.relkind = 'S' THEN 's'::"char" ELSE 'r'::"char" END, c.relowner)`
+
+const defaultObjectPairsSQL = `CROSS JOIN (VALUES
     ('r'::"char", 'r'::"char", 'table'),
     ('S'::"char", 's'::"char", 'sequence'),
     ('f'::"char", 'f'::"char", 'routine'),
     ('T'::"char", 'T'::"char", 'type')
   ) AS kinds(defaclobjtype_code, acldefault_code, object_kind)`
-	if strings.Count(objectACLs, sequenceObjectFallback) != 1 {
+
+const defaultACLFallbackUseSQL = `pg_catalog.acldefault(kinds.acldefault_code, owners.owner_oid)`
+const defaultACLCatalogUseSQL = `defaults.defaclobjtype = kinds.defaclobjtype_code`
+
+// These digests bind each complete comment-free token stream. The readable
+// localized sequences above separately identify the PostgreSQL code distinction.
+const objectACLActiveSQLDigest = "7f910fb8267b15ec8aefe3543220862353a60c33364551d732caac2fe182b8d3"
+const defaultACLActiveSQLDigest = "292840d38b0658a67249c06962eb22bf4a218eec381a843cfc061ecae80ae6fb"
+
+func validateACLObjectCodeMappings(objectACLs, defaultACLs string) error {
+	objectTokens, err := tokenizeActiveCatalogSQL(objectACLs)
+	if err != nil {
+		return errors.New("object ACL SQL is malformed")
+	}
+	defaultTokens, err := tokenizeActiveCatalogSQL(defaultACLs)
+	if err != nil {
+		return errors.New("default ACL SQL is malformed")
+	}
+	if digest := activeSQLTokenDigest(objectTokens); digest != objectACLActiveSQLDigest {
+		return fmt.Errorf("object ACL active SQL digest = %s, want %s", digest, objectACLActiveSQLDigest)
+	}
+	if digest := activeSQLTokenDigest(defaultTokens); digest != defaultACLActiveSQLDigest {
+		return fmt.Errorf("default ACL active SQL digest = %s, want %s", digest, defaultACLActiveSQLDigest)
+	}
+	if err := requireOneActiveSQLSequence(objectTokens, sequenceObjectFallbackSQL); err != nil {
 		return errors.New("object ACL fallback codes drifted")
 	}
-	if strings.Count(defaultACLs, defaultObjectPairs) != 1 ||
-		strings.Count(defaultACLs, `pg_catalog.acldefault(kinds.acldefault_code, owners.owner_oid)`) != 1 ||
-		strings.Count(defaultACLs, `defaults.defaclobjtype = kinds.defaclobjtype_code`) != 1 {
-		return errors.New("default ACL catalog/fallback object-code pairs drifted")
+	for _, required := range []string{defaultObjectPairsSQL, defaultACLFallbackUseSQL, defaultACLCatalogUseSQL} {
+		if err := requireOneActiveSQLSequence(defaultTokens, required); err != nil {
+			return errors.New("default ACL catalog/fallback object-code pairs drifted")
+		}
 	}
 	return nil
+}
+
+func activeSQLTokenDigest(tokens []string) string {
+	hasher := sha256.New()
+	var size [8]byte
+	for _, token := range tokens {
+		binary.BigEndian.PutUint64(size[:], uint64(len(token)))
+		_, _ = hasher.Write(size[:])
+		_, _ = hasher.Write([]byte(token))
+	}
+	return fmt.Sprintf("%x", hasher.Sum(nil))
+}
+
+func assertLocalizedACLSequencesPresent(t *testing.T, objectACLs, defaultACLs string) {
+	t.Helper()
+	objectTokens, err := tokenizeActiveCatalogSQL(objectACLs)
+	if err != nil || requireOneActiveSQLSequence(objectTokens, sequenceObjectFallbackSQL) != nil {
+		t.Fatal("object active-decoy mutant does not isolate whole-query binding")
+	}
+	defaultTokens, err := tokenizeActiveCatalogSQL(defaultACLs)
+	if err != nil {
+		t.Fatal("default active-decoy mutant is malformed")
+	}
+	for _, required := range []string{defaultObjectPairsSQL, defaultACLFallbackUseSQL, defaultACLCatalogUseSQL} {
+		if requireOneActiveSQLSequence(defaultTokens, required) != nil {
+			t.Fatal("default active-decoy mutant does not isolate whole-query binding")
+		}
+	}
+}
+
+func requireOneActiveSQLSequence(active []string, requiredSQL string) error {
+	required, err := tokenizeActiveCatalogSQL(requiredSQL)
+	if err != nil || len(required) == 0 {
+		return errors.New("invalid required SQL sequence")
+	}
+	count := 0
+	for start := 0; start+len(required) <= len(active); start++ {
+		matched := true
+		for offset := range required {
+			if active[start+offset] != required[offset] {
+				matched = false
+				break
+			}
+		}
+		if matched {
+			count++
+		}
+	}
+	if count != 1 {
+		return errors.New("required SQL sequence count drifted")
+	}
+	return nil
+}
+
+func tokenizeActiveCatalogSQL(input string) ([]string, error) {
+	if len(input) > maximumCatalogGuardSQLBytes {
+		return nil, errors.New("catalog SQL exceeds structural-guard bound")
+	}
+	if strings.IndexByte(input, 0) >= 0 {
+		return nil, errors.New("catalog SQL contains a NUL byte")
+	}
+	tokens := make([]string, 0, len(input)/4)
+	for index := 0; index < len(input); {
+		switch {
+		case isSQLWhitespace(input[index]):
+			index++
+		case index+1 < len(input) && input[index] == '-' && input[index+1] == '-':
+			index += 2
+			for index < len(input) && input[index] != '\n' && input[index] != '\r' {
+				index++
+			}
+		case index+1 < len(input) && input[index] == '/' && input[index+1] == '*':
+			depth := 1
+			index += 2
+			for depth > 0 {
+				if index >= len(input) {
+					return nil, errors.New("unterminated SQL block comment")
+				}
+				switch {
+				case index+1 < len(input) && input[index] == '/' && input[index+1] == '*':
+					depth++
+					index += 2
+				case index+1 < len(input) && input[index] == '*' && input[index+1] == '/':
+					depth--
+					index += 2
+				default:
+					index++
+				}
+			}
+		case (input[index] == 'E' || input[index] == 'e') && index+1 < len(input) && input[index+1] == '\'':
+			end, err := scanSQLSingleQuoted(input, index+1, true)
+			if err != nil {
+				return nil, err
+			}
+			tokens = append(tokens, input[index:end])
+			index = end
+		case input[index] == '\'':
+			end, err := scanSQLSingleQuoted(input, index, false)
+			if err != nil {
+				return nil, err
+			}
+			tokens = append(tokens, input[index:end])
+			index = end
+		case input[index] == '"':
+			end, err := scanSQLDoubleQuoted(input, index)
+			if err != nil {
+				return nil, err
+			}
+			tokens = append(tokens, input[index:end])
+			index = end
+		case input[index] == '$':
+			if index+1 < len(input) && input[index+1] >= '0' && input[index+1] <= '9' {
+				start := index
+				index += 2
+				for index < len(input) && input[index] >= '0' && input[index] <= '9' {
+					index++
+				}
+				if index < len(input) && isSQLIdentifierContinuation(input[index]) {
+					return nil, errors.New("SQL parameter has identifier junk")
+				}
+				tokens = append(tokens, input[start:index])
+				continue
+			}
+			delimiter, ok := sqlDollarQuoteDelimiter(input, index)
+			if !ok {
+				tokens = append(tokens, "$")
+				index++
+				continue
+			}
+			contentStart := index + len(delimiter)
+			closingOffset := strings.Index(input[contentStart:], delimiter)
+			if closingOffset < 0 {
+				return nil, errors.New("unterminated SQL dollar quote")
+			}
+			end := contentStart + closingOffset + len(delimiter)
+			tokens = append(tokens, input[index:end])
+			index = end
+		case input[index] == ':' && index+1 < len(input) && (input[index+1] == ':' || input[index+1] == '='):
+			tokens = append(tokens, input[index:index+2])
+			index += 2
+		case isSQLOperatorByte(input[index]):
+			start := index
+			index++
+			for index < len(input) && isSQLOperatorByte(input[index]) {
+				if index+1 < len(input) && (input[index] == '-' && input[index+1] == '-' || input[index] == '/' && input[index+1] == '*') {
+					break
+				}
+				index++
+			}
+			tokens = append(tokens, input[start:index])
+		case input[index] >= '0' && input[index] <= '9':
+			start := index
+			index++
+			for index < len(input) && input[index] >= '0' && input[index] <= '9' {
+				index++
+			}
+			if index < len(input) && isSQLIdentifierContinuation(input[index]) {
+				return nil, errors.New("SQL integer has identifier junk")
+			}
+			tokens = append(tokens, input[start:index])
+		case isSQLIdentifierStart(input[index]):
+			start := index
+			index++
+			for index < len(input) && isSQLIdentifierContinuation(input[index]) {
+				index++
+			}
+			tokens = append(tokens, input[start:index])
+		default:
+			tokens = append(tokens, input[index:index+1])
+			index++
+		}
+	}
+	return tokens, nil
+}
+
+func scanSQLSingleQuoted(input string, start int, backslashEscapes bool) (int, error) {
+	for index := start + 1; index < len(input); index++ {
+		if backslashEscapes && input[index] == '\\' {
+			if index+1 >= len(input) {
+				return 0, errors.New("unterminated SQL escape string")
+			}
+			index++
+			continue
+		}
+		if input[index] != '\'' {
+			continue
+		}
+		if index+1 < len(input) && input[index+1] == '\'' {
+			index++
+			continue
+		}
+		return index + 1, nil
+	}
+	return 0, errors.New("unterminated SQL string")
+}
+
+func scanSQLDoubleQuoted(input string, start int) (int, error) {
+	for index := start + 1; index < len(input); index++ {
+		if input[index] != '"' {
+			continue
+		}
+		if index+1 < len(input) && input[index+1] == '"' {
+			index++
+			continue
+		}
+		return index + 1, nil
+	}
+	return 0, errors.New("unterminated SQL quoted identifier")
+}
+
+func sqlDollarQuoteDelimiter(input string, start int) (string, bool) {
+	if start+1 >= len(input) {
+		return "", false
+	}
+	if input[start+1] == '$' {
+		return "$$", true
+	}
+	if !isSQLIdentifierStart(input[start+1]) {
+		return "", false
+	}
+	end := start + 2
+	for end < len(input) && isSQLIdentifierContinuation(input[end]) && input[end] != '$' {
+		end++
+	}
+	if end >= len(input) || input[end] != '$' {
+		return "", false
+	}
+	return input[start : end+1], true
+}
+
+func isSQLWhitespace(value byte) bool {
+	return value == ' ' || value == '\t' || value == '\n' || value == '\r' || value == '\f'
+}
+
+func isSQLIdentifierStart(value byte) bool {
+	return value == '_' || value >= 0x80 || value >= 'a' && value <= 'z' || value >= 'A' && value <= 'Z'
+}
+
+func isSQLIdentifierContinuation(value byte) bool {
+	return isSQLIdentifierStart(value) || value >= '0' && value <= '9' || value == '$'
+}
+
+func isSQLOperatorByte(value byte) bool {
+	return strings.ContainsRune("+-*/<>=~!@#%^&|`?", rune(value))
+}
+
+func lineCommentSQL(value string) string {
+	return "-- " + strings.ReplaceAll(value, "\n", "\n-- ")
+}
+
+func blockCommentSQL(value string) string { return "/* " + value + " */" }
+
+func TestCatalogSQLTokenizerRespectsQuotesAndRejectsMalformedInput(t *testing.T) {
+	input := `SELECT '--', "/*", $tag$-- /*$tag$, E'quote\'--still' -- removed
+FROM x /* outer /* nested */ comment */ WHERE y = '/*still*/'`
+	want := []string{"SELECT", "'--'", ",", `"/*"`, ",", "$tag$-- /*$tag$", ",", `E'quote\'--still'`, "FROM", "x", "WHERE", "y", "=", "'/*still*/'"}
+	got, err := tokenizeActiveCatalogSQL(input)
+	if err != nil {
+		t.Fatalf("tokenizeActiveCatalogSQL() error = %v", err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("tokens = %#v, want %#v", got, want)
+	}
+	operatorTokens, err := tokenizeActiveCatalogSQL(`SELECT 'r'::"char", $1, a<>b, a||b, a*/b`)
+	if err != nil {
+		t.Fatalf("operator tokenization failed: %v", err)
+	}
+	wantOperatorTokens := []string{"SELECT", "'r'", "::", `"char"`, ",", "$1", ",", "a", "<>", "b", ",", "a", "||", "b", ",", "a", "*/", "b"}
+	if !reflect.DeepEqual(operatorTokens, wantOperatorTokens) {
+		t.Fatalf("operator tokens = %#v, want %#v", operatorTokens, wantOperatorTokens)
+	}
+	for _, testCase := range []struct {
+		canonical string
+		split     string
+	}{
+		{`SELECT 'r'::"char"`, `SELECT 'r':/**/:"char"`},
+		{`SELECT $1`, `SELECT $ 1`},
+		{`SELECT a<>b`, `SELECT a</**/>b`},
+		{`SELECT a||b`, `SELECT a|/**/|b`},
+		{"SELECT a b", "SELECT a\vb"},
+	} {
+		canonical, err := tokenizeActiveCatalogSQL(testCase.canonical)
+		if err != nil {
+			t.Fatalf("canonical operator was not lexable: %v", err)
+		}
+		split, err := tokenizeActiveCatalogSQL(testCase.split)
+		if err != nil {
+			t.Fatalf("split-token mutation was not lexable: %v", err)
+		}
+		if reflect.DeepEqual(canonical, split) {
+			t.Fatal("split-token mutation retained the canonical token boundary")
+		}
+	}
+	for _, testCase := range []struct {
+		canonical string
+		junk      string
+	}{
+		{`SELECT 0 THEN`, `SELECT 0THEN`},
+		{`SELECT $1 AND`, `SELECT $1AND`},
+	} {
+		if _, err := tokenizeActiveCatalogSQL(testCase.canonical); err != nil {
+			t.Fatalf("canonical literal or parameter was not lexable: %v", err)
+		}
+		if _, err := tokenizeActiveCatalogSQL(testCase.junk); err == nil {
+			t.Fatal("tokenizer accepted PostgreSQL identifier junk")
+		}
+	}
+
+	for _, malformed := range []string{
+		`SELECT 'unterminated`,
+		`SELECT "unterminated`,
+		`SELECT E'unterminated\`,
+		`SELECT /* unterminated`,
+		`SELECT $tag$unterminated`,
+		strings.Repeat("x", maximumCatalogGuardSQLBytes+1),
+	} {
+		if _, err := tokenizeActiveCatalogSQL(malformed); err == nil {
+			t.Fatal("tokenizer accepted malformed or over-bound SQL")
+		}
+	}
 }
 
 func TestDecodeManifestRejectsNonCanonicalJSONBeforeTypedDecode(t *testing.T) {
