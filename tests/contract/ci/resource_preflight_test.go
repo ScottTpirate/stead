@@ -153,3 +153,32 @@ func TestReleaseAttestationReceiptCardinalityRejectsBeforeSigningRequest(t *test
 		}
 	})
 }
+
+func TestArchiveManifestAndTransportCollectionsArePreflighted(t *testing.T) {
+	t.Run("archive manifest one over", func(t *testing.T) {
+		files := make([]policyrelease.ManifestFile, policyrelease.MaxArchiveFiles)
+		_, err := policyrelease.ValidateArchive([]byte("not-inspected"), nil, files)
+		if policyrelease.ErrorCode(err) != "archive_content_limit" {
+			t.Fatalf("manifest one-over preflight = %v (%s)", err, policyrelease.ErrorCode(err))
+		}
+	})
+
+	t.Run("archive manifest exact reaches field validation", func(t *testing.T) {
+		files := make([]policyrelease.ManifestFile, policyrelease.MaxArchiveFiles-1)
+		_, err := policyrelease.ValidateArchive([]byte("not-inspected"), nil, files)
+		if policyrelease.ErrorCode(err) != "invalid_archive_path" {
+			t.Fatalf("manifest exact ceiling = %v (%s)", err, policyrelease.ErrorCode(err))
+		}
+	})
+
+	t.Run("transport envelope one over", func(t *testing.T) {
+		handoff := policyrelease.ImmutableReleaseHandoff{
+			ArchiveBytes:                    []byte("archive"),
+			ReleaseAttestationEnvelopeBytes: make([]byte, policyrelease.MaxEnvelopeBytes+1),
+		}
+		descriptor, encoded, err := policyrelease.BuildTransportDescriptor(handoff)
+		if policyrelease.ErrorCode(err) != "transport_artifact_size_limit" || encoded != nil || descriptor.ArchiveDigest != "" {
+			t.Fatalf("transport preflight = %v (%s), bytes=%d", err, policyrelease.ErrorCode(err), len(encoded))
+		}
+	})
+}

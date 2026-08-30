@@ -244,6 +244,9 @@ func copyPresentedSignatureSummary(summary PresentedSignatureSummary) PresentedS
 // non-authorizing. It may be embedded by a future approved TUF transport layer;
 // it cannot replace either DSSE envelope or the deployment assurance result.
 func BuildTransportDescriptor(handoff ImmutableReleaseHandoff) (TransportDescriptorV1, []byte, error) {
+	if len(handoff.ArchiveBytes) == 0 || len(handoff.ArchiveBytes) > MaxArchiveBytes || len(handoff.ReleaseAttestationEnvelopeBytes) == 0 || len(handoff.ReleaseAttestationEnvelopeBytes) > MaxEnvelopeBytes {
+		return TransportDescriptorV1{}, nil, contractError("transport_artifact_size_limit", "handoff", nil)
+	}
 	if err := requireDigestMatches("archive_digest", handoff.ArchiveDigest, handoff.ArchiveBytes); err != nil {
 		return TransportDescriptorV1{}, nil, err
 	}

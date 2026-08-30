@@ -352,6 +352,29 @@ func archiveEntryNameAt(inspection ArchiveInspection) string {
 // ValidateArchive verifies that the archive contains exactly one supplied DSSE
 // envelope and each digest-listed payload/evidence file, with no other entry.
 func ValidateArchive(archive, envelope []byte, files []ManifestFile) (ArchiveInspection, error) {
+	if len(files) > MaxArchiveFiles-1 || len(envelope) > MaxArchiveFileBytes {
+		return ArchiveInspection{}, contractError("archive_content_limit", "manifest.files", nil)
+	}
+	var total uint64
+	for _, file := range files {
+		if err := validatePath(file.Path, false); err != nil {
+			return ArchiveInspection{}, err
+		}
+		if err := validateMediaType("manifest.files.media_type", file.MediaType); err != nil {
+			return ArchiveInspection{}, err
+		}
+		if err := validateDigest("manifest.files.digest", file.Digest); err != nil {
+			return ArchiveInspection{}, err
+		}
+		if file.Size < 0 || file.Size > MaxArchiveFileBytes {
+			return ArchiveInspection{}, contractError("archive_file_size_limit", "manifest.files", nil)
+		}
+		size := uint64(file.Size)
+		if total > MaxArchiveContent-size {
+			return ArchiveInspection{}, contractError("archive_content_limit", "manifest.files", nil)
+		}
+		total += size
+	}
 	inspection, err := InspectArchive(archive)
 	if err != nil {
 		return ArchiveInspection{}, err
