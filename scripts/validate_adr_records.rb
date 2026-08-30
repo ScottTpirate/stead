@@ -222,7 +222,11 @@ end
 
 security_issue = issues["STEAD-P1-006"]
 if security_issue
-  required_candidates = EXPECTED_RECORDS.reject { |number, _record| number == "0001" }.values.map { |record| record.fetch(:candidate) }
+  required_candidates = EXPECTED_RECORDS.values.filter_map do |record|
+    candidate = record.fetch(:candidate)
+    gate = adr_gates[candidate]
+    candidate if Array(gate&.fetch("dependent_issues", nil)).include?("STEAD-P1-006")
+  end
   criteria = Array(security_issue["acceptance_criteria"]).join(" ")
   missing_candidates = required_candidates.reject { |candidate| criteria.include?(candidate) }
   failures << "STEAD-P1-006 acceptance criteria omit ADR gates: #{missing_candidates.join(', ')}" unless missing_candidates.empty?
