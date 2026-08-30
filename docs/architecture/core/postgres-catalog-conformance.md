@@ -16,18 +16,18 @@ The manifest registers:
 - exact database, schema, object, owner-global default, and schema-scoped default ACL tuples; and
 - an invariant that the actual persistent column-ACL tuple set is empty.
 
-The comparator validates the manifest before reading a catalog. It rejects invalid deployment identities; role bindings not exactly encoded as `stead-role:v1:<installation-uuid>:<semantic-id>`; unqualified or overlength registered role names; unknown semantic references; duplicate expected tuples; any `SUPERUSER`, `CREATEROLE`, `CREATEDB`, replication, or `BYPASSRLS` role capability; any `ADMIN TRUE` membership; any ACL/default-ACL grant to `PUBLIC`; and any ACL/default-ACL grant option. Legitimate registered `LOGIN` and `INHERIT` properties remain exact manifest fields. It then rejects PostgreSQL versions older than 16 and compares every registered set in both directions. Unknown principals, duplicate catalog rows, missing/extra tuples, owner/property/binding drift, option reversal or inversion, unexpected grants, and every `pg_attribute.attacl` entry fail closed. Role properties are compared field-by-field and configuration arrays element-by-element; no concatenated equality key is authoritative.
+Before typed decoding, the manifest reader performs a bounded canonical JSON pass. It rejects invalid UTF-8, duplicate decoded object keys at every manifest depth, case variants of known keys, unknown or missing fields, null-for-container ambiguity, non-integral number spellings, invalid types, and trailing values. The comparator then rejects invalid deployment identities; role bindings not exactly encoded as `stead-role:v1:<installation-uuid>:<semantic-id>`; unqualified or overlength registered role names; unknown semantic references; duplicate expected tuples; any `SUPERUSER`, `CREATEROLE`, `CREATEDB`, replication, or `BYPASSRLS` role capability; any `ADMIN TRUE` membership; any ACL/default-ACL grant to `PUBLIC`; and any ACL/default-ACL grant option. Legitimate registered `LOGIN` and `INHERIT` properties remain exact manifest fields. It then rejects PostgreSQL versions older than 16 and compares every registered set in both directions. Unknown principals, duplicate catalog rows, missing/extra tuples, owner/property/binding drift, option reversal or inversion, unexpected grants, and every `pg_attribute.attacl` entry fail closed. Role properties are compared field-by-field and configuration arrays element-by-element; no concatenated equality key is authoritative.
 
 ## Catalog read contract
 
 `CatalogQueryContracts` is the stable adapter contract and `SQLCollector` is its standard-library `database/sql` implementation. The collector opens one repeatable-read, read-only transaction against the target database, sets `SET LOCAL search_path = pg_catalog, pg_temp`, verifies that exact effective value, and only then executes these ordered projections:
 
 1. `server_version` from `server_version_num`;
-2. release-owned roles from `pg_roles` and `shobj_description`, including all registered properties but never password bytes; `rolconfig` is emitted as a sorted JSON array and decoded strictly without delimiter packing;
+2. release-owned roles from `pg_roles` and `shobj_description`, including all registered properties but never password bytes; `rolconfig` is emitted as a JSON array ordered bytewise with explicit `COLLATE "C"` and decoded strictly without delimiter packing;
 3. all `pg_auth_members` rows where either endpoint has the deployment prefix, including grantor and all three PostgreSQL 16 membership options;
 4. the connected database and its effective ACL from `pg_database` plus `acldefault`/`aclexplode`;
 5. every non-system schema and its effective ACL from `pg_namespace`;
-6. every non-system relation, routine, and owner-created type/domain plus effective `relacl`, `proacl`, and `typacl` tuples;
+6. the selected ACL-bearing non-system relation kinds (ordinary/partitioned tables, sequences, views, materialized views, and foreign tables), plus routines and owner-created types/domains, with effective `relacl`, `proacl`, and `typacl` tuples;
 7. every owner-global and schema-scoped row from `pg_default_acl`; and
 8. every persistent user-column ACL from `pg_attribute.attacl`, including unregistered schemas and relations.
 

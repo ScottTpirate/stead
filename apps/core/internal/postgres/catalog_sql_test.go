@@ -102,6 +102,21 @@ func TestRoleConfigurationJSONIsLosslessAndStrict(t *testing.T) {
 	}
 }
 
+func TestRoleConfigurationUsesBytewiseCOrdering(t *testing.T) {
+	// C/UTF-8 byte order places upper-case Z before lower-case a. Several
+	// locale collations order these case-insensitively or place a first.
+	configuration, err := decodeRoleConfiguration(`["setting=Z","setting=a"]`)
+	if err != nil {
+		t.Fatalf("C-ordered configuration rejected: %v", err)
+	}
+	if !reflect.DeepEqual(configuration, []string{"setting=Z", "setting=a"}) {
+		t.Fatalf("configuration = %#v", configuration)
+	}
+	if _, err := decodeRoleConfiguration(`["setting=a","setting=Z"]`); err == nil {
+		t.Fatal("locale-style order was accepted instead of bytewise C order")
+	}
+}
+
 type catalogTestDriver struct {
 	snapshot                   Snapshot
 	failQuery                  string

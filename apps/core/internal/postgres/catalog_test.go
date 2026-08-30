@@ -1,6 +1,7 @@
 package postgres
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"io"
@@ -143,43 +144,51 @@ func TestLockstepManifestAndCatalogCannotAuthorizeProhibitedState(t *testing.T) 
 		{"bypass_rls", func(value *RoleProperties) { value.BypassRLS = true }},
 	}
 	for _, testCase := range roleMutations {
-		t.Run("role_"+testCase.name, func(t *testing.T) {
-			manifest := cloneManifest(t, base)
-			testCase.mutate(&manifest.Roles[0].Properties)
-			assertViolationCode(t, Compare(manifest, snapshotForManifest(manifest)), CodeProhibitedRoleCapability)
-		})
+		for roleIndex := range base.Roles {
+			t.Run("role_"+strconv.Itoa(roleIndex)+"_"+testCase.name, func(t *testing.T) {
+				manifest := cloneManifest(t, base)
+				testCase.mutate(&manifest.Roles[roleIndex].Properties)
+				assertViolationCode(t, Compare(manifest, snapshotForManifest(manifest)), CodeProhibitedRoleCapability)
+			})
+		}
 	}
 
-	t.Run("membership_admin", func(t *testing.T) {
-		manifest := cloneManifest(t, base)
-		manifest.Memberships[0].AdminOption = true
-		assertViolationCode(t, Compare(manifest, snapshotForManifest(manifest)), CodeMembershipAdminEnabled)
-	})
+	for edge := range base.Memberships {
+		t.Run("membership_"+strconv.Itoa(edge)+"_admin", func(t *testing.T) {
+			manifest := cloneManifest(t, base)
+			manifest.Memberships[edge].AdminOption = true
+			assertViolationCode(t, Compare(manifest, snapshotForManifest(manifest)), CodeMembershipAdminEnabled)
+		})
+	}
 
 	objectBase := cloneManifest(t, base)
 	objectBase.Objects = append(objectBase.Objects, ObjectSpec{Schema: "core_outbox", Name: "event_intents", Kind: "table", Owner: "core_outbox_owner"})
 	objectBase.ObjectACLs = append(objectBase.ObjectACLs, ACLSpec{Schema: "core_outbox", Object: "event_intents", ObjectKind: "table", Grantor: "core_outbox_owner", Grantee: "core_outbox_owner", Privilege: "SELECT"})
-	aclMutations := []struct {
-		name   string
-		base   Manifest
-		code   Code
-		mutate func(*Manifest)
+	aclGroups := []struct {
+		name        string
+		base        Manifest
+		length      func(Manifest) int
+		makePublic  func(*Manifest, int)
+		grantOption func(*Manifest, int)
 	}{
-		{"database_public", base, CodePublicPrivilege, func(value *Manifest) { value.DatabaseACLs[0].Grantee = PublicPrincipal }},
-		{"schema_public", base, CodePublicPrivilege, func(value *Manifest) { value.SchemaACLs[0].Grantee = PublicPrincipal }},
-		{"object_public", objectBase, CodePublicPrivilege, func(value *Manifest) { value.ObjectACLs[0].Grantee = PublicPrincipal }},
-		{"default_public", base, CodePublicPrivilege, func(value *Manifest) { value.DefaultACLs[0].Grantee = PublicPrincipal }},
-		{"database_grant_option", base, CodeGrantOptionEnabled, func(value *Manifest) { value.DatabaseACLs[0].GrantOption = true }},
-		{"schema_grant_option", base, CodeGrantOptionEnabled, func(value *Manifest) { value.SchemaACLs[0].GrantOption = true }},
-		{"object_grant_option", objectBase, CodeGrantOptionEnabled, func(value *Manifest) { value.ObjectACLs[0].GrantOption = true }},
-		{"default_grant_option", base, CodeGrantOptionEnabled, func(value *Manifest) { value.DefaultACLs[0].GrantOption = true }},
+		{"database", base, func(value Manifest) int { return len(value.DatabaseACLs) }, func(value *Manifest, index int) { value.DatabaseACLs[index].Grantee = PublicPrincipal }, func(value *Manifest, index int) { value.DatabaseACLs[index].GrantOption = true }},
+		{"schema", base, func(value Manifest) int { return len(value.SchemaACLs) }, func(value *Manifest, index int) { value.SchemaACLs[index].Grantee = PublicPrincipal }, func(value *Manifest, index int) { value.SchemaACLs[index].GrantOption = true }},
+		{"object", objectBase, func(value Manifest) int { return len(value.ObjectACLs) }, func(value *Manifest, index int) { value.ObjectACLs[index].Grantee = PublicPrincipal }, func(value *Manifest, index int) { value.ObjectACLs[index].GrantOption = true }},
+		{"default", base, func(value Manifest) int { return len(value.DefaultACLs) }, func(value *Manifest, index int) { value.DefaultACLs[index].Grantee = PublicPrincipal }, func(value *Manifest, index int) { value.DefaultACLs[index].GrantOption = true }},
 	}
-	for _, testCase := range aclMutations {
-		t.Run(testCase.name, func(t *testing.T) {
-			manifest := cloneManifest(t, testCase.base)
-			testCase.mutate(&manifest)
-			assertViolationCode(t, Compare(manifest, snapshotForManifest(manifest)), testCase.code)
-		})
+	for _, group := range aclGroups {
+		for entry := 0; entry < group.length(group.base); entry++ {
+			t.Run(group.name+"_"+strconv.Itoa(entry)+"_public", func(t *testing.T) {
+				manifest := cloneManifest(t, group.base)
+				group.makePublic(&manifest, entry)
+				assertViolationCode(t, Compare(manifest, snapshotForManifest(manifest)), CodePublicPrivilege)
+			})
+			t.Run(group.name+"_"+strconv.Itoa(entry)+"_grant_option", func(t *testing.T) {
+				manifest := cloneManifest(t, group.base)
+				group.grantOption(&manifest, entry)
+				assertViolationCode(t, Compare(manifest, snapshotForManifest(manifest)), CodeGrantOptionEnabled)
+			})
+		}
 	}
 }
 
@@ -207,7 +216,10 @@ func TestManifestIdentityAndDuplicateValidation(t *testing.T) {
 	assertViolationCode(t, ValidateManifest(invalidRoleName), CodeInvalidRegisteredIdentity)
 
 	wrongBindingUUID := cloneManifest(t, manifest)
-	wrongBindingUUID.Roles[0].Binding = "stead-role:v1:00000000-0000-4000-8000-000000000002:database-owner"
+	wrongBindingUUID.Roles[0].Binding = strings.Replace(wrongBindingUUID.Roles[0].Binding, manifest.InstallationUUID, "00000000-0000-4000-8000-000000000002", 1)
+	if !strings.HasSuffix(wrongBindingUUID.Roles[0].Binding, ":"+manifest.Roles[0].SemanticID) {
+		t.Fatal("wrong-UUID mutation changed the semantic role suffix")
+	}
 	assertViolationCode(t, ValidateManifest(wrongBindingUUID), CodeInvalidRegisteredIdentity)
 
 	wrongBindingVersion := cloneManifest(t, manifest)
@@ -256,7 +268,7 @@ func TestCatalogQueryContractsCoverExactACLInputs(t *testing.T) {
 		}
 	}
 	for name, fragments := range map[string][]string{
-		"roles":         {"pg_roles", "rolinherit", "rolbypassrls", "rolpassword", "rolvaliduntil", "rolconfig", "shobj_description", "json_agg", "configuration_json"},
+		"roles":         {"pg_roles", "rolinherit", "rolbypassrls", "rolpassword", "rolvaliduntil", "rolconfig", "shobj_description", "json_agg", `ORDER BY setting COLLATE "C"`, "configuration_json"},
 		"memberships":   {"pg_auth_members", "admin_option", "inherit_option", "set_option", "grantor"},
 		"database_acls": {"pg_database", "aclexplode", "acldefault"},
 		"schema_acls":   {"pg_namespace", "aclexplode", "acldefault"},
@@ -281,20 +293,60 @@ func TestCatalogQueryContractsCoverExactACLInputs(t *testing.T) {
 	}
 }
 
-func TestDecodeManifestRejectsUnknownAndTrailingData(t *testing.T) {
-	manifest := loadCoreOutboxManifest(t)
-	if manifest.DeploymentKey == "" {
-		t.Fatal("decoded manifest is empty")
-	}
-	if _, err := DecodeManifest(strings.NewReader(`{"unknown":true}`)); err == nil {
-		t.Fatal("DecodeManifest accepted an unknown field")
-	}
+func TestDecodeManifestRejectsNonCanonicalJSONBeforeTypedDecode(t *testing.T) {
 	data, err := os.ReadFile(fixtureRoot + "core_outbox_catalog_manifest.json")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := DecodeManifest(strings.NewReader(string(data) + `{}`)); err == nil {
-		t.Fatal("DecodeManifest accepted trailing data")
+	if _, err := DecodeManifest(bytes.NewReader(data)); err != nil {
+		t.Fatalf("canonical fixture rejected: %v", err)
+	}
+
+	augmented := loadCoreOutboxManifest(t)
+	augmented.Objects = append(augmented.Objects, ObjectSpec{Schema: "core_outbox", Name: "event_intents", Kind: "table", Owner: "core_outbox_owner"})
+	augmented.ObjectACLs = append(augmented.ObjectACLs, ACLSpec{Schema: "core_outbox", Object: "event_intents", ObjectKind: "table", Grantor: "core_outbox_owner", Grantee: "core_outbox_owner", Privilege: "SELECT"})
+	augmentedData, err := json.Marshal(augmented)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fixture := string(data)
+	augmentedFixture := string(augmentedData)
+	mutations := []struct {
+		name string
+		data []byte
+	}{
+		{"duplicate_root", []byte(replaceOnce(t, fixture, `"roles": [`, `"roles": [], "roles": [`))},
+		{"escaped_duplicate_root", []byte(replaceOnce(t, fixture, `"roles": [`, `"roles": [], "\u0072oles": [`))},
+		{"escaped_known_key", []byte(replaceOnce(t, fixture, `"roles": [`, `"\u0072oles": [`))},
+		{"lone_surrogate", []byte(replaceOnce(t, fixture, `"deployment_key": "0123456789abcdef"`, `"deployment_key": "\ud800"`))},
+		{"duplicate_role", []byte(replaceOnce(t, fixture, `"semantic_id": "database_owner",`, `"semantic_id": "database_owner", "semantic_id": "database_owner",`))},
+		{"duplicate_role_properties", []byte(replaceOnce(t, fixture, `"superuser": false,`, `"superuser": false, "superuser": false,`))},
+		{"duplicate_principal", []byte(replaceOnce(t, fixture, `"semantic_id": "bootstrap_grantor",`, `"semantic_id": "bootstrap_grantor", "semantic_id": "bootstrap_grantor",`))},
+		{"duplicate_membership", []byte(replaceOnce(t, fixture, `{"role": "core_outbox_read_write",`, `{"role": "core_outbox_read_write", "role": "core_outbox_read_write",`))},
+		{"duplicate_database", []byte(replaceOnce(t, fixture, `{"name": "stead_0123456789abcdef",`, `{"name": "stead_0123456789abcdef", "name": "stead_0123456789abcdef",`))},
+		{"duplicate_schema", []byte(replaceOnce(t, fixture, `{"name": "core_outbox",`, `{"name": "core_outbox", "name": "core_outbox",`))},
+		{"duplicate_database_acl", []byte(replaceOnce(t, fixture, `{"database": "stead_0123456789abcdef",`, `{"database": "stead_0123456789abcdef", "database": "stead_0123456789abcdef",`))},
+		{"duplicate_schema_acl", []byte(replaceOnce(t, fixture, `{"schema": "core_outbox", "grantor":`, `{"schema": "core_outbox", "schema": "core_outbox", "grantor":`))},
+		{"duplicate_default_acl", []byte(replaceOnce(t, fixture, `{"owner": "core_outbox_owner", "object_kind":`, `{"owner": "core_outbox_owner", "owner": "core_outbox_owner", "object_kind":`))},
+		{"duplicate_object", []byte(replaceOnce(t, augmentedFixture, `{"schema":"core_outbox","name":"event_intents",`, `{"schema":"core_outbox","schema":"core_outbox","name":"event_intents",`))},
+		{"duplicate_object_acl", []byte(replaceOnce(t, augmentedFixture, `{"schema":"core_outbox","object":"event_intents",`, `{"schema":"core_outbox","schema":"core_outbox","object":"event_intents",`))},
+		{"case_variant_root", []byte(replaceOnce(t, fixture, `"roles": [`, `"Roles": [`))},
+		{"case_variant_nested", []byte(replaceOnce(t, fixture, `"semantic_id": "database_owner"`, `"Semantic_ID": "database_owner"`))},
+		{"unknown_root", []byte(replaceOnce(t, fixture, `{`, `{"unknown": false,`))},
+		{"unknown_nested", []byte(replaceOnce(t, fixture, `"superuser": false,`, `"unknown": false, "superuser": false,`))},
+		{"null_array", []byte(replaceOnce(t, fixture, `"configuration": []`, `"configuration": null`))},
+		{"noncanonical_integer", []byte(replaceOnce(t, fixture, `"connection_limit": -1`, `"connection_limit": -1.0`))},
+		{"missing_required", []byte(replaceOnce(t, fixture, `"superuser": false, `, ``))},
+		{"trailing_value", append(append([]byte(nil), data...), []byte(`{}`)...)},
+		{"invalid_utf8", []byte("{\"deployment_key\":\"\xff\"}")},
+	}
+	for _, mutation := range mutations {
+		t.Run(mutation.name, func(t *testing.T) {
+			if _, err := DecodeManifest(bytes.NewReader(mutation.data)); err == nil {
+				t.Fatal("DecodeManifest accepted non-canonical JSON")
+			}
+		})
 	}
 }
 
@@ -323,6 +375,14 @@ func cloneManifest(t *testing.T, manifest Manifest) Manifest {
 		t.Fatal(err)
 	}
 	return cloned
+}
+
+func replaceOnce(t *testing.T, input, old, replacement string) string {
+	t.Helper()
+	if !strings.Contains(input, old) {
+		t.Fatalf("test mutation target %q not found", old)
+	}
+	return strings.Replace(input, old, replacement, 1)
 }
 
 func snapshotForManifest(manifest Manifest) Snapshot {
