@@ -11,7 +11,7 @@ const forbiddenCapabilityLinks = () =>
 
 afterEach(() => {
   cleanup();
-  window.location.hash = "";
+  window.history.replaceState(null, "", "/");
 });
 
 describe("Foundation", () => {
@@ -20,20 +20,23 @@ describe("Foundation", () => {
 
     render(<Foundation />);
 
+    expect(screen.getByRole("heading", { level: 1, name: "Home" })).toBeDefined();
+
+    const navigation = screen.getByRole("navigation", { name: "Primary navigation" });
+
     expect(
-      screen.getByRole("heading", { level: 1, name: "Open work, in one place." }),
-    ).toBeDefined();
+      ["Home", "Inbox", "My Work", "Projects", "Knowledge", "Teams"].map(
+        (name) => within(navigation).getByRole("link", { name }).getAttribute("href"),
+      ),
+    ).toEqual(["/", "/inbox", "/my-work", "/projects", "/knowledge", "/teams"]);
 
-    const navigation = screen.getByRole("navigation", { name: "Project areas" });
-    const links = within(navigation).getAllByRole("link");
-
-    expect(links.map((link) => link.textContent)).toEqual(["Overview", "Work", "Docs"]);
-
-    await user.tab();
-    expect(document.activeElement).toBe(links[0]);
+    const inboxLink = within(navigation).getByRole("link", { name: "Inbox" });
+    inboxLink.focus();
+    expect(document.activeElement).toBe(inboxLink);
 
     await user.keyboard("{Enter}");
-    expect(window.location.hash).toBe("#overview");
+    expect(window.location.pathname).toBe("/inbox");
+    expect(screen.getByRole("heading", { level: 1, name: "Inbox" })).toBeDefined();
   });
 
   it("contains no software-capability links in the general shell fixture", () => {
@@ -45,7 +48,7 @@ describe("Foundation", () => {
   it("detects duplicate forbidden-capability mutations", () => {
     render(<Foundation />);
 
-    const navigation = screen.getByRole("navigation", { name: "Project areas" });
+    const navigation = screen.getByRole("navigation", { name: "Primary navigation" });
     for (let index = 0; index < 2; index += 1) {
       const link = document.createElement("a");
       link.href = "#code";

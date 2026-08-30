@@ -93,21 +93,39 @@ test("merged provenance still prohibits a Devlane distribution import", async ()
   assert.match(sourceRecord, /relationship: source-reference/u);
 });
 
-test("unapproved browser and accessibility test dependencies remain absent", async () => {
+test("approved unit harness is exact while browser and accessibility engines remain absent", async () => {
   const manifest = JSON.parse(
     await readFile(new URL("../package.json", import.meta.url), "utf8"),
   );
   const lock = await readFile(new URL("../../../package-lock.json", import.meta.url), "utf8");
+  const approvals = await readFile(
+    new URL("../../../docs/governance/dependency-approvals.yaml", import.meta.url),
+    "utf8",
+  );
   const declared = {
     ...manifest.dependencies,
     ...manifest.devDependencies,
   };
-  for (const dependency of [
-    "vitest",
-    "@testing-library/react",
-    "@playwright/test",
-    "axe-core",
-  ]) {
+
+  const approvedUnitHarness = {
+    vitest: ["4.1.11", "DEP-APP-NPM-VITEST-4-1-11"],
+    "@testing-library/react": [
+      "16.3.3",
+      "DEP-APP-NPM-TESTING-LIBRARY-REACT-16-3-3",
+    ],
+    "@testing-library/dom": ["10.4.1", "DEP-APP-NPM-TESTING-LIBRARY-DOM-10-4-1"],
+    "@testing-library/user-event": [
+      "14.6.6",
+      "DEP-APP-NPM-TESTING-LIBRARY-USER-EVENT-14-6-6",
+    ],
+    "happy-dom": ["20.11.2", "DEP-APP-NPM-HAPPY-DOM-20-11-2"],
+  };
+  for (const [dependency, [version, approvalId]] of Object.entries(approvedUnitHarness)) {
+    assert.equal(declared[dependency], version);
+    assert.match(approvals, new RegExp(`approval_id: ${approvalId}\\n`, "u"));
+  }
+
+  for (const dependency of ["@playwright/test", "axe-core"]) {
     assert.equal(declared[dependency], undefined);
     assert.doesNotMatch(lock, new RegExp(`node_modules/${dependency.replace("/", "\\/")}`, "u"));
   }
