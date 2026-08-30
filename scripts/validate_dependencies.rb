@@ -244,6 +244,77 @@ end
 errors << "devlane-provenance.yaml: imported_paths must be empty before import" unless provenance.dig("import", "imported_paths") == []
 errors << "devlane-provenance.yaml: destination_paths must be empty before import" unless provenance.dig("import", "destination_paths") == []
 
+devlane_import = provenance["proposed_import"]
+expected_devlane_sources = {
+  "apps/web/src/styles/tokens.css" => {
+    "git_blob" => "36901af0c10553a8ad6d0860a58435912b274239",
+    "sha256" => "870cd43b2af00ee047217ca72882343550fa0a862e0c86fb29771ae8aabcc7f2",
+    "destination_path" => "packages/design-system/src/tokens.css"
+  },
+  "apps/web/src/components/ui/Button.tsx" => {
+    "git_blob" => "d0297e53de76f4a13d2b1b351cd33134824b842c",
+    "sha256" => "7c5f4bb8d08a00dbafcf2e26023f2cbb238fea70b465a54b4fe349069983a0ae",
+    "destination_path" => "packages/design-system/src/primitives.tsx"
+  },
+  "apps/web/src/components/ui/Card.tsx" => {
+    "git_blob" => "ff8e971a0e8f9030b2168bf02d6117a8ad544c7b",
+    "sha256" => "e62355d412674de0fea7fde6a3ebf7aa2eeb57aa317fd2e2bf8bd61a6f14dd66",
+    "destination_path" => "packages/design-system/src/primitives.tsx"
+  },
+  "apps/web/src/components/ui/Badge.tsx" => {
+    "git_blob" => "f4187e997315105f6b5337b4fd7a319b08caa315",
+    "sha256" => "c709b3508c61ff8886c5859804d09a46b8d202b76ab68dda0ca31e3d07ff35bc",
+    "destination_path" => "packages/design-system/src/primitives.tsx"
+  },
+  "apps/web/src/components/ui/Input.tsx" => {
+    "git_blob" => "22977a8cbfb24f155594564e076e86858c7cdb4e",
+    "sha256" => "35eb3b4e8ce4562833c03099d28f86d8484dc63a487fd42f66493a418ebe46b4",
+    "destination_path" => "packages/design-system/src/primitives.tsx"
+  },
+  "apps/web/src/components/ui/Skeleton.tsx" => {
+    "git_blob" => "cb274b88ee26d7c834cbc1e0a052e6f18f41fc8f",
+    "sha256" => "8ba0dc9ca6e8a1243b433ea757b2aab3ef25d693a88fcb3560ca41601b2b066b",
+    "destination_path" => "packages/design-system/src/primitives.tsx"
+  }
+}.freeze
+
+if !devlane_import.is_a?(Hash)
+  errors << "devlane-provenance.yaml: proposed_import must be a mapping"
+else
+  import_record = components["devlane-stead-primitives"]
+  errors << "dependency registry: missing Devlane primitive import candidate" unless import_record
+  expected_import_fields = {
+    "approval_id" => "DEP-APP-DEVLANE-STEAD-PRIMITIVES-7719DCAD",
+    "scope_version" => "stead-primitives-v1",
+    "proposed_destination_paths" => ["packages/design-system/src/tokens.css", "packages/design-system/src/primitives.tsx"]
+  }
+  expected_import_fields.each do |field, expected|
+    errors << "devlane-provenance.yaml: proposed_import.#{field} must equal #{expected.inspect}" unless devlane_import[field] == expected
+  end
+
+  source_files = Array(devlane_import["source_files"])
+  source_paths = source_files.filter_map { |entry| entry["source_path"] if entry.is_a?(Hash) }
+  errors << "devlane-provenance.yaml: proposed source paths must be unique" unless source_paths.uniq.length == source_paths.length
+  errors << "devlane-provenance.yaml: exact proposed source set mismatch" unless source_paths.to_set == expected_devlane_sources.keys.to_set
+  source_files.each do |entry|
+    next unless entry.is_a?(Hash) && expected_devlane_sources.key?(entry["source_path"])
+
+    expected_devlane_sources.fetch(entry["source_path"]).each do |field, expected|
+      errors << "devlane-provenance.yaml: #{entry['source_path']}.#{field} must equal #{expected.inspect}" unless entry[field] == expected
+    end
+    errors << "devlane-provenance.yaml: #{entry['source_path']} requires a modification statement" unless entry["modification"].is_a?(String) && !entry["modification"].strip.empty?
+  end
+
+  if import_record
+    decision = import_record.fetch("decision", {})
+    errors << "devlane-provenance.yaml: proposed import status must match dependency decision" unless devlane_import["status"] == decision["status"]
+    errors << "devlane-provenance.yaml: proposed import approvers must match dependency decision" unless devlane_import["approvers"] == decision["approvers"]
+    errors << "devlane-provenance.yaml: proposed import approval time must match dependency decision" unless devlane_import["approved_at"] == decision["approved_at"]
+    distribution_approved = decision["status"] == "APPROVED"
+    errors << "devlane-provenance.yaml: approved_source_distribution must follow the exact decision status" unless devlane_import["approved_source_distribution"] == distribution_approved
+  end
+end
+
 lockfile = JSON.parse(File.read(LOCK_PATH))
 errors << "package-lock.json: lockfileVersion must be 3" unless lockfile["lockfileVersion"] == 3
 direct_dependencies = direct_npm_dependencies(lockfile, errors)

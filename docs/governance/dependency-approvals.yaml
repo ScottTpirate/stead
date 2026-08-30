@@ -36,6 +36,63 @@ records:
     adr: null
     legal_approval: null
 
+  - approval_id: DEP-APP-DEVLANE-STEAD-PRIMITIVES-7719DCAD
+    component:
+      name: devlane-stead-primitives
+      kind: source_snapshot
+      ecosystem: git
+      source_url: https://github.com/Devlaner/devlane
+      version: 7719dcadf91f881b5aefe8b74012ffcfbba0bc17-stead-primitives-v1
+      digest: { algorithm: git-sha1, value: 7719dcadf91f881b5aefe8b74012ffcfbba0bc17 }
+      license_expression: MIT
+    usage:
+      owner: WS-05 frontend; WS-01 dependency and provenance integration
+      directories: [docs/governance, packages/design-system, apps/web, THIRD_PARTY_NOTICES.md]
+      purpose: >-
+        Proposed distribution of six exact Devlane design-token and UI-primitive source
+        files as two substantially adapted Stead design-system files.
+      relationship: source-reference
+      distributed_in: [stead-web source and release artifacts]
+      linkage_or_interface: >-
+        File-level derivative-source plan only until independently approved; resulting
+        code is dependency-free except for the already approved React runtime and receives
+        product data only through the canonical Stead API client.
+    decision: { category: ALLOW-PERMISSIVE, status: REVIEWED_PENDING_INDEPENDENT_APPROVAL, independent_approval_required: true, approvers: [], approved_at: null }
+    obligations:
+      notices: [NOTICE-DEVLANE-MIT]
+      source_or_offer: Preserve the Devlane MIT license and copyright notice in every distributed source or binary release containing the derived subset.
+      modifications: >-
+        Record every source blob and SHA-256, exact destination digest, Stead namespace and
+        accessibility changes, removed Tailwind/helper dependencies, and removed Devlane
+        ontology, route, backend, API, branding, theme, and asset material.
+    security:
+      vulnerability_result: >-
+        Author intake found no executable network/provider/authentication path in the six
+        proposed files; independent dependency, security, and QA approval is still pending.
+      provenance_result: >-
+        GitHub's Git data API and an exact detached checkout both resolved commit
+        7719dcadf91f881b5aefe8b74012ffcfbba0bc17 to tree
+        a568d1d11bab6012ffce1345193dcb537fa43556 and LICENSE blob
+        b39a03349aaf17ccb61bef17f9f0e88d86a746ca; every proposed source blob and SHA-256 is
+        recorded in devlane-provenance.yaml.
+      maintenance_risk: >-
+        This becomes an owned permanent derivative; upstream changes are not automatic,
+        and every source, scope, destination, dependency, or distribution change requires
+        a new exact review.
+      permissions_and_network: >-
+        The selected CSS and presentational React sources request no network, storage,
+        credential, provider, or system permission. Source clsx, tailwind-merge, Tailwind,
+        API, route, service, context, page, asset, and backend dependencies are excluded.
+    change:
+      update_policy: Every source commit/tree/blob, imported-file scope, resulting destination digest, dependency, license, or distribution change reopens independent review.
+      rollback_version: git:e24a4d9d05ad6df19c5bcaa9c385ee74fd5d8c31
+      rollback_constraints: >-
+        Before import, remove this unused candidate. After import, restore the last approved
+        provenance ledger and destination files, rerun all frontend and notice checks, and
+        retain the MIT notice while any Devlane-derived material remains distributed.
+    adr: null
+    legal_approval: null
+
   - approval_id: DEP-APP-ACTIONS-CHECKOUT-3D3C42E5
     component:
       name: actions/checkout

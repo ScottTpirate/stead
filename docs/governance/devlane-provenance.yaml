@@ -35,6 +35,81 @@ import:
   backend_boundary: >-
     The Devlane backend, routes, and ontology are not Stead contracts or systems of record.
     Imported frontend code must call canonical Stead APIs only.
+proposed_import:
+  approval_id: DEP-APP-DEVLANE-STEAD-PRIMITIVES-7719DCAD
+  status: REVIEWED_PENDING_INDEPENDENT_APPROVAL
+  scope_version: stead-primitives-v1
+  proposed_destination_paths:
+    - packages/design-system/src/tokens.css
+    - packages/design-system/src/primitives.tsx
+  source_files:
+    - source_path: apps/web/src/styles/tokens.css
+      git_blob: 36901af0c10553a8ad6d0860a58435912b274239
+      sha256: 870cd43b2af00ee047217ca72882343550fa0a862e0c86fb29771ae8aabcc7f2
+      destination_path: packages/design-system/src/tokens.css
+      modification: >-
+        Retain the neutral, brand, semantic-surface, dark-theme, spacing, radius, and
+        shadow design language; namespace it for Stead, remove source product priority
+        and pink-theme semantics, and add Stead reduced-motion and system-theme behavior.
+    - source_path: apps/web/src/components/ui/Button.tsx
+      git_blob: d0297e53de76f4a13d2b1b351cd33134824b842c
+      sha256: 7c5f4bb8d08a00dbafcf2e26023f2cbb238fea70b465a54b4fe349069983a0ae
+      destination_path: packages/design-system/src/primitives.tsx
+      modification: >-
+        Adapt the button variants and pending indicator to dependency-free Stead CSS,
+        preserve native button semantics, and add explicit busy-state accessibility.
+    - source_path: apps/web/src/components/ui/Card.tsx
+      git_blob: ff8e971a0e8f9030b2168bf02d6117a8ad544c7b
+      sha256: e62355d412674de0fea7fde6a3ebf7aa2eeb57aa317fd2e2bf8bd61a6f14dd66
+      destination_path: packages/design-system/src/primitives.tsx
+      modification: >-
+        Adapt the outlined and raised container pattern into the semantic Stead Surface
+        primitive without importing source routes, data, or product concepts.
+    - source_path: apps/web/src/components/ui/Badge.tsx
+      git_blob: f4187e997315105f6b5337b4fd7a319b08caa315
+      sha256: c709b3508c61ff8886c5859804d09a46b8d202b76ab68dda0ca31e3d07ff35bc
+      destination_path: packages/design-system/src/primitives.tsx
+      modification: >-
+        Adapt the closed semantic color variants for presentational status and security
+        chrome; badges remain text-bearing and never make an authorization decision.
+    - source_path: apps/web/src/components/ui/Input.tsx
+      git_blob: 22977a8cbfb24f155594564e076e86858c7cdb4e
+      sha256: 35eb3b4e8ce4562833c03099d28f86d8484dc63a487fd42f66493a418ebe46b4
+      destination_path: packages/design-system/src/primitives.tsx
+      modification: >-
+        Adapt the labeled input pattern into TextField, use collision-safe generated IDs,
+        and bind description, error, invalid, and alert semantics accessibly.
+    - source_path: apps/web/src/components/ui/Skeleton.tsx
+      git_blob: cb274b88ee26d7c834cbc1e0a052e6f18f41fc8f
+      sha256: 8ba0dc9ca6e8a1243b433ea757b2aab3ef25d693a88fcb3560ca41601b2b066b
+      destination_path: packages/design-system/src/primitives.tsx
+      modification: >-
+        Adapt the decorative loading block into a bounded accessible LoadingState with a
+        status label and reduced-motion behavior.
+  excluded_source_dependencies:
+    - apps/web/src/lib/utils.ts
+    - clsx
+    - tailwind-merge
+    - tailwindcss
+  excluded_source_areas:
+    - apps/api
+    - apps/web/src/api
+    - apps/web/src/routes
+    - apps/web/src/services
+    - apps/web/src/pages
+    - apps/web/src/contexts
+    - source assets and branding
+  review_obligations:
+    - verify exact commit, tree, source blobs, SHA-256 values, and MIT license blob
+    - confirm the six files contain no backend call, route, authorization decision, or source ontology dependency
+    - confirm only React remains as an already approved runtime dependency
+    - retain NOTICE-DEVLANE-MIT and an accurate modification statement
+    - independently review license, security, accessibility, maintenance, ontology removal, and canonical API boundary
+    - record exact resulting destination SHA-256 values before the import commit may merge
+    - report eager and lazy JavaScript deltas against the 60808-byte gzip foundation baseline
+  approved_source_distribution: false
+  approvers: []
+  approved_at: null
 update:
   trigger: a proposed source commit, tree, license blob, import scope, or distribution change
   procedure: >-

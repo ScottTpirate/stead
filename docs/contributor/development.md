@@ -112,7 +112,9 @@ them without a new clean evaluation and independent approval.
 ## Devlane boundary
 
 [`devlane-provenance.yaml`](../governance/devlane-provenance.yaml) pins the upstream commit,
-tree, and license blob. No Devlane code or asset has been imported. Before the first import:
+tree, and license blob. No Devlane code or asset has been imported. Its proposed first
+import is limited to the exact token and primitive source files recorded there and remains
+non-distributable until independent approval. Before the first import:
 
 1. obtain independent approval for the exact source and proposed distribution;
 2. record every source path, destination path, digest, modification, and notice;
