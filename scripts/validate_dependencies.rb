@@ -32,6 +32,131 @@ FOUNDATION_ROLLBACK_TARGET = "git:e24a4d9d05ad6df19c5bcaa9c385ee74fd5d8c31"
 EXACT_GO_VERSION = /\Av\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?\z/
 GO_H1_DIGEST = /\Ah1:[A-Za-z0-9+\/]{43}=\z/
 PROHIBITED_GO_DIRECTIVES = Set.new(%w[exclude godebug replace retract tool toolchain]).freeze
+EXPECTED_REJECTED_DECISIONS = {
+  "github.com/jackc/pgx/v5" => {
+    "category" => "ALLOW-PERMISSIVE",
+    "status" => "REJECTED",
+    "independent_approval_required" => true,
+    "approvers" => [],
+    "approved_at" => nil,
+    "reason_codes" => ["REACHABLE_KNOWN_VULNERABILITY"],
+    "evidence_refs" => [
+      "dependency-evidence/stead-p1-015-postgresql.yaml#go_candidate",
+      "github-pr-39-comment-5471438314",
+      "github-issue-38-comment-5471438378"
+    ]
+  },
+  "postgres" => {
+    "category" => "UNKNOWN",
+    "status" => "REJECTED",
+    "independent_approval_required" => true,
+    "approvers" => [],
+    "approved_at" => nil,
+    "reason_codes" => [
+      "UNRESOLVED_CRITICAL_HIGH_FINDINGS",
+      "INCOMPLETE_LICENSE_CLASSIFICATION",
+      "MISSING_SIGNED_SUPPLY_CHAIN_EVIDENCE"
+    ],
+    "evidence_refs" => [
+      "dependency-evidence/stead-p1-015-postgresql.yaml#oci_candidate",
+      "github-pr-39-comment-5471438314",
+      "github-issue-38-comment-5471438378"
+    ]
+  }
+}.freeze
+EXPECTED_POSTGRESQL_REJECTION_EVIDENCE = {
+  ["candidate_state"] => "REJECTED_QUARANTINED_NOT_INTEGRATED",
+  ["recorded_at"] => "2026-08-30T21:35:54Z",
+  ["independent_review", "candidate_revision"] => "f929649e9c5896d579147b922fdd87659f26c2ff",
+  ["independent_review", "completed_at"] => "2026-08-30T21:35:54Z",
+  ["independent_review", "disposition"] => "REVISE_HOLD",
+  ["independent_review", "release_eligible"] => false,
+  ["independent_review", "evidence_references"] => ["github-pr-39-comment-5471438314", "github-issue-38-comment-5471438378"],
+  ["go_candidate", "vulnerability_scan", "status"] => "REJECTED_REACHABLE_VULNERABILITY",
+  ["go_candidate", "vulnerability_scan", "completed_at"] => "2026-08-30T21:35:54Z",
+  ["go_candidate", "vulnerability_scan", "tool"] => {
+    "name" => "govulncheck", "version" => "v1.7.0", "go_version" => "go1.27.0",
+    "database" => "https://vuln.go.dev", "database_updated_at" => "2026-08-28T14:47:45Z"
+  },
+  ["go_candidate", "vulnerability_scan", "result"] => {
+    "advisory_id" => "GO-2026-5970", "cve_id" => "CVE-2026-56852",
+    "vulnerable_module" => "golang.org/x/text", "vulnerable_version" => "v0.29.0",
+    "fixed_version" => "v0.39.0", "reachable_path" => "github.com/jackc/pgx/v5 SCRAM authentication"
+  },
+  ["go_candidate", "vulnerability_scan", "evidence_digest"] => {
+    "closure_go_mod_sha256" => "42d674c3b77defbc95c0b96a077302adc47f70b049520843df185b13cebada49",
+    "closure_go_sum_sha256" => "2f18690ef7080bc7b609a33b4f779b44e197f6f6c5f405c34e51a8931579c8c0"
+  },
+  ["go_candidate", "provenance_review", "status"] => "REPRODUCED_NOT_APPROVED",
+  ["go_candidate", "provenance_review", "result"] => "Exact tag commit, module and go.mod checksums, pgxpool closure, license files, and notice obligations reproduced.",
+  ["go_candidate", "possible_successor", "status"] => "UNAPPROVED_INFORMATION_ONLY",
+  ["go_candidate", "possible_successor", "selected_modules"] => [
+    {
+      "module" => "golang.org/x/text", "version" => "v0.39.0",
+      "module_sum" => "h1:UbZz4pLOvn600D6Oh6GGEI6VAmndrEBLv8/6BEXzyus=",
+      "go_mod_sum" => "h1:3UwRclnC2g0TU9x8PZiyfOajCd1zaUNHF9cvqcQZ+ZM="
+    },
+    {
+      "module" => "golang.org/x/sync", "version" => "v0.21.0",
+      "module_sum" => "h1:HLII4xRRTtCRkxYp4HNFF0Js/Og6q2i++KXbg0gHCwM=",
+      "go_mod_sum" => "h1:9xrNwdLfx4jkKbNva9FpL6vEN7evnE43NNNJQ2LF3+0="
+    }
+  ],
+  ["go_candidate", "possible_successor", "govulncheck_findings"] => 0,
+  ["go_candidate", "possible_successor", "closure_go_mod_sha256"] => "925e120507c7b457b98f5dcb68a05f3044ab9883a608c591f6a9f7bdbb636ac4",
+  ["go_candidate", "possible_successor", "closure_go_sum_sha256"] => "760a7e8525ac7caaf6fa69cbc51ae7661a0a942369b9412e1a2cd17655e51a33",
+  ["go_candidate", "possible_successor", "required_next_step"] => "New immutable intake revision, exact closure/checksums/notices, compatibility tests, and fresh independent rescan.",
+  ["oci_candidate", "created"] => "2026-08-25T00:42:19.848754437Z",
+  ["oci_candidate", "source_revision"] => "9d15534160ade17f2b6c455a39ee967c49b1937d",
+  ["oci_candidate", "vulnerability_scan", "status"] => "REJECTED_UNRESOLVED_CRITICAL_HIGH",
+  ["oci_candidate", "vulnerability_scan", "completed_at"] => "2026-08-30T21:35:54Z",
+  ["oci_candidate", "vulnerability_scan", "reviewed_disposition"] => "Both independent scanners retain unresolved Critical/High findings after the reviewed non-applicable results; RG-08 is not satisfied.",
+  ["oci_candidate", "vulnerability_scan", "reports"] => [
+    {
+      "tool" => "trivy", "version" => "0.74.0", "database_version" => 2,
+      "database_updated_at" => "2026-08-30T19:01:43.110912224Z",
+      "report_created_at" => "2026-08-30T21:27:24.886430412Z",
+      "report_sha256" => "928280778e02c072db6b3f05a4e8fee9b535b2a75eca668dfba689697e1be720",
+      "raw_os_critical" => 15, "raw_os_high" => 45
+    },
+    {
+      "tool" => "grype", "version" => "0.118.0", "database_schema" => "v6.1.9",
+      "database_built_at" => "2026-08-30T06:27:52Z",
+      "report_created_at" => "2026-08-30T21:29:44.933982995Z",
+      "report_sha256" => "5307fb983fbe1d72971956244d538e4caec97d41e75a9f64304cc0bbbb010693",
+      "raw_os_critical" => 26, "raw_os_high" => 49
+    }
+  ],
+  ["oci_candidate", "package_license_inventory", "status"] => "REJECTED_INCOMPLETE_LICENSE_CLASSIFICATION",
+  ["oci_candidate", "package_license_inventory", "tool"] => "syft",
+  ["oci_candidate", "package_license_inventory", "version"] => "1.51.1",
+  ["oci_candidate", "package_license_inventory", "report_sha256"] => "a5859ae8a27dac4117c518a4cc0a8433c6e336633143edb386a59c2eaba678e8",
+  ["oci_candidate", "package_license_inventory", "published_spdx_license_concluded"] => "NOASSERTION",
+  ["oci_candidate", "package_license_inventory", "published_spdx_noassertion_concluded_packages"] => 204,
+  ["oci_candidate", "package_license_inventory", "scanner_custom_tokens"] => ["Custom-Unicode", "Custom-pg_dump", "Custom-regex"],
+  ["oci_candidate", "package_license_inventory", "disposition"] => "Legal/policy normalization is incomplete; UNKNOWN remains rejected and quarantined.",
+  ["oci_candidate", "published_supply_chain_statements", "status"] => "REPRODUCED_UNSIGNED_EVIDENCE_ONLY",
+  ["oci_candidate", "published_supply_chain_statements", "attestation_manifest_digest"] => "sha256:4ba017d475bffe5bb91d50107c339b64a43853b264a2426ceddfa47557939ea3",
+  ["oci_candidate", "published_supply_chain_statements", "subject_manifest_digest"] => "sha256:1938c16e9d2f10a6a3623b344b64ae8d45f407f2c5f34f0979468bb689b9227a",
+  ["oci_candidate", "published_supply_chain_statements", "spdx"] => {
+    "predicate_type" => "https://spdx.dev/Document", "version" => "SPDX-2.3",
+    "layer_digest" => "sha256:90162b18863727e5883dc9c5fcae8c65b6ff353e7e9caa03292e77626d386d47"
+  },
+  ["oci_candidate", "published_supply_chain_statements", "slsa"] => {
+    "predicate_type" => "https://slsa.dev/provenance/v0.2",
+    "layer_digest" => "sha256:81926168df652b2566d246259a832e999ed94d3c134671eb1adb6e07a292f05e",
+    "source_revision" => "9d15534160ade17f2b6c455a39ee967c49b1937d"
+  },
+  ["oci_candidate", "published_supply_chain_statements", "assurance_limit"] => "Published statements are digest-bound provenance evidence only; no SLSA level or approval is claimed.",
+  ["oci_candidate", "signature_attestation_review", "status"] => "REJECTED_NO_COSIGN_SIGNATURE_OR_SIGNED_ATTESTATION",
+  ["oci_candidate", "signature_attestation_review", "tool"] => "cosign",
+  ["oci_candidate", "signature_attestation_review", "version"] => "3.1.3",
+  ["oci_candidate", "signature_attestation_review", "checked_digests"] => [
+    "sha256:bb3e1a57e5407e0a5280b4211980a5e537f4abd234a87014ac979849a78dd825",
+    "sha256:1938c16e9d2f10a6a3623b344b64ae8d45f407f2c5f34f0979468bb689b9227a"
+  ],
+  ["oci_candidate", "signature_attestation_review", "result"] => "No Cosign signature or signed Cosign attestation was found for either digest."
+}.freeze
 
 def allowed_lock_license?(license)
   license.is_a?(String) && DEFAULT_PERMISSIVE_NPM_LICENSES.include?(license)
@@ -271,6 +396,7 @@ def validate_go_dependencies(mod_source, sum_source, components, errors, allowed
     end
 
     errors << "#{name}: registry version differs from go.mod" unless record.dig("component", "version") == version
+    errors << "#{name}: direct Go module is not approved for use" unless record.dig("decision", "status") == "APPROVED"
     module_sum = sums[[name, version]]
     go_mod_sum = sums[[name, "#{version}/go.mod"]]
     errors << "#{sum_label}: missing module checksum for #{name} #{version}" if module_sum.nil?
@@ -349,6 +475,7 @@ def validate_oci_workflow_images(workflow_sources, components, errors)
       errors << "#{name}: registry version differs from workflow image tag"
     end
     errors << "#{name}: workflow image digest differs from approval registry" unless record.dig("component", "digest", "value") == reference["digest"]
+    errors << "#{name}: workflow OCI image is not approved for use" unless record.dig("decision", "status") == "APPROVED"
   end
   references
 end
@@ -363,7 +490,77 @@ def release_approval_errors(active_names, components, release_eligible_statuses)
   end
 end
 
+def decision_state_errors(record)
+  name = record.dig("component", "name")
+  decision = record.fetch("decision", {})
+  status = decision["status"]
+  approvers = Array(decision["approvers"])
+  approved_at = decision["approved_at"]
+  reason_codes = Array(decision["reason_codes"])
+  evidence_refs = Array(decision["evidence_refs"])
+  errors = []
+
+  if decision["category"] == "UNKNOWN" && status != "REJECTED"
+    errors << "#{name}: UNKNOWN license category must remain rejected and quarantined"
+  end
+
+  case status
+  when "REVIEWED_PENDING_INDEPENDENT_APPROVAL"
+    errors << "#{name}: pending candidate must not name approvers" unless approvers.empty?
+    errors << "#{name}: pending candidate must not have approved_at" unless approved_at.nil?
+    errors << "#{name}: pending candidate must not carry rejection reason codes" unless reason_codes.empty?
+    errors << "#{name}: pending candidate must not carry rejection evidence references" unless evidence_refs.empty?
+  when "REJECTED"
+    errors << "#{name}: rejected candidate must not name approvers" unless approvers.empty?
+    errors << "#{name}: rejected candidate must not have approved_at" unless approved_at.nil?
+    errors << "#{name}: rejected candidate requires stable reason codes" if reason_codes.empty?
+    errors << "#{name}: rejected candidate requires stable evidence references" if evidence_refs.empty?
+  when "APPROVED"
+    errors << "#{name}: approval requires at least two recorded independent identities" if approvers.length < 2
+    errors << "#{name}: approval requires approved_at" if approved_at.nil?
+    errors << "#{name}: approved candidate must not retain rejection reason codes" unless reason_codes.empty?
+    errors << "#{name}: approved candidate must not retain rejection evidence references" unless evidence_refs.empty?
+  end
+
+  errors
+end
+
+def exact_rejected_candidate_errors(components)
+  errors = EXPECTED_REJECTED_DECISIONS.filter_map do |name, expected|
+    record = components[name]
+    if record.nil?
+      "dependency registry: missing rejected evidence record #{name}"
+    elsif record["decision"] != expected
+      "#{name}: rejected decision or its immutable reason/evidence binding differs from the reviewed disposition"
+    end
+  end
+  postgres_record = components["postgres"]
+  if postgres_record && postgres_record.dig("component", "license_expression") != "NOASSERTION"
+    errors << "postgres: rejected image license must remain NOASSERTION"
+  end
+  errors
+end
+
+def nested_value(value, path)
+  path.reduce(value) { |cursor, key| cursor.is_a?(Hash) ? cursor[key] : nil }
+end
+
+def postgresql_rejection_evidence_errors(evidence)
+  EXPECTED_POSTGRESQL_REJECTION_EVIDENCE.filter_map do |path, expected|
+    actual = nested_value(evidence, path)
+    next if actual == expected
+
+    "dependency-evidence/stead-p1-015-postgresql.yaml: #{path.join('.')} must preserve rejected finding #{expected.inspect}"
+  end
+end
+
+def delete_nested_key!(value, path)
+  parent = path[0...-1].reduce(value) { |cursor, key| cursor.fetch(key) }
+  parent.delete(path.last)
+end
+
 def run_validator_self_tests
+  guard_count = 7
   pending_go = {
     "component" => {
       "name" => "example.com/db", "kind" => "go_module", "ecosystem" => "go", "version" => "v1.2.3",
@@ -417,12 +614,123 @@ def run_validator_self_tests
   validate_oci_workflow_images({ "wrong.yml" => "container:\n  image: postgres:16-bookworm@sha256:#{'b' * 64}\n" }, components, wrong_oci_errors)
   failures << "wrong OCI digest mutation was accepted" unless wrong_oci_errors.any? { |error| error.include?("digest differs") }
 
+  rejected_go = Marshal.load(Marshal.dump(pending_go))
+  rejected_go["component"]["name"] = "example.com/rejected-db"
+  rejected_go["decision"] = {
+    "status" => "REJECTED", "approvers" => [], "approved_at" => nil,
+    "reason_codes" => ["REACHABLE_KNOWN_VULNERABILITY"], "evidence_refs" => ["evidence/rejected-db"]
+  }
+  rejected_oci = Marshal.load(Marshal.dump(pending_oci))
+  rejected_oci["component"]["name"] = "rejected-postgres"
+  rejected_oci["decision"] = {
+    "status" => "REJECTED", "approvers" => [], "approved_at" => nil,
+    "reason_codes" => ["UNRESOLVED_CRITICAL_HIGH_FINDINGS"], "evidence_refs" => ["evidence/rejected-postgres"]
+  }
+  rejected_components = {
+    "example.com/rejected-db" => rejected_go,
+    "rejected-postgres" => rejected_oci
+  }
+  rejected_go_activation_errors = []
+  rejected_go_sum = "example.com/rejected-db v1.2.3 h1:#{'a' * 43}=\nexample.com/rejected-db v1.2.3/go.mod h1:#{'b' * 43}=\n"
+  validate_go_dependencies(
+    "module fixture\nrequire example.com/rejected-db v1.2.3\n",
+    rejected_go_sum,
+    rejected_components,
+    rejected_go_activation_errors,
+    mod_label: "rejected.mod",
+    sum_label: "rejected.sum"
+  )
+  failures << "rejected Go module activation mutation was accepted" unless rejected_go_activation_errors.any? { |error| error.include?("not approved for use") }
+
+  rejected_oci_activation_errors = []
+  rejected_oci_source = "services:\n  db:\n    image: rejected-postgres:16-bookworm@sha256:#{'a' * 64}\n"
+  validate_oci_workflow_images({ "rejected.yml" => rejected_oci_source }, rejected_components, rejected_oci_activation_errors)
+  failures << "rejected OCI image activation mutation was accepted" unless rejected_oci_activation_errors.any? { |error| error.include?("not approved for use") }
+  guard_count += 2
+
+  rejected_release_errors = release_approval_errors(Set.new(rejected_components.keys), rejected_components, ["APPROVED"])
+  failures << "rejected Go module mutation became release eligible" unless rejected_release_errors.any? { |error| error.start_with?("example.com/rejected-db:") }
+  failures << "rejected OCI image mutation became release eligible" unless rejected_release_errors.any? { |error| error.start_with?("rejected-postgres:") }
+  guard_count += 2
+
+  rejected_with_approval = Marshal.load(Marshal.dump(rejected_go))
+  rejected_with_approval["decision"]["approvers"] = ["self-approval"]
+  rejected_with_approval["decision"]["approved_at"] = "2026-08-30T21:35:54Z"
+  approval_metadata_errors = decision_state_errors(rejected_with_approval)
+  unless approval_metadata_errors.any? { |error| error.include?("must not name approvers") } &&
+         approval_metadata_errors.any? { |error| error.include?("must not have approved_at") }
+    failures << "rejected candidate approval metadata mutation was accepted"
+  end
+  guard_count += 1
+
+  registry_fixture = load_yaml(REGISTRY_PATH)
+  registry_components = registry_fixture.fetch("records").to_h { |record| [record.dig("component", "name"), record] }
+  decision_mutation_survivors = []
+  EXPECTED_REJECTED_DECISIONS.each do |name, expected_decision|
+    expected_decision.each_key do |field|
+      mutated_components = Marshal.load(Marshal.dump(registry_components))
+      mutated_components.fetch(name).fetch("decision").delete(field)
+      decision_mutation_survivors << "#{name}.decision.#{field}" if exact_rejected_candidate_errors(mutated_components).empty?
+      guard_count += 1
+    end
+  end
+  failures << "exact rejected-decision mutation survivors: #{decision_mutation_survivors.join(', ')}" unless decision_mutation_survivors.empty?
+
+  softened_decision_mutations = [
+    ["github.com/jackc/pgx/v5", "status", "APPROVED"],
+    ["github.com/jackc/pgx/v5", "reason_codes", ["RISK_ACCEPTED"]],
+    ["postgres", "category", "REVIEW-NONRUNTIME"],
+    ["postgres", "reason_codes", ["SCAN_REVIEWED"]]
+  ]
+  softened_decision_survivors = []
+  softened_decision_mutations.each do |name, field, replacement|
+    mutated_components = Marshal.load(Marshal.dump(registry_components))
+    mutated_components.fetch(name).fetch("decision")[field] = replacement
+    softened_decision_survivors << "#{name}.decision.#{field}" if exact_rejected_candidate_errors(mutated_components).empty?
+    guard_count += 1
+  end
+  failures << "rejected decision softening mutation survivors: #{softened_decision_survivors.join(', ')}" unless softened_decision_survivors.empty?
+
+  softened_license_components = Marshal.load(Marshal.dump(registry_components))
+  softened_license_components.fetch("postgres").fetch("component")["license_expression"] = "MIT"
+  if exact_rejected_candidate_errors(softened_license_components).empty?
+    failures << "rejected OCI license softening mutation was accepted"
+  end
+  guard_count += 1
+
+  evidence_fixture = load_yaml(POSTGRESQL_EVIDENCE_PATH)
+  evidence_mutation_survivors = []
+  EXPECTED_POSTGRESQL_REJECTION_EVIDENCE.each_key do |path|
+    mutated_evidence = Marshal.load(Marshal.dump(evidence_fixture))
+    delete_nested_key!(mutated_evidence, path)
+    evidence_mutation_survivors << path.join(".") if postgresql_rejection_evidence_errors(mutated_evidence).empty?
+    guard_count += 1
+  end
+  failures << "rejected evidence deletion mutation survivors: #{evidence_mutation_survivors.join(', ')}" unless evidence_mutation_survivors.empty?
+
+  softened_evidence_mutations = {
+    ["independent_review", "release_eligible"] => true,
+    ["go_candidate", "vulnerability_scan", "status"] => "PASS",
+    ["go_candidate", "possible_successor", "status"] => "APPROVED",
+    ["oci_candidate", "vulnerability_scan", "status"] => "PASS",
+    ["oci_candidate", "signature_attestation_review", "status"] => "VERIFIED"
+  }
+  softened_evidence_survivors = []
+  softened_evidence_mutations.each do |path, replacement|
+    mutated_evidence = Marshal.load(Marshal.dump(evidence_fixture))
+    parent = path[0...-1].reduce(mutated_evidence) { |cursor, key| cursor.fetch(key) }
+    parent[path.last] = replacement
+    softened_evidence_survivors << path.join(".") if postgresql_rejection_evidence_errors(mutated_evidence).empty?
+    guard_count += 1
+  end
+  failures << "rejected evidence softening mutation survivors: #{softened_evidence_survivors.join(', ')}" unless softened_evidence_survivors.empty?
+
   unless failures.empty?
     warn "dependency validator self-tests failed:"
     failures.each { |failure| warn "- #{failure}" }
     exit 1
   end
-  puts "dependency validator self-tests passed: 7/7 mutation guards"
+  puts "dependency validator self-tests passed: #{guard_count}/#{guard_count} mutation guards"
 end
 
 if ARGV.first == "--self-test"
@@ -445,9 +753,6 @@ records.each do |record|
   name = record.dig("component", "name")
   digest = record.dig("component", "digest", "value")
   algorithm = record.dig("component", "digest", "algorithm")
-  status = record.dig("decision", "status")
-  approvers = Array(record.dig("decision", "approvers"))
-  approved_at = record.dig("decision", "approved_at")
   rollback_version = record.dig("change", "rollback_version")
 
   case algorithm
@@ -463,6 +768,11 @@ records.each do |record|
 
   kind = record.dig("component", "kind")
   ecosystem = record.dig("component", "ecosystem")
+  license_expression = record.dig("component", "license_expression")
+  if license_expression&.match?(/\bNOASSERTION\b/i)
+    errors << "#{name}: NOASSERTION license requires UNKNOWN category" unless record.dig("decision", "category") == "UNKNOWN"
+    errors << "#{name}: NOASSERTION license must remain rejected" unless record.dig("decision", "status") == "REJECTED"
+  end
   if kind == "go_module"
     errors << "#{name}: go_module must use the go ecosystem" unless ecosystem == "go"
     errors << "#{name}: go_module artifact checksum must use go-h1" unless algorithm == "go-h1"
@@ -481,16 +791,11 @@ records.each do |record|
     errors << "#{name}: oci ecosystem record must use oci_image kind"
   end
 
-  if status == "REVIEWED_PENDING_INDEPENDENT_APPROVAL"
-    errors << "#{name}: pending candidate must not name approvers" unless approvers.empty?
-    errors << "#{name}: pending candidate must not have approved_at" unless approved_at.nil?
-  elsif status == "APPROVED"
-    errors << "#{name}: approval requires at least two recorded independent identities" if approvers.length < 2
-    errors << "#{name}: approval requires approved_at" if approved_at.nil?
-  end
+  errors.concat(decision_state_errors(record))
 
   errors << "#{name}: rollback target must be the immutable Phase 0 baseline" unless rollback_version == FOUNDATION_ROLLBACK_TARGET
 end
+errors.concat(exact_rejected_candidate_errors(components))
 
 REQUIRED_PINS.each do |name, (version, digest)|
   record = components[name]
@@ -522,7 +827,7 @@ errors << "devlane-provenance.yaml: destination_paths must be empty before impor
 postgresql_evidence = load_yaml(POSTGRESQL_EVIDENCE_PATH)
 expected_postgresql_evidence = {
   ["issue_id"] => "STEAD-P1-015",
-  ["candidate_state"] => "GOVERNANCE_ONLY_NOT_INTEGRATED",
+  ["candidate_state"] => "REJECTED_QUARANTINED_NOT_INTEGRATED",
   ["go_candidate", "approval_id"] => "DEP-APP-GO-PGX-V5-5-10-0",
   ["go_candidate", "module"] => "github.com/jackc/pgx/v5",
   ["go_candidate", "version"] => "v5.10.0",
@@ -535,7 +840,7 @@ expected_postgresql_evidence = {
   ["oci_candidate", "selected_platform", "manifest_digest"] => "sha256:1938c16e9d2f10a6a3623b344b64ae8d45f407f2c5f34f0979468bb689b9227a",
   ["oci_candidate", "selected_platform", "config_digest"] => "sha256:5f71c21b69a7977b82247582e2e731ed76bdebaadb7dd7945ed76bcc9ed06632",
   ["oci_candidate", "postgres_package_version"] => "16.15-1.pgdg12+2",
-  ["oci_candidate", "created"] => "2026-08-25"
+  ["oci_candidate", "created"] => "2026-08-25T00:42:19.848754437Z"
 }
 expected_postgresql_evidence.each do |path, expected|
   actual = path.reduce(postgresql_evidence) { |cursor, key| cursor.is_a?(Hash) ? cursor[key] : nil }
@@ -553,6 +858,7 @@ actual_closure = Array(postgresql_evidence.dig("go_candidate", "pgxpool_module_c
   [entry["module"], [entry["version"], entry["module_sum"], entry["go_mod_sum"], entry["upstream_commit"], entry["license_expression"]]]
 end
 errors << "dependency-evidence/stead-p1-015-postgresql.yaml: pgxpool module closure differs from the reviewed intake" unless actual_closure == expected_pgxpool_closure
+errors.concat(postgresql_rejection_evidence_errors(postgresql_evidence))
 
 pgx_record = components["github.com/jackc/pgx/v5"]
 if pgx_record
@@ -563,14 +869,6 @@ postgres_record = components["postgres"]
 if postgres_record
   errors << "postgres: registry index digest differs from intake evidence" unless postgres_record.dig("component", "digest", "value") == postgresql_evidence.dig("oci_candidate", "index_digest")
 end
-unless postgresql_evidence.dig("go_candidate", "vulnerability_scan") == { "status" => "PENDING_INDEPENDENT_SCAN", "result" => nil }
-  errors << "dependency-evidence/stead-p1-015-postgresql.yaml: Go vulnerability evidence must remain honestly pending until an independent result is recorded"
-end
-unless postgresql_evidence.dig("oci_candidate", "vulnerability_scan") == { "status" => "PENDING_IMAGE_SCAN", "result" => nil } &&
-       postgresql_evidence.dig("oci_candidate", "package_license_inventory") == { "status" => "PENDING_IMAGE_SCAN", "result" => nil }
-  errors << "dependency-evidence/stead-p1-015-postgresql.yaml: image vulnerability/license evidence must remain honestly pending until scan results are recorded"
-end
-
 lockfile = JSON.parse(File.read(LOCK_PATH))
 errors << "package-lock.json: lockfileVersion must be 3" unless lockfile["lockfileVersion"] == 3
 direct_dependencies = direct_npm_dependencies(lockfile, errors)
@@ -691,7 +989,9 @@ errors << "scripts/validate_openfga.sh: repository-owned model evaluator is miss
 errors << "scripts/validate_openfga.sh: external OpenFGA CLI execution is prohibited until a vulnerability-clean exact release is approved" if openfga_runner.match?(/\bfga\s+model\s+test\b|openfga\/cli\/releases/)
 
 notices = File.read(NOTICES_PATH)
-required_notices = records.flat_map { |record| Array(record.dig("obligations", "notices")) }.uniq
+required_notices = records.select { |record| record.dig("decision", "status") == "APPROVED" }
+                          .flat_map { |record| Array(record.dig("obligations", "notices")) }
+                          .uniq
 required_notices.each do |notice_id|
   errors << "THIRD_PARTY_NOTICES.md: missing #{notice_id}" unless notices.include?(notice_id)
 end
@@ -721,6 +1021,7 @@ unless errors.empty?
 end
 
 pending = records.count { |record| record.dig("decision", "status") == "REVIEWED_PENDING_INDEPENDENT_APPROVAL" }
-puts "dependency registry valid: #{records.length} exact candidate records; #{direct_dependencies.length} direct npm dependencies; #{direct_go.length} direct Go modules; #{oci_references.length} workflow OCI images; #{pending} pending independent approval"
+rejected = records.count { |record| record.dig("decision", "status") == "REJECTED" }
+puts "dependency registry valid: #{records.length} exact candidate records; #{direct_dependencies.length} direct npm dependencies; #{direct_go.length} direct Go modules; #{oci_references.length} workflow OCI images; #{pending} pending independent approval; #{rejected} rejected/quarantined"
 puts "transitive license review required before approval: #{review_licenses.to_a.sort.join(", ")}" unless review_licenses.empty?
 puts "release eligibility verified for #{active_record_names.length} active dependencies" if release_mode

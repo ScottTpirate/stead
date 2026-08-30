@@ -1,7 +1,10 @@
 # Stead third-party notices
 
 This file records notices required by dependencies that are, or are intended to be,
-distributed with Stead artifacts. The machine-readable source is
+distributed with Stead artifacts. A separately marked quarantine appendix may preserve
+license evidence for rejected intake candidates; that appendix is not generated
+release-notice input and does not authorize distribution of the named code. The
+machine-readable source is
 [`docs/governance/dependency-approvals.yaml`](docs/governance/dependency-approvals.yaml).
 Build and test tools that are not distributed remain inventoried there and in the
 lockfile/SBOM even when they require no notice in this file.
@@ -37,6 +40,13 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+## Quarantined evidence-only notices — not approved or distributed
+
+The following six notices preserve the license evidence collected for the rejected
+`github.com/jackc/pgx/v5` v5.10.0 closure. Their presence does not make any module
+release-eligible. A successor may reuse them only after a new immutable intake and
+independent approval establish the exact closure and distribution obligations.
 
 ## NOTICE-PGX-MIT — pgx
 

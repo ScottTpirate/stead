@@ -137,7 +137,7 @@
             "approved_at"
           ],
           "properties": {
-            "category": { "enum": ["ALLOW-PERMISSIVE", "REVIEW-NONRUNTIME"] },
+            "category": { "enum": ["ALLOW-PERMISSIVE", "REVIEW-NONRUNTIME", "UNKNOWN"] },
             "status": { "enum": ["REVIEWED_PENDING_INDEPENDENT_APPROVAL", "APPROVED", "REJECTED", "REVOKED"] },
             "independent_approval_required": { "const": true },
             "approvers": { "$ref": "#/$defs/stringArray" },
@@ -146,7 +146,9 @@
                 { "type": "null" },
                 { "type": "string", "format": "date-time" }
               ]
-            }
+            },
+            "reason_codes": { "$ref": "#/$defs/stringArray" },
+            "evidence_refs": { "$ref": "#/$defs/stringArray" }
           }
         },
         "obligations": {

@@ -505,20 +505,27 @@ records:
       relationship: runtime
       distributed_in: [stead-api]
       linkage_or_interface: Proposed in-process Go module used only behind WS-02-owned PostgreSQL repositories and transaction ports; the exact pgxpool module closure is recorded in dependency-evidence/stead-p1-015-postgresql.yaml.
-    decision: { category: ALLOW-PERMISSIVE, status: REVIEWED_PENDING_INDEPENDENT_APPROVAL, independent_approval_required: true, approvers: [], approved_at: null }
+    decision:
+      category: ALLOW-PERMISSIVE
+      status: REJECTED
+      independent_approval_required: true
+      approvers: []
+      approved_at: null
+      reason_codes: [REACHABLE_KNOWN_VULNERABILITY]
+      evidence_refs: [dependency-evidence/stead-p1-015-postgresql.yaml#go_candidate, github-pr-39-comment-5471438314, github-issue-38-comment-5471438378]
     obligations:
       notices: [NOTICE-PGX-MIT, NOTICE-PGPASSFILE-MIT, NOTICE-PGSERVICEFILE-MIT, NOTICE-PUDDLE-MIT, NOTICE-GO-X-SYNC-BSD-3-CLAUSE, NOTICE-GO-X-TEXT-BSD-3-CLAUSE]
-      source_or_offer: Preserve the complete MIT and BSD-3-Clause notices for pgx and every distributed transitive module in stead-api notices and release evidence.
-      modifications: Candidate modules are not vendored or modified; any later patch, fork, vendoring, or closure change requires fresh review and updated notices.
+      source_or_offer: These quarantined notice IDs preserve intake evidence only. If a distinct successor is approved, preserve the complete MIT and BSD-3-Clause notices for every module actually distributed in stead-api.
+      modifications: Rejected modules are not vendored or modified; any successor, patch, fork, vendoring, or closure change requires fresh review and updated notices.
     security:
-      vulnerability_result: PENDING_INDEPENDENT_SCAN; no vulnerability-clean result is claimed, and the candidate may not enter go.mod or a release until exact-module and transitive scans are reviewed.
-      provenance_result: Requester-supplied Go sums, upstream tag commit, transitive commits, and license expressions are recorded in dependency-evidence/stead-p1-015-postgresql.yaml; independent checksum/provenance review remains pending.
-      maintenance_risk: Major-version API is pinned, but pool, protocol, authentication, cancellation, and transitive changes require compatibility, failure-injection, and supply-chain review on every update.
+      vulnerability_result: REJECTED — independent govulncheck v1.7.0 found reachable GO-2026-5970 / CVE-2026-56852 through golang.org/x/text v0.29.0 in the pgx SCRAM authentication path; fixed in x/text v0.39.0. This exact closure cannot be imported, activated, or released.
+      provenance_result: Independent review reproduced the exact pgx tag commit, module and go.mod checksums, pgxpool closure, license files, and notice obligations. Reproduced provenance does not override the reachable vulnerability rejection; exact evidence is recorded in dependency-evidence/stead-p1-015-postgresql.yaml.
+      maintenance_risk: A temporary x/text v0.39.0 / MVS x/sync v0.21.0 successor probe was clean in the recorded scan but is not approved. It requires a new immutable intake, full checksum/closure/notice evidence, compatibility tests, and fresh independent review.
       permissions_and_network: Proposed stead-api runtime opens PostgreSQL network connections using deployment-scoped credentials; no provider, browser, telemetry, or arbitrary outbound authority is authorized.
     change:
-      update_policy: Every pgx version, Go sum, upstream commit, module-closure, license, runtime permission, distribution, or linkage change requires a new independently reviewed candidate.
+      update_policy: This exact record is permanently rejected. Every successor pgx version or closure, including the informational x/text v0.39.0 selection, requires a new approval ID and independently reviewed checksums, provenance, licenses, notices, vulnerability scan, compatibility tests, runtime permissions, and rollback evidence.
       rollback_version: git:e24a4d9d05ad6df19c5bcaa9c385ee74fd5d8c31
-      rollback_constraints: Candidate is not integrated. After integration, rollback requires a previously approved driver version compatible with persisted PostgreSQL state and passing migration, transaction, and failure-injection tests; otherwise recover forward while protected operations deny.
+      rollback_constraints: Rejected candidate is not integrated, so no product-state rollback is needed. Any separately approved successor must name a known-good driver compatible with persisted PostgreSQL state and pass migration, transaction, rollback, and failure-injection tests.
     adr: ADR-0007
     legal_approval: null
 
@@ -530,7 +537,7 @@ records:
       source_url: https://hub.docker.com/_/postgres
       version: 16-bookworm
       digest: { algorithm: sha256, value: "sha256:bb3e1a57e5407e0a5280b4211980a5e537f4abd234a87014ac979849a78dd825" }
-      license_expression: NOASSERTION-PENDING-IMAGE-INVENTORY
+      license_expression: NOASSERTION
     usage:
       owner: WS-02 integration fixtures; WS-13 supply-chain gate
       directories: [.github/workflows, tests/integration/core]
@@ -538,18 +545,25 @@ records:
       relationship: test
       distributed_in: []
       linkage_or_interface: Proposed ephemeral CI service only, pinned by multi-platform index digest with the reviewed Linux amd64 manifest and config recorded separately; it is excluded from Stead release artifacts.
-    decision: { category: REVIEW-NONRUNTIME, status: REVIEWED_PENDING_INDEPENDENT_APPROVAL, independent_approval_required: true, approvers: [], approved_at: null }
+    decision:
+      category: UNKNOWN
+      status: REJECTED
+      independent_approval_required: true
+      approvers: []
+      approved_at: null
+      reason_codes: [UNRESOLVED_CRITICAL_HIGH_FINDINGS, INCOMPLETE_LICENSE_CLASSIFICATION, MISSING_SIGNED_SUPPLY_CHAIN_EVIDENCE]
+      evidence_refs: [dependency-evidence/stead-p1-015-postgresql.yaml#oci_candidate, github-pr-39-comment-5471438314, github-issue-38-comment-5471438378]
     obligations:
       notices: []
-      source_or_offer: CI-only candidate is not distributed; its complete package/license inventory still must be reviewed before approval or activation.
-      modifications: Official image candidate would be used unmodified and ephemerally if independently approved.
+      source_or_offer: Rejected CI-only image is quarantined and not distributed; its published SPDX and scanner inventories remain evidence only and do not establish a complete approved license disposition.
+      modifications: The rejected official image candidate is not activated, modified, or distributed.
     security:
-      vulnerability_result: PENDING_IMAGE_SCAN; no vulnerability or base-image PASS is claimed, and no workflow activation or release use is authorized.
-      provenance_result: Requester-supplied index, Linux amd64 manifest, config digest, image creation time, and PG_VERSION are recorded in dependency-evidence/stead-p1-015-postgresql.yaml; independent registry/provenance verification remains pending.
-      maintenance_risk: Mutable tag metadata, Debian package churn, platform divergence, image entrypoint behavior, and database lifecycle require digest-specific review and periodic replacement.
+      vulnerability_result: REJECTED — independent Trivy 0.74.0 and Grype 0.118.0 scans of the exact Linux amd64 manifest both retained unresolved Critical/High findings after review; RG-08 therefore prohibits activation.
+      provenance_result: Independent review reproduced the index, Linux amd64 manifest/config, PostgreSQL 16.15 package, Docker source commit, and digest-bound SPDX 2.3 and SLSA provenance v0.2 statements. The statements are unsigned; Cosign 3.1.3 found no signature or signed attestation for either digest, so they are evidence rather than approval.
+      maintenance_risk: Image-wide license disposition is incomplete because the published SPDX concludes NOASSERTION and the Syft inventory contains unnormalized/custom license tokens. Mutable tag metadata, Debian package churn, platform divergence, entrypoint behavior, and database lifecycle also require a new digest-specific review.
       permissions_and_network: Proposed use is an ephemeral loopback-accessible CI service with synthetic data and disposable credentials; privileged mode, host mounts, external publication, protected data, and release distribution are prohibited.
     change:
-      update_policy: Every index, platform manifest, config, tag, PostgreSQL package version, platform, package inventory, CI permission, or distribution change requires a new independently reviewed candidate.
+      update_policy: This exact record is permanently rejected. Every successor index, platform manifest/config, tag, PostgreSQL package version, platform, package/license inventory, signed provenance set, CI permission, or distribution change requires a new approval ID and independent review.
       rollback_version: git:e24a4d9d05ad6df19c5bcaa9c385ee74fd5d8c31
       rollback_constraints: Candidate is not activated. If later approved and activated, remove the digest-pinned workflow service and return integration tests to the approved non-service baseline; no product state may be retained.
     adr: ADR-0007
