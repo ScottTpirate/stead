@@ -217,7 +217,7 @@ func verifyGoldenVector(t *testing.T, vector goldenVector) {
 	if policyrelease.SHA256Digest(activationEnvelope) != vector.Activation.EnvelopeDigest || policyrelease.SHA256Digest(archive) != vector.Activation.ArchiveDigest || len(archive) != vector.Activation.ArchiveBytes {
 		t.Fatal("golden activation envelope/archive identity failed")
 	}
-	if _, err := policyrelease.InspectArchive(archive); err != nil {
+	if _, err := observedPolicyRelease.InspectArchive(archive); err != nil {
 		t.Fatalf("golden archive safety: %v", err)
 	}
 	archiveFiles := make(map[string][]byte)

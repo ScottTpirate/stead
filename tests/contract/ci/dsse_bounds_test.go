@@ -229,12 +229,12 @@ func TestDSSERejectsHighSNonminimalDuplicateAndCrossType(t *testing.T) {
 		t.Fatalf("duplicate signature error = %v (%s)", err, policyrelease.ErrorCode(err))
 	}
 
-	unsigned, err := policyrelease.PrepareUnsigned(fixtureBuildInput(t, "commercial", 1, false))
+	unsigned, err := observedPolicyRelease.PrepareUnsigned(fixtureBuildInput(t, "commercial", 1, false))
 	if err != nil {
 		t.Fatal(err)
 	}
 	crossType, signing := externallySign(t, policyrelease.ReleaseAttestationPayloadType, unsigned.ManifestPayload, 1, false)
-	_, err = policyrelease.FinalizeActivationArchive(unsigned, crossType, signing)
+	_, err = observedPolicyRelease.FinalizeActivationArchive(unsigned, crossType, signing)
 	if policyrelease.ErrorCode(err) != "cross_type_dsse_substitution" {
 		t.Fatalf("cross-type error = %v (%s)", err, policyrelease.ErrorCode(err))
 	}

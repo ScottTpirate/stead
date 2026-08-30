@@ -13,9 +13,11 @@ bytes can gain authority.
 
 ## Construction order
 
-The public API makes the non-circular order explicit:
+The sole public lifecycle boundary is an `ObservedWorkflow`; its methods make
+the non-circular order explicit while the deterministic builders remain
+unexported:
 
-1. `PrepareUnsigned(BuildInput)` validates bounded inputs, creates
+1. `ObservedWorkflow.PrepareUnsigned(BuildInput)` validates bounded inputs, creates
    `evidence/pre-signing-evidence-manifest.json`, emits canonical manifest bytes,
    computes the policy/evidence/activation identities, and emits an activation
    `SigningRequestV1`.
@@ -25,7 +27,7 @@ The public API makes the non-circular order explicit:
    `NewPresentedSigningResult`; the builder never receives a key. These
    receipts remain `unverified_presented_material` and do not establish signer
    identity, custody, trust, threshold satisfaction, or authority.
-3. `FinalizeActivationArchive` checks only bounded DSSE syntax, exact payload,
+3. `ObservedWorkflow.FinalizeActivationArchive` checks only bounded DSSE syntax, exact payload,
    canonical DER/low-S shape, exact signature-byte receipt binding, and that
    enough distinct key-ID/custodian claims were presented for the deployment
    policy's requested counts. It does not verify ECDSA or trust. It writes and
@@ -33,7 +35,7 @@ The public API makes the non-circular order explicit:
 4. A network-disabled workflow may present a digest-addressed check receipt for
    that exact archive. Its claimed outcome is labeled unverified and is not
    activation authority.
-5. `PrepareReleaseAttestation` binds the final activation-set, envelope,
+5. `ObservedWorkflow.PrepareReleaseAttestation` binds the final activation-set, envelope,
    archive, embedded evidence, policy/model/trust/deployment-policy, exact
    disclosure mode, presented assurance, signature/custodian claims, source,
    digest-addressed review and waiver receipts, builder/workflow, and offline
@@ -41,7 +43,7 @@ The public API makes the non-circular order explicit:
    unverified. Its payload contains neither its own ID nor its future envelope
    digest and declares `authority: none`.
 6. The separate release ceremony signs that exact attestation request.
-   `FinalizeReleaseHandoff` repeats the syntax, binding, and presented-count
+   `ObservedWorkflow.FinalizeReleaseHandoff` repeats the syntax, binding, and presented-count
    checks and returns exact archive and attestation-envelope bytes plus every
    immutable identity needed by WS-06. The handoff declares `authority: none`
    and a typed `required_not_performed_by_ws09` WS-06 verification checklist.
@@ -191,7 +193,7 @@ v0.1 bridges, and exact assurance binding. The digest-bound
 `PresentedAssuranceEvaluationV1` is also labeled unverified; its claimed result
 does not replace downstream WS-06/WS-12 authentication or activation checks.
 
-`BuildTransportDescriptor` names only exact archive and attestation-envelope
+`ObservedWorkflow.BuildTransportDescriptor` names only exact archive and attestation-envelope
 digests and always states `non_authorizing_transport_only`. TUF metadata, OCI
 descriptors/tags, filenames, HTTPS, repository membership, and filesystem
 ownership cannot replace either DSSE envelope or the deployment assurance
@@ -200,36 +202,56 @@ TUF, public PKI, transparency service, registry, KMS, or proprietary dependency.
 
 ## WS-09 lifecycle observation seam
 
-`ObservedWorkflow` wraps the lifecycle-relevant construction operations without
-changing their existing function signatures or deterministic implementation:
-unsigned preparation, activation finalization, archive inspection and exact
-validation, release-attestation preparation, release-handoff finalization, and
-transport-descriptor construction. Each call attempts exactly one terminal
+`ObservedWorkflow` is the compile-time-mandatory boundary for unsigned
+preparation, activation finalization, archive inspection and exact validation,
+release-attestation preparation, release-handoff finalization, and
+transport-descriptor construction. The deterministic primitives are
+unexported, and contract tests type-check the package surface to reject any
+public package-level bypass. Each admitted call attempts exactly one terminal
 `LifecycleEvent` on success or failure. Events declare `authority: none`, name
 WS-09 as producer and WS-07 as the durable-audit owner, and contain only stable
 workflow/stage/outcome/error codes; bounded operation, correlation, and
-causation identifiers; syntactically valid existing SHA-256 identities; bounded
-receipt/review/waiver and archive counts; and deployment-policy signing and
-approval thresholds.
+causation identifiers; safe builder/build/release/signing workflow identities;
+closed source revision, lock, recipe, evidence, archive, attestation, signing
+request/result and threshold facts; and presented review/approval and waiver
+counts. Signing, threshold, approval, and waiver facts are explicitly
+`unverified_presented_material`; WS-09 does not turn them into verified facts.
+Facts are populated only when the typed stage input already carries them:
+prepare/finalize activation and prepare/finalize release retain the complete
+builder, source/lock/recipe, signing, threshold, review, and waiver facts;
+archive inspect/validate expose only archive identity and bounded entry/file
+counts; transport exposes source plus the archive/attestation/policy and release
+signing/threshold facts retained by `ImmutableReleaseHandoff`. The observer
+never reparses protected bodies or invents facts absent from a stage boundary.
 
 Lifecycle identifiers are limited to 128 ASCII identifier bytes and are copied
 when the wrapper is created. They are never passed into canonical encoders,
 signing requests, DSSE envelopes, archives, attestations, handoffs, or transport
 descriptors. Events expose no payload, envelope, archive, signature, key,
-credential, protected body, source/path, parser text, arbitrary attributes, or
-metric-label map. The callback receives a value-only event with no slices,
+credential, protected body, source content, filesystem path, parser text,
+arbitrary attributes, or metric-label map. The callback receives a value-only
+event with no slices,
 maps, pointers, or interfaces. Different lifecycle identifiers therefore leave
 all typed and byte outputs identical.
 
-Observation is fail closed: a missing observer, callback error, callback panic,
-concurrent use, or callback reentry returns only the stable
-`lifecycle_observer_failed` code and discards otherwise valid operation output.
-One `ObservedWorkflow` represents one serialized flow. The observer interface
-itself performs no I/O and grants no database, network, provider, filesystem,
-signing, policy, or authorization capability. Implementations may pass the
-bounded event to a separately authorized WS-07 adapter, but durable audit,
-outbox transactions, retry, retention, metric projection, and delivery remain
-outside this package and under WS-07 ownership.
+Observation is fail closed. The transactional port contract requires a WS-07
+adapter to atomically retain one terminal event and return its exact typed
+`LifecycleAcknowledgement`; the package validates that receipt but cannot
+enforce persistence behavior inside an adapter. Under this contract an error,
+panic, or mismatched receipt means no event was accepted, returns only
+`lifecycle_observer_failed`, and discards otherwise valid output. A conforming
+adapter therefore cannot retain a success event when the public operation
+returns observer failure. One `ObservedWorkflow` represents one serialized flow and acquires its
+guard before any underlying computation. Concurrent entry and callback
+reentry are admission failures: the nested call returns zero output with
+`lifecycle_operation_in_progress`, performs no computation or recursive
+observation, and leaves the one already-admitted call to produce its one
+acknowledged terminal event. The observer interface itself performs no I/O and
+grants no database, network, provider, filesystem, signing, policy, or
+authorization capability. Implementations may pass the bounded event to a
+separately authorized WS-07 adapter, but atomic durable audit/outbox commit,
+retry, retention, metric projection, and delivery remain outside this package
+and under WS-07 ownership.
 
 Build/sign/archive/attestation interruption leaves no runtime state because this
 module owns none. Retry from pinned source/lock/recipe and declared metadata;

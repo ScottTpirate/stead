@@ -476,10 +476,10 @@ func validatePolicyContentIndex(file File, expectedEntries []PolicyContentIndexE
 	return nil
 }
 
-// PrepareUnsigned constructs deterministic pre-signing content and an external
+// prepareUnsigned constructs deterministic pre-signing content and an external
 // signing request. Calling it twice with byte-identical inputs yields identical
 // output bytes and identities.
-func PrepareUnsigned(input BuildInput) (UnsignedActivation, error) {
+func prepareUnsigned(input BuildInput) (UnsignedActivation, error) {
 	if err := preflightReviewAndWaiverCounts(input.Evidence.ReviewReceipts, input.Evidence.WaiverReceipts); err != nil {
 		return UnsignedActivation{}, err
 	}

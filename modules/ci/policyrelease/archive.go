@@ -193,9 +193,9 @@ func expectedDirectories(files []ManifestFile) []string {
 	return result
 }
 
-// InspectArchive validates the strict bounded ustar framing before returning
+// inspectArchive validates the strict bounded ustar framing before returning
 // content identities. It never extracts paths to disk.
-func InspectArchive(archive []byte) (ArchiveInspection, error) {
+func inspectArchive(archive []byte) (ArchiveInspection, error) {
 	if len(archive) == 0 || len(archive) > MaxArchiveBytes || len(archive)%ustarBlockSize != 0 {
 		return ArchiveInspection{}, contractError("archive_size_limit", "archive", nil)
 	}
@@ -364,9 +364,9 @@ func archiveEntryNameAt(inspection ArchiveInspection) string {
 	return lastFile
 }
 
-// ValidateArchive verifies that the archive contains exactly one supplied DSSE
+// validateArchive verifies that the archive contains exactly one supplied DSSE
 // envelope and each digest-listed payload/evidence file, with no other entry.
-func ValidateArchive(archive, envelope []byte, files []ManifestFile) (ArchiveInspection, error) {
+func validateArchive(archive, envelope []byte, files []ManifestFile) (ArchiveInspection, error) {
 	if len(files) > MaxArchiveFiles-1 || len(envelope) > MaxArchiveFileBytes {
 		return ArchiveInspection{}, contractError("archive_content_limit", "manifest.files", nil)
 	}
@@ -390,7 +390,7 @@ func ValidateArchive(archive, envelope []byte, files []ManifestFile) (ArchiveIns
 		}
 		total += size
 	}
-	inspection, err := InspectArchive(archive)
+	inspection, err := inspectArchive(archive)
 	if err != nil {
 		return ArchiveInspection{}, err
 	}
@@ -435,9 +435,9 @@ func manifestFileList(files []File) []ManifestFile {
 	return result
 }
 
-// FinalizeActivationArchive accepts externally signed bytes and constructs the
+// finalizeActivationArchive accepts externally signed bytes and constructs the
 // deterministic archive for that exact envelope.
-func FinalizeActivationArchive(unsigned UnsignedActivation, envelope []byte, signing PresentedSigningResult) (ActivationArchive, error) {
+func finalizeActivationArchive(unsigned UnsignedActivation, envelope []byte, signing PresentedSigningResult) (ActivationArchive, error) {
 	if err := validateUnsignedActivation(unsigned); err != nil {
 		return ActivationArchive{}, err
 	}
@@ -456,7 +456,7 @@ func FinalizeActivationArchive(unsigned UnsignedActivation, envelope []byte, sig
 	if err != nil {
 		return ActivationArchive{}, err
 	}
-	if _, err := ValidateArchive(archive, envelope, unsigned.Manifest.Files); err != nil {
+	if _, err := validateArchive(archive, envelope, unsigned.Manifest.Files); err != nil {
 		return ActivationArchive{}, err
 	}
 	return ActivationArchive{

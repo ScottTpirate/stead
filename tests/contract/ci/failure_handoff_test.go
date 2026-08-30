@@ -13,7 +13,7 @@ import (
 func TestContractErrorsExposeOnlyStableSafeCodes(t *testing.T) {
 	input := fixtureBuildInput(t, "commercial", 1, false)
 	input.Manifest.DeploymentPolicy.PolicySignatureThreshold = 0
-	_, err := policyrelease.PrepareUnsigned(input)
+	_, err := observedPolicyRelease.PrepareUnsigned(input)
 	if err == nil || err.Error() != "invalid_signature_threshold" || policyrelease.ErrorCode(err) != "invalid_signature_threshold" {
 		t.Fatalf("unsafe or unstable contract error: %v (%s)", err, policyrelease.ErrorCode(err))
 	}
@@ -66,7 +66,7 @@ func TestDuplicateAndParserErrorsNeverExposeAttackerKeyText(t *testing.T) {
 
 	input := fixtureBuildInput(t, "commercial", 1, false)
 	input.EvidenceFiles[2].Content = appendJSONMember(t, input.EvidenceFiles[2].Content, `"`+secret+`":"x"`)
-	_, err = policyrelease.PrepareUnsigned(input)
+	_, err = observedPolicyRelease.PrepareUnsigned(input)
 	if policyrelease.ErrorCode(err) != "signed_payload_contract_error" {
 		t.Fatalf("unknown key error = %v (%s)", err, policyrelease.ErrorCode(err))
 	}
@@ -75,14 +75,14 @@ func TestDuplicateAndParserErrorsNeverExposeAttackerKeyText(t *testing.T) {
 
 func TestEveryDSSESignedPayloadRejectsCaseFoldedAliases(t *testing.T) {
 	t.Run("activation manifest", func(t *testing.T) {
-		unsigned, err := policyrelease.PrepareUnsigned(fixtureBuildInput(t, "commercial", 1, false))
+		unsigned, err := observedPolicyRelease.PrepareUnsigned(fixtureBuildInput(t, "commercial", 1, false))
 		if err != nil {
 			t.Fatal(err)
 		}
 		unsigned.ManifestPayload = appendJSONMember(t, unsigned.ManifestPayload, `"SCHEMA_VERSION":"1.0.0"`)
 		unsigned.ActivationSetID = policyrelease.SHA256Digest(unsigned.ManifestPayload)
 		envelope, signing := externallySign(t, policyrelease.ActivationManifestPayloadType, unsigned.ManifestPayload, 1, false)
-		_, err = policyrelease.FinalizeActivationArchive(unsigned, envelope, signing)
+		_, err = observedPolicyRelease.FinalizeActivationArchive(unsigned, envelope, signing)
 		if policyrelease.ErrorCode(err) != "json_member_name_mismatch" {
 			t.Fatalf("error = %v (%s)", err, policyrelease.ErrorCode(err))
 		}
@@ -105,7 +105,7 @@ func TestEveryDSSESignedPayloadRejectsCaseFoldedAliases(t *testing.T) {
 		input.PayloadFiles[envelopeIndex].Content = trustEnvelope
 		input.Manifest.Trust.TrustSetID = policyrelease.SHA256Digest(trustPayload)
 		input.Manifest.Trust.TrustSetEnvelopeDigest = policyrelease.SHA256Digest(trustEnvelope)
-		_, err := policyrelease.PrepareUnsigned(input)
+		_, err := observedPolicyRelease.PrepareUnsigned(input)
 		if policyrelease.ErrorCode(err) != "json_member_name_mismatch" {
 			t.Fatalf("error = %v (%s)", err, policyrelease.ErrorCode(err))
 		}
@@ -116,7 +116,7 @@ func TestEveryDSSESignedPayloadRejectsCaseFoldedAliases(t *testing.T) {
 		attestation.PayloadBytes = appendJSONMember(t, attestation.PayloadBytes, `"SCHEMA_VERSION":"1.0.0"`)
 		attestation.AttestationID = policyrelease.SHA256Digest(attestation.PayloadBytes)
 		envelope, signing := externallySign(t, policyrelease.ReleaseAttestationPayloadType, attestation.PayloadBytes, 1, false)
-		_, err := policyrelease.FinalizeReleaseHandoff(activation, attestation, envelope, signing)
+		_, err := observedPolicyRelease.FinalizeReleaseHandoff(activation, attestation, envelope, signing)
 		if policyrelease.ErrorCode(err) != "json_member_name_mismatch" {
 			t.Fatalf("error = %v (%s)", err, policyrelease.ErrorCode(err))
 		}
@@ -208,16 +208,16 @@ func externalMappingBuildInput(t testing.TB) policyrelease.BuildInput {
 
 func TestExternalRegimeMappingBindsSnapshotAndMappingEvidence(t *testing.T) {
 	input := externalMappingBuildInput(t)
-	unsigned, err := policyrelease.PrepareUnsigned(input)
+	unsigned, err := observedPolicyRelease.PrepareUnsigned(input)
 	if err != nil {
 		t.Fatalf("valid external mapping rejected: %v (%s)", err, policyrelease.ErrorCode(err))
 	}
 	envelope, signing := externallySign(t, policyrelease.ActivationManifestPayloadType, unsigned.ManifestPayload, 1, false)
-	activation, err := policyrelease.FinalizeActivationArchive(unsigned, envelope, signing)
+	activation, err := observedPolicyRelease.FinalizeActivationArchive(unsigned, envelope, signing)
 	if err != nil {
 		t.Fatalf("valid external mapping archive rejected: %v (%s)", err, policyrelease.ErrorCode(err))
 	}
-	if _, err := policyrelease.ValidateArchive(activation.ArchiveBytes, envelope, unsigned.Manifest.Files); err != nil {
+	if _, err := observedPolicyRelease.ValidateArchive(activation.ArchiveBytes, envelope, unsigned.Manifest.Files); err != nil {
 		t.Fatalf("external mapping archive validation failed: %v (%s)", err, policyrelease.ErrorCode(err))
 	}
 	want := map[string]bool{
@@ -272,7 +272,7 @@ func TestExternalRegimeMappingBindsSnapshotAndMappingEvidence(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			candidate := externalMappingBuildInput(t)
 			testCase.mutate(&candidate)
-			_, err := policyrelease.PrepareUnsigned(candidate)
+			_, err := observedPolicyRelease.PrepareUnsigned(candidate)
 			if policyrelease.ErrorCode(err) != testCase.code {
 				t.Fatalf("error = %v (%s), want %s", err, policyrelease.ErrorCode(err), testCase.code)
 			}
@@ -321,7 +321,7 @@ func TestPreSigningEvidenceUsesClosedPathMediaAndSchemaAdmission(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			input := fixtureBuildInput(t, "commercial", 1, false)
 			testCase.mutate(&input)
-			_, err := policyrelease.PrepareUnsigned(input)
+			_, err := observedPolicyRelease.PrepareUnsigned(input)
 			if policyrelease.ErrorCode(err) != testCase.code {
 				t.Fatalf("error = %v (%s), want %s", err, policyrelease.ErrorCode(err), testCase.code)
 			}
@@ -416,7 +416,7 @@ func TestBuildAdmissionRejectsUnknownMediaCoverageAndUnboundContent(t *testing.T
 		t.Run(testCase.name, func(t *testing.T) {
 			input := fixtureBuildInput(t, "commercial", 1, false)
 			testCase.mutate(&input)
-			_, err := policyrelease.PrepareUnsigned(input)
+			_, err := observedPolicyRelease.PrepareUnsigned(input)
 			if policyrelease.ErrorCode(err) != testCase.code {
 				t.Fatalf("error = %v (%s), want %s", err, policyrelease.ErrorCode(err), testCase.code)
 			}
@@ -425,7 +425,7 @@ func TestBuildAdmissionRejectsUnknownMediaCoverageAndUnboundContent(t *testing.T
 }
 
 func TestSigningAndReleaseWorkflowsRemainSeparatedFromBuilder(t *testing.T) {
-	unsigned, err := policyrelease.PrepareUnsigned(fixtureBuildInput(t, "commercial", 1, false))
+	unsigned, err := observedPolicyRelease.PrepareUnsigned(fixtureBuildInput(t, "commercial", 1, false))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -434,7 +434,7 @@ func TestSigningAndReleaseWorkflowsRemainSeparatedFromBuilder(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := policyrelease.FinalizeActivationArchive(unsigned, envelope, signing); policyrelease.ErrorCode(err) != "builder_signing_workflow_not_separated" {
+	if _, err := observedPolicyRelease.FinalizeActivationArchive(unsigned, envelope, signing); policyrelease.ErrorCode(err) != "builder_signing_workflow_not_separated" {
 		t.Fatalf("builder signing separation error = %v (%s)", err, policyrelease.ErrorCode(err))
 	}
 
@@ -444,7 +444,7 @@ func TestSigningAndReleaseWorkflowsRemainSeparatedFromBuilder(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := policyrelease.FinalizeReleaseHandoff(activation, attestation, releaseEnvelope, releaseSigning); policyrelease.ErrorCode(err) != "release_signing_workflow_not_separated" {
+	if _, err := observedPolicyRelease.FinalizeReleaseHandoff(activation, attestation, releaseEnvelope, releaseSigning); policyrelease.ErrorCode(err) != "release_signing_workflow_not_separated" {
 		t.Fatalf("release signing separation error = %v (%s)", err, policyrelease.ErrorCode(err))
 	}
 }
@@ -467,7 +467,7 @@ func TestReleaseAttestationSigningRequestIsExactlyBound(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			candidate := attestation
 			testCase.mutate(&candidate)
-			handoff, err := policyrelease.FinalizeReleaseHandoff(activation, candidate, releaseEnvelope, releaseSigning)
+			handoff, err := observedPolicyRelease.FinalizeReleaseHandoff(activation, candidate, releaseEnvelope, releaseSigning)
 			if policyrelease.ErrorCode(err) != "signing_request_binding_mismatch" || handoff.ArchiveBytes != nil || handoff.ReleaseAttestationEnvelopeBytes != nil {
 				t.Fatalf("signing request binding = %v (%s), archive=%d envelope=%d", err, policyrelease.ErrorCode(err), len(handoff.ArchiveBytes), len(handoff.ReleaseAttestationEnvelopeBytes))
 			}
@@ -499,7 +499,7 @@ func TestReleaseAttestationRejectsSelfReferenceSwapsAndIncompleteEvidence(t *tes
 		candidate.PayloadBytes = mutated
 		candidate.AttestationID = policyrelease.SHA256Digest(mutated)
 		envelope, signing := externallySign(t, policyrelease.ReleaseAttestationPayloadType, mutated, 1, false)
-		_, err := policyrelease.FinalizeReleaseHandoff(activation, candidate, envelope, signing)
+		_, err := observedPolicyRelease.FinalizeReleaseHandoff(activation, candidate, envelope, signing)
 		if policyrelease.ErrorCode(err) != "signed_payload_contract_error" {
 			t.Fatalf("self-reference error = %v (%s)", err, policyrelease.ErrorCode(err))
 		}
@@ -511,7 +511,7 @@ func TestReleaseAttestationRejectsSelfReferenceSwapsAndIncompleteEvidence(t *tes
 		candidate.PayloadBytes, _ = json.Marshal(candidate.Payload)
 		candidate.AttestationID = policyrelease.SHA256Digest(candidate.PayloadBytes)
 		envelope, signing := externallySign(t, policyrelease.ReleaseAttestationPayloadType, candidate.PayloadBytes, 1, false)
-		_, err := policyrelease.FinalizeReleaseHandoff(activation, candidate, envelope, signing)
+		_, err := observedPolicyRelease.FinalizeReleaseHandoff(activation, candidate, envelope, signing)
 		if policyrelease.ErrorCode(err) != "release_attestation_binding_mismatch" {
 			t.Fatalf("archive swap error = %v (%s)", err, policyrelease.ErrorCode(err))
 		}
@@ -525,7 +525,7 @@ func TestReleaseAttestationRejectsSelfReferenceSwapsAndIncompleteEvidence(t *tes
 			t.Fatal("fixture content not found")
 		}
 		candidate.ArchiveBytes[index] ^= 1
-		_, err := policyrelease.PrepareReleaseAttestation(candidate, policyrelease.ReleaseAttestationInput{})
+		_, err := observedPolicyRelease.PrepareReleaseAttestation(candidate, policyrelease.ReleaseAttestationInput{})
 		if policyrelease.ErrorCode(err) != "digest_mismatch" {
 			t.Fatalf("mutated archive error = %v (%s)", err, policyrelease.ErrorCode(err))
 		}
@@ -534,14 +534,14 @@ func TestReleaseAttestationRejectsSelfReferenceSwapsAndIncompleteEvidence(t *tes
 	t.Run("offline result for other archive", func(t *testing.T) {
 		input := releaseInput("reviewer-a", "accept")
 		input.OfflineCheckReceipt.SubjectArchiveDigest = policyrelease.SHA256Digest([]byte("other"))
-		_, err := policyrelease.PrepareReleaseAttestation(activation, input)
+		_, err := observedPolicyRelease.PrepareReleaseAttestation(activation, input)
 		if policyrelease.ErrorCode(err) != "presented_offline_check_not_bound" {
 			t.Fatalf("offline binding error = %v (%s)", err, policyrelease.ErrorCode(err))
 		}
 	})
 
 	t.Run("pending approval", func(t *testing.T) {
-		_, err := policyrelease.PrepareReleaseAttestation(activation, releaseInput("reviewer-a", "pending"))
+		_, err := observedPolicyRelease.PrepareReleaseAttestation(activation, releaseInput("reviewer-a", "pending"))
 		if policyrelease.ErrorCode(err) != "presented_release_review_not_accept" {
 			t.Fatalf("pending approval error = %v (%s)", err, policyrelease.ErrorCode(err))
 		}
@@ -555,7 +555,7 @@ func TestReleaseAttestationRejectsSelfReferenceSwapsAndIncompleteEvidence(t *tes
 			RecordDigest:       policyrelease.SHA256Digest([]byte("fixture-rejected-waiver-record")),
 			ClaimedDisposition: "rejected",
 		}}
-		_, err := policyrelease.PrepareReleaseAttestation(activation, input)
+		_, err := observedPolicyRelease.PrepareReleaseAttestation(activation, input)
 		if policyrelease.ErrorCode(err) != "presented_release_waiver_not_approved" {
 			t.Fatalf("rejected waiver error = %v (%s)", err, policyrelease.ErrorCode(err))
 		}
@@ -564,7 +564,7 @@ func TestReleaseAttestationRejectsSelfReferenceSwapsAndIncompleteEvidence(t *tes
 	t.Run("missing approval", func(t *testing.T) {
 		input := releaseInput("reviewer-a", "accept")
 		input.ReviewReceipts = nil
-		_, err := policyrelease.PrepareReleaseAttestation(activation, input)
+		_, err := observedPolicyRelease.PrepareReleaseAttestation(activation, input)
 		if policyrelease.ErrorCode(err) != "missing_presented_final_review" {
 			t.Fatalf("missing approval error = %v (%s)", err, policyrelease.ErrorCode(err))
 		}
@@ -573,14 +573,14 @@ func TestReleaseAttestationRejectsSelfReferenceSwapsAndIncompleteEvidence(t *tes
 	t.Run("release workflow is builder", func(t *testing.T) {
 		input := releaseInput("reviewer-a", "accept")
 		input.ReleaseWorkflowIdentity = activation.Unsigned.EvidenceManifest.BuilderIdentity
-		_, err := policyrelease.PrepareReleaseAttestation(activation, input)
+		_, err := observedPolicyRelease.PrepareReleaseAttestation(activation, input)
 		if policyrelease.ErrorCode(err) != "builder_release_workflow_not_separated" {
 			t.Fatalf("builder release workflow error = %v (%s)", err, policyrelease.ErrorCode(err))
 		}
 	})
 
 	t.Run("release self approval", func(t *testing.T) {
-		_, err := policyrelease.PrepareReleaseAttestation(activation, releaseInput("release-workflow-v1", "accept"))
+		_, err := observedPolicyRelease.PrepareReleaseAttestation(activation, releaseInput("release-workflow-v1", "accept"))
 		if policyrelease.ErrorCode(err) != "self_presented_release_review" {
 			t.Fatalf("release self approval error = %v (%s)", err, policyrelease.ErrorCode(err))
 		}
@@ -588,7 +588,7 @@ func TestReleaseAttestationRejectsSelfReferenceSwapsAndIncompleteEvidence(t *tes
 }
 
 func TestSigningReceiptMustBindExactReturnedSignature(t *testing.T) {
-	unsigned, err := policyrelease.PrepareUnsigned(fixtureBuildInput(t, "commercial", 1, false))
+	unsigned, err := observedPolicyRelease.PrepareUnsigned(fixtureBuildInput(t, "commercial", 1, false))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -598,7 +598,7 @@ func TestSigningReceiptMustBindExactReturnedSignature(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = policyrelease.FinalizeActivationArchive(unsigned, envelope, signing)
+	_, err = observedPolicyRelease.FinalizeActivationArchive(unsigned, envelope, signing)
 	if policyrelease.ErrorCode(err) != "signing_receipt_mismatch" {
 		t.Fatalf("receipt mismatch error = %v (%s)", err, policyrelease.ErrorCode(err))
 	}

@@ -493,7 +493,7 @@ func writeWS06Archive(t testing.TB, envelope []byte, files map[string][]byte) []
 		t.Fatal(err)
 	}
 	archive := buffer.Bytes()
-	if _, err := policyrelease.InspectArchive(archive); err != nil {
+	if _, err := observedPolicyRelease.InspectArchive(archive); err != nil {
 		t.Fatalf("recomposed WS-06 archive: %v", err)
 	}
 	return archive
@@ -1088,7 +1088,7 @@ func validateWS06CompositionBaseline(t testing.TB, baseline ws06CompositionBasel
 		manifest.DeploymentPolicy.PolicySignatureThreshold != baseline.SignatureThreshold || manifest.DeploymentPolicy.DistinctSigningCustodians != baseline.DistinctCustodiansRequired {
 		t.Fatal("activation policy or pinned-time binding failed")
 	}
-	if _, err := policyrelease.InspectArchive(archive); err != nil {
+	if _, err := observedPolicyRelease.InspectArchive(archive); err != nil {
 		t.Fatalf("baseline archive safety: %v", err)
 	}
 	archiveFiles := archiveFileContents(t, archive)
@@ -1307,7 +1307,7 @@ func assertWS06MaterializedNonTargetInvariants(t testing.TB, caseID string, mate
 	if policyrelease.SHA256Digest(archive) != vector.Activation.ArchiveDigest || len(archive) != vector.Activation.ArchiveBytes {
 		t.Fatal("materialized archive identity is stale")
 	}
-	if _, err := policyrelease.InspectArchive(archive); err != nil {
+	if _, err := observedPolicyRelease.InspectArchive(archive); err != nil {
 		t.Fatalf("materialized archive safety: %v", err)
 	}
 	archiveFiles := archiveFileContents(t, archive)

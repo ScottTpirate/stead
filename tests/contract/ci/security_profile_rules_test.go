@@ -56,7 +56,7 @@ func TestSecurityProfileMetadataCollectionsAreStreamingPreflighted(t *testing.T)
 			mutateSecurityProfile(t, &exact, func(document map[string]any) {
 				testCase.mutate(document, policyrelease.MaxMetadataEntries)
 			})
-			if _, err := policyrelease.PrepareUnsigned(exact); policyrelease.ErrorCode(err) == "metadata_cardinality_limit" {
+			if _, err := observedPolicyRelease.PrepareUnsigned(exact); policyrelease.ErrorCode(err) == "metadata_cardinality_limit" {
 				t.Fatalf("exact metadata ceiling rejected by preflight: %v", err)
 			}
 
@@ -64,7 +64,7 @@ func TestSecurityProfileMetadataCollectionsAreStreamingPreflighted(t *testing.T)
 			mutateSecurityProfile(t, &oneOver, func(document map[string]any) {
 				testCase.mutate(document, policyrelease.MaxMetadataEntries+1)
 			})
-			result, err := policyrelease.PrepareUnsigned(oneOver)
+			result, err := observedPolicyRelease.PrepareUnsigned(oneOver)
 			if policyrelease.ErrorCode(err) != "metadata_cardinality_limit" || result.ManifestPayload != nil || result.SigningRequestBytes != nil {
 				t.Fatalf("one-over metadata preflight = %v (%s), manifest=%d request=%d", err, policyrelease.ErrorCode(err), len(result.ManifestPayload), len(result.SigningRequestBytes))
 			}
@@ -109,7 +109,7 @@ func TestSecurityProfileRuleFamiliesAndTerms(t *testing.T) {
 	valid := fixtureBuildInput(t, "commercial", 1, false)
 	installValidProfileRuleFixture(t, &valid)
 	rebindPolicyContentIndex(t, &valid)
-	if _, err := policyrelease.PrepareUnsigned(valid); err != nil {
+	if _, err := observedPolicyRelease.PrepareUnsigned(valid); err != nil {
 		t.Fatalf("valid profile rule fixture rejected: %v (%s)", err, policyrelease.ErrorCode(err))
 	}
 
@@ -169,7 +169,7 @@ func TestSecurityProfileRuleFamiliesAndTerms(t *testing.T) {
 			mutateSecurityProfile(t, &input, func(document map[string]any) {
 				testCase.mutate(document["semantics"].(map[string]any))
 			})
-			_, err := policyrelease.PrepareUnsigned(input)
+			_, err := observedPolicyRelease.PrepareUnsigned(input)
 			if policyrelease.ErrorCode(err) != testCase.code {
 				t.Fatalf("error = %v (%s), want %s", err, policyrelease.ErrorCode(err), testCase.code)
 			}

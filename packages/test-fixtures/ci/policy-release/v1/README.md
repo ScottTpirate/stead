@@ -15,8 +15,9 @@ and exact SLSA source/lock/subject fields. All caller-provided evidence, review,
 offline-check, signature, key-ID, and custodian material is digest-bound and
 explicitly labeled unverified; the fixture claims no authority.
 `observation/lifecycle-contract.json` inventories the exact WS-09 terminal
-observation codes and value-only safe fields consumable by a separately owned
-WS-07 durable audit/outbox adapter. It is out-of-artifact test metadata: it is
+observation codes, acknowledgement receipt, operation-guard failure, and
+value-only safe facts consumable by a separately owned WS-07 durable
+audit/outbox adapter. It is out-of-artifact test metadata: it is
 not included in source inputs, signed bytes, archives, handoffs, or transport
 descriptors and grants no persistence or delivery authority.
 `vectors/negative-cases.json` is the stable inventory of fail-closed parser,

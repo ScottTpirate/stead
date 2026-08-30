@@ -55,11 +55,11 @@ func TestDeploymentPolicySelectsThresholdAndCustodianSeparation(t *testing.T) {
 }
 
 func TestProfileIDDoesNotSelectAssuranceOrDisclosureMode(t *testing.T) {
-	commercial, err := policyrelease.PrepareUnsigned(fixtureBuildInput(t, "commercial", 3, true))
+	commercial, err := observedPolicyRelease.PrepareUnsigned(fixtureBuildInput(t, "commercial", 3, true))
 	if err != nil {
 		t.Fatal(err)
 	}
-	synthetic, err := policyrelease.PrepareUnsigned(fixtureBuildInput(t, "synthetic_regulated", 3, true))
+	synthetic, err := observedPolicyRelease.PrepareUnsigned(fixtureBuildInput(t, "synthetic_regulated", 3, true))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,28 +75,28 @@ func TestProfileIDDoesNotSelectAssuranceOrDisclosureMode(t *testing.T) {
 }
 
 func TestDistinctCustodianThresholdFailsClosed(t *testing.T) {
-	unsigned, err := policyrelease.PrepareUnsigned(fixtureBuildInput(t, "commercial", 2, true))
+	unsigned, err := observedPolicyRelease.PrepareUnsigned(fixtureBuildInput(t, "commercial", 2, true))
 	if err != nil {
 		t.Fatal(err)
 	}
 	envelope, signing := externallySign(t, policyrelease.ActivationManifestPayloadType, unsigned.ManifestPayload, 2, true)
-	_, err = policyrelease.FinalizeActivationArchive(unsigned, envelope, signing)
+	_, err = observedPolicyRelease.FinalizeActivationArchive(unsigned, envelope, signing)
 	if policyrelease.ErrorCode(err) != "presented_custodian_claim_count_below_policy_request" {
 		t.Fatalf("same-custodian error = %v (%s)", err, policyrelease.ErrorCode(err))
 	}
 }
 
 func TestActivationAndReleaseThresholdsAreIndependent(t *testing.T) {
-	unsigned, err := policyrelease.PrepareUnsigned(fixtureBuildInput(t, "commercial", 2, true))
+	unsigned, err := observedPolicyRelease.PrepareUnsigned(fixtureBuildInput(t, "commercial", 2, true))
 	if err != nil {
 		t.Fatal(err)
 	}
 	activationEnvelope, activationSigning := externallySign(t, policyrelease.ActivationManifestPayloadType, unsigned.ManifestPayload, 2, false)
-	activation, err := policyrelease.FinalizeActivationArchive(unsigned, activationEnvelope, activationSigning)
+	activation, err := observedPolicyRelease.FinalizeActivationArchive(unsigned, activationEnvelope, activationSigning)
 	if err != nil {
 		t.Fatal(err)
 	}
-	attestation, err := policyrelease.PrepareReleaseAttestation(activation, policyrelease.ReleaseAttestationInput{
+	attestation, err := observedPolicyRelease.PrepareReleaseAttestation(activation, policyrelease.ReleaseAttestationInput{
 		ReleaseWorkflowIdentity: "release-workflow-v1",
 		ReviewReceipts:          []policyrelease.ReviewReceipt{{ReviewerID: "reviewer-a", Role: "independent-release", SubjectDigest: activation.ArchiveDigest, RecordDigest: policyrelease.SHA256Digest([]byte("review")), ClaimedDisposition: "accept"}},
 		OfflineCheckReceipt:     policyrelease.OfflineCheckReceipt{ClaimedOutcome: "pass", SubjectArchiveDigest: activation.ArchiveDigest, ReportDigest: policyrelease.SHA256Digest([]byte("offline"))},
@@ -105,7 +105,7 @@ func TestActivationAndReleaseThresholdsAreIndependent(t *testing.T) {
 		t.Fatal(err)
 	}
 	releaseEnvelope, releaseSigning := externallySign(t, policyrelease.ReleaseAttestationPayloadType, attestation.PayloadBytes, 1, false)
-	_, err = policyrelease.FinalizeReleaseHandoff(activation, attestation, releaseEnvelope, releaseSigning)
+	_, err = observedPolicyRelease.FinalizeReleaseHandoff(activation, attestation, releaseEnvelope, releaseSigning)
 	if policyrelease.ErrorCode(err) != "presented_signature_count_below_policy_request" {
 		t.Fatalf("independent release threshold error = %v (%s)", err, policyrelease.ErrorCode(err))
 	}
@@ -151,7 +151,7 @@ func TestUnknownMismatchedAndWeakerAssuranceReject(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			input := fixtureBuildInput(t, "commercial", 1, false)
 			testCase.mutate(&input)
-			_, err := policyrelease.PrepareUnsigned(input)
+			_, err := observedPolicyRelease.PrepareUnsigned(input)
 			if policyrelease.ErrorCode(err) != testCase.code {
 				t.Fatalf("error = %v (%s), want %s", err, policyrelease.ErrorCode(err), testCase.code)
 			}
@@ -223,7 +223,7 @@ func TestExactSecurityProfileSchemaIdentityAndVersionReject(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			input := fixtureBuildInput(t, "commercial", 1, false)
 			testCase.mutate(&input)
-			_, err := policyrelease.PrepareUnsigned(input)
+			_, err := observedPolicyRelease.PrepareUnsigned(input)
 			if policyrelease.ErrorCode(err) != testCase.code {
 				t.Fatalf("error = %v (%s), want %s", err, policyrelease.ErrorCode(err), testCase.code)
 			}
@@ -270,7 +270,7 @@ func TestExactDeploymentPolicySchemaIdentityVersionAndCeilingsReject(t *testing.
 		t.Run(testCase.name, func(t *testing.T) {
 			input := fixtureBuildInput(t, "commercial", 1, false)
 			testCase.mutate(&input)
-			_, err := policyrelease.PrepareUnsigned(input)
+			_, err := observedPolicyRelease.PrepareUnsigned(input)
 			if policyrelease.ErrorCode(err) != testCase.code {
 				t.Fatalf("error = %v (%s), want %s", err, policyrelease.ErrorCode(err), testCase.code)
 			}
@@ -286,7 +286,7 @@ func TestPresentedAssuranceResultMustBeExactCanonicalHandoff(t *testing.T) {
 		}
 		input.PayloadFiles[index].Content = append(input.PayloadFiles[index].Content, '\n')
 		input.Manifest.DeploymentPolicy.PresentedAssuranceResultDigest = policyrelease.SHA256Digest(input.PayloadFiles[index].Content)
-		_, err := policyrelease.PrepareUnsigned(input)
+		_, err := observedPolicyRelease.PrepareUnsigned(input)
 		if policyrelease.ErrorCode(err) != "noncanonical_presented_assurance" {
 			t.Fatalf("noncanonical result error = %v (%s)", err, policyrelease.ErrorCode(err))
 		}
@@ -305,7 +305,7 @@ func TestProvisionalSigstoreProfileRejectsWithoutProfileBranch(t *testing.T) {
 					input.Manifest.Profiles[0].Digest = policyrelease.SHA256Digest(input.PayloadFiles[index].Content)
 				}
 			}
-			_, err := policyrelease.PrepareUnsigned(input)
+			_, err := observedPolicyRelease.PrepareUnsigned(input)
 			if policyrelease.ErrorCode(err) != "unsupported_profile_signing_format" {
 				t.Fatalf("error = %v (%s)", err, policyrelease.ErrorCode(err))
 			}

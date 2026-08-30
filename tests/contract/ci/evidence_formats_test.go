@@ -64,7 +64,7 @@ func TestSPDXThreeEvidenceAdmissionIsClosed(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			input := fixtureBuildInput(t, "commercial", 1, false)
 			mutateEvidenceReport(t, &input, "evidence/sbom.spdx.json", testCase.mutate)
-			_, err := policyrelease.PrepareUnsigned(input)
+			_, err := observedPolicyRelease.PrepareUnsigned(input)
 			if policyrelease.ErrorCode(err) != testCase.code {
 				t.Fatalf("error = %v (%s), want %s", err, policyrelease.ErrorCode(err), testCase.code)
 			}
@@ -109,7 +109,7 @@ func TestSLSAProvenanceV1AdmissionIsClosed(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			input := fixtureBuildInput(t, "commercial", 1, false)
 			mutateEvidenceReport(t, &input, "evidence/provenance.json", testCase.mutate)
-			_, err := policyrelease.PrepareUnsigned(input)
+			_, err := observedPolicyRelease.PrepareUnsigned(input)
 			if policyrelease.ErrorCode(err) != "provenance_evidence_schema_mismatch" {
 				t.Fatalf("error = %v (%s)", err, policyrelease.ErrorCode(err))
 			}
@@ -137,7 +137,7 @@ func TestSLSAProvenanceV1AdmissionIsClosed(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			input := fixtureBuildInput(t, "commercial", 1, false)
 			mutateEvidenceReport(t, &input, "evidence/provenance.json", testCase.mutate)
-			_, err := policyrelease.PrepareUnsigned(input)
+			_, err := observedPolicyRelease.PrepareUnsigned(input)
 			if policyrelease.ErrorCode(err) != "provenance_evidence_binding_mismatch" {
 				t.Fatalf("error = %v (%s)", err, policyrelease.ErrorCode(err))
 			}

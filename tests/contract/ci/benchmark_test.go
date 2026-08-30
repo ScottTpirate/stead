@@ -11,7 +11,7 @@ func BenchmarkPrepareUnsigned(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for iteration := 0; iteration < b.N; iteration++ {
-		if _, err := policyrelease.PrepareUnsigned(input); err != nil {
+		if _, err := observedPolicyRelease.PrepareUnsigned(input); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -19,7 +19,9 @@ func BenchmarkPrepareUnsigned(b *testing.B) {
 
 func BenchmarkObservedPrepareUnsigned(b *testing.B) {
 	input := fixtureBuildInput(b, "commercial", 1, false)
-	workflow, err := policyrelease.NewObservedWorkflow(lifecycleContext("benchmark"), policyrelease.LifecycleObserverFunc(func(policyrelease.LifecycleEvent) error { return nil }))
+	workflow, err := policyrelease.NewObservedWorkflow(lifecycleContext("benchmark"), policyrelease.LifecycleObserverFunc(func(event policyrelease.LifecycleEvent) (policyrelease.LifecycleAcknowledgement, error) {
+		return policyrelease.AcknowledgeLifecycleEvent(event), nil
+	}))
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -33,7 +35,7 @@ func BenchmarkObservedPrepareUnsigned(b *testing.B) {
 }
 
 func BenchmarkFinalizeActivationArchive(b *testing.B) {
-	unsigned, err := policyrelease.PrepareUnsigned(fixtureBuildInput(b, "commercial", 1, false))
+	unsigned, err := observedPolicyRelease.PrepareUnsigned(fixtureBuildInput(b, "commercial", 1, false))
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -41,7 +43,7 @@ func BenchmarkFinalizeActivationArchive(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for iteration := 0; iteration < b.N; iteration++ {
-		if _, err := policyrelease.FinalizeActivationArchive(unsigned, envelope, signing); err != nil {
+		if _, err := observedPolicyRelease.FinalizeActivationArchive(unsigned, envelope, signing); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -53,7 +55,7 @@ func BenchmarkInspectArchive(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for iteration := 0; iteration < b.N; iteration++ {
-		if _, err := policyrelease.InspectArchive(activation.ArchiveBytes); err != nil {
+		if _, err := observedPolicyRelease.InspectArchive(activation.ArchiveBytes); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -69,7 +71,7 @@ func BenchmarkPrepareReleaseAttestation(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for iteration := 0; iteration < b.N; iteration++ {
-		if _, err := policyrelease.PrepareReleaseAttestation(activation, input); err != nil {
+		if _, err := observedPolicyRelease.PrepareReleaseAttestation(activation, input); err != nil {
 			b.Fatal(err)
 		}
 	}

@@ -37,12 +37,12 @@ func boundedWaivers(count int, subject, prefix string) []policyrelease.WaiverRec
 
 func fixtureActivation(t testing.TB) policyrelease.ActivationArchive {
 	t.Helper()
-	unsigned, err := policyrelease.PrepareUnsigned(fixtureBuildInput(t, "commercial", 1, false))
+	unsigned, err := observedPolicyRelease.PrepareUnsigned(fixtureBuildInput(t, "commercial", 1, false))
 	if err != nil {
 		t.Fatal(err)
 	}
 	envelope, signing := externallySign(t, policyrelease.ActivationManifestPayloadType, unsigned.ManifestPayload, 1, false)
-	activation, err := policyrelease.FinalizeActivationArchive(unsigned, envelope, signing)
+	activation, err := observedPolicyRelease.FinalizeActivationArchive(unsigned, envelope, signing)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,7 +53,7 @@ func TestBuildReceiptCardinalityIsPreflighted(t *testing.T) {
 	t.Run("exact review ceiling", func(t *testing.T) {
 		input := fixtureBuildInput(t, "commercial", 1, false)
 		input.Evidence.ReviewReceipts = boundedReviews(policyrelease.MaxReviewReceipts, input.Evidence.ReviewReceipts[0].SubjectDigest, "build")
-		if _, err := policyrelease.PrepareUnsigned(input); err != nil {
+		if _, err := observedPolicyRelease.PrepareUnsigned(input); err != nil {
 			t.Fatalf("exact review ceiling rejected: %v (%s)", err, policyrelease.ErrorCode(err))
 		}
 	})
@@ -61,7 +61,7 @@ func TestBuildReceiptCardinalityIsPreflighted(t *testing.T) {
 	t.Run("one over review ceiling", func(t *testing.T) {
 		input := fixtureBuildInput(t, "commercial", 1, false)
 		input.Evidence.ReviewReceipts = make([]policyrelease.ReviewReceipt, policyrelease.MaxReviewReceipts+1)
-		result, err := policyrelease.PrepareUnsigned(input)
+		result, err := observedPolicyRelease.PrepareUnsigned(input)
 		if policyrelease.ErrorCode(err) != "review_receipt_count_limit" || result.ManifestPayload != nil || result.SigningRequestBytes != nil {
 			t.Fatalf("one-over review preflight = %v (%s), request bytes=%d", err, policyrelease.ErrorCode(err), len(result.SigningRequestBytes))
 		}
@@ -70,7 +70,7 @@ func TestBuildReceiptCardinalityIsPreflighted(t *testing.T) {
 	t.Run("exact waiver ceiling", func(t *testing.T) {
 		input := fixtureBuildInput(t, "commercial", 1, false)
 		input.Evidence.WaiverReceipts = boundedWaivers(policyrelease.MaxWaiverReceipts, input.Evidence.ReviewReceipts[0].SubjectDigest, "build")
-		if _, err := policyrelease.PrepareUnsigned(input); err != nil {
+		if _, err := observedPolicyRelease.PrepareUnsigned(input); err != nil {
 			t.Fatalf("exact waiver ceiling rejected: %v (%s)", err, policyrelease.ErrorCode(err))
 		}
 	})
@@ -78,7 +78,7 @@ func TestBuildReceiptCardinalityIsPreflighted(t *testing.T) {
 	t.Run("one over waiver ceiling", func(t *testing.T) {
 		input := fixtureBuildInput(t, "commercial", 1, false)
 		input.Evidence.WaiverReceipts = make([]policyrelease.WaiverReceipt, policyrelease.MaxWaiverReceipts+1)
-		result, err := policyrelease.PrepareUnsigned(input)
+		result, err := observedPolicyRelease.PrepareUnsigned(input)
 		if policyrelease.ErrorCode(err) != "waiver_receipt_count_limit" || result.ManifestPayload != nil || result.SigningRequestBytes != nil {
 			t.Fatalf("one-over waiver preflight = %v (%s), request bytes=%d", err, policyrelease.ErrorCode(err), len(result.SigningRequestBytes))
 		}
@@ -88,7 +88,7 @@ func TestBuildReceiptCardinalityIsPreflighted(t *testing.T) {
 func TestManifestCollectionsArePreflightedBeforeCopy(t *testing.T) {
 	input := fixtureBuildInput(t, "commercial", 1, false)
 	input.Manifest.RequiredContextIDs = make([]string, policyrelease.MaxMetadataEntries+1)
-	result, err := policyrelease.PrepareUnsigned(input)
+	result, err := observedPolicyRelease.PrepareUnsigned(input)
 	if policyrelease.ErrorCode(err) != "metadata_cardinality_limit" || result.ManifestPayload != nil || result.SigningRequestBytes != nil {
 		t.Fatalf("manifest preflight = %v (%s), request bytes=%d", err, policyrelease.ErrorCode(err), len(result.SigningRequestBytes))
 	}
@@ -97,7 +97,7 @@ func TestManifestCollectionsArePreflightedBeforeCopy(t *testing.T) {
 func TestBuildFileCardinalityIsPreflightedBeforeFileValidation(t *testing.T) {
 	input := fixtureBuildInput(t, "commercial", 1, false)
 	input.PayloadFiles = make([]policyrelease.File, policyrelease.MaxArchiveFiles-1)
-	result, err := policyrelease.PrepareUnsigned(input)
+	result, err := observedPolicyRelease.PrepareUnsigned(input)
 	if policyrelease.ErrorCode(err) != "archive_content_limit" || result.ManifestPayload != nil || result.SigningRequestBytes != nil {
 		t.Fatalf("file-count preflight = %v (%s), request bytes=%d", err, policyrelease.ErrorCode(err), len(result.SigningRequestBytes))
 	}
@@ -138,7 +138,7 @@ func TestReleaseAttestationReceiptCardinalityRejectsBeforeSigningRequest(t *test
 		input := base
 		input.ReviewReceipts = boundedReviews(policyrelease.MaxReviewReceipts, activation.ArchiveDigest, "release")
 		input.WaiverReceipts = boundedWaivers(policyrelease.MaxWaiverReceipts, activation.ArchiveDigest, "release")
-		result, err := policyrelease.PrepareReleaseAttestation(activation, input)
+		result, err := observedPolicyRelease.PrepareReleaseAttestation(activation, input)
 		if err != nil || len(result.PayloadBytes) > policyrelease.MaxDecodedPayloadBytes || len(result.SigningRequestBytes) == 0 {
 			t.Fatalf("exact release ceilings: payload=%d request=%d err=%v (%s)", len(result.PayloadBytes), len(result.SigningRequestBytes), err, policyrelease.ErrorCode(err))
 		}
@@ -147,7 +147,7 @@ func TestReleaseAttestationReceiptCardinalityRejectsBeforeSigningRequest(t *test
 	t.Run("one over reviews emits no request", func(t *testing.T) {
 		input := base
 		input.ReviewReceipts = make([]policyrelease.ReviewReceipt, policyrelease.MaxReviewReceipts+1)
-		result, err := policyrelease.PrepareReleaseAttestation(activation, input)
+		result, err := observedPolicyRelease.PrepareReleaseAttestation(activation, input)
 		if policyrelease.ErrorCode(err) != "review_receipt_count_limit" || result.PayloadBytes != nil || result.SigningRequestBytes != nil {
 			t.Fatalf("one-over release reviews = %v (%s), payload=%d request=%d", err, policyrelease.ErrorCode(err), len(result.PayloadBytes), len(result.SigningRequestBytes))
 		}
@@ -157,7 +157,7 @@ func TestReleaseAttestationReceiptCardinalityRejectsBeforeSigningRequest(t *test
 		input := base
 		input.ReviewReceipts = boundedReviews(1, activation.ArchiveDigest, "release")
 		input.WaiverReceipts = make([]policyrelease.WaiverReceipt, policyrelease.MaxWaiverReceipts+1)
-		result, err := policyrelease.PrepareReleaseAttestation(activation, input)
+		result, err := observedPolicyRelease.PrepareReleaseAttestation(activation, input)
 		if policyrelease.ErrorCode(err) != "waiver_receipt_count_limit" || result.PayloadBytes != nil || result.SigningRequestBytes != nil {
 			t.Fatalf("one-over release waivers = %v (%s), payload=%d request=%d", err, policyrelease.ErrorCode(err), len(result.PayloadBytes), len(result.SigningRequestBytes))
 		}
@@ -177,19 +177,19 @@ func releaseInputForActivation(activation policyrelease.ActivationArchive) polic
 }
 
 func TestReleaseAttestationActivationArtifactsAreImmediatelyPreflighted(t *testing.T) {
-	unsigned, err := policyrelease.PrepareUnsigned(fixtureBuildInput(t, "commercial", 1, false))
+	unsigned, err := observedPolicyRelease.PrepareUnsigned(fixtureBuildInput(t, "commercial", 1, false))
 	if err != nil {
 		t.Fatal(err)
 	}
 	envelope, signing := externallySign(t, policyrelease.ActivationManifestPayloadType, unsigned.ManifestPayload, 1, false)
 	exactEnvelope := withUnknownPadding(t, envelope, policyrelease.MaxEnvelopeBytes)
-	exact, err := policyrelease.FinalizeActivationArchive(unsigned, exactEnvelope, signing)
+	exact, err := observedPolicyRelease.FinalizeActivationArchive(unsigned, exactEnvelope, signing)
 	if err != nil {
 		t.Fatalf("finalize exact envelope activation: %v (%s)", err, policyrelease.ErrorCode(err))
 	}
 	exact.ArchiveBytes = append(exact.ArchiveBytes, make([]byte, policyrelease.MaxArchiveBytes-len(exact.ArchiveBytes))...)
 	exact.ArchiveDigest = policyrelease.SHA256Digest(exact.ArchiveBytes)
-	result, err := policyrelease.PrepareReleaseAttestation(exact, releaseInputForActivation(exact))
+	result, err := observedPolicyRelease.PrepareReleaseAttestation(exact, releaseInputForActivation(exact))
 	if err != nil || len(result.PayloadBytes) == 0 || len(result.SigningRequestBytes) == 0 {
 		t.Fatalf("exact activation artifact ceilings: payload=%d request=%d err=%v (%s)", len(result.PayloadBytes), len(result.SigningRequestBytes), err, policyrelease.ErrorCode(err))
 	}
@@ -215,11 +215,11 @@ func TestReleaseAttestationActivationArtifactsAreImmediatelyPreflighted(t *testi
 			input := policyrelease.ReleaseAttestationInput{
 				ReviewReceipts: make([]policyrelease.ReviewReceipt, policyrelease.MaxReviewReceipts+1),
 			}
-			got, err := policyrelease.PrepareReleaseAttestation(activation, input)
+			got, err := observedPolicyRelease.PrepareReleaseAttestation(activation, input)
 			if policyrelease.ErrorCode(err) != "activation_artifact_size_limit" || got.PayloadBytes != nil || got.SigningRequestBytes != nil {
 				t.Fatalf("activation preflight = %v (%s), payload=%d request=%d", err, policyrelease.ErrorCode(err), len(got.PayloadBytes), len(got.SigningRequestBytes))
 			}
-			gotHandoff, err := policyrelease.FinalizeReleaseHandoff(activation, policyrelease.UnsignedReleaseAttestation{}, nil, policyrelease.PresentedSigningResult{})
+			gotHandoff, err := observedPolicyRelease.FinalizeReleaseHandoff(activation, policyrelease.UnsignedReleaseAttestation{}, nil, policyrelease.PresentedSigningResult{})
 			if policyrelease.ErrorCode(err) != "activation_artifact_size_limit" || gotHandoff.ArchiveBytes != nil || gotHandoff.ReleaseAttestationEnvelopeBytes != nil {
 				t.Fatalf("inherited activation preflight = %v (%s), archive=%d envelope=%d", err, policyrelease.ErrorCode(err), len(gotHandoff.ArchiveBytes), len(gotHandoff.ReleaseAttestationEnvelopeBytes))
 			}
@@ -243,7 +243,7 @@ func TestUnsignedReleaseAttestationPayloadIsImmediatelyPreflighted(t *testing.T)
 				PayloadBytes:  bytes.Repeat([]byte{'x'}, testCase.size),
 				AttestationID: policyrelease.SHA256Digest([]byte("different")),
 			}
-			handoff, err := policyrelease.FinalizeReleaseHandoff(activation, unsigned, nil, policyrelease.PresentedSigningResult{})
+			handoff, err := observedPolicyRelease.FinalizeReleaseHandoff(activation, unsigned, nil, policyrelease.PresentedSigningResult{})
 			if policyrelease.ErrorCode(err) != testCase.code || handoff.ArchiveBytes != nil || handoff.ReleaseAttestationEnvelopeBytes != nil {
 				t.Fatalf("payload boundary = %v (%s), archive=%d envelope=%d", err, policyrelease.ErrorCode(err), len(handoff.ArchiveBytes), len(handoff.ReleaseAttestationEnvelopeBytes))
 			}
@@ -254,7 +254,7 @@ func TestUnsignedReleaseAttestationPayloadIsImmediatelyPreflighted(t *testing.T)
 func TestArchiveManifestAndTransportCollectionsArePreflighted(t *testing.T) {
 	t.Run("archive manifest one over", func(t *testing.T) {
 		files := make([]policyrelease.ManifestFile, policyrelease.MaxArchiveFiles)
-		_, err := policyrelease.ValidateArchive([]byte("not-inspected"), nil, files)
+		_, err := observedPolicyRelease.ValidateArchive([]byte("not-inspected"), nil, files)
 		if policyrelease.ErrorCode(err) != "archive_content_limit" {
 			t.Fatalf("manifest one-over preflight = %v (%s)", err, policyrelease.ErrorCode(err))
 		}
@@ -262,7 +262,7 @@ func TestArchiveManifestAndTransportCollectionsArePreflighted(t *testing.T) {
 
 	t.Run("archive manifest exact reaches field validation", func(t *testing.T) {
 		files := make([]policyrelease.ManifestFile, policyrelease.MaxArchiveFiles-1)
-		_, err := policyrelease.ValidateArchive([]byte("not-inspected"), nil, files)
+		_, err := observedPolicyRelease.ValidateArchive([]byte("not-inspected"), nil, files)
 		if policyrelease.ErrorCode(err) != "invalid_archive_path" {
 			t.Fatalf("manifest exact ceiling = %v (%s)", err, policyrelease.ErrorCode(err))
 		}
@@ -273,7 +273,7 @@ func TestArchiveManifestAndTransportCollectionsArePreflighted(t *testing.T) {
 			ArchiveBytes:                    []byte("archive"),
 			ReleaseAttestationEnvelopeBytes: make([]byte, policyrelease.MaxEnvelopeBytes+1),
 		}
-		descriptor, encoded, err := policyrelease.BuildTransportDescriptor(handoff)
+		descriptor, encoded, err := observedPolicyRelease.BuildTransportDescriptor(handoff)
 		if policyrelease.ErrorCode(err) != "transport_artifact_size_limit" || encoded != nil || descriptor.ArchiveDigest != "" {
 			t.Fatalf("transport preflight = %v (%s), bytes=%d", err, policyrelease.ErrorCode(err), len(encoded))
 		}

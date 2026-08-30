@@ -75,7 +75,7 @@ func TestManifestAndDeploymentInputBoundaries(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			input := fixtureBuildInput(t, "commercial", 1, false)
 			testCase.mutate(&input)
-			_, err := policyrelease.PrepareUnsigned(input)
+			_, err := observedPolicyRelease.PrepareUnsigned(input)
 			if policyrelease.ErrorCode(err) != testCase.code {
 				t.Fatalf("error = %v (%s), want %s", err, policyrelease.ErrorCode(err), testCase.code)
 			}
@@ -96,7 +96,7 @@ func TestArtifactPathKindAndRootBoundaries(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			input := fixtureBuildInput(t, "commercial", 1, false)
 			input.PayloadFiles[0].Path = testCase.path
-			_, err := policyrelease.PrepareUnsigned(input)
+			_, err := observedPolicyRelease.PrepareUnsigned(input)
 			if policyrelease.ErrorCode(err) != testCase.code {
 				t.Fatalf("error = %v (%s), want %s", err, policyrelease.ErrorCode(err), testCase.code)
 			}
@@ -145,7 +145,7 @@ func TestBindingAdmissionBoundaries(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			input := fixtureBuildInput(t, "commercial", 1, false)
 			testCase.mutate(&input)
-			_, err := policyrelease.PrepareUnsigned(input)
+			_, err := observedPolicyRelease.PrepareUnsigned(input)
 			if policyrelease.ErrorCode(err) != testCase.code {
 				t.Fatalf("error = %v (%s), want %s", err, policyrelease.ErrorCode(err), testCase.code)
 			}
@@ -172,7 +172,7 @@ func TestPresentedReviewAndWaiverInputBoundaries(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			input := fixtureBuildInput(t, "commercial", 1, false)
 			testCase.mutate(&input.Evidence.ReviewReceipts[0])
-			_, err := policyrelease.PrepareUnsigned(input)
+			_, err := observedPolicyRelease.PrepareUnsigned(input)
 			if policyrelease.ErrorCode(err) != testCase.code {
 				t.Fatalf("error = %v (%s), want %s", err, policyrelease.ErrorCode(err), testCase.code)
 			}
@@ -200,7 +200,7 @@ func TestPresentedReviewAndWaiverInputBoundaries(t *testing.T) {
 				RecordDigest: policyrelease.SHA256Digest([]byte("fixture-waiver-record")), ClaimedDisposition: "approved",
 			}}
 			testCase.mutate(&input.Evidence.WaiverReceipts[0])
-			_, err := policyrelease.PrepareUnsigned(input)
+			_, err := observedPolicyRelease.PrepareUnsigned(input)
 			if policyrelease.ErrorCode(err) != testCase.code {
 				t.Fatalf("error = %v (%s), want %s", err, policyrelease.ErrorCode(err), testCase.code)
 			}
@@ -218,7 +218,7 @@ func TestPresentedReviewAndWaiverInputBoundaries(t *testing.T) {
 			{WaiverID: "fixture-waiver-b", SubjectDigest: subject, RecordDigest: policyrelease.SHA256Digest([]byte("waiver-b")), ClaimedDisposition: "approved"},
 			{WaiverID: "fixture-waiver-a", SubjectDigest: subject, RecordDigest: policyrelease.SHA256Digest([]byte("waiver-a")), ClaimedDisposition: "approved"},
 		}
-		if _, err := policyrelease.PrepareUnsigned(input); err != nil {
+		if _, err := observedPolicyRelease.PrepareUnsigned(input); err != nil {
 			t.Fatalf("valid multiple review/waiver records rejected: %v (%s)", err, policyrelease.ErrorCode(err))
 		}
 	})

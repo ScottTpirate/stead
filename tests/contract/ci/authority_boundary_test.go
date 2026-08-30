@@ -73,12 +73,12 @@ func assertNoAuthorityClaimFields(t testing.TB, value any) {
 // plus arbitrary digest/custodian receipts is shape-valid, but WS-09 must emit
 // only unverified presented material and a non-authorizing WS-06 handoff.
 func TestSyntacticR1S1AndArbitraryReceiptsNeverClaimAuthority(t *testing.T) {
-	unsigned, err := policyrelease.PrepareUnsigned(fixtureBuildInput(t, "commercial", 1, false))
+	unsigned, err := observedPolicyRelease.PrepareUnsigned(fixtureBuildInput(t, "commercial", 1, false))
 	if err != nil {
 		t.Fatal(err)
 	}
 	activationEnvelope, activationSigning := syntacticOnlySigning(t, policyrelease.ActivationManifestPayloadType, unsigned.ManifestPayload, "unverified-activation-workflow")
-	activation, err := policyrelease.FinalizeActivationArchive(unsigned, activationEnvelope, activationSigning)
+	activation, err := observedPolicyRelease.FinalizeActivationArchive(unsigned, activationEnvelope, activationSigning)
 	if err != nil {
 		t.Fatalf("syntax-only activation handoff: %v (%s)", err, policyrelease.ErrorCode(err))
 	}
@@ -95,7 +95,7 @@ func TestSyntacticR1S1AndArbitraryReceiptsNeverClaimAuthority(t *testing.T) {
 		t.Fatal("syntax-only activation material was not labeled unverified")
 	}
 
-	attestation, err := policyrelease.PrepareReleaseAttestation(activation, policyrelease.ReleaseAttestationInput{
+	attestation, err := observedPolicyRelease.PrepareReleaseAttestation(activation, policyrelease.ReleaseAttestationInput{
 		ReleaseWorkflowIdentity: "unverified-release-workflow",
 		ReviewReceipts: []policyrelease.ReviewReceipt{{
 			ReviewerID: "arbitrary-reviewer", Role: "independent-release", SubjectDigest: activation.ArchiveDigest,
@@ -110,7 +110,7 @@ func TestSyntacticR1S1AndArbitraryReceiptsNeverClaimAuthority(t *testing.T) {
 		t.Fatal(err)
 	}
 	releaseEnvelope, releaseSigning := syntacticOnlySigning(t, policyrelease.ReleaseAttestationPayloadType, attestation.PayloadBytes, "unverified-attestation-signing-workflow")
-	handoff, err := policyrelease.FinalizeReleaseHandoff(activation, attestation, releaseEnvelope, releaseSigning)
+	handoff, err := observedPolicyRelease.FinalizeReleaseHandoff(activation, attestation, releaseEnvelope, releaseSigning)
 	if err != nil {
 		t.Fatalf("syntax-only release handoff: %v (%s)", err, policyrelease.ErrorCode(err))
 	}
@@ -185,13 +185,13 @@ func TestCanonicalCallerRebindingCannotPromotePresentedEvidence(t *testing.T) {
 		}, "presented_evidence_treatment_mismatch"},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
-			unsigned, err := policyrelease.PrepareUnsigned(fixtureBuildInput(t, "commercial", 1, false))
+			unsigned, err := observedPolicyRelease.PrepareUnsigned(fixtureBuildInput(t, "commercial", 1, false))
 			if err != nil {
 				t.Fatal(err)
 			}
 			rebindUnsignedEvidence(t, &unsigned, testCase.mutate)
 			envelope, signing := syntacticOnlySigning(t, policyrelease.ActivationManifestPayloadType, unsigned.ManifestPayload, "unverified-activation-workflow")
-			_, err = policyrelease.FinalizeActivationArchive(unsigned, envelope, signing)
+			_, err = observedPolicyRelease.FinalizeActivationArchive(unsigned, envelope, signing)
 			if policyrelease.ErrorCode(err) != testCase.code {
 				t.Fatalf("error = %v (%s), want %s", err, policyrelease.ErrorCode(err), testCase.code)
 			}
@@ -200,12 +200,12 @@ func TestCanonicalCallerRebindingCannotPromotePresentedEvidence(t *testing.T) {
 }
 
 func TestActivationAndHandoffDeepCopyNestedCollections(t *testing.T) {
-	unsigned, err := policyrelease.PrepareUnsigned(fixtureBuildInput(t, "commercial", 1, false))
+	unsigned, err := observedPolicyRelease.PrepareUnsigned(fixtureBuildInput(t, "commercial", 1, false))
 	if err != nil {
 		t.Fatal(err)
 	}
 	activationEnvelope, activationSigning := externallySign(t, policyrelease.ActivationManifestPayloadType, unsigned.ManifestPayload, 1, false)
-	activation, err := policyrelease.FinalizeActivationArchive(unsigned, activationEnvelope, activationSigning)
+	activation, err := observedPolicyRelease.FinalizeActivationArchive(unsigned, activationEnvelope, activationSigning)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -221,7 +221,7 @@ func TestActivationAndHandoffDeepCopyNestedCollections(t *testing.T) {
 		t.Fatal("activation aliases unsigned input, signing receipts, or summary slices")
 	}
 
-	attestation, err := policyrelease.PrepareReleaseAttestation(activation, policyrelease.ReleaseAttestationInput{
+	attestation, err := observedPolicyRelease.PrepareReleaseAttestation(activation, policyrelease.ReleaseAttestationInput{
 		ReleaseWorkflowIdentity: "release-workflow-v1",
 		ReviewReceipts: []policyrelease.ReviewReceipt{{
 			ReviewerID: "reviewer-a", Role: "independent-release", SubjectDigest: activation.ArchiveDigest,
@@ -233,7 +233,7 @@ func TestActivationAndHandoffDeepCopyNestedCollections(t *testing.T) {
 		t.Fatal(err)
 	}
 	releaseEnvelope, releaseSigning := externallySign(t, policyrelease.ReleaseAttestationPayloadType, attestation.PayloadBytes, 1, false)
-	handoff, err := policyrelease.FinalizeReleaseHandoff(activation, attestation, releaseEnvelope, releaseSigning)
+	handoff, err := observedPolicyRelease.FinalizeReleaseHandoff(activation, attestation, releaseEnvelope, releaseSigning)
 	if err != nil {
 		t.Fatal(err)
 	}

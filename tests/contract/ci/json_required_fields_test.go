@@ -10,7 +10,7 @@ import (
 
 func assertPrepareJSONContractError(t testing.TB, input policyrelease.BuildInput, want string) {
 	t.Helper()
-	_, err := policyrelease.PrepareUnsigned(input)
+	_, err := observedPolicyRelease.PrepareUnsigned(input)
 	if policyrelease.ErrorCode(err) != want {
 		t.Fatalf("error = %v (%s), want %s", err, policyrelease.ErrorCode(err), want)
 	}
@@ -240,7 +240,7 @@ func TestExactJSONRejectsInvalidContainerAndIntegerRepresentations(t *testing.T)
 }
 
 func TestRequiredNullableTrustMemberAllowsNullButRejectsOmission(t *testing.T) {
-	if _, err := policyrelease.PrepareUnsigned(fixtureBuildInput(t, "commercial", 1, false)); err != nil {
+	if _, err := observedPolicyRelease.PrepareUnsigned(fixtureBuildInput(t, "commercial", 1, false)); err != nil {
 		t.Fatalf("explicit null previous_trust_set_id rejected: %v (%s)", err, policyrelease.ErrorCode(err))
 	}
 
@@ -255,7 +255,7 @@ func TestRequiredNullableTrustMemberAllowsNullButRejectsOmission(t *testing.T) {
 		document["previous_trust_set_id"] = policyrelease.SHA256Digest([]byte("previous-trust-set"))
 	})
 	rebindPolicyContentIndex(t, &nonnull)
-	if _, err := policyrelease.PrepareUnsigned(nonnull); err != nil {
+	if _, err := observedPolicyRelease.PrepareUnsigned(nonnull); err != nil {
 		t.Fatalf("non-null previous_trust_set_id rejected: %v (%s)", err, policyrelease.ErrorCode(err))
 	}
 }

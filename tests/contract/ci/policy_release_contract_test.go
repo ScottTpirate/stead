@@ -14,11 +14,11 @@ import (
 // T-STEAD-P1-016-CONTRACT, T-TEST-008-ACCEPTANCE,
 // T-ADR-0006-DETERMINISTIC-BUILD, T-ADR-0006-POLICY-CONFORMANCE.
 func TestDeterministicUnsignedConstructionAndEvidence(t *testing.T) {
-	first, err := policyrelease.PrepareUnsigned(fixtureBuildInput(t, "commercial", 1, false))
+	first, err := observedPolicyRelease.PrepareUnsigned(fixtureBuildInput(t, "commercial", 1, false))
 	if err != nil {
 		t.Fatalf("first PrepareUnsigned: %v (%s)", err, policyrelease.ErrorCode(err))
 	}
-	second, err := policyrelease.PrepareUnsigned(fixtureBuildInput(t, "commercial", 1, false))
+	second, err := observedPolicyRelease.PrepareUnsigned(fixtureBuildInput(t, "commercial", 1, false))
 	if err != nil {
 		t.Fatalf("second PrepareUnsigned: %v (%s)", err, policyrelease.ErrorCode(err))
 	}
@@ -116,7 +116,7 @@ func TestPolicyBundleIdentityBindsEverySemanticPayload(t *testing.T) {
 			}
 		}
 	}
-	if _, err := policyrelease.PrepareUnsigned(input); policyrelease.ErrorCode(err) != "policy_content_index_binding_mismatch" {
+	if _, err := observedPolicyRelease.PrepareUnsigned(input); policyrelease.ErrorCode(err) != "policy_content_index_binding_mismatch" {
 		t.Fatalf("stale content index error = %v (%s)", err, policyrelease.ErrorCode(err))
 	}
 
@@ -138,33 +138,33 @@ func TestPolicyBundleIdentityBindsEverySemanticPayload(t *testing.T) {
 		t.Fatal("semantic policy update reused policy_bundle_id")
 	}
 	indexFile.Content = reboundIndex
-	if _, err := policyrelease.PrepareUnsigned(input); policyrelease.ErrorCode(err) != "presented_review_subject_mismatch" {
+	if _, err := observedPolicyRelease.PrepareUnsigned(input); policyrelease.ErrorCode(err) != "presented_review_subject_mismatch" {
 		t.Fatalf("stale review error = %v (%s)", err, policyrelease.ErrorCode(err))
 	}
 	input.Evidence.ReviewReceipts[0].SubjectDigest = newBundleID
 	mutateEvidenceReport(t, &input, "evidence/provenance.json", func(document map[string]any) {
 		document["subject"].([]any)[0].(map[string]any)["digest"].(map[string]any)["sha256"] = newBundleID[len("sha256:"):]
 	})
-	if _, err := policyrelease.PrepareUnsigned(input); err != nil {
+	if _, err := observedPolicyRelease.PrepareUnsigned(input); err != nil {
 		t.Fatalf("fully rebound semantic update rejected: %v (%s)", err, policyrelease.ErrorCode(err))
 	}
 }
 
 func TestFixedEnvelopeArchiveAndAttestationConstructionAreDeterministic(t *testing.T) {
-	firstUnsigned, err := policyrelease.PrepareUnsigned(fixtureBuildInput(t, "commercial", 1, false))
+	firstUnsigned, err := observedPolicyRelease.PrepareUnsigned(fixtureBuildInput(t, "commercial", 1, false))
 	if err != nil {
 		t.Fatal(err)
 	}
-	secondUnsigned, err := policyrelease.PrepareUnsigned(fixtureBuildInput(t, "commercial", 1, false))
+	secondUnsigned, err := observedPolicyRelease.PrepareUnsigned(fixtureBuildInput(t, "commercial", 1, false))
 	if err != nil {
 		t.Fatal(err)
 	}
 	envelope, signing := externallySign(t, policyrelease.ActivationManifestPayloadType, firstUnsigned.ManifestPayload, 1, false)
-	firstArchive, err := policyrelease.FinalizeActivationArchive(firstUnsigned, envelope, signing)
+	firstArchive, err := observedPolicyRelease.FinalizeActivationArchive(firstUnsigned, envelope, signing)
 	if err != nil {
 		t.Fatal(err)
 	}
-	secondArchive, err := policyrelease.FinalizeActivationArchive(secondUnsigned, envelope, signing)
+	secondArchive, err := observedPolicyRelease.FinalizeActivationArchive(secondUnsigned, envelope, signing)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -176,11 +176,11 @@ func TestFixedEnvelopeArchiveAndAttestationConstructionAreDeterministic(t *testi
 		ReviewReceipts:          []policyrelease.ReviewReceipt{{ReviewerID: "fixture-final-reviewer", Role: "independent-release", SubjectDigest: firstArchive.ArchiveDigest, RecordDigest: policyrelease.SHA256Digest([]byte("review")), ClaimedDisposition: "accept"}},
 		OfflineCheckReceipt:     policyrelease.OfflineCheckReceipt{ClaimedOutcome: "pass", SubjectArchiveDigest: firstArchive.ArchiveDigest, ReportDigest: policyrelease.SHA256Digest([]byte("offline-check-report"))},
 	}
-	firstAttestation, err := policyrelease.PrepareReleaseAttestation(firstArchive, releaseInput)
+	firstAttestation, err := observedPolicyRelease.PrepareReleaseAttestation(firstArchive, releaseInput)
 	if err != nil {
 		t.Fatal(err)
 	}
-	secondAttestation, err := policyrelease.PrepareReleaseAttestation(secondArchive, releaseInput)
+	secondAttestation, err := observedPolicyRelease.PrepareReleaseAttestation(secondArchive, releaseInput)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -220,7 +220,7 @@ func TestOneWayReleaseCeremonyAndImmutableTransportIdentity(t *testing.T) {
 	if handoff.PresentedActivationReceiptSetDigest != activation.PresentedActivationSigning.ReceiptSetDigest || handoff.PresentedActivationSignatures.Treatment != policyrelease.PresentedMaterialTreatment || handoff.Authority != policyrelease.NonAuthorizingHandoffAuthority {
 		t.Fatal("typed handoff omitted or overstated presented activation material")
 	}
-	inspection, err := policyrelease.ValidateArchive(handoff.ArchiveBytes, activation.EnvelopeBytes, activation.Unsigned.Manifest.Files)
+	inspection, err := observedPolicyRelease.ValidateArchive(handoff.ArchiveBytes, activation.EnvelopeBytes, activation.Unsigned.Manifest.Files)
 	if err != nil {
 		t.Fatalf("ValidateArchive: %v (%s)", err, policyrelease.ErrorCode(err))
 	}
@@ -228,7 +228,7 @@ func TestOneWayReleaseCeremonyAndImmutableTransportIdentity(t *testing.T) {
 		t.Fatal("archive inspection identity mismatch")
 	}
 
-	descriptor, descriptorBytes, err := policyrelease.BuildTransportDescriptor(handoff)
+	descriptor, descriptorBytes, err := observedPolicyRelease.BuildTransportDescriptor(handoff)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -255,7 +255,7 @@ func TestOneWayReleaseCeremonyAndImmutableTransportIdentity(t *testing.T) {
 // T-ADR-0006-DSSE fixed P-256/SHA-256, PAE, SPKI key identity, DER, low-S,
 // and exact-payload vector. The fixture key is public and non-authorizing.
 func TestFixedDSSEVerificationVector(t *testing.T) {
-	unsigned, err := policyrelease.PrepareUnsigned(fixtureBuildInput(t, "commercial", 1, false))
+	unsigned, err := observedPolicyRelease.PrepareUnsigned(fixtureBuildInput(t, "commercial", 1, false))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -281,7 +281,7 @@ func TestFixedDSSEVerificationVector(t *testing.T) {
 }
 
 func TestManifestAndAttestationRejectUnknownFields(t *testing.T) {
-	unsigned, err := policyrelease.PrepareUnsigned(fixtureBuildInput(t, "commercial", 1, false))
+	unsigned, err := observedPolicyRelease.PrepareUnsigned(fixtureBuildInput(t, "commercial", 1, false))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -297,7 +297,7 @@ func TestManifestAndAttestationRejectUnknownFields(t *testing.T) {
 	unsigned.ManifestPayload = mutated
 	unsigned.ActivationSetID = policyrelease.SHA256Digest(mutated)
 	envelope, signing := externallySign(t, policyrelease.ActivationManifestPayloadType, mutated, 1, false)
-	_, err = policyrelease.FinalizeActivationArchive(unsigned, envelope, signing)
+	_, err = observedPolicyRelease.FinalizeActivationArchive(unsigned, envelope, signing)
 	if policyrelease.ErrorCode(err) != "signed_payload_contract_error" {
 		t.Fatalf("unknown signed field error = %v (%s)", err, policyrelease.ErrorCode(err))
 	}
@@ -306,7 +306,7 @@ func TestManifestAndAttestationRejectUnknownFields(t *testing.T) {
 func TestReturnedArtifactsDoNotAliasCallerBuffers(t *testing.T) {
 	input := fixtureBuildInput(t, "commercial", 1, false)
 	original := append([]byte(nil), input.PayloadFiles[0].Content...)
-	unsigned, err := policyrelease.PrepareUnsigned(input)
+	unsigned, err := observedPolicyRelease.PrepareUnsigned(input)
 	if err != nil {
 		t.Fatal(err)
 	}

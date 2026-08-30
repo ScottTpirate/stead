@@ -19,6 +19,79 @@ import (
 	policyrelease "github.com/ScottTpirate/stead/modules/ci/policyrelease"
 )
 
+// observedPolicyRelease is the test-suite caller boundary. Production exposes
+// lifecycle construction only through ObservedWorkflow, so all contract tests
+// exercise the same mandatory observation path as external callers.
+var observedPolicyRelease observedPolicyReleaseAPI
+
+type observedPolicyReleaseAPI struct{}
+
+func newTestObservedWorkflow() (*policyrelease.ObservedWorkflow, error) {
+	return policyrelease.NewObservedWorkflow(policyrelease.LifecycleContext{
+		OperationID:   "contract-test-operation",
+		CorrelationID: "contract-test-correlation",
+		CausationID:   "contract-test-causation",
+	}, policyrelease.LifecycleObserverFunc(func(event policyrelease.LifecycleEvent) (policyrelease.LifecycleAcknowledgement, error) {
+		return policyrelease.AcknowledgeLifecycleEvent(event), nil
+	}))
+}
+
+func (observedPolicyReleaseAPI) PrepareUnsigned(input policyrelease.BuildInput) (policyrelease.UnsignedActivation, error) {
+	workflow, err := newTestObservedWorkflow()
+	if err != nil {
+		return policyrelease.UnsignedActivation{}, err
+	}
+	return workflow.PrepareUnsigned(input)
+}
+
+func (observedPolicyReleaseAPI) FinalizeActivationArchive(unsigned policyrelease.UnsignedActivation, envelope []byte, signing policyrelease.PresentedSigningResult) (policyrelease.ActivationArchive, error) {
+	workflow, err := newTestObservedWorkflow()
+	if err != nil {
+		return policyrelease.ActivationArchive{}, err
+	}
+	return workflow.FinalizeActivationArchive(unsigned, envelope, signing)
+}
+
+func (observedPolicyReleaseAPI) InspectArchive(archive []byte) (policyrelease.ArchiveInspection, error) {
+	workflow, err := newTestObservedWorkflow()
+	if err != nil {
+		return policyrelease.ArchiveInspection{}, err
+	}
+	return workflow.InspectArchive(archive)
+}
+
+func (observedPolicyReleaseAPI) ValidateArchive(archive, envelope []byte, files []policyrelease.ManifestFile) (policyrelease.ArchiveInspection, error) {
+	workflow, err := newTestObservedWorkflow()
+	if err != nil {
+		return policyrelease.ArchiveInspection{}, err
+	}
+	return workflow.ValidateArchive(archive, envelope, files)
+}
+
+func (observedPolicyReleaseAPI) PrepareReleaseAttestation(activation policyrelease.ActivationArchive, input policyrelease.ReleaseAttestationInput) (policyrelease.UnsignedReleaseAttestation, error) {
+	workflow, err := newTestObservedWorkflow()
+	if err != nil {
+		return policyrelease.UnsignedReleaseAttestation{}, err
+	}
+	return workflow.PrepareReleaseAttestation(activation, input)
+}
+
+func (observedPolicyReleaseAPI) FinalizeReleaseHandoff(activation policyrelease.ActivationArchive, unsigned policyrelease.UnsignedReleaseAttestation, envelope []byte, signing policyrelease.PresentedSigningResult) (policyrelease.ImmutableReleaseHandoff, error) {
+	workflow, err := newTestObservedWorkflow()
+	if err != nil {
+		return policyrelease.ImmutableReleaseHandoff{}, err
+	}
+	return workflow.FinalizeReleaseHandoff(activation, unsigned, envelope, signing)
+}
+
+func (observedPolicyReleaseAPI) BuildTransportDescriptor(handoff policyrelease.ImmutableReleaseHandoff) (policyrelease.TransportDescriptorV1, []byte, error) {
+	workflow, err := newTestObservedWorkflow()
+	if err != nil {
+		return policyrelease.TransportDescriptorV1{}, nil, err
+	}
+	return workflow.BuildTransportDescriptor(handoff)
+}
+
 type fixtureSignature struct {
 	KeyID string `json:"keyid"`
 	Sig   string `json:"sig"`
@@ -460,16 +533,16 @@ func rebindPolicyContentIndex(t testing.TB, input *policyrelease.BuildInput) {
 
 func completeFixtureRelease(t testing.TB, profile string, threshold int, distinct bool) (policyrelease.ActivationArchive, policyrelease.UnsignedReleaseAttestation, policyrelease.ImmutableReleaseHandoff) {
 	t.Helper()
-	unsigned, err := policyrelease.PrepareUnsigned(fixtureBuildInput(t, profile, threshold, distinct))
+	unsigned, err := observedPolicyRelease.PrepareUnsigned(fixtureBuildInput(t, profile, threshold, distinct))
 	if err != nil {
 		t.Fatalf("PrepareUnsigned: %v (%s)", err, policyrelease.ErrorCode(err))
 	}
 	activationEnvelope, activationSigning := externallySign(t, policyrelease.ActivationManifestPayloadType, unsigned.ManifestPayload, threshold, false)
-	activation, err := policyrelease.FinalizeActivationArchive(unsigned, activationEnvelope, activationSigning)
+	activation, err := observedPolicyRelease.FinalizeActivationArchive(unsigned, activationEnvelope, activationSigning)
 	if err != nil {
 		t.Fatalf("FinalizeActivationArchive: %v (%s)", err, policyrelease.ErrorCode(err))
 	}
-	attestation, err := policyrelease.PrepareReleaseAttestation(activation, policyrelease.ReleaseAttestationInput{
+	attestation, err := observedPolicyRelease.PrepareReleaseAttestation(activation, policyrelease.ReleaseAttestationInput{
 		ReleaseWorkflowIdentity: "stead-ci-policy-release-workflow-v1",
 		ReviewReceipts: []policyrelease.ReviewReceipt{{
 			ReviewerID:         "fixture-final-reviewer",
@@ -488,7 +561,7 @@ func completeFixtureRelease(t testing.TB, profile string, threshold int, distinc
 		t.Fatalf("PrepareReleaseAttestation: %v (%s)", err, policyrelease.ErrorCode(err))
 	}
 	releaseEnvelope, releaseSigning := externallySign(t, policyrelease.ReleaseAttestationPayloadType, attestation.PayloadBytes, threshold, false)
-	handoff, err := policyrelease.FinalizeReleaseHandoff(activation, attestation, releaseEnvelope, releaseSigning)
+	handoff, err := observedPolicyRelease.FinalizeReleaseHandoff(activation, attestation, releaseEnvelope, releaseSigning)
 	if err != nil {
 		t.Fatalf("FinalizeReleaseHandoff: %v (%s)", err, policyrelease.ErrorCode(err))
 	}
