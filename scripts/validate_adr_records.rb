@@ -106,6 +106,42 @@ def load_yaml(relative)
   )
 end
 
+def adr_requirement_traceability_failures(requirements:, adr_number:, claimed_requirement_ids:, declared_test_ids:)
+  test_prefix = "T-ADR-#{adr_number}-"
+  claimed_requirements = claimed_requirement_ids.to_set
+  declared_tests = declared_test_ids.to_set
+  registered_tests = Set.new
+  tests_linked_to_claimed_requirements = Set.new
+  covered_claimed_requirements = Set.new
+
+  requirements.each do |record|
+    adr_tests = Array(record["test_ids"]).select { |test_id| test_id.start_with?(test_prefix) }.to_set
+    registered_tests.merge(adr_tests)
+    next unless claimed_requirements.include?(record.fetch("requirement_id"))
+
+    tests_linked_to_claimed_requirements.merge(adr_tests)
+    covered_claimed_requirements << record.fetch("requirement_id") unless adr_tests.empty?
+  end
+
+  failures = []
+  orphaned_tests = declared_tests - tests_linked_to_claimed_requirements
+  unless orphaned_tests.empty?
+    failures << "ADR-#{adr_number} declared tests orphaned from claimed requirements: #{orphaned_tests.to_a.sort.join(', ')}"
+  end
+
+  uncovered_requirements = claimed_requirements - covered_claimed_requirements
+  unless uncovered_requirements.empty?
+    failures << "ADR-#{adr_number} claimed requirements missing ADR test links: #{uncovered_requirements.to_a.sort.join(', ')}"
+  end
+
+  undeclared_tests = registered_tests - declared_tests
+  unless undeclared_tests.empty?
+    failures << "requirements register names undeclared ADR-#{adr_number} tests: #{undeclared_tests.to_a.sort.join(', ')}"
+  end
+
+  failures
+end
+
 failures = []
 requirements = load_yaml("specs/traceability/requirements.yaml").fetch("requirements")
 known_requirement_ids = requirements.map { |record| record.fetch("requirement_id") }.to_set
@@ -138,6 +174,7 @@ failures << "ADR record set mismatch: expected #{expected_numbers.join(', ')}, f
 
 all_test_owners = Hash.new { |hash, key| hash[key] = [] }
 tests_by_number = {}
+requirements_by_number = {}
 
 paths.each do |path|
   basename = path.basename.to_s
@@ -168,6 +205,7 @@ paths.each do |path|
   failures << "#{relative}: duplicate Requirement IDs" unless requirement_ids.uniq.length == requirement_ids.length
   unknown_requirements = requirement_ids.reject { |id| known_requirement_ids.include?(id) }
   failures << "#{relative}: unknown Requirement IDs #{unknown_requirements.join(', ')}" unless unknown_requirements.empty?
+  requirements_by_number[number] = requirement_ids
 
   candidate = expected.fetch(:candidate)
   resolution_line = source.lines.find { |line| line.start_with?("- **Resolves") }
@@ -218,6 +256,41 @@ end
 
 all_test_owners.each do |test_id, owners|
   failures << "#{test_id}: declared by multiple ADR records: #{owners.join(', ')}" unless owners.length == 1
+end
+
+adr_0007_traceability_failures = adr_requirement_traceability_failures(
+  requirements: requirements,
+  adr_number: "0007",
+  claimed_requirement_ids: requirements_by_number.fetch("0007", []),
+  declared_test_ids: tests_by_number.fetch("0007", [])
+)
+failures.concat(adr_0007_traceability_failures)
+
+# Exercise the same validator against a one-link deletion in a copy of the
+# repository-owned registry. At least one required mapping must introduce a
+# failure; otherwise the completeness checks are not mutation-sensitive.
+adr_0007_mutation_detected = requirements.each_with_index.any? do |record, record_index|
+  next false unless requirements_by_number.fetch("0007", []).include?(record.fetch("requirement_id"))
+
+  Array(record["test_ids"]).each_index.any? do |test_index|
+    test_id = record.fetch("test_ids").fetch(test_index)
+    next false unless test_id.start_with?("T-ADR-0007-")
+
+    mutated_requirements = requirements.map do |registered_requirement|
+      registered_requirement.merge("test_ids" => Array(registered_requirement["test_ids"]).dup)
+    end
+    mutated_requirements.fetch(record_index).fetch("test_ids").delete_at(test_index)
+    mutated_failures = adr_requirement_traceability_failures(
+      requirements: mutated_requirements,
+      adr_number: "0007",
+      claimed_requirement_ids: requirements_by_number.fetch("0007", []),
+      declared_test_ids: tests_by_number.fetch("0007", [])
+    )
+    !(mutated_failures.to_set - adr_0007_traceability_failures.to_set).empty?
+  end
+end
+unless adr_0007_mutation_detected
+  failures << "ADR-0007 traceability mutation guard did not detect any single required mapping deletion"
 end
 
 security_issue = issues["STEAD-P1-006"]
