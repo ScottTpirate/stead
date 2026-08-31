@@ -102,6 +102,84 @@ ADR_0008_REQUIREMENT_TEST_MAPPING = {
     ]
 }.freeze
 
+ADR_0008_LOGICAL_PRODUCER_SOURCES = {
+  "organizationEvents" => "urn:stead:producer:organization",
+  "identityEvents" => "urn:stead:producer:identity",
+  "authorizationEvents" => "urn:stead:producer:authorization",
+  "classificationEvents" => "urn:stead:producer:classification",
+  "projectEvents" => "urn:stead:producer:project",
+  "workEvents" => "urn:stead:producer:workitem",
+  "commentEvents" => "urn:stead:producer:comment",
+  "knowledgeEvents" => "urn:stead:producer:document",
+  "scmEvents" => "urn:stead:producer:scm",
+  "ciEvents" => "urn:stead:producer:ci",
+  "artifactEvents" => "urn:stead:producer:artifact",
+  "attachmentEvents" => "urn:stead:producer:attachment",
+  "storageEvents" => "urn:stead:producer:storage",
+  "searchGraphEvents" => "urn:stead:producer:search_graph",
+  "notificationEvents" => "urn:stead:producer:notification",
+  "auditEvents" => "urn:stead:producer:audit",
+  "migrationEvents" => "urn:stead:producer:migration",
+  "operationsEvents" => "urn:stead:producer:operations",
+  "deadLetterEvents" => "urn:stead:producer:dead_letter"
+}.freeze
+
+ADR_0008_LOGICAL_PRODUCER_SOURCE_PATTERN =
+  "^urn:stead:producer:(organization|identity|authorization|classification|project|workitem|comment|document|scm|ci|artifact|attachment|storage|search_graph|notification|audit|migration|operations|dead_letter)$"
+
+ADR_0008_DELIVERY_CONTRACT = {
+  "logical-producer-source" => "closed-asyncapi-channel-registry",
+  "broker-max-deliver" => "unlimited-until-durable-terminal-outcome",
+  "terminal-attempt-authority" => "consumer-owner-postgresql",
+  "production-transport" => "verified-mutual-tls-no-fallback",
+  "jetstream-at-rest-encryption" => "required-secretprovider-reference",
+  "broker-manifest" => "closed-version-pinned-complete-readback",
+  "failure-evidence" => "closed-minimized-postgresql-and-backup"
+}.freeze
+
+ADR_0008_FAILURE_CODES = %w[
+  schema_invalid
+  schema_unsupported
+  account_binding_mismatch
+  payload_integrity_mismatch
+  authorization_denied
+  effect_fence_stale
+  handler_retryable
+  handler_terminal
+  attempt_budget_exhausted
+  internal_redacted
+].freeze
+
+ADR_0008_SECURITY_GAP_FRAGMENTS = {
+  terminal_delivery: [
+    "`MaxDeliver=-1`",
+    "Stead, not NATS, owns the finite handler-attempt budget of eight.",
+    "a crash at every handler attempt reaches a durable terminal boundary on recovery"
+  ],
+  tls_and_at_rest: [
+    "Every production NATS path uses authenticated, verified TLS with no plaintext listener",
+    "JetStream file storage is encrypted at rest with the NATS server's authenticated-encryption facility.",
+    "successor as current key and predecessor as transitional previous key"
+  ],
+  stable_source: [
+    "AsyncAPI registers exactly one restore-stable logical producer source for every channel",
+    "restore, producer replacement, topology migration, and dual-major publication reuse the same logical source",
+    "cloud_event_source` must be the restore-stable AsyncAPI registry value"
+  ],
+  closed_manifest: [
+    "canonical `stead.nats.partition-manifest.v1`",
+    "synchronous/default persistence (never asynchronous persistence)",
+    "no mirror, no sources, no subject transform, no republish",
+    "no rollup, no per-message TTL or subject-delete-marker TTL, no direct or mirror-direct access",
+    "`no_ack=false`"
+  ],
+  failure_evidence: [
+    "The failure-code registry is exactly",
+    "Arbitrary maps, JSON error blobs, raw NATS metadata, exception strings/digests",
+    "authenticated backup/restore fixtures carry protected-value canaries"
+  ]
+}.transform_values(&:freeze).freeze
+
 EXPECTED_P1_006_ADR_CANDIDATES = %w[
   ADR-CAND-002
   ADR-CAND-003
@@ -383,6 +461,94 @@ def exact_adr_requirement_mapping_failures(requirements:, adr_number:, expected_
   failures
 end
 
+def adr_0008_security_contract_failures(adr_source:, asyncapi:, bypass_source:)
+  failures = []
+
+  ADR_0008_SECURITY_GAP_FRAGMENTS.each do |group, fragments|
+    missing = fragments.reject { |fragment| adr_source.include?(fragment) }
+    unless missing.empty?
+      failures << "ADR-0008 #{group} contract omits canonical clauses: #{missing.join(' | ')}"
+    end
+  end
+
+  formatted_failure_codes = ADR_0008_FAILURE_CODES.map { |code| "`#{code}`" }
+  expected_failure_registry =
+    "The failure-code registry is exactly #{formatted_failure_codes[0...-1].join(', ')}, and #{formatted_failure_codes.last}."
+  unless adr_source.include?(expected_failure_registry)
+    failures << "ADR-0008 failure-code registry must be the exact closed ten-code sequence"
+  end
+
+  nats_server = asyncapi.dig("servers", "nats") || {}
+  unless nats_server["x-production-transport"] == "verified-mutual-tls" &&
+         nats_server["x-tls-handshake-first"] == "required-no-fallback"
+    failures << "AsyncAPI NATS server must require verified mutual TLS and a no-fallback TLS-first handshake"
+  end
+
+  channels = asyncapi.fetch("channels", {})
+  actual_sources = channels.to_h do |channel_name, channel|
+    [channel_name, channel["x-logical-producer-source"]]
+  end
+  unless actual_sources == ADR_0008_LOGICAL_PRODUCER_SOURCES
+    missing = ADR_0008_LOGICAL_PRODUCER_SOURCES.reject { |name, source| actual_sources[name] == source }
+    unexpected = actual_sources.reject { |name, source| ADR_0008_LOGICAL_PRODUCER_SOURCES[name] == source }
+    failures << "AsyncAPI logical producer-source registry mismatch: missing/wrong #{missing.inspect}; unexpected #{unexpected.inspect}"
+  end
+
+
+  ADR_0008_LOGICAL_PRODUCER_SOURCES.each do |channel_name, expected_source|
+    channel = channels[channel_name] || {}
+    message_refs = channel.fetch("messages", {}).values.filter_map { |message| message["$ref"] }
+    if message_refs.length != 1
+      failures << "AsyncAPI #{channel_name} must bind exactly one message for logical producer-source validation"
+      next
+    end
+
+    message_name = message_refs.first.delete_prefix("#/components/messages/")
+    payload_ref = asyncapi.dig("components", "messages", message_name, "payload", "$ref")
+    schema_name = payload_ref.to_s.delete_prefix("#/components/schemas/")
+    source_const = asyncapi.dig(
+      "components", "schemas", schema_name, "allOf", 1, "properties", "source", "const"
+    )
+    unless source_const == expected_source
+      failures << "AsyncAPI #{channel_name} envelope source const must equal #{expected_source}"
+    end
+  end
+
+  source_schema = asyncapi.dig(
+    "components", "schemas", "SteadCloudEventEnvelope", "properties", "source"
+  ) || {}
+  unless source_schema == {
+    "type" => "string",
+    "format" => "uri",
+    "pattern" => ADR_0008_LOGICAL_PRODUCER_SOURCE_PATTERN
+  }
+    failures << "AsyncAPI CloudEvent source must be the exact closed restore-stable logical-producer schema"
+  end
+
+  delivery_contract = asyncapi.fetch("x-delivery-contract", {})
+  ADR_0008_DELIVERY_CONTRACT.each do |field, expected|
+    failures << "AsyncAPI x-delivery-contract #{field} must equal #{expected}" unless delivery_contract[field] == expected
+  end
+
+  bypass_rows = bypass_source.lines.grep(/^\| CBI-030 \|/)
+  if bypass_rows.length != 1
+    failures << "classification bypass inventory must contain exactly one CBI-030 row"
+  else
+    bypass_row = bypass_rows.first
+    {
+      terminal_delivery: "unlimited broker redelivery plus PostgreSQL-owned bounded terminal state",
+      tls_and_at_rest: "verified TLS on every enabled client/resolver/route/gateway/leaf link with no fallback",
+      stable_source: "restore-stable AsyncAPI producer source",
+      closed_manifest: "unsafe or unknown persistence/republish/mirror/source/transform/rollup/TTL/direct/`no_ack` fields fail",
+      failure_evidence: "protected canaries are absent from event, PostgreSQL, DLQ, telemetry and backup/restore evidence"
+    }.each do |group, fragment|
+      failures << "CBI-030 omits ADR-0008 #{group} bypass coverage" unless bypass_row.include?(fragment)
+    end
+  end
+
+  failures
+end
+
 # The P1-006 approval prerequisite is intentionally a strict raw-source clause,
 # not rendered Markdown. Escapes, entities, formatting delimiters, links, HTML,
 # and cross-item composition cannot stand in for the machine-reviewed wording.
@@ -646,6 +812,8 @@ issue_catalog_source = ROOT.join(issue_catalog_relative).read(encoding: "UTF-8")
 issue_catalog = load_yaml(issue_catalog_relative)
 adr_gates = issue_catalog.fetch("adr_decision_gates").to_h { |gate| [gate.fetch("adr_id"), gate] }
 issues = issue_catalog.fetch("issues").to_h { |issue| [issue.fetch("id"), issue] }
+asyncapi = load_yaml("specs/asyncapi/stead.yaml")
+classification_bypass_source = ROOT.join("docs/security/classification-bypass-inventory.md").read(encoding: "UTF-8")
 adr_index = ROOT.join("docs/adr/INDEX.md").read(encoding: "UTF-8")
 candidate_index = ROOT.join("docs/governance/adr-candidate-index.md").read(encoding: "UTF-8")
 choice_queue = ROOT.join("docs/adr/unresolved-implementation-choices.md").read(encoding: "UTF-8")
@@ -673,6 +841,7 @@ failures << "ADR record set mismatch: expected #{expected_numbers.join(', ')}, f
 all_test_owners = Hash.new { |hash, key| hash[key] = [] }
 tests_by_number = {}
 requirements_by_number = {}
+adr_0008_source = nil
 
 paths.each do |path|
   basename = path.basename.to_s
@@ -681,6 +850,7 @@ paths.each do |path|
 
   expected = EXPECTED_RECORDS.fetch(number)
   source = path.read(encoding: "UTF-8")
+  adr_0008_source = source if number == "0008"
   relative = path.relative_path_from(ROOT).to_s
   expected_adr_id = "ADR-#{number}"
 
@@ -750,6 +920,210 @@ paths.each do |path|
   if approval_identities["WS-13-independent-qa"] == approval_identities["WS-13-independent-security"]
     failures << "implementation issue catalog: #{candidate} independent QA and security identities must be distinct"
   end
+end
+
+if adr_0008_source
+  failures.concat(
+    adr_0008_security_contract_failures(
+      adr_source: adr_0008_source,
+      asyncapi: asyncapi,
+      bypass_source: classification_bypass_source
+    )
+  )
+else
+  failures << "ADR-0008 source unavailable for security contract validation"
+end
+
+# Exercise one or more independent semantic mutations for every security gap
+# that blocked the prior immutable candidate. These are decision-contract
+# mutants only; passing them is not NATS runtime evidence.
+adr_0008_security_mutations = []
+register_adr_0008_security_mutation = lambda do |group, name, mutated_adr, mutated_asyncapi, mutated_bypass|
+  adr_0008_security_mutations << {
+    group: group,
+    name: name,
+    adr: mutated_adr,
+    asyncapi: mutated_asyncapi,
+    bypass: mutated_bypass
+  }
+end
+deep_copy_asyncapi = -> { Marshal.load(Marshal.dump(asyncapi)) }
+
+if adr_0008_source
+  register_adr_0008_security_mutation.call(
+    :terminal_delivery,
+    "finite broker MaxDeliver",
+    adr_0008_source.gsub("`MaxDeliver=-1`", "`MaxDeliver=8`"),
+    deep_copy_asyncapi.call,
+    classification_bypass_source
+  )
+  register_adr_0008_security_mutation.call(
+    :terminal_delivery,
+    "removed PostgreSQL attempt authority",
+    adr_0008_source.sub(
+      "Stead, not NATS, owns the finite handler-attempt budget of eight.",
+      "The broker delivery count owns the handler-attempt budget."
+    ),
+    deep_copy_asyncapi.call,
+    classification_bypass_source
+  )
+  terminal_asyncapi = deep_copy_asyncapi.call
+  terminal_asyncapi.fetch("x-delivery-contract")["broker-max-deliver"] = "eight"
+  register_adr_0008_security_mutation.call(
+    :terminal_delivery,
+    "finite AsyncAPI delivery contract",
+    adr_0008_source,
+    terminal_asyncapi,
+    classification_bypass_source
+  )
+
+  tls_asyncapi = deep_copy_asyncapi.call
+  tls_asyncapi.dig("servers", "nats")["x-production-transport"] = "optional-tls"
+  register_adr_0008_security_mutation.call(
+    :tls_and_at_rest,
+    "optional transport TLS",
+    adr_0008_source,
+    tls_asyncapi,
+    classification_bypass_source
+  )
+  register_adr_0008_security_mutation.call(
+    :tls_and_at_rest,
+    "plaintext fallback restored",
+    adr_0008_source.sub(
+      "Every production NATS path uses authenticated, verified TLS with no plaintext listener",
+      "Production NATS paths prefer encrypted listeners"
+    ),
+    deep_copy_asyncapi.call,
+    classification_bypass_source
+  )
+  register_adr_0008_security_mutation.call(
+    :tls_and_at_rest,
+    "at-rest rotation removed",
+    adr_0008_source.sub(
+      "successor as current key and predecessor as transitional previous key",
+      "one unchanged at-rest key"
+    ),
+    deep_copy_asyncapi.call,
+    classification_bypass_source
+  )
+
+  source_asyncapi = deep_copy_asyncapi.call
+  source_asyncapi.dig("channels", "organizationEvents")["x-logical-producer-source"] =
+    "https://restored-host.example/producer/organization"
+  register_adr_0008_security_mutation.call(
+    :stable_source,
+    "runtime-bound channel source",
+    adr_0008_source,
+    source_asyncapi,
+    classification_bypass_source
+  )
+  source_const_asyncapi = deep_copy_asyncapi.call
+  source_const_asyncapi.dig(
+    "components", "schemas", "OrganizationCloudEventEnvelope", "allOf", 1, "properties", "source"
+  )["const"] = "urn:stead:producer:organization:restored-host"
+  register_adr_0008_security_mutation.call(
+    :stable_source,
+    "runtime-bound envelope source const",
+    adr_0008_source,
+    source_const_asyncapi,
+    classification_bypass_source
+  )
+  source_schema_asyncapi = deep_copy_asyncapi.call
+  source_schema_asyncapi.dig(
+    "components", "schemas", "SteadCloudEventEnvelope", "properties", "source"
+  )["pattern"] = "^.+$"
+  register_adr_0008_security_mutation.call(
+    :stable_source,
+    "open CloudEvent source schema",
+    adr_0008_source,
+    source_schema_asyncapi,
+    classification_bypass_source
+  )
+  register_adr_0008_security_mutation.call(
+    :stable_source,
+    "restore source stability removed",
+    adr_0008_source.sub(
+      "restore, producer replacement, topology migration, and dual-major publication reuse the same logical source",
+      "producer deployments choose their own source"
+    ),
+    deep_copy_asyncapi.call,
+    classification_bypass_source
+  )
+
+  manifest_asyncapi = deep_copy_asyncapi.call
+  manifest_asyncapi.fetch("x-delivery-contract")["broker-manifest"] = "server-defaults"
+  register_adr_0008_security_mutation.call(
+    :closed_manifest,
+    "open broker manifest",
+    adr_0008_source,
+    manifest_asyncapi,
+    classification_bypass_source
+  )
+  register_adr_0008_security_mutation.call(
+    :closed_manifest,
+    "asynchronous persistence admitted",
+    adr_0008_source.sub(
+      "synchronous/default persistence (never asynchronous persistence)",
+      "asynchronous persistence"
+    ),
+    deep_copy_asyncapi.call,
+    classification_bypass_source
+  )
+  register_adr_0008_security_mutation.call(
+    :closed_manifest,
+    "no_ack closure removed",
+    adr_0008_source.sub("`no_ack=false`", "`no_ack=true`"),
+    deep_copy_asyncapi.call,
+    classification_bypass_source
+  )
+
+  failure_asyncapi = deep_copy_asyncapi.call
+  failure_asyncapi.fetch("x-delivery-contract")["failure-evidence"] = "arbitrary-handler-errors"
+  register_adr_0008_security_mutation.call(
+    :failure_evidence,
+    "open failure evidence",
+    adr_0008_source,
+    failure_asyncapi,
+    classification_bypass_source
+  )
+  register_adr_0008_security_mutation.call(
+    :failure_evidence,
+    "unknown failure code admitted",
+    adr_0008_source.sub("`internal_redacted`", "`raw_internal_error`"),
+    deep_copy_asyncapi.call,
+    classification_bypass_source
+  )
+  register_adr_0008_security_mutation.call(
+    :failure_evidence,
+    "PostgreSQL and backup canary removed",
+    adr_0008_source,
+    deep_copy_asyncapi.call,
+    classification_bypass_source.sub(
+      "protected canaries are absent from event, PostgreSQL, DLQ, telemetry and backup/restore evidence",
+      "event payloads are minimized"
+    )
+  )
+end
+
+adr_0008_security_mutation_groups = adr_0008_security_mutations.each_with_object(Hash.new(0)) do |mutation, counts|
+  counts[mutation.fetch(:group)] += 1
+end
+expected_adr_0008_security_mutation_groups = ADR_0008_SECURITY_GAP_FRAGMENTS.keys.to_h { |group| [group, 3] }
+expected_adr_0008_security_mutation_groups[:stable_source] = 4
+unless adr_0008_security_mutation_groups == expected_adr_0008_security_mutation_groups
+  failures << "ADR-0008 security mutation inventory mismatch: expected #{expected_adr_0008_security_mutation_groups.inspect}, found #{adr_0008_security_mutation_groups.inspect}"
+end
+
+adr_0008_security_mutation_survivors = adr_0008_security_mutations.filter_map do |mutation|
+  mutation_failures = adr_0008_security_contract_failures(
+    adr_source: mutation.fetch(:adr),
+    asyncapi: mutation.fetch(:asyncapi),
+    bypass_source: mutation.fetch(:bypass)
+  )
+  "#{mutation.fetch(:group)}/#{mutation.fetch(:name)}" if mutation_failures.empty?
+end
+unless adr_0008_security_mutation_survivors.empty?
+  failures << "ADR-0008 security contract mutation survivors: #{adr_0008_security_mutation_survivors.join(', ')}"
 end
 
 all_test_owners.each do |test_id, owners|
@@ -1751,6 +2125,7 @@ if failures.empty?
   puts "STEAD-P1-006 strict raw gate mutation guard: PASS (#{p1_006_gate_mutation_count}/#{EXPECTED_P1_006_GATE_MUTATION_COUNT} mutations killed)"
   puts "ADR-0007 exact-mapping mutation guard: PASS (#{adr_0007_killed_mutations}/#{adr_0007_expected_edges.length} required edge deletions killed)"
   puts "ADR-0008 exact-mapping mutation guard: PASS (#{adr_0008_killed_mutations}/#{adr_0008_expected_edges.length} required edge deletions killed)"
+  puts "ADR-0008 security-contract mutation guard: PASS (#{adr_0008_security_mutations.length}/#{adr_0008_security_mutations.length} mutations killed across #{adr_0008_security_mutation_groups.length} gap groups)"
   puts "ADR traceability validation: PASS (records=#{paths.length}, requirements=#{known_requirement_ids.length}, tests=#{all_test_owners.length})"
 else
   warn "ADR traceability validation: FAIL (#{failures.length} issue#{failures.length == 1 ? '' : 's'})"
