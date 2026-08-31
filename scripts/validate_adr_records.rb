@@ -1,6 +1,7 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
+require "digest"
 require "json"
 require "pathname"
 require "set"
@@ -82,6 +83,11 @@ EXPECTED_REQUIREMENT_TEST_LINKS = {
     ]
   }.freeze
 }.freeze
+
+# Close the complete ADR-0009 Decision body so a semantic weakening cannot
+# retain valid traceability merely by preserving test names and review rows.
+ADR_0009_DECISION_BODY_SHA256 =
+  "d1cb0089d38a16ad9b100df6efe7863d786159223f595abc027a8b5227a8163c".freeze
 
 EXPECTED_P1_006_ADR_CANDIDATES = %w[
   ADR-CAND-002
@@ -389,6 +395,35 @@ def adr_0009_review_structure_failures(source)
   failures
 end
 
+def adr_0009_decision_body_failures(source)
+  failures = []
+  decision_matches = source.to_enum(:scan, /^## Decision\n/).map { Regexp.last_match }
+  consequence_matches = source.to_enum(:scan, /^## Consequences\n/).map { Regexp.last_match }
+  if decision_matches.length != 1 || consequence_matches.length != 1
+    failures << "ADR-0009 raw Decision and Consequences headings must each occur exactly once"
+    return failures
+  end
+
+  decision_match = decision_matches.first
+  consequence_match = consequence_matches.first
+  if consequence_match.begin(0) <= decision_match.end(0)
+    failures << "ADR-0009 raw Decision body must precede Consequences"
+    return failures
+  end
+
+  first_h2 = source.match(/^## ([^#\n][^\n]*)\n/, decision_match.end(0))
+  unless first_h2&.begin(0) == consequence_match.begin(0)
+    failures << "ADR-0009 Consequences must be the next raw level-two section after Decision"
+  end
+
+  body = source.byteslice(decision_match.end(0), consequence_match.begin(0) - decision_match.end(0))
+  actual = Digest::SHA256.hexdigest(body)
+  unless actual == ADR_0009_DECISION_BODY_SHA256
+    failures << "ADR-0009 Decision body must match closed semantic digest #{ADR_0009_DECISION_BODY_SHA256}, found #{actual}"
+  end
+  failures
+end
+
 # The P1-006 approval prerequisite is intentionally a strict raw-source clause,
 # not rendered Markdown. Escapes, entities, formatting delimiters, links, HTML,
 # and cross-item composition cannot stand in for the machine-reviewed wording.
@@ -681,6 +716,8 @@ tests_by_number = {}
 requirements_by_number = {}
 adr_0009_review_mutation_survivors = []
 adr_0009_review_mutation_count = 0
+adr_0009_security_mutation_survivors = []
+adr_0009_security_mutation_count = 0
 
 paths.each do |path|
   basename = path.basename.to_s
@@ -724,6 +761,7 @@ paths.each do |path|
 
   if number == "0009"
     failures.concat(adr_0009_review_structure_failures(source))
+    failures.concat(adr_0009_decision_body_failures(source))
     qa_line = source.lines.find { |line| line.start_with?("| Independent QA and C-QA traceability owner (distinct WS-13 identity) |") }
     security_line = source.lines.find { |line| line.start_with?("| Independent security (distinct WS-13 identity) |") }
     if qa_line && security_line
@@ -739,6 +777,39 @@ paths.each do |path|
         if adr_0009_review_structure_failures(mutated_source).empty?
           adr_0009_review_mutation_survivors << label
         end
+      end
+    end
+
+    security_mutations = {
+      "later webhook actor authorizes combined snapshot" => source.sub(
+        "one actor can never authorize a combined snapshot",
+        "the latest mapped actor may authorize the combined current snapshot"
+      ),
+      "causal proof made optional" => source.sub(
+        "A complete contiguous proof chain must connect the last confirmed token to the freshly read token.",
+        "A later webhook sender is sufficient when the current snapshot is readable."
+      ),
+      "administrator impersonation ignored" => source.sub(
+        "binds the effective actor and every administrator/Sudo impersonator",
+        "binds the displayed webhook sender"
+      ),
+      "single matching create adopted without operation identity" => source.sub(
+        "Exactly one candidate carrying that verified operation-bound key may be adopted.",
+        "Exactly one matching candidate may be adopted from its content digest."
+      ),
+      "before snapshot treated as no-effect proof" => source.sub(
+        "a current before, intended-after, absent, or recreated snapshot is never by itself terminal proof",
+        "a current before snapshot proves that the operation had no effect"
+      ),
+      "apply-revert ABA admitted" => source.sub(
+        "Without such proof, snapshot comparison guides containment only; the original permit remains `reconciling`",
+        "Without such proof, a complete current snapshot may terminalize success or `failed_without_effect`"
+      )
+    }
+    security_mutations.each do |label, mutated_source|
+      adr_0009_security_mutation_count += 1
+      if mutated_source == source || adr_0009_decision_body_failures(mutated_source).empty?
+        adr_0009_security_mutation_survivors << label
       end
     end
   end
@@ -905,6 +976,12 @@ unless adr_0009_review_mutation_count == 4
 end
 unless adr_0009_review_mutation_survivors.empty?
   failures << "ADR-0009 review-separation mutation survivors: #{adr_0009_review_mutation_survivors.join(', ')}"
+end
+unless adr_0009_security_mutation_count == 6
+  failures << "ADR-0009 semantic-security mutation inventory must contain exactly 6 cases, found #{adr_0009_security_mutation_count}"
+end
+unless adr_0009_security_mutation_survivors.empty?
+  failures << "ADR-0009 semantic-security mutation survivors: #{adr_0009_security_mutation_survivors.join(', ')}"
 end
 
 security_issue = issues["STEAD-P1-006"]
@@ -1804,6 +1881,7 @@ if failures.empty?
   puts "ADR-0007 exact-mapping mutation guard: PASS (#{adr_0007_killed_mutations}/#{adr_0007_expected_edges.length} required edge deletions killed)"
   puts "ADR-0009 exact-mapping mutation guard: PASS (#{adr_0009_killed_mutations}/#{adr_0009_expected_edges.length} required edge deletions killed)"
   puts "ADR-0009 review-separation mutation guard: PASS (#{adr_0009_review_mutation_count}/4 mutations killed)"
+  puts "ADR-0009 semantic-security mutation guard: PASS (#{adr_0009_security_mutation_count}/6 mutations killed)"
   puts "ADR traceability validation: PASS (records=#{paths.length}, requirements=#{known_requirement_ids.length}, tests=#{all_test_owners.length})"
 else
   warn "ADR traceability validation: FAIL (#{failures.length} issue#{failures.length == 1 ? '' : 's'})"
