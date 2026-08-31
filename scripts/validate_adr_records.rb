@@ -281,6 +281,15 @@ ADR_0008_SECURITY_DECISION_SECTION_SHA256 = {
     "cf38c3d40685a4df6e85535471b865dff4b85cbac0f3778e34609efd6f7c62b7"
 }.freeze
 
+# Bind the complete raw Decision body, including every level-three heading and
+# every byte between them. This parser-independent boundary rejects Markdown or
+# HTML syntax that could reparent, demote, fence, or wrap normative content even
+# when the structural parser does not recognize that syntax.
+ADR_0008_DECISION_HEADING = "Decision".freeze
+ADR_0008_DECISION_NEXT_HEADING = "Consequences".freeze
+ADR_0008_DECISION_BODY_SHA256 =
+  "c1f1d448ebc02dca1bf3004b5ff45d9da0c5a99295ebdb3253937c078b37cf5e".freeze
+
 EXPECTED_P1_006_ADR_CANDIDATES = %w[
   ADR-CAND-002
   ADR-CAND-003
@@ -609,10 +618,63 @@ def markdown_heading_structure(source)
   }
 end
 
-def adr_0008_security_decision_site_failures(adr_source)
+def adr_0008_raw_decision_body_failures(adr_source)
   failures = []
+  binary_source = adr_source.b
+  decision_pattern = /^## #{Regexp.escape(ADR_0008_DECISION_HEADING)}\n/n
+  boundary_pattern = /^## #{Regexp.escape(ADR_0008_DECISION_NEXT_HEADING)}\n/n
+
+  decision_matches = []
+  scan_offset = 0
+  while (match = binary_source.match(decision_pattern, scan_offset))
+    decision_matches << match
+    scan_offset = match.end(0)
+  end
+  if decision_matches.length != 1
+    failures << "ADR-0008 raw level-two #{ADR_0008_DECISION_HEADING.inspect} heading must occur exactly once"
+    return failures
+  end
+
+  boundary_matches = []
+  scan_offset = 0
+  while (match = binary_source.match(boundary_pattern, scan_offset))
+    boundary_matches << match
+    scan_offset = match.end(0)
+  end
+  if boundary_matches.length != 1
+    failures << "ADR-0008 raw level-two #{ADR_0008_DECISION_NEXT_HEADING.inspect} heading must occur exactly once"
+    return failures
+  end
+
+  decision_match = decision_matches.first
+  boundary_match = boundary_matches.first
+  if boundary_match.begin(0) <= decision_match.end(0)
+    failures << "ADR-0008 raw #{ADR_0008_DECISION_HEADING} body must precede level-two #{ADR_0008_DECISION_NEXT_HEADING.inspect}"
+    return failures
+  end
+
+  first_level_two_after_decision = binary_source.match(/^## ([^#\n][^\n]*)\n/n, decision_match.end(0))
+  unless first_level_two_after_decision&.begin(0) == boundary_match.begin(0)
+    found_heading = first_level_two_after_decision&.[](1)&.dup&.force_encoding(Encoding::UTF_8)
+    failures << "ADR-0008 raw #{ADR_0008_DECISION_HEADING} body must terminate at level-two #{ADR_0008_DECISION_NEXT_HEADING.inspect}, found #{found_heading.inspect}"
+  end
+
+  decision_body = binary_source.byteslice(
+    decision_match.end(0),
+    boundary_match.begin(0) - decision_match.end(0)
+  )
+  actual_sha256 = Digest::SHA256.hexdigest(decision_body)
+  unless actual_sha256 == ADR_0008_DECISION_BODY_SHA256
+    failures << "ADR-0008 raw #{ADR_0008_DECISION_HEADING} body must match closed digest #{ADR_0008_DECISION_BODY_SHA256}, found #{actual_sha256}"
+  end
+
+  failures
+end
+
+def adr_0008_security_decision_site_failures(adr_source)
+  failures = adr_0008_raw_decision_body_failures(adr_source)
   structure = markdown_heading_structure(adr_source)
-  decision_heading = "Decision"
+  decision_heading = ADR_0008_DECISION_HEADING
   decision_count = structure.fetch(:level_two_counts)[decision_heading]
   if decision_count != 1
     failures << "ADR-0008 must contain exactly one level-two #{decision_heading.inspect} heading"
@@ -1347,6 +1409,75 @@ if adr_0008_source
     classification_bypass_source,
     "must be directly under level-two \"Decision\""
   )
+
+  fenced_decision_body_adr = adr_0008_source
+                             .sub("## Decision\n\n", "## Decision\n\n```markdown\n")
+                             .sub("\n## Consequences\n", "\n```\n\n## Consequences\n")
+  register_adr_0008_security_mutation.call(
+    :decision_structure,
+    "Decision body fenced as Markdown",
+    fenced_decision_body_adr,
+    deep_copy_asyncapi.call,
+    classification_bypass_source,
+    "raw Decision body must match closed digest"
+  )
+
+  indented_heading_demotion_adr = adr_0008_source.sub(
+    "## Decision\n\n",
+    "## Decision\n\n  ## Non-normative examples\n\n"
+  )
+  register_adr_0008_security_mutation.call(
+    :decision_structure,
+    "indented level-two demotion",
+    indented_heading_demotion_adr,
+    deep_copy_asyncapi.call,
+    classification_bypass_source,
+    "raw Decision body must match closed digest"
+  )
+
+  setext_heading_demotion_adr = adr_0008_source.sub(
+    "## Decision\n\n",
+    "## Decision\n\nNon-normative examples\n=====================\n\n"
+  )
+  register_adr_0008_security_mutation.call(
+    :decision_structure,
+    "Setext level-two demotion",
+    setext_heading_demotion_adr,
+    deep_copy_asyncapi.call,
+    classification_bypass_source,
+    "raw Decision body must match closed digest"
+  )
+
+  html_heading_demotion_adr = adr_0008_source.sub(
+    "## Decision\n\n",
+    "## Decision\n\n<h2>Non-normative examples</h2>\n\n"
+  )
+  register_adr_0008_security_mutation.call(
+    :decision_structure,
+    "raw HTML level-two demotion",
+    html_heading_demotion_adr,
+    deep_copy_asyncapi.call,
+    classification_bypass_source,
+    "raw Decision body must match closed digest"
+  )
+
+  html_wrapped_decision_body_adr = adr_0008_source
+                                   .sub(
+                                     "## Decision\n\n",
+                                     "## Decision\n\n<!-- non-normative wrapper begins -->\n<section data-status=\"non-normative\">\n"
+                                   )
+                                   .sub(
+                                     "\n## Consequences\n",
+                                     "\n</section>\n<!-- non-normative wrapper ends -->\n\n## Consequences\n"
+                                   )
+  register_adr_0008_security_mutation.call(
+    :decision_structure,
+    "raw HTML comment and wrapper",
+    html_wrapped_decision_body_adr,
+    deep_copy_asyncapi.call,
+    classification_bypass_source,
+    "raw Decision body must match closed digest"
+  )
 end
 
 adr_0008_security_mutation_groups = adr_0008_security_mutations.each_with_object(Hash.new(0)) do |mutation, counts|
@@ -1355,7 +1486,7 @@ end
 expected_adr_0008_security_mutation_groups = ADR_0008_SECURITY_DECISION_SITES.keys.to_h { |group| [group, 3] }
 expected_adr_0008_security_mutation_groups[:terminal_delivery] = 5
 expected_adr_0008_security_mutation_groups[:stable_source] = 4
-expected_adr_0008_security_mutation_groups[:decision_structure] = 1
+expected_adr_0008_security_mutation_groups[:decision_structure] = 6
 unless adr_0008_security_mutation_groups == expected_adr_0008_security_mutation_groups
   failures << "ADR-0008 security mutation inventory mismatch: expected #{expected_adr_0008_security_mutation_groups.inspect}, found #{adr_0008_security_mutation_groups.inspect}"
 end
