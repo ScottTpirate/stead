@@ -200,10 +200,41 @@ func externalMappingBuildInput(t testing.TB) policyrelease.BuildInput {
 		Path: "payload/" + snapshotPath, MediaType: "application/json", Content: snapshot,
 	})
 	input.EvidenceFiles = append(input.EvidenceFiles, policyrelease.File{
-		Path: "evidence/" + evidencePath, MediaType: "application/json", Content: evidence,
+		Path: "evidence/" + evidencePath, MediaType: "application/vnd.stead.policy-test-result.v1+json", Content: evidence,
 	})
 	rebindPolicyContentIndex(t, &input)
 	return input
+}
+
+func removeEvidenceFile(t testing.TB, input *policyrelease.BuildInput, path string) {
+	t.Helper()
+	for index := range input.EvidenceFiles {
+		if input.EvidenceFiles[index].Path == path {
+			input.EvidenceFiles = append(input.EvidenceFiles[:index], input.EvidenceFiles[index+1:]...)
+			return
+		}
+	}
+	t.Fatalf("evidence report %s missing", path)
+}
+
+func replaceExternalMappingEvidence(t testing.TB, input *policyrelease.BuildInput, content []byte) {
+	t.Helper()
+	const path = "evidence/tests/contract/fixtures/security-label-profiles/regulated-example-rule-evidence.json"
+	for index := range input.EvidenceFiles {
+		if input.EvidenceFiles[index].Path != path {
+			continue
+		}
+		input.EvidenceFiles[index].Content = append([]byte(nil), content...)
+		digest := policyrelease.SHA256Digest(content)
+		mutateSecurityProfile(t, input, func(document map[string]any) {
+			mapping := document["semantics"].(map[string]any)["registry_mappings"].([]any)[0].(map[string]any)
+			coverage := mapping["mapping_provenance"].(map[string]any)["tested_coverage"].([]any)[0].(map[string]any)
+			coverage["evidence_digest"] = digest
+		})
+		rebindPolicyContentIndex(t, input)
+		return
+	}
+	t.Fatalf("evidence report %s missing", path)
 }
 
 func TestExternalRegimeMappingBindsSnapshotAndMappingEvidence(t *testing.T) {
@@ -256,10 +287,14 @@ func TestExternalRegimeMappingBindsSnapshotAndMappingEvidence(t *testing.T) {
 			input.PayloadFiles[len(input.PayloadFiles)-1].Content = []byte(`{"changed":true}`)
 		}, "bound_digest_mismatch"},
 		{"missing mapping evidence", func(input *policyrelease.BuildInput) {
-			input.EvidenceFiles = input.EvidenceFiles[:len(input.EvidenceFiles)-1]
+			removeEvidenceFile(t, input, "evidence/tests/contract/fixtures/security-label-profiles/regulated-example-rule-evidence.json")
 		}, "missing_security_profile_mapping_evidence"},
 		{"mapping evidence digest mismatch", func(input *policyrelease.BuildInput) {
-			input.EvidenceFiles[len(input.EvidenceFiles)-1].Content = []byte(`{"changed":true}`)
+			for index := range input.EvidenceFiles {
+				if input.EvidenceFiles[index].Path == "evidence/tests/contract/fixtures/security-label-profiles/regulated-example-rule-evidence.json" {
+					input.EvidenceFiles[index].Content = []byte(`{"changed":true}`)
+				}
+			}
 		}, "security_profile_artifact_digest_mismatch"},
 		{"stale mapping source revision", func(input *policyrelease.BuildInput) {
 			mutateSecurityProfile(t, input, func(document map[string]any) {
@@ -275,6 +310,121 @@ func TestExternalRegimeMappingBindsSnapshotAndMappingEvidence(t *testing.T) {
 			_, err := observedPolicyRelease.PrepareUnsigned(candidate)
 			if policyrelease.ErrorCode(err) != testCase.code {
 				t.Fatalf("error = %v (%s), want %s", err, policyrelease.ErrorCode(err), testCase.code)
+			}
+		})
+	}
+}
+
+func TestExternalMappingEvidenceUsesClosedTypedAdmission(t *testing.T) {
+	t.Run("registered mapping evidence must be profile bound", func(t *testing.T) {
+		input := fixtureBuildInput(t, "commercial", 1, false)
+		input.EvidenceFiles = append(input.EvidenceFiles, policyrelease.File{
+			Path:      "evidence/tests/contract/fixtures/security-label-profiles/regulated-example-rule-evidence.json",
+			MediaType: "application/vnd.stead.policy-test-result.v1+json",
+			Content:   repositoryBytes(t, "tests/contract/fixtures/security-label-profiles/regulated-example-rule-evidence.json"),
+		})
+		if _, err := observedPolicyRelease.PrepareUnsigned(input); policyrelease.ErrorCode(err) != "unbound_security_profile_mapping_evidence" {
+			t.Fatalf("error = %v (%s)", err, policyrelease.ErrorCode(err))
+		}
+	})
+
+	for name, path := range map[string]string{
+		"outside admitted roots": "mapping-result.json",
+		"noncanonical path":      "tests/../private-mapping.json",
+	} {
+		t.Run(name, func(t *testing.T) {
+			input := externalMappingBuildInput(t)
+			mutateSecurityProfile(t, &input, func(document map[string]any) {
+				mapping := document["semantics"].(map[string]any)["registry_mappings"].([]any)[0].(map[string]any)
+				coverage := mapping["mapping_provenance"].(map[string]any)["tested_coverage"].([]any)[0].(map[string]any)
+				coverage["evidence_path"] = path
+			})
+			if _, err := observedPolicyRelease.PrepareUnsigned(input); policyrelease.ErrorCode(err) != "security_profile_artifact_path_mismatch" {
+				t.Fatalf("error = %v (%s)", err, policyrelease.ErrorCode(err))
+			}
+		})
+	}
+
+	t.Run("arbitrary private JSON path", func(t *testing.T) {
+		input := externalMappingBuildInput(t)
+		content := []byte(`{"private_key":"LS0tLS1CRUdJTiBQUklWQVRFIEtFWS0tLS0t","credential":"secret"}`)
+		mutateSecurityProfile(t, &input, func(document map[string]any) {
+			mapping := document["semantics"].(map[string]any)["registry_mappings"].([]any)[0].(map[string]any)
+			coverage := mapping["mapping_provenance"].(map[string]any)["tested_coverage"].([]any)[0].(map[string]any)
+			coverage["evidence_path"] = "tests/private-mapping.json"
+			coverage["evidence_digest"] = policyrelease.SHA256Digest(content)
+		})
+		input.EvidenceFiles = append(input.EvidenceFiles, policyrelease.File{
+			Path: "evidence/tests/private-mapping.json", MediaType: "application/json", Content: content,
+		})
+		if _, err := observedPolicyRelease.PrepareUnsigned(input); policyrelease.ErrorCode(err) != "unknown_evidence_path" {
+			t.Fatalf("error = %v (%s)", err, policyrelease.ErrorCode(err))
+		}
+	})
+
+	t.Run("wrong media on typed mapping path", func(t *testing.T) {
+		input := externalMappingBuildInput(t)
+		for index := range input.EvidenceFiles {
+			if input.EvidenceFiles[index].Path == "evidence/tests/contract/fixtures/security-label-profiles/regulated-example-rule-evidence.json" {
+				input.EvidenceFiles[index].MediaType = "application/json"
+			}
+		}
+		if _, err := observedPolicyRelease.PrepareUnsigned(input); policyrelease.ErrorCode(err) != "evidence_media_type_mismatch" {
+			t.Fatalf("error = %v (%s)", err, policyrelease.ErrorCode(err))
+		}
+	})
+
+	t.Run("test identity mismatch", func(t *testing.T) {
+		input := externalMappingBuildInput(t)
+		mutateSecurityProfile(t, &input, func(document map[string]any) {
+			mapping := document["semantics"].(map[string]any)["registry_mappings"].([]any)[0].(map[string]any)
+			coverage := mapping["mapping_provenance"].(map[string]any)["tested_coverage"].([]any)[0].(map[string]any)
+			coverage["test_id"] = "T-UNRELATED"
+		})
+		rebindPolicyContentIndex(t, &input)
+		if _, err := observedPolicyRelease.PrepareUnsigned(input); policyrelease.ErrorCode(err) != "security_profile_mapping_evidence_binding_mismatch" {
+			t.Fatalf("error = %v (%s)", err, policyrelease.ErrorCode(err))
+		}
+	})
+
+	for name, assertion := range map[string]string{
+		"private material in typed assertion": "LS0tLS1CRUdJTiBQUklWQVRFIEtFWS0tLS0t",
+		"credential in typed assertion":       "credential-token-value",
+	} {
+		t.Run(name, func(t *testing.T) {
+			input := externalMappingBuildInput(t)
+			content, err := json.Marshal(map[string]any{
+				"test_id": "T-ADR-0002-PROFILE-NEUTRALITY", "assertions": []string{assertion},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			replaceExternalMappingEvidence(t, &input, content)
+			if _, err := observedPolicyRelease.PrepareUnsigned(input); policyrelease.ErrorCode(err) != "policy_test_evidence_schema_mismatch" {
+				t.Fatalf("error = %v (%s)", err, policyrelease.ErrorCode(err))
+			}
+		})
+	}
+
+	for _, field := range []string{"private_key", "credential", "activation_set_id", "archive_digest", "signing_workflow_identity"} {
+		t.Run(field, func(t *testing.T) {
+			input := externalMappingBuildInput(t)
+			var document map[string]any
+			for _, file := range input.EvidenceFiles {
+				if file.Path == "evidence/tests/contract/fixtures/security-label-profiles/regulated-example-rule-evidence.json" {
+					if err := json.Unmarshal(file.Content, &document); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			document[field] = "impossible-pre-signing-material"
+			content, err := json.Marshal(document)
+			if err != nil {
+				t.Fatal(err)
+			}
+			replaceExternalMappingEvidence(t, &input, content)
+			if _, err := observedPolicyRelease.PrepareUnsigned(input); policyrelease.ErrorCode(err) != "signed_payload_contract_error" {
+				t.Fatalf("error = %v (%s)", err, policyrelease.ErrorCode(err))
 			}
 		})
 	}

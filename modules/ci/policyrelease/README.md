@@ -86,14 +86,18 @@ vulnerability paths, their exact media types, and their strict JSON field
 schemas. SLSA provenance additionally binds the exact manifest source
 revision, dependency-lock digest, and sole `stead-policy-content-index`
 subject digest equal to `policy_bundle_id`; well-formed but unrelated evidence
-rejects. The only additional evidence paths are mapping-coverage artifacts
-named and SHA-256 bound by an admitted security profile. Authoritative
-snapshots are likewise required at `payload/<declared payload_path>`. An
-`external_regime_mapping` profile admits only authoritative-snapshot source
-objects, requires at least one mapping, and binds every snapshot and mapping
-evidence file into the signed manifest. Missing, conflicting, unbound, or
-digest-mismatched artifacts reject. Free-form or protected evidence belongs in
-a separate authorized evidence system and cannot enter this archive writer.
+rejects. Security-profile mapping coverage must reuse a path explicitly marked
+for that purpose in this same typed evidence registry; v1 registers the exact
+synthetic mapping-test fixture with the policy-test-result media type, strict
+`test_id`/`assertions` schema, profile-bound test ID, and SHA-256 digest.
+Authoritative snapshots are likewise required at
+`payload/<declared payload_path>`. An `external_regime_mapping` profile admits
+only authoritative-snapshot source objects, requires at least one mapping, and
+binds every snapshot and mapping evidence file into the signed manifest.
+Unknown paths, wrong media, schema extensions (including post-signing identity
+fields), private or credential fields, missing files, and digest mismatches all
+reject. Free-form or protected evidence belongs in a separate authorized
+evidence system and cannot enter this archive writer.
 
 The digest-listed conformance report must claim 100% decision-row coverage, at
 least 90% critical mutation score, and pass outcomes for deterministic replay,
@@ -111,8 +115,10 @@ bounded readers also accept canonically padded URL-safe Base64, but reject mixed
 alphabets, absent/excess padding, duplicate JSON keys, case-folded known-member
 aliases, duplicate key IDs, non-minimal DER, high-S, and cross-type
 substitution. Genuine bounded unknown DSSE envelope extensions remain
-ignorable. Activation-manifest, trust-set, and release-attestation payloads all
-use exact-case, exact-member admission.
+ignorable. A streaming pass enforces the signature and unknown-extension
+collection ceilings before reflective shape decoding can allocate maps or
+slices. Activation-manifest, trust-set, and release-attestation payloads all use
+exact-case, exact-member admission.
 
 | Limit | V1 maximum |
 |---|---:|
@@ -120,6 +126,7 @@ use exact-case, exact-member admission.
 | Decoded payload | 2 MiB |
 | JSON nesting | 32 |
 | Signatures | 16 |
+| Members/items in one unknown extension collection | 256 |
 | Encoded signature | 256 bytes |
 | Decoded signature | 128 bytes |
 | UTF-8 key ID | 80 bytes |

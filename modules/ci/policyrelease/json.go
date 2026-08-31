@@ -162,6 +162,96 @@ func preflightJSONValueCardinality(decoder *json.Decoder, depth, maxDepth, maxEn
 	return nil
 }
 
+// preflightDSSEEnvelopeCardinality rejects attacker-controlled collection
+// growth before validateJSONMembers reflects the envelope into maps and slices.
+// DSSE permits extensions, so unknown values remain accepted within the same
+// depth and byte ceilings, but their arrays and objects are bounded. The
+// signatures member has its tighter protocol-specific ceiling.
+func preflightDSSEEnvelopeCardinality(data []byte) error {
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.UseNumber()
+	if err := preflightDSSEJSONValue(decoder, 0, true, MaxMetadataEntries, "dsse_extension_cardinality_limit"); err != nil {
+		return err
+	}
+	if _, err := decoder.Token(); err != io.EOF {
+		if err == nil {
+			return contractError("json_trailing_value", "json", nil)
+		}
+		return contractError("malformed_json", "json", nil)
+	}
+	return nil
+}
+
+func preflightDSSEJSONValue(decoder *json.Decoder, depth int, envelopeRoot bool, arrayLimit int, arrayLimitCode string) error {
+	token, err := decoder.Token()
+	if err != nil {
+		return contractError("malformed_json", "json", nil)
+	}
+	delim, compound := token.(json.Delim)
+	if !compound {
+		return nil
+	}
+	depth++
+	if depth > MaxJSONDepth {
+		return contractError("json_depth_limit", "json", nil)
+	}
+	switch delim {
+	case '{':
+		count := 0
+		keys := make(map[string]struct{})
+		for decoder.More() {
+			if count >= MaxMetadataEntries {
+				return contractError("dsse_extension_cardinality_limit", "envelope", nil)
+			}
+			count++
+			keyToken, err := decoder.Token()
+			if err != nil {
+				return contractError("malformed_json", "json", nil)
+			}
+			key, ok := keyToken.(string)
+			if !ok {
+				return contractError("malformed_json_object_key", "json", nil)
+			}
+			if _, duplicate := keys[key]; duplicate {
+				return contractError("duplicate_json_key", "json", nil)
+			}
+			keys[key] = struct{}{}
+			limit, code := MaxMetadataEntries, "dsse_extension_cardinality_limit"
+			if envelopeRoot && key == "signatures" {
+				limit, code = MaxEnvelopeSignatures, "signature_count_limit"
+			}
+			if err := preflightDSSEJSONValue(decoder, depth, false, limit, code); err != nil {
+				return err
+			}
+		}
+		closing, err := decoder.Token()
+		if err != nil || closing != json.Delim('}') {
+			return contractError("malformed_json", "json", nil)
+		}
+	case '[':
+		count := 0
+		for decoder.More() {
+			if count >= arrayLimit {
+				return contractError(arrayLimitCode, "envelope", nil)
+			}
+			count++
+			if err := preflightDSSEJSONValue(decoder, depth, false, MaxMetadataEntries, "dsse_extension_cardinality_limit"); err != nil {
+				return err
+			}
+		}
+		closing, err := decoder.Token()
+		if err != nil || closing != json.Delim(']') {
+			return contractError("malformed_json", "json", nil)
+		}
+		if arrayLimitCode == "signature_count_limit" && count == 0 {
+			return contractError("signature_count_limit", "signatures", nil)
+		}
+	default:
+		return contractError("malformed_json", "json", nil)
+	}
+	return nil
+}
+
 func decodeJSONShape(data []byte) (any, error) {
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.UseNumber()

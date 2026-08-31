@@ -120,6 +120,11 @@ type profileCoverageV01 struct {
 	EvidenceDigest string `json:"evidence_digest"`
 }
 
+type profileMappingEvidenceRequirement struct {
+	Digest string
+	TestID string
+}
+
 type profileMappingProvenanceV01 struct {
 	MappingVersion string               `json:"mapping_version"`
 	SourceRevision string               `json:"source_revision"`
@@ -395,17 +400,47 @@ type vulnerabilityEvidenceV01 struct {
 	UnknownCriticalOrHigh int    `json:"unknown_critical_or_high"`
 }
 
+type policyTestEvidenceV1 struct {
+	TestID     string   `json:"test_id"`
+	Assertions []string `json:"assertions"`
+}
+
 type evidenceSpec struct {
-	mediaType string
-	validate  func([]byte) (ConformanceClaims, error)
+	mediaType      string
+	required       bool
+	profileMapping bool
+	validate       func([]byte) (ConformanceClaims, error)
 }
 
 var evidenceSpecs = map[string]evidenceSpec{
-	"evidence/sbom.spdx.json":            {"application/spdx+json", validateSPDXEvidence},
-	"evidence/provenance.json":           {"application/vnd.in-toto+json", validateProvenanceEvidence},
-	conformanceEvidencePath:              {"application/vnd.stead.policy-conformance.v1+json", validateConformanceEvidence},
-	"evidence/license-result.json":       {"application/vnd.stead.policy-license-result.v1+json", validateLicenseEvidence},
-	"evidence/vulnerability-result.json": {"application/vnd.stead.policy-vulnerability.v1+json", validateVulnerabilityEvidence},
+	"evidence/sbom.spdx.json":            {mediaType: "application/spdx+json", required: true, validate: validateSPDXEvidence},
+	"evidence/provenance.json":           {mediaType: "application/vnd.in-toto+json", required: true, validate: validateProvenanceEvidence},
+	conformanceEvidencePath:              {mediaType: "application/vnd.stead.policy-conformance.v1+json", required: true, validate: validateConformanceEvidence},
+	"evidence/license-result.json":       {mediaType: "application/vnd.stead.policy-license-result.v1+json", required: true, validate: validateLicenseEvidence},
+	"evidence/vulnerability-result.json": {mediaType: "application/vnd.stead.policy-vulnerability.v1+json", required: true, validate: validateVulnerabilityEvidence},
+	"evidence/tests/contract/fixtures/security-label-profiles/regulated-example-rule-evidence.json": {
+		mediaType: "application/vnd.stead.policy-test-result.v1+json", profileMapping: true, validate: validatePolicyTestEvidence,
+	},
+}
+
+func profileMappingEvidenceArchivePath(relativePath string) (string, error) {
+	if !profilePayloadPathPattern.MatchString(relativePath) {
+		return "", contractError("security_profile_artifact_path_mismatch", "profile.semantics.registry_mappings", nil)
+	}
+	archivePath := "evidence/" + relativePath
+	if err := validatePath(archivePath, false); err != nil {
+		return "", contractError("security_profile_artifact_path_mismatch", "profile.semantics.registry_mappings", nil)
+	}
+	spec, registered := evidenceSpecs[archivePath]
+	if !registered || !spec.profileMapping {
+		return "", contractError("unknown_evidence_path", "profile.semantics.registry_mappings", nil)
+	}
+	return archivePath, nil
+}
+
+func isProfileMappingEvidencePath(path string) bool {
+	spec, registered := evidenceSpecs[path]
+	return registered && spec.profileMapping
 }
 
 func nonemptyText(value string) bool {
@@ -511,8 +546,11 @@ func validateProfileRuleSemantics(document securityProfileDocumentV01, field str
 			return contractError("security_profile_registry_mapping_mismatch", field+".registry_mappings", nil)
 		}
 		for _, coverage := range provenance.TestedCoverage {
-			if !profileTestIDPattern.MatchString(coverage.TestID) || !profilePayloadPathPattern.MatchString(coverage.EvidencePath) || validateDigest("profile.mapping.evidence_digest", coverage.EvidenceDigest) != nil {
+			if !profileTestIDPattern.MatchString(coverage.TestID) || validateDigest("profile.mapping.evidence_digest", coverage.EvidenceDigest) != nil {
 				return contractError("security_profile_registry_mapping_mismatch", field+".registry_mappings", nil)
+			}
+			if _, err := profileMappingEvidenceArchivePath(coverage.EvidencePath); err != nil {
+				return err
 			}
 		}
 	}
@@ -914,7 +952,7 @@ func validateSecurityProfileDocument(file File, binding ProfileBinding) error {
 	return nil
 }
 
-func profileArtifactRequirements(file File) (map[string]string, map[string]string, error) {
+func profileArtifactRequirements(file File) (map[string]string, map[string]profileMappingEvidenceRequirement, error) {
 	if err := preflightJSONArrayCardinality(file.Content, MaxJSONDepth, MaxMetadataEntries); err != nil {
 		return nil, nil, err
 	}
@@ -923,7 +961,7 @@ func profileArtifactRequirements(file File) (map[string]string, map[string]strin
 		return nil, nil, err
 	}
 	snapshots := make(map[string]string)
-	evidence := make(map[string]string)
+	evidence := make(map[string]profileMappingEvidenceRequirement)
 	for _, source := range document.AuthoritativeSources {
 		if source.SourceKind != "authoritative_snapshot" {
 			continue
@@ -939,14 +977,15 @@ func profileArtifactRequirements(file File) (map[string]string, map[string]strin
 	}
 	for _, mapping := range document.Semantics.RegistryMappings {
 		for _, coverage := range mapping.MappingProvenance.TestedCoverage {
-			archivePath := "evidence/" + coverage.EvidencePath
-			if err := validatePath(archivePath, false); err != nil {
-				return nil, nil, contractError("security_profile_artifact_path_mismatch", "profile.semantics.registry_mappings", nil)
+			archivePath, err := profileMappingEvidenceArchivePath(coverage.EvidencePath)
+			if err != nil {
+				return nil, nil, err
 			}
-			if prior, exists := evidence[archivePath]; exists && prior != coverage.EvidenceDigest {
+			requirement := profileMappingEvidenceRequirement{Digest: coverage.EvidenceDigest, TestID: coverage.TestID}
+			if prior, exists := evidence[archivePath]; exists && prior != requirement {
 				return nil, nil, contractError("security_profile_artifact_digest_conflict", "profile.semantics.registry_mappings", nil)
 			}
-			evidence[archivePath] = coverage.EvidenceDigest
+			evidence[archivePath] = requirement
 		}
 	}
 	return snapshots, evidence, nil
@@ -1243,6 +1282,28 @@ func validateVulnerabilityEvidence(data []byte) (ConformanceClaims, error) {
 	return ConformanceClaims{}, nil
 }
 
+func validatePolicyTestEvidence(data []byte) (ConformanceClaims, error) {
+	var report policyTestEvidenceV1
+	if err := decodeStrict(data, &report); err != nil {
+		return ConformanceClaims{}, err
+	}
+	if report.TestID != "T-ADR-0002-PROFILE-NEUTRALITY" || len(report.Assertions) != 1 || report.Assertions[0] != "synthetic_category resolves to SYN-CAT-001 through the generic registry-mapping contract" {
+		return ConformanceClaims{}, contractError("policy_test_evidence_schema_mismatch", "evidence.policy_test", nil)
+	}
+	return ConformanceClaims{}, nil
+}
+
+func validateProfileMappingEvidenceBinding(file File, requirement profileMappingEvidenceRequirement) error {
+	var report policyTestEvidenceV1
+	if err := decodeStrict(file.Content, &report); err != nil {
+		return err
+	}
+	if report.TestID != requirement.TestID {
+		return contractError("security_profile_mapping_evidence_binding_mismatch", "profile.semantics.registry_mappings", nil)
+	}
+	return nil
+}
+
 func validateTypedEvidenceFile(file File, provenance provenanceBinding) (ConformanceClaims, error) {
 	spec, ok := evidenceSpecs[file.Path]
 	if !ok {
@@ -1265,7 +1326,10 @@ func validateTypedEvidenceFile(file File, provenance provenanceBinding) (Conform
 
 func sortedEvidencePaths() []string {
 	paths := make([]string, 0, len(evidenceSpecs))
-	for pathValue := range evidenceSpecs {
+	for pathValue, spec := range evidenceSpecs {
+		if !spec.required {
+			continue
+		}
 		paths = append(paths, pathValue)
 	}
 	sort.Strings(paths)

@@ -6,6 +6,7 @@ import (
 	"encoding/asn1"
 	"encoding/base64"
 	"encoding/json"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -40,6 +41,43 @@ func nestedUnknownEnvelope(t *testing.T, levels int) []byte {
 	prefix = append(prefix, bytes.Repeat([]byte{']'}, levels)...)
 	prefix = append(prefix, '}')
 	return prefix
+}
+
+func repeatedEmptyObjects(count int) []byte {
+	if count == 0 {
+		return nil
+	}
+	items := bytes.Repeat([]byte(`{},`), count)
+	return items[:len(items)-1]
+}
+
+func envelopeWithUnknownObjectArray(t *testing.T, count int) []byte {
+	t.Helper()
+	base, _ := externallySign(t, policyrelease.ActivationManifestPayloadType, []byte("x"), 1, false)
+	result := append(append([]byte(nil), base[:len(base)-1]...), []byte(`,"future_objects":[`)...)
+	result = append(result, repeatedEmptyObjects(count)...)
+	return append(result, ']', '}')
+}
+
+func envelopeWithEmptySignatures(count int) []byte {
+	result := []byte(`{"payloadType":"application/vnd.stead.policy-activation-manifest.v1+json","payload":"eA==","signatures":[`)
+	result = append(result, repeatedEmptyObjects(count)...)
+	return append(result, ']', '}')
+}
+
+func envelopeWithUnknownObject(t *testing.T, count int) []byte {
+	t.Helper()
+	base, _ := externallySign(t, policyrelease.ActivationManifestPayloadType, []byte("x"), 1, false)
+	result := append(append([]byte(nil), base[:len(base)-1]...), []byte(`,"future_object":{`)...)
+	for index := 0; index < count; index++ {
+		if index > 0 {
+			result = append(result, ',')
+		}
+		result = append(result, []byte(`"member_`)...)
+		result = strconv.AppendInt(result, int64(index), 10)
+		result = append(result, []byte(`":0`)...)
+	}
+	return append(result, '}', '}')
 }
 
 // T-ADR-0006-DSSE parser/resource ceilings and canonical Base64.
@@ -123,6 +161,51 @@ func TestDSSEDepthSignatureAndKeyBoundaries(t *testing.T) {
 	encoded, _ = json.Marshal(raw)
 	if _, err := policyrelease.ParseDSSEEnvelope(encoded); policyrelease.ErrorCode(err) != "base64_decoded_limit" {
 		t.Fatalf("one-over decoded signature error = %v (%s)", err, policyrelease.ErrorCode(err))
+	}
+}
+
+func TestDSSECollectionsAreStreamingPreflighted(t *testing.T) {
+	if _, err := policyrelease.ParseDSSEEnvelope(envelopeWithEmptySignatures(0)); policyrelease.ErrorCode(err) != "signature_count_limit" {
+		t.Fatalf("empty signature array error = %v (%s)", err, policyrelease.ErrorCode(err))
+	}
+	if _, err := policyrelease.ParseDSSEEnvelope(envelopeWithEmptySignatures(1 << 16)); policyrelease.ErrorCode(err) != "signature_count_limit" {
+		t.Fatalf("huge signature array error = %v (%s)", err, policyrelease.ErrorCode(err))
+	}
+
+	if _, err := policyrelease.ParseDSSEEnvelope(envelopeWithUnknownObjectArray(t, policyrelease.MaxMetadataEntries)); err != nil {
+		t.Fatalf("bounded unknown object array rejected: %v (%s)", err, policyrelease.ErrorCode(err))
+	}
+	if _, err := policyrelease.ParseDSSEEnvelope(envelopeWithUnknownObjectArray(t, policyrelease.MaxMetadataEntries*32)); policyrelease.ErrorCode(err) != "dsse_extension_cardinality_limit" {
+		t.Fatalf("huge unknown object array error = %v (%s)", err, policyrelease.ErrorCode(err))
+	}
+
+	if _, err := policyrelease.ParseDSSEEnvelope(envelopeWithUnknownObject(t, policyrelease.MaxMetadataEntries)); err != nil {
+		t.Fatalf("bounded unknown object rejected: %v (%s)", err, policyrelease.ErrorCode(err))
+	}
+	if _, err := policyrelease.ParseDSSEEnvelope(envelopeWithUnknownObject(t, policyrelease.MaxMetadataEntries*32)); policyrelease.ErrorCode(err) != "dsse_extension_cardinality_limit" {
+		t.Fatalf("huge unknown object error = %v (%s)", err, policyrelease.ErrorCode(err))
+	}
+}
+
+func TestDSSEStreamingPreflightReturnsStableMalformedCodes(t *testing.T) {
+	base, _ := externallySign(t, policyrelease.ActivationManifestPayloadType, []byte("x"), 1, false)
+	testCases := []struct {
+		name string
+		raw  []byte
+		code string
+	}{
+		{"trailing value", append(append([]byte(nil), base...), []byte(`{}`)...), "json_trailing_value"},
+		{"trailing malformed token", append(append([]byte(nil), base...), '!'), "malformed_json"},
+		{"truncated member value", []byte(`{"payloadType":`), "malformed_json"},
+		{"truncated object", []byte(`{"future":1`), "malformed_json"},
+		{"mismatched array close", []byte(`{"future":[1}`), "malformed_json"},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if _, err := policyrelease.ParseDSSEEnvelope(testCase.raw); policyrelease.ErrorCode(err) != testCase.code {
+				t.Fatalf("error = %v (%s), want %s", err, policyrelease.ErrorCode(err), testCase.code)
+			}
+		})
 	}
 }
 

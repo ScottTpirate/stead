@@ -118,7 +118,7 @@ func ParseDSSEEnvelope(envelope []byte) (ParsedEnvelope, error) {
 	if !utf8.Valid(envelope) {
 		return ParsedEnvelope{}, contractError("invalid_envelope_utf8", "envelope", nil)
 	}
-	if err := validateJSON(envelope, MaxJSONDepth, false); err != nil {
+	if err := preflightDSSEEnvelopeCardinality(envelope); err != nil {
 		return ParsedEnvelope{}, err
 	}
 	var raw dsseEnvelope
