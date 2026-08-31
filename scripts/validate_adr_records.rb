@@ -290,6 +290,25 @@ ADR_0008_DECISION_NEXT_HEADING = "Consequences".freeze
 ADR_0008_DECISION_BODY_SHA256 =
   "c1f1d448ebc02dca1bf3004b5ff45d9da0c5a99295ebdb3253937c078b37cf5e".freeze
 
+# The immutable decision revision covers the complete substantive ADR, not only
+# the Decision body. A later acceptance-only descendant may mechanically change
+# only the exact status/resolution pair and the trailing review records; those
+# forms normalize to fixed sentinels before the closed digest is checked.
+ADR_0008_PROPOSED_STATUS_LINE = "- **Status:** Proposed\n".freeze
+ADR_0008_ACCEPTED_STATUS_PATTERN =
+  /\A- \*\*Status:\*\* Accepted at immutable decision revision `[0-9a-f]{40}` on [0-9]{4}-[0-9]{2}-[0-9]{2}\n\z/
+ADR_0008_PROPOSED_RESOLUTION_LINE =
+  "- **Resolves on acceptance:** `ADR-CAND-006`\n".freeze
+ADR_0008_ACCEPTED_RESOLUTION_LINE = "- **Resolves:** `ADR-CAND-006`\n".freeze
+ADR_0008_REVIEWS_HEADING = "## Reviews and approvals\n".freeze
+ADR_0008_NORMALIZED_STATUS_LINE =
+  "- **Status:** <normalized-proposed-or-accepted-immutable-revision>\n".freeze
+ADR_0008_NORMALIZED_RESOLUTION_LINE = "- **Resolution:** `ADR-CAND-006`\n".freeze
+ADR_0008_NORMALIZED_REVIEWS_SECTION =
+  "## Reviews and approvals\n<normalized-review-and-approval-records>\n".freeze
+ADR_0008_SUBSTANTIVE_SOURCE_SHA256 =
+  "05c1d30bdf1a598ef61cc688579384db38d203083a0830db665af0271bcf4d5b".freeze
+
 EXPECTED_P1_006_ADR_CANDIDATES = %w[
   ADR-CAND-002
   ADR-CAND-003
@@ -618,6 +637,71 @@ def markdown_heading_structure(source)
   }
 end
 
+def adr_0008_substantive_source_failures(adr_source)
+  failures = []
+  status_lines = adr_source.lines.select { |line| line.start_with?("- **Status:**") }
+  if status_lines.length != 1
+    failures << "ADR-0008 status must occur exactly once in an allowed immutable-revision form"
+    return failures
+  end
+
+  status_line = status_lines.first
+  state = if status_line == ADR_0008_PROPOSED_STATUS_LINE
+            :proposed
+          elsif status_line.match?(ADR_0008_ACCEPTED_STATUS_PATTERN)
+            :accepted
+          end
+  unless state
+    failures << "ADR-0008 status must use the exact Proposed or Accepted immutable-revision form"
+    return failures
+  end
+
+  resolution_lines = adr_source.lines.select do |line|
+    line.start_with?("- **Resolves on acceptance:**", "- **Resolves:**")
+  end
+  expected_resolution = if state == :accepted
+                          ADR_0008_ACCEPTED_RESOLUTION_LINE
+                        else
+                          ADR_0008_PROPOSED_RESOLUTION_LINE
+                        end
+  unless resolution_lines == [expected_resolution]
+    failures << "ADR-0008 #{state} status must use its exact paired resolution line"
+    return failures
+  end
+
+  review_matches = []
+  scan_offset = 0
+  review_pattern = /^#{Regexp.escape(ADR_0008_REVIEWS_HEADING)}/
+  while (match = adr_source.match(review_pattern, scan_offset))
+    review_matches << match
+    scan_offset = match.end(0)
+  end
+  if review_matches.length != 1
+    failures << "ADR-0008 raw Reviews and approvals heading must occur exactly once"
+    return failures
+  end
+
+  review_match = review_matches.first
+  review_body = adr_source[review_match.end(0)..]
+  if review_body.match?(/^ {0,3}[#]{1,2}[ \t]+|^<h[12](?:[ \t>])/i) ||
+     review_body.each_line.each_cons(2).any? { |_line, underline| underline.match?(/^ {0,3}(?:=+|-+)[ \t]*\n?$/) }
+    failures << "ADR-0008 Reviews and approvals must remain the trailing level-two section"
+    return failures
+  end
+
+  normalized_source = adr_source.sub(status_line, ADR_0008_NORMALIZED_STATUS_LINE)
+                                .sub(expected_resolution, ADR_0008_NORMALIZED_RESOLUTION_LINE)
+  normalized_review_offset = normalized_source.match(review_pattern).begin(0)
+  normalized_source = normalized_source[0, normalized_review_offset] +
+                      ADR_0008_NORMALIZED_REVIEWS_SECTION
+  actual_sha256 = Digest::SHA256.hexdigest(normalized_source)
+  unless actual_sha256 == ADR_0008_SUBSTANTIVE_SOURCE_SHA256
+    failures << "ADR-0008 substantive ADR source must match closed digest #{ADR_0008_SUBSTANTIVE_SOURCE_SHA256}, found #{actual_sha256}"
+  end
+
+  failures
+end
+
 def adr_0008_raw_decision_body_failures(adr_source)
   failures = []
   binary_source = adr_source.b
@@ -672,7 +756,8 @@ def adr_0008_raw_decision_body_failures(adr_source)
 end
 
 def adr_0008_security_decision_site_failures(adr_source)
-  failures = adr_0008_raw_decision_body_failures(adr_source)
+  failures = adr_0008_substantive_source_failures(adr_source)
+  failures.concat(adr_0008_raw_decision_body_failures(adr_source))
   structure = markdown_heading_structure(adr_source)
   decision_heading = ADR_0008_DECISION_HEADING
   decision_count = structure.fetch(:level_two_counts)[decision_heading]
@@ -1478,6 +1563,88 @@ if adr_0008_source
     classification_bypass_source,
     "raw Decision body must match closed digest"
   )
+
+  outside_comment_envelope_adr = adr_0008_source
+                                 .sub(
+                                   "## Decision\n",
+                                   "<!-- Decision content is non-normative\n## Decision\n"
+                                 )
+                                 .sub("\n## Verification\n", "\n-->\n\n## Verification\n")
+  register_adr_0008_security_mutation.call(
+    :substantive_source,
+    "HTML comment envelope outside Decision",
+    outside_comment_envelope_adr,
+    deep_copy_asyncapi.call,
+    classification_bypass_source,
+    "substantive ADR source must match closed digest"
+  )
+
+  metadata_comment_envelope_adr = adr_0008_source
+                                  .sub(
+                                    "- **Date:** 2026-08-30\n",
+                                    "<!-- Decision record is non-normative\n- **Date:** 2026-08-30\n"
+                                  )
+                                  .sub("\n## Verification\n", "\n-->\n\n## Verification\n")
+  register_adr_0008_security_mutation.call(
+    :substantive_source,
+    "HTML comment envelope opened in metadata",
+    metadata_comment_envelope_adr,
+    deep_copy_asyncapi.call,
+    classification_bypass_source,
+    "substantive ADR source must match closed digest"
+  )
+
+  outside_html_block_adr = adr_0008_source
+                           .sub(
+                             "## Decision\n",
+                             "<div data-status=\"non-normative\">\n## Decision\n"
+                           )
+                           .sub("\n## Verification\n", "\n</div>\n\n## Verification\n")
+  register_adr_0008_security_mutation.call(
+    :substantive_source,
+    "raw HTML block envelope outside Decision",
+    outside_html_block_adr,
+    deep_copy_asyncapi.call,
+    classification_bypass_source,
+    "substantive ADR source must match closed digest"
+  )
+
+  outside_fence_envelope_adr = adr_0008_source
+                               .sub("## Decision\n", "```markdown\n## Decision\n")
+                               .sub("\n## Verification\n", "\n```\n\n## Verification\n")
+  register_adr_0008_security_mutation.call(
+    :substantive_source,
+    "fenced Markdown envelope outside Decision",
+    outside_fence_envelope_adr,
+    deep_copy_asyncapi.call,
+    classification_bypass_source,
+    "substantive ADR source must match closed digest"
+  )
+end
+
+
+if adr_0008_source
+  accepted_form_fixture = adr_0008_source
+                          .sub(
+                            ADR_0008_PROPOSED_STATUS_LINE,
+                            "- **Status:** Accepted at immutable decision revision `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa` on 2026-08-30\n"
+                          )
+                          .sub(
+                            ADR_0008_PROPOSED_RESOLUTION_LINE,
+                            ADR_0008_ACCEPTED_RESOLUTION_LINE
+                          )
+  accepted_review_offset = accepted_form_fixture.match(/^#{Regexp.escape(ADR_0008_REVIEWS_HEADING)}/).begin(0)
+  accepted_form_fixture = accepted_form_fixture[0, accepted_review_offset] + <<~REVIEWS
+    ## Reviews and approvals
+
+    | Role | Identity | Disposition |
+    |---|---|---|
+    | Independent QA | `/root/example-qa` | ACCEPT |
+  REVIEWS
+  acceptance_form_failures = adr_0008_substantive_source_failures(accepted_form_fixture)
+  unless acceptance_form_failures.empty?
+    failures << "ADR-0008 acceptance-only normalization fixture failed: #{acceptance_form_failures.join('; ')}"
+  end
 end
 
 adr_0008_security_mutation_groups = adr_0008_security_mutations.each_with_object(Hash.new(0)) do |mutation, counts|
@@ -1487,6 +1654,7 @@ expected_adr_0008_security_mutation_groups = ADR_0008_SECURITY_DECISION_SITES.ke
 expected_adr_0008_security_mutation_groups[:terminal_delivery] = 5
 expected_adr_0008_security_mutation_groups[:stable_source] = 4
 expected_adr_0008_security_mutation_groups[:decision_structure] = 6
+expected_adr_0008_security_mutation_groups[:substantive_source] = 4
 unless adr_0008_security_mutation_groups == expected_adr_0008_security_mutation_groups
   failures << "ADR-0008 security mutation inventory mismatch: expected #{expected_adr_0008_security_mutation_groups.inspect}, found #{adr_0008_security_mutation_groups.inspect}"
 end
