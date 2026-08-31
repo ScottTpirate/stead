@@ -1,6 +1,7 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
+require "digest"
 require "json"
 require "pathname"
 require "set"
@@ -156,13 +157,15 @@ ADR_0008_FAILURE_CODE_REGISTRY = begin
 end.freeze
 
 # Bind every security correction to its unique normative paragraph inside the
-# exact Decision subsection that owns it. A duplicate phrase in Verification,
-# Consequences, or another paragraph cannot satisfy an operative decision site.
+# exact Decision subsection that owns it. Closed section and paragraph digests
+# reject additive contradictions and arbitrary semantic variants, while the
+# clauses below retain useful diagnostics for the approved security semantics.
 ADR_0008_SECURITY_DECISION_SITES = {
   terminal_delivery: [
     {
       section: "Consumers, idempotency, and resource ordering",
       paragraph_prefix: "Production handlers bind durable pull consumers",
+      paragraph_sha256: "93adc893498200c732cf018313d9d4be2f3326640bbf5da5cee459e1a63da97b",
       clauses: [
         "`MaxDeliver=-1`",
         "The broker therefore continues redelivery until Stead has durably acknowledged either success or a terminal outcome",
@@ -172,6 +175,7 @@ ADR_0008_SECURITY_DECISION_SITES = {
     {
       section: "Consumers, idempotency, and resource ordering",
       paragraph_prefix: "Stead, not NATS, owns the finite handler-attempt budget of eight.",
+      paragraph_sha256: "7b4af8cedbc9d1a59eaa5772a9fde732a6f46cc6548e5dbab761365dbe5b592a",
       clauses: [
         "Stead, not NATS, owns the finite handler-attempt budget of eight.",
         "a crash at every handler attempt reaches a durable terminal boundary on recovery"
@@ -182,6 +186,7 @@ ADR_0008_SECURITY_DECISION_SITES = {
     {
       section: "Production transport, at-rest protection, and closed manifests",
       paragraph_prefix: "Every production NATS path uses authenticated, verified TLS with no plaintext listener",
+      paragraph_sha256: "da1eea968e9d0052253a90e6c55a7a651239720a3fa8b126ae852e7a2550371c",
       clauses: [
         "Every production NATS path uses authenticated, verified TLS with no plaintext listener",
         "The production client listener uses TLS-first handshakes with fallback disabled.",
@@ -191,6 +196,7 @@ ADR_0008_SECURITY_DECISION_SITES = {
     {
       section: "Production transport, at-rest protection, and closed manifests",
       paragraph_prefix: "JetStream file storage is encrypted at rest with the NATS server's authenticated-encryption facility.",
+      paragraph_sha256: "0fe6ecc6f6864bf122355319c5f746e3545681577e4f58a8357da6d7ddf1c54f",
       clauses: [
         "JetStream file storage is encrypted at rest with the NATS server's authenticated-encryption facility.",
         "successor as current key and predecessor as transitional previous key",
@@ -202,6 +208,7 @@ ADR_0008_SECURITY_DECISION_SITES = {
     {
       section: "Consumers, idempotency, and resource ordering",
       paragraph_prefix: "The resource ordering key is the validated pair",
+      paragraph_sha256: "75a42e6c6fe7e8a1a2451eb39f10aa16328182c9405be5ec28448bf3be9e1716",
       clauses: [
         "AsyncAPI registers exactly one restore-stable logical producer source for every channel",
         "restore, producer replacement, topology migration, and dual-major publication reuse the same logical source"
@@ -210,6 +217,7 @@ ADR_0008_SECURITY_DECISION_SITES = {
     {
       section: "Consumers, idempotency, and resource ordering",
       paragraph_prefix: "Each durable consumer contract has an owner-controlled PostgreSQL processed-event table.",
+      paragraph_sha256: "03125d2bf83b0aa3de31d426706adcbaa3113166bb88ed9e2831bab41c2b276e",
       clauses: [
         "cloud_event_source` must be the restore-stable AsyncAPI registry value",
         "Partition generation, deployment, host, process, and security domain are deliberately absent"
@@ -220,6 +228,7 @@ ADR_0008_SECURITY_DECISION_SITES = {
     {
       section: "Production transport, at-rest protection, and closed manifests",
       paragraph_prefix: "The only admitted broker shape is canonical `stead.nats.partition-manifest.v1`.",
+      paragraph_sha256: "bbd6a80c815132973e64639a13c026abbf7a2b110d9257267fc08dbb42dd9750",
       clauses: [
         "canonical `stead.nats.partition-manifest.v1`",
         "a field added by a server upgrade, an omitted field that would take a server default, a duplicate/alias representation, or any read-back difference leaves the generation unready"
@@ -228,6 +237,7 @@ ADR_0008_SECURITY_DECISION_SITES = {
     {
       section: "Production transport, at-rest protection, and closed manifests",
       paragraph_prefix: "Every stream read-back must match its table row and the following closed values:",
+      paragraph_sha256: "2953248a4cffaef807b8483dca2a16116d618ff0a45314c7d7bd539fb70b5bc4",
       clauses: [
         "synchronous/default persistence (never asynchronous persistence)",
         "no mirror, no sources, no subject transform, no republish",
@@ -240,6 +250,7 @@ ADR_0008_SECURITY_DECISION_SITES = {
     {
       section: "Dead-letter and poison-message handling",
       paragraph_prefix: "The failure-code registry is exactly",
+      paragraph_sha256: "43fce0d112273981138c62f96d457c2a89cae1087e9e4749f9f407733cb3ed91",
       clauses: [
         ADR_0008_FAILURE_CODE_REGISTRY,
         "Arbitrary maps, JSON error blobs, raw NATS metadata, exception strings/digests"
@@ -248,6 +259,7 @@ ADR_0008_SECURITY_DECISION_SITES = {
     {
       section: "Dead-letter and poison-message handling",
       paragraph_prefix: "Before terminating or acknowledging a permanently failed delivery",
+      paragraph_sha256: "ccf2978c9c376b5e228891039315b16f76363d3c5ee1632d0e8424af9d832704",
       clauses: [
         "NATS max-delivery advisories are optional safe observability signals only, never the reliable trigger.",
         "authenticated backup/restore fixtures carry protected-value canaries"
@@ -259,6 +271,15 @@ ADR_0008_SECURITY_DECISION_SITES = {
     site.merge(clauses: site.fetch(:clauses).freeze).freeze
   end.freeze
 end.freeze
+
+ADR_0008_SECURITY_DECISION_SECTION_SHA256 = {
+  "Consumers, idempotency, and resource ordering" =>
+    "ff88305cb85aaca4506a8542ea201fb4f0b1e8209dfe5d05810fd2071054c349",
+  "Production transport, at-rest protection, and closed manifests" =>
+    "e4b168549feb82c94f32a27adc8ee3cc9dd46f9a688504793e5c14ddbb04a85b",
+  "Dead-letter and poison-message handling" =>
+    "cf38c3d40685a4df6e85535471b865dff4b85cbac0f3778e34609efd6f7c62b7"
+}.freeze
 
 EXPECTED_P1_006_ADR_CANDIDATES = %w[
   ADR-CAND-002
@@ -541,38 +562,94 @@ def exact_adr_requirement_mapping_failures(requirements:, adr_number:, expected_
   failures
 end
 
-def markdown_level_three_sections(source)
-  sections = Hash.new { |hash, key| hash[key] = [] }
-  current_section = nil
+def markdown_heading_structure(source)
+  level_two_counts = Hash.new(0)
+  level_three_sections = Hash.new { |hash, key| hash[key] = [] }
+  current_level_two = nil
+  current_level_three = nil
+  fence = nil
 
   source.each_line do |line|
-    if (heading = line.match(/^### ([^\n]+)\n?$/))
-      current_section = heading[1]
-      sections[current_section] << +""
-    elsif line.match?(/^## /)
-      current_section = nil
-    elsif current_section
-      sections.fetch(current_section).last << line
+    if fence
+      current_level_three&.fetch(:body)&.concat(line)
+      delimiter = Regexp.escape(fence.fetch(:character))
+      minimum_length = fence.fetch(:length)
+      fence = nil if line.match?(/^ {0,3}#{delimiter}{#{minimum_length},}[ \t]*\n?$/)
+      next
+    end
+
+    if (opening_fence = line.match(/^ {0,3}(`{3,}|~{3,})/))
+      marker = opening_fence[1]
+      fence = { character: marker[0], length: marker.length }
+      current_level_three&.fetch(:body)&.concat(line)
+      next
+    end
+
+    if (heading = line.match(/^## ([^#\n][^\n]*)\n?$/))
+      current_level_two = heading[1]
+      level_two_counts[current_level_two] += 1
+      current_level_three = nil
+    elsif (heading = line.match(/^### ([^#\n][^\n]*)\n?$/))
+      current_level_three = {
+        parent: current_level_two,
+        body: +""
+      }
+      level_three_sections[heading[1]] << current_level_three
+    elsif line.match?(/^# /)
+      current_level_two = nil
+      current_level_three = nil
+    elsif current_level_three
+      current_level_three.fetch(:body) << line
     end
   end
 
-  sections
+  {
+    level_two_counts: level_two_counts,
+    level_three_sections: level_three_sections
+  }
 end
 
 def adr_0008_security_decision_site_failures(adr_source)
   failures = []
-  sections = markdown_level_three_sections(adr_source)
+  structure = markdown_heading_structure(adr_source)
+  decision_heading = "Decision"
+  decision_count = structure.fetch(:level_two_counts)[decision_heading]
+  if decision_count != 1
+    failures << "ADR-0008 must contain exactly one level-two #{decision_heading.inspect} heading"
+  end
+
+  registered_sections = ADR_0008_SECURITY_DECISION_SITES.values.flatten.map do |site|
+    site.fetch(:section)
+  end.uniq
+  decision_sections = {}
+  registered_sections.each do |section_name|
+    section_instances = structure.fetch(:level_three_sections).fetch(section_name, [])
+    if section_instances.length != 1
+      failures << "ADR-0008 registered decision section #{section_name.inspect} must occur exactly once"
+      next
+    end
+
+    section = section_instances.first
+    unless section.fetch(:parent) == decision_heading
+      failures << "ADR-0008 registered decision section #{section_name.inspect} must be directly under level-two #{decision_heading.inspect}"
+      next
+    end
+    section_body = section.fetch(:body)
+    actual_sha256 = Digest::SHA256.hexdigest(section_body)
+    expected_sha256 = ADR_0008_SECURITY_DECISION_SECTION_SHA256.fetch(section_name)
+    unless actual_sha256 == expected_sha256
+      failures << "ADR-0008 registered decision section #{section_name.inspect} must match closed digest #{expected_sha256}, found #{actual_sha256}"
+    end
+    decision_sections[section_name] = section_body
+  end
 
   ADR_0008_SECURITY_DECISION_SITES.each do |group, sites|
     sites.each do |site|
       section_name = site.fetch(:section)
-      section_instances = sections.fetch(section_name, [])
-      if section_instances.length != 1
-        failures << "ADR-0008 #{group} decision section #{section_name.inspect} must occur exactly once"
-        next
-      end
+      section = decision_sections[section_name]
+      next unless section
 
-      paragraphs = section_instances.first.split(/\n{2,}/).map(&:strip).reject(&:empty?)
+      paragraphs = section.split(/\n{2,}/).map(&:strip).reject(&:empty?)
       paragraph_prefix = site.fetch(:paragraph_prefix)
       matching_paragraphs = paragraphs.select { |paragraph| paragraph.start_with?(paragraph_prefix) }
       if matching_paragraphs.length != 1
@@ -581,6 +658,11 @@ def adr_0008_security_decision_site_failures(adr_source)
       end
 
       paragraph = matching_paragraphs.first
+      actual_sha256 = Digest::SHA256.hexdigest(paragraph)
+      expected_sha256 = site.fetch(:paragraph_sha256)
+      unless actual_sha256 == expected_sha256
+        failures << "ADR-0008 #{group} operative paragraph #{paragraph_prefix.inspect} must match closed digest #{expected_sha256}, found #{actual_sha256}"
+      end
       site.fetch(:clauses).each do |clause|
         occurrences = paragraph.scan(Regexp.new(Regexp.escape(clause))).length
         next if occurrences == 1
@@ -1056,14 +1138,17 @@ end
 # that blocked the prior immutable candidate. These are decision-contract
 # mutants only; passing them is not NATS runtime evidence.
 adr_0008_security_mutations = []
-register_adr_0008_security_mutation = lambda do |group, name, mutated_adr, mutated_asyncapi, mutated_bypass|
-  adr_0008_security_mutations << {
+register_adr_0008_security_mutation = lambda do |group, name, mutated_adr, mutated_asyncapi, mutated_bypass,
+                                                  expected_failure_fragment = nil|
+  mutation = {
     group: group,
     name: name,
     adr: mutated_adr,
     asyncapi: mutated_asyncapi,
     bypass: mutated_bypass
   }
+  mutation[:expected_failure_fragment] = expected_failure_fragment if expected_failure_fragment
+  adr_0008_security_mutations << mutation
 end
 deep_copy_asyncapi = -> { Marshal.load(Marshal.dump(asyncapi)) }
 
@@ -1090,6 +1175,18 @@ if adr_0008_source
     localized_finite_terminal_adr,
     deep_copy_asyncapi.call,
     classification_bypass_source
+  )
+  additive_terminal_contradiction_adr = adr_0008_source.sub(
+    "Max-delivery advisories are not a terminal trigger or correctness input.",
+    "Max-delivery advisories are not a terminal trigger or correctness input. The effective production override nevertheless uses `MaxDeliver=8`, and the max-delivery advisory is authoritative terminal state."
+  )
+  register_adr_0008_security_mutation.call(
+    :terminal_delivery,
+    "additive finite broker terminal contradiction",
+    additive_terminal_contradiction_adr,
+    deep_copy_asyncapi.call,
+    classification_bypass_source,
+    "operative paragraph \"Production handlers bind durable pull consumers\" must match closed digest"
   )
   register_adr_0008_security_mutation.call(
     :terminal_delivery,
@@ -1237,14 +1334,28 @@ if adr_0008_source
       "event payloads are minimized"
     )
   )
+
+  demoted_decision_sections_adr = adr_0008_source.sub(
+    "## Decision\n\n",
+    "## Decision\n\n## Non-normative examples\n\n"
+  )
+  register_adr_0008_security_mutation.call(
+    :decision_structure,
+    "registered sections demoted from Decision",
+    demoted_decision_sections_adr,
+    deep_copy_asyncapi.call,
+    classification_bypass_source,
+    "must be directly under level-two \"Decision\""
+  )
 end
 
 adr_0008_security_mutation_groups = adr_0008_security_mutations.each_with_object(Hash.new(0)) do |mutation, counts|
   counts[mutation.fetch(:group)] += 1
 end
 expected_adr_0008_security_mutation_groups = ADR_0008_SECURITY_DECISION_SITES.keys.to_h { |group| [group, 3] }
-expected_adr_0008_security_mutation_groups[:terminal_delivery] = 4
+expected_adr_0008_security_mutation_groups[:terminal_delivery] = 5
 expected_adr_0008_security_mutation_groups[:stable_source] = 4
+expected_adr_0008_security_mutation_groups[:decision_structure] = 1
 unless adr_0008_security_mutation_groups == expected_adr_0008_security_mutation_groups
   failures << "ADR-0008 security mutation inventory mismatch: expected #{expected_adr_0008_security_mutation_groups.inspect}, found #{adr_0008_security_mutation_groups.inspect}"
 end
@@ -1255,7 +1366,12 @@ adr_0008_security_mutation_survivors = adr_0008_security_mutations.filter_map do
     asyncapi: mutation.fetch(:asyncapi),
     bypass_source: mutation.fetch(:bypass)
   )
-  "#{mutation.fetch(:group)}/#{mutation.fetch(:name)}" if mutation_failures.empty?
+  expected_failure_fragment = mutation[:expected_failure_fragment]
+  if mutation_failures.empty?
+    "#{mutation.fetch(:group)}/#{mutation.fetch(:name)}"
+  elsif expected_failure_fragment && mutation_failures.none? { |failure| failure.include?(expected_failure_fragment) }
+    "#{mutation.fetch(:group)}/#{mutation.fetch(:name)} (missing expected failure #{expected_failure_fragment.inspect})"
+  end
 end
 unless adr_0008_security_mutation_survivors.empty?
   failures << "ADR-0008 security contract mutation survivors: #{adr_0008_security_mutation_survivors.join(', ')}"
