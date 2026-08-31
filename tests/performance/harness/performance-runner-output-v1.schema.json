@@ -14,7 +14,7 @@
     "schema_version": { "const": "1.0" },
     "source_revision": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
     "dataset_sha256": { "$ref": "#/$defs/sha256" },
-    "scenario_id": { "type": "string", "minLength": 1 },
+    "scenario_id": { "type": "string", "minLength": 1, "maxLength": 120 },
     "evidence_sha256": { "$ref": "#/$defs/sha256" },
     "request_traces_sha256": { "$ref": "#/$defs/sha256" },
     "kind": {
@@ -25,24 +25,24 @@
       ]
     },
     "observations": {
-      "type": "array", "minItems": 1,
+      "type": "array", "minItems": 1, "maxItems": 32,
       "items": {
         "type": "object", "additionalProperties": false,
         "required": ["metric", "value", "unit"],
         "properties": {
-          "metric": { "type": "string", "minLength": 1 },
+          "metric": { "type": "string", "minLength": 1, "maxLength": 160 },
           "value": { "type": "number", "minimum": 0 },
           "unit": { "enum": ["bytes", "calls", "count", "milliseconds", "nanoseconds", "ratio"] }
         }
       }
     },
     "observations_sha256": { "$ref": "#/$defs/sha256" },
-    "payload_files": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/fileReference" } }
+    "payload_files": { "type": "array", "minItems": 1, "maxItems": 256, "items": { "$ref": "#/$defs/fileReference" } }
   },
   "$defs": {
     "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
     "relativePath": {
-      "type": "string", "minLength": 1,
+      "type": "string", "minLength": 1, "maxLength": 240,
       "pattern": "^(artifacts/performance|packages/test-fixtures/harness/performance|scripts/performance)/[A-Za-z0-9._/-]+$"
     },
     "fileReference": {

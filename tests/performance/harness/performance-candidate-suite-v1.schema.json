@@ -21,11 +21,11 @@
         "controls_revision": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
         "dirty": { "const": false },
         "recorded_at": { "type": "string", "format": "date-time" },
-        "implementation_owner": { "type": "string", "minLength": 1 },
+        "implementation_owner": { "type": "string", "minLength": 1, "maxLength": 254 },
         "tool_versions": {
           "type": "object", "minProperties": 1,
-          "propertyNames": { "type": "string", "minLength": 1 },
-          "additionalProperties": { "type": "string", "minLength": 1 }
+          "propertyNames": { "type": "string", "minLength": 1, "maxLength": 120 },
+          "additionalProperties": { "type": "string", "minLength": 1, "maxLength": 240 }
         }
       }
     },
@@ -44,13 +44,13 @@
     },
     "dataset": { "$ref": "#/$defs/fileReference" },
     "runtime_components": {
-      "type": "array", "minItems": 6,
+      "type": "array", "minItems": 6, "maxItems": 6,
       "items": {
         "type": "object", "additionalProperties": false,
         "required": ["name", "version", "artifact", "version_probe"],
         "properties": {
           "name": { "enum": ["go", "node", "postgresql", "openfga", "nats_server", "gitea"] },
-          "version": { "type": "string", "minLength": 1 },
+          "version": { "type": "string", "minLength": 1, "maxLength": 120 },
           "artifact": { "$ref": "#/$defs/fileReference" },
           "version_probe": {
             "type": "object", "additionalProperties": false,
@@ -58,7 +58,7 @@
             "properties": {
               "argv": {
                 "type": "array", "minItems": 2, "maxItems": 2,
-                "items": { "type": "string", "minLength": 1 }
+                "items": { "type": "string", "minLength": 1, "maxLength": 240 }
               },
               "stdout": { "$ref": "#/$defs/fileReference" },
               "invocation_sha256": { "$ref": "#/$defs/sha256" }
@@ -68,30 +68,30 @@
       }
     },
     "evidence": {
-      "type": "array", "minItems": 9,
+      "type": "array", "minItems": 9, "maxItems": 9,
       "items": {
         "type": "object", "additionalProperties": false,
         "required": ["scenario_id", "path", "sha256"],
         "properties": {
-          "scenario_id": { "type": "string", "minLength": 1 },
+          "scenario_id": { "type": "string", "minLength": 1, "maxLength": 120 },
           "path": { "$ref": "#/$defs/relativePath" },
           "sha256": { "$ref": "#/$defs/sha256" }
         }
       }
     },
     "benchmark_artifacts": {
-      "type": "array", "minItems": 10,
+      "type": "array", "minItems": 10, "maxItems": 99,
       "items": { "$ref": "#/$defs/fileReference" }
     },
     "regression_reviews": {
-      "type": "array",
+      "type": "array", "maxItems": 100,
       "items": { "$ref": "#/$defs/fileReference" }
     }
   },
   "$defs": {
     "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
     "relativePath": {
-      "type": "string", "minLength": 1,
+      "type": "string", "minLength": 1, "maxLength": 240,
       "pattern": "^(artifacts/performance|packages/test-fixtures/harness/performance|tests/performance/datasets|scripts/performance)/[A-Za-z0-9._/-]+$"
     },
     "fileReference": {

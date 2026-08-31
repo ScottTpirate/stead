@@ -38,12 +38,64 @@ assert = lambda do |test_id, condition, message|
   results[test_id] << message unless condition
 end
 
-parse = ->(path) { JSON.parse(path.read(encoding: "UTF-8")) }
+parse = ->(path) { Stead::PerformanceStrictJSON.parse_file(path) }
 copy = ->(value) { Marshal.load(Marshal.dump(value)) }
 fixture = parse.call(FIXTURE_PATH)
 baseline = parse.call(BASELINE_PATH)
 verifier = Stead::PerformanceVerifier.new(root: ROOT)
 manifest = verifier.manifest
+
+strict_rejections = [
+  '{"source":{"revision":"a","revision":"b"}}',
+  '{"source":{"revision":"a","\\u0072evision":"b"}}',
+  "[" * 33 + "0" + "]" * 33,
+  JSON.generate("x" * (Stead::PerformanceStrictJSON::MAX_STRING_BYTES + 1)),
+  "[" + (["0"] * (Stead::PerformanceStrictJSON::MAX_COLLECTION_ENTRIES + 1)).join(",") + "]"
+]
+strict_results = strict_rejections.map do |source|
+  begin
+    Stead::PerformanceStrictJSON.parse(source)
+    false
+  rescue JSON::ParserError
+    true
+  end
+end
+exact_depth = Stead::PerformanceStrictJSON.parse("[" * 32 + "0" + "]" * 32)
+exact_string = Stead::PerformanceStrictJSON.parse(JSON.generate("x" * Stead::PerformanceStrictJSON::MAX_STRING_BYTES))
+exact_bytes_source = '{"a":1}'
+exact_bytes = Stead::PerformanceStrictJSON.parse(exact_bytes_source, max_bytes: exact_bytes_source.bytesize)
+one_over_bytes = begin
+  Stead::PerformanceStrictJSON.parse(exact_bytes_source, max_bytes: exact_bytes_source.bytesize - 1)
+  false
+rescue JSON::ParserError
+  true
+end
+bounded_file_results = Tempfile.create(["stead-performance-bounded-", ".bin"]) do |file|
+  file.binmode
+  file.write("abcd")
+  file.flush
+  exact_read = Stead::PerformanceBoundedFile.read(file.path, max_bytes: 4) == "abcd"
+  exact_digest = Stead::PerformanceBoundedFile.sha256(file.path, max_bytes: 4) == Digest::SHA256.hexdigest("abcd")
+  one_over_read = begin
+    Stead::PerformanceBoundedFile.read(file.path, max_bytes: 3)
+    false
+  rescue Stead::PerformanceBoundedFile::TooLarge
+    true
+  end
+  one_over_digest = begin
+    Stead::PerformanceBoundedFile.sha256(file.path, max_bytes: 3)
+    false
+  rescue Stead::PerformanceBoundedFile::TooLarge
+    true
+  end
+  exact_read && exact_digest && one_over_read && one_over_digest
+end
+assert.call(
+  "T-P1-012-PERF-EVIDENCE-SCHEMA",
+  strict_results.all? && exact_depth.is_a?(Array) && exact_string.bytesize == Stead::PerformanceStrictJSON::MAX_STRING_BYTES &&
+    exact_bytes == { "a" => 1 } && one_over_bytes && bounded_file_results,
+  "all JSON and artifact entrypoints must reject duplicate decoded keys and enforce exact byte, depth, collection, and decoded-string ceilings before semantic parsing or hashing"
+)
 
 semantic_errors = lambda do |document, candidate: false, reviews: [], evidence_sha256: nil, implementation_owner: nil|
   Stead::PerformanceEvidence.new(document, manifest: manifest).validate(
@@ -205,7 +257,7 @@ generated_output, generator_stderr, generator_status = Open3.capture3(
   "ruby", ROOT.join(manifest_document.dig("generator", "path")).to_s,
   chdir: ROOT.to_s
 )
-generated_corpus = generator_status.success? ? JSON.parse(generated_output) : {}
+generated_corpus = generator_status.success? ? Stead::PerformanceStrictJSON.parse(generated_output) : {}
 generated_corpus.dig("relationships", 0)&.store("target_id", "document_000000000000000000000000")
 generated_corpus.dig("releases", 0)&.store("approver_person_id", "person_000000000000000000000000")
 generated_corpus.dig("teams", 0)&.store("parent_team_id", generated_corpus.dig("teams", 1, "id"))
@@ -620,6 +672,177 @@ Dir.mktmpdir("performance-adversarial-", artifacts_parent.to_s) do |directory|
     "T-P1-012-PERF-CANDIDATE-COVERAGE",
     generic_validator.instance_variable_get(:@errors).include?("query_count artifact must contain the exact kind-specific observation set"),
     "generic kind.result observations cannot stand in for scenario-owned instrumentation"
+  )
+
+  bundle_directory = Pathname(directory).join("bundle")
+  FileUtils.mkdir_p(bundle_directory)
+  capabilities = Stead::PerformanceEvidence::FRONTEND_CAPABILITIES
+  bundle_spec = {
+    "entry.js" => { "imports" => [], "dynamic_imports" => capabilities.map { |capability| "#{capability}.js" } },
+    "docs_editor.js" => { "imports" => [], "dynamic_imports" => [] },
+    "code.js" => { "imports" => ["shared.js"], "dynamic_imports" => [] },
+    "delivery.js" => { "imports" => ["shared.js"], "dynamic_imports" => [] },
+    "administration.js" => { "imports" => [], "dynamic_imports" => [] },
+    "migration.js" => { "imports" => [], "dynamic_imports" => [] },
+    "analytics.js" => { "imports" => [], "dynamic_imports" => [] },
+    "shared.js" => { "imports" => [], "dynamic_imports" => [] }
+  }
+  relative_for = lambda { |name| "#{relative_directory}/bundle/#{name}" }
+  bundle_files = bundle_spec.map do |name, edges|
+    path = bundle_directory.join(name)
+    path.write("export const #{name.delete_suffix('.js')} = #{name.bytes.sum};\n")
+    bytes = path.binread
+    {
+      "path" => relative_for.call(name),
+      "sha256" => Digest::SHA256.hexdigest(bytes),
+      "uncompressed_bytes" => bytes.bytesize,
+      "gzip_bytes" => Zlib.gzip(bytes, level: Zlib::BEST_COMPRESSION).bytesize,
+      "imports" => edges["imports"].map { |child| relative_for.call(child) },
+      "dynamic_imports" => edges["dynamic_imports"].map { |child| relative_for.call(child) }
+    }
+  end
+  graph = {
+    "eager_entry_path" => relative_for.call("entry.js"),
+    "capability_entries" => capabilities.map { |capability| { "capability" => capability, "path" => relative_for.call("#{capability}.js") } },
+    "files" => bundle_files
+  }
+  graph_files = bundle_files.to_h { |file| [file["path"], file] }
+  closure = lambda do |start, dynamic|
+    pending = [start]
+    seen = []
+    until pending.empty?
+      path = pending.shift
+      next if seen.include?(path)
+
+      seen << path
+      pending.concat(graph_files.fetch(path)["imports"])
+      pending.concat(graph_files.fetch(path)["dynamic_imports"]) if dynamic
+    end
+    seen
+  end
+  eager_paths = closure.call(graph["eager_entry_path"], false)
+  lazy_summaries = graph["capability_entries"].map do |entry|
+    file_paths = (closure.call(entry["path"], true) - eager_paths).sort
+    {
+      "name" => entry["capability"], "capability" => entry["capability"], "entry_path" => entry["path"],
+      "file_paths" => file_paths,
+      "uncompressed_bytes" => file_paths.sum { |path| graph_files.fetch(path)["uncompressed_bytes"] },
+      "gzip_bytes" => file_paths.sum { |path| graph_files.fetch(path)["gzip_bytes"] }
+    }
+  end
+  unique_lazy_paths = lazy_summaries.flat_map { |summary| summary["file_paths"] }.uniq
+  frontend_sizes = copy.call(fixture["sizes"])
+  frontend_sizes["frontend_bundle_graph"] = graph
+  frontend_sizes["lazy_javascript_chunks"] = lazy_summaries
+  frontend_sizes["eager_javascript_gzip_bytes"] = eager_paths.sum { |path| graph_files.fetch(path)["gzip_bytes"] }
+  frontend_sizes["lazy_javascript_gzip_bytes"] = unique_lazy_paths.sum { |path| graph_files.fetch(path)["gzip_bytes"] }
+  frontend_sizes["frontend_baseline"]["current_gzip_bytes"] = frontend_sizes["eager_javascript_gzip_bytes"]
+  frontend_sizes["frontend_baseline"]["delta_gzip_bytes"] =
+    frontend_sizes["eager_javascript_gzip_bytes"] - frontend_sizes["frontend_baseline"]["baseline_gzip_bytes"]
+  frontend_sizes["frontend_baseline"]["lazy_chunk_delta_gzip_bytes"] = frontend_sizes["lazy_javascript_gzip_bytes"]
+  size_errors_for = lambda do |sizes|
+    validator = Stead::PerformanceEvidence.new({ "sizes" => sizes }, manifest: manifest)
+    validator.instance_variable_set(:@errors, [])
+    validator.send(:validate_sizes, manifest.scenario("cold-initial-application"))
+    validator.instance_variable_get(:@errors)
+  end
+  valid_bundle_errors = size_errors_for.call(frontend_sizes)
+  fabricated_lazy_delta = copy.call(frontend_sizes)
+  fabricated_lazy_delta["frontend_baseline"]["lazy_chunk_delta_gzip_bytes"] += 1
+  substituted_digest = copy.call(frontend_sizes)
+  substituted_digest["frontend_bundle_graph"]["files"][1]["sha256"] = "0" * 64
+  omitted_transitive = copy.call(frontend_sizes)
+  omitted_transitive["lazy_javascript_chunks"].find { |entry| entry["capability"] == "code" }["file_paths"].pop
+  duplicate_capability = copy.call(frontend_sizes)
+  duplicate_capability["frontend_bundle_graph"]["capability_entries"].last["capability"] = "code"
+
+  bundle_artifact = {
+    "kind" => "frontend_bundle",
+    "measurement_files" => bundle_files.map { |file| file.slice("path", "sha256") },
+    "observations" => [
+      { "metric" => "eager_javascript_gzip_bytes", "value" => frontend_sizes["eager_javascript_gzip_bytes"], "unit" => "bytes" },
+      { "metric" => "lazy_javascript_gzip_bytes", "value" => frontend_sizes["lazy_javascript_gzip_bytes"], "unit" => "bytes" },
+      { "metric" => "lazy_javascript_chunk_count", "value" => capabilities.length, "unit" => "count" }
+    ]
+  }
+  bundle_suite = Stead::PerformanceCandidateSuite.new(synthetic_suite, root: ROOT, schema_gate: verifier.schema_gate, manifest: manifest)
+  bundle_suite.send(:validate_measurement_files, bundle_artifact, { "sizes" => frontend_sizes })
+  incomplete_artifact = copy.call(bundle_artifact)
+  incomplete_artifact["measurement_files"] = incomplete_artifact["measurement_files"].take(1)
+  incomplete_suite = Stead::PerformanceCandidateSuite.new(synthetic_suite, root: ROOT, schema_gate: verifier.schema_gate, manifest: manifest)
+  incomplete_suite.send(:validate_measurement_files, incomplete_artifact, { "sizes" => frontend_sizes })
+  assert.call(
+    "T-P1-012-PERF-BUNDLE-DELTA",
+    valid_bundle_errors.empty? && bundle_suite.instance_variable_get(:@errors).empty? &&
+      size_errors_for.call(fabricated_lazy_delta).include?("frontend lazy delta does not match verifier-computed lazy bytes") &&
+      size_errors_for.call(substituted_digest).any? { |error| error.include?("sha256 does not match artifact bytes") } &&
+      size_errors_for.call(omitted_transitive).any? { |error| error.include?("omits, substitutes, or duplicates transitive graph files") } &&
+      size_errors_for.call(duplicate_capability).include?("frontend bundle graph must declare each lazy capability exactly once") &&
+      incomplete_suite.instance_variable_get(:@errors).include?("frontend_bundle measurement files must exactly bind every eager, lazy, transitive, and shared graph file"),
+    "eager and six lazy capability totals must be recomputed from unique digest-bound files and the complete transitive/shared graph"
+  )
+
+  encoded_canary = Stead::PerformanceRetainedEvidenceScan.encoded_forms("synthetic-canary")
+  hexadecimal_canary = "synthetic-canary".unpack1("H*")
+  percent_canary = "synthetic-canary".bytes.map { |byte| format("%%%02X", byte) }.join
+  retained_cases = {
+    "runner-stderr.log" => "prefix synthetic-canary suffix",
+    "environment.json" => JSON.generate({ "safe" => encoded_canary[1] }),
+    "runner-output.json" => JSON.generate({ "safe" => hexadecimal_canary }),
+    "payload.json" => JSON.generate({ "Secret_Token" => "redacted" }),
+    "request-traces.json" => JSON.generate({ "safe" => percent_canary }),
+    "measurement.txt" => "Authorization: Bearer prohibited",
+    "evidence.json" => JSON.generate({ "safe" => "stead_perf_canary_alpha_7d9e" }),
+    "runner.bin" => "\x00synthetic-canary\xff".b
+  }
+  redaction_suite = Stead::PerformanceCandidateSuite.new(synthetic_suite, root: ROOT, schema_gate: verifier.schema_gate, manifest: manifest)
+  retained_cases.each do |name, bytes|
+    path = Pathname(directory).join(name)
+    path.binwrite(bytes)
+    reference = { "path" => "#{relative_directory}/#{name}", "sha256" => Digest::SHA256.hexdigest(bytes) }
+    redaction_suite.send(:resolve_reference, reference)
+  end
+  redaction_errors = redaction_suite.instance_variable_get(:@errors)
+
+  duplicate_json_path = Pathname(directory).join("duplicate-evidence.json")
+  duplicate_json_path.write('{"source":{"revision":"a","\\u0072evision":"b"}}')
+  duplicate_suite = Stead::PerformanceCandidateSuite.new(synthetic_suite, root: ROOT, schema_gate: verifier.schema_gate, manifest: manifest)
+  duplicate_suite.send(
+    :resolve_reference,
+    { "path" => "#{relative_directory}/duplicate-evidence.json", "sha256" => Stead::PerformanceCanonicalJSON.file_digest(duplicate_json_path) }
+  )
+
+  clean_path = Pathname(directory).join("clean-output.txt")
+  clean_path.write("aggregate-count=1\n")
+  clean_reference = { "path" => "#{relative_directory}/clean-output.txt", "sha256" => Stead::PerformanceCanonicalJSON.file_digest(clean_path) }
+  exact_size_suite = Stead::PerformanceCandidateSuite.new(synthetic_suite, root: ROOT, schema_gate: verifier.schema_gate, manifest: manifest)
+  exact_size_path = exact_size_suite.send(:resolve_reference, clean_reference, max_bytes: clean_path.size)
+  one_over_size_suite = Stead::PerformanceCandidateSuite.new(synthetic_suite, root: ROOT, schema_gate: verifier.schema_gate, manifest: manifest)
+  one_over_size_path = one_over_size_suite.send(:resolve_reference, clean_reference, max_bytes: clean_path.size - 1)
+
+  outside_telemetry = copy.call(fixture)
+  outside_telemetry["provenance"]["command"] = "runner --marker synthetic-canary"
+  outside_telemetry_errors = semantic_errors.call(outside_telemetry)
+  assert.call(
+    "T-P1-012-PERF-REDACTION",
+    retained_cases.keys.all? { |name| redaction_errors.any? { |error| error.include?(name) } },
+    "runner stderr/environment/output/payload/trace/measurement/evidence/binary files must all receive protected-content scanning"
+  )
+  assert.call(
+    "T-P1-012-PERF-REDACTION",
+    duplicate_suite.instance_variable_get(:@errors).any? { |error| error.include?("strict JSON preflight failed: duplicate object key") },
+    "referenced JSON artifacts must reject duplicate decoded keys before semantic parsing"
+  )
+  assert.call(
+    "T-P1-012-PERF-REDACTION",
+    exact_size_path == clean_path && exact_size_suite.instance_variable_get(:@errors).empty? && one_over_size_path.nil? &&
+      one_over_size_suite.instance_variable_get(:@errors).any? { |error| error.include?("byte ceiling") },
+    "referenced artifacts must accept the exact byte ceiling and reject one byte over before reading"
+  )
+  assert.call(
+    "T-P1-012-PERF-REDACTION",
+    outside_telemetry_errors.any? { |error| error.include?("performance evidence retains protected content") },
+    "protected content outside telemetry.records must fail evidence validation"
   )
 end
 

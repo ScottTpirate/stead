@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 
-import { readFile } from "node:fs/promises";
 import process from "node:process";
 
 import Ajv2020 from "ajv/dist/2020.js";
 import addFormats from "ajv-formats";
+import { readStrictJson } from "./strict_json.mjs";
 
 const [schemaPath, ...documentPaths] = process.argv.slice(2);
 if (!schemaPath || documentPaths.length === 0) {
@@ -12,7 +12,7 @@ if (!schemaPath || documentPaths.length === 0) {
   process.exit(2);
 }
 
-const parseJson = async (path) => JSON.parse(await readFile(path, "utf8"));
+const parseJson = readStrictJson;
 
 try {
   const schema = await parseJson(schemaPath);

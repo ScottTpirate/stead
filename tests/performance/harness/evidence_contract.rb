@@ -12,8 +12,147 @@ require "time"
 require "tmpdir"
 require "zlib"
 require_relative "normative_controls"
+require_relative "strict_json"
 
 module Stead
+  module PerformanceBoundedFile
+    class TooLarge < StandardError; end
+
+    module_function
+
+    def read(path, max_bytes:)
+      File.open(path, "rb") do |file|
+        bytes = file.read(max_bytes + 1)
+        raise TooLarge, "file exceeds #{max_bytes} bytes" if bytes.bytesize > max_bytes
+
+        bytes
+      end
+    end
+
+    def sha256(path, max_bytes:)
+      digest = Digest::SHA256.new
+      total = 0
+      File.open(path, "rb") do |file|
+        while (chunk = file.read(64 * 1024))
+          total += chunk.bytesize
+          raise TooLarge, "file exceeds #{max_bytes} bytes" if total > max_bytes
+
+          digest.update(chunk)
+        end
+      end
+      digest.hexdigest
+    end
+  end
+
+  module PerformanceRetainedEvidenceScan
+    SAFE_CONTROL_KEYS = %w[protectedcontentretained].freeze
+    RAW_SCAN_OVERLAP_BYTES = 8_192
+
+    module_function
+
+    def structured_findings(document, rules:)
+      findings = []
+      walk = lambda do |value, path|
+        case value
+        when Hash
+          value.each do |key, child|
+            normalized = normalize(key)
+            if !SAFE_CONTROL_KEYS.include?(normalized) && rules.fetch("forbidden_normalized_keys", []).any? do |forbidden|
+              normalized == forbidden || normalized.include?(forbidden)
+            end
+              findings << "forbidden key at #{path}/#{key}"
+            end
+            findings << "protected-content canary at #{path}/#{key}" if encoded_canary?(key.to_s)
+            walk.call(child, "#{path}/#{key}")
+          end
+        when Array
+          value.each_with_index { |child, index| walk.call(child, "#{path}/#{index}") }
+        when String
+          normalized = normalize_punctuation(value)
+          if rules.fetch("forbidden_normalized_value_patterns", []).any? do |pattern|
+            normalized.include?(normalize_punctuation(pattern))
+          end
+            findings << "forbidden value at #{path}"
+          end
+          findings << "protected-content canary at #{path}" if encoded_canary?(value)
+        end
+      end
+      walk.call(document, "$")
+      findings.uniq
+    end
+
+    def raw_file_findings(path, rules:, max_bytes:)
+      needles = rules.fetch("forbidden_normalized_value_patterns", []).map(&:downcase)
+      PerformanceNormativeControls::TELEMETRY_CANARIES.each do |canary|
+        needles.concat(encoded_forms(canary))
+      end
+      needles.uniq!
+      findings = []
+      tail = +""
+      scanned_bytes = 0
+      binary_extension = %w[.js .bin .wasm .so .a .o .exe].include?(Pathname(path).extname.downcase)
+      File.open(path, "rb") do |file|
+        while (chunk = file.read(64 * 1024))
+          scanned_bytes += chunk.bytesize
+          if scanned_bytes > max_bytes
+            findings << "retained bytes exceed #{max_bytes} byte ceiling"
+            break
+          end
+          haystack = (tail + chunk).downcase
+          needles.each do |needle|
+            findings << "retained bytes contain protected or forbidden content" if haystack.include?(needle)
+          end
+          unless binary_extension
+            without_whitespace = haystack.gsub(/\s+/, "")
+            if rules.fetch("forbidden_normalized_value_patterns", []).any? do |pattern|
+              without_whitespace.include?(normalize_punctuation(pattern))
+            end
+              findings << "retained bytes contain protected or forbidden content"
+            end
+            normalized_assignments = haystack.gsub(/[^a-z0-9:=]/, "")
+            if rules.fetch("forbidden_normalized_keys", []).any? do |key|
+              normalized_assignments.include?("#{key}:") || normalized_assignments.include?("#{key}=")
+            end
+              findings << "retained bytes contain a forbidden structured key"
+            end
+          end
+          tail = haystack.byteslice(-RAW_SCAN_OVERLAP_BYTES, RAW_SCAN_OVERLAP_BYTES) || haystack
+          break unless findings.empty?
+        end
+      end
+      findings.uniq
+    end
+
+    def encoded_canary?(value)
+      haystack = value.to_s.downcase
+      PerformanceNormativeControls::TELEMETRY_CANARIES.any? do |canary|
+        encoded_forms(canary).any? { |form| haystack.include?(form) }
+      end
+    end
+
+    def encoded_forms(canary)
+      base64 = [canary].pack("m0")
+      urlsafe = base64.tr("+/", "-_")
+      [
+        canary,
+        base64,
+        base64.delete_suffix("="),
+        urlsafe,
+        urlsafe.delete_suffix("="),
+        canary.unpack1("H*"),
+        canary.bytes.map { |byte| format("%%%02X", byte) }.join
+      ].map(&:downcase).uniq
+    end
+
+    def normalize(value)
+      value.to_s.downcase.gsub(/[^a-z0-9]/, "")
+    end
+
+    def normalize_punctuation(value)
+      value.to_s.downcase.gsub(/\s+/, "").gsub(/[^a-z0-9:=_-]/, "")
+    end
+  end
+
   module PerformanceCanonicalJSON
     module_function
 
@@ -25,8 +164,8 @@ module Stead
       Digest::SHA256.hexdigest(generate(value))
     end
 
-    def file_digest(path)
-      Digest::SHA256.file(path).hexdigest
+    def file_digest(path, max_bytes: PerformanceStrictJSON::MAX_JSON_BYTES)
+      PerformanceBoundedFile.sha256(path, max_bytes: max_bytes)
     end
 
     def canonical(value)
@@ -61,7 +200,7 @@ module Stead
     end
 
     def validate(path, expected_type: nil)
-      document = JSON.parse(Pathname(path).read(encoding: "UTF-8"))
+      document = PerformanceStrictJSON.parse_file(path)
       artifact_type = document.is_a?(Hash) ? document["artifact_type"] : nil
       errors = []
       if expected_type && artifact_type != expected_type
@@ -77,7 +216,7 @@ module Stead
         runner.to_s, "node", validator.to_s, schema.to_s, Pathname(path).expand_path.to_s,
         chdir: root.to_s
       )
-      payload = JSON.parse(stdout) unless stdout.strip.empty?
+      payload = PerformanceStrictJSON.parse(stdout) unless stdout.strip.empty?
       unless status.success?
         schema_errors = payload&.dig("results", 0, "errors")
         if schema_errors.is_a?(Array) && !schema_errors.empty?
@@ -111,7 +250,7 @@ module Stead
     def self.load(root:)
       root_path = Pathname(root).expand_path
       path = root_path.join(MANIFEST_PATH)
-      new(JSON.parse(path.read(encoding: "UTF-8")), path: path, root: root_path)
+      new(PerformanceStrictJSON.parse_file(path), path: path, root: root_path)
     end
 
     def initialize(document, path:, root:)
@@ -137,7 +276,7 @@ module Stead
     end
 
     def frontend_baseline
-      @frontend_baseline ||= JSON.parse(root.join(FRONTEND_BASELINE_PATH).read(encoding: "UTF-8"))
+      @frontend_baseline ||= PerformanceStrictJSON.parse_file(root.join(FRONTEND_BASELINE_PATH))
     end
 
     def benchmark_environment(scenario_id)
@@ -239,7 +378,7 @@ module Stead
         if status.success?
           errors << "trusted corpus generator output digest mismatch" unless Digest::SHA256.hexdigest(stdout) == generator["output_sha256"]
           begin
-            generated = JSON.parse(stdout)
+            generated = PerformanceStrictJSON.parse(stdout)
             errors << "trusted corpus seed does not match generator output" unless generated["generator_seed"] == generator["seed"]
             errors << "trusted corpus cardinalities do not match generator output" unless generated["cardinalities"] == document["corpus"]
             Tempfile.create(["stead-performance-corpus-", ".json"]) do |file|
@@ -453,11 +592,14 @@ module Stead
     BUDGET_COUNT_FIELDS = %w[
       sql_queries postgres_writes openfga_calls policy_calls provider_calls logical_audit_operations
     ].freeze
+    FRONTEND_CAPABILITIES = %w[docs_editor code delivery administration migration analytics].freeze
+    BUNDLE_PATH_PREFIXES = %w[artifacts/performance/ packages/test-fixtures/harness/performance/].freeze
+    MAX_BUNDLE_FILE_BYTES = 32 * 1024 * 1024
 
     attr_reader :document, :manifest
 
     def self.load(path, manifest:)
-      new(JSON.parse(Pathname(path).read(encoding: "UTF-8")), manifest: manifest)
+      new(PerformanceStrictJSON.parse_file(path), manifest: manifest)
     end
 
     def initialize(document, manifest:)
@@ -486,6 +628,7 @@ module Stead
       validate_targets(scenario)
       validate_sizes(scenario)
       validate_telemetry
+      validate_retained_document
       validate_regressions(
         scenario,
         reviews: regression_reviews,
@@ -856,8 +999,20 @@ module Stead
       eager = sizes["eager_javascript_gzip_bytes"]
       error("eager JavaScript gzip budget exceeded: #{eager} > #{EAGER_BUNDLE_BUDGET_BYTES}") if eager.is_a?(Numeric) && eager > EAGER_BUNDLE_BUDGET_BYTES
 
+      graph = sizes["frontend_bundle_graph"]
+      frontend_touched = scenario.dig("classifications", "frontend_touched")
+      error("frontend-touched evidence requires a byte-backed frontend bundle graph") if frontend_touched && !graph.is_a?(Hash)
+      if graph.nil?
+        error("lazy JavaScript summaries require a frontend bundle graph") unless sizes.fetch("lazy_javascript_chunks", []).empty?
+        error("lazy JavaScript bytes must be zero without a frontend bundle graph") unless sizes["lazy_javascript_gzip_bytes"] == 0
+      elsif graph.is_a?(Hash)
+        validate_frontend_bundle_graph(graph, sizes)
+      else
+        error("sizes.frontend_bundle_graph must be an object or null")
+      end
+
       baseline = sizes["frontend_baseline"]
-      if scenario.dig("classifications", "frontend_touched") && !baseline.is_a?(Hash)
+      if frontend_touched && !baseline.is_a?(Hash)
         error("frontend-touched evidence requires sizes.frontend_baseline")
         return
       end
@@ -870,6 +1025,142 @@ module Stead
       error("frontend current gzip bytes must equal eager JavaScript bytes") unless baseline["current_gzip_bytes"] == eager
       expected_delta = baseline["current_gzip_bytes"].to_i - baseline["baseline_gzip_bytes"].to_i
       error("frontend eager delta does not match baseline/current values") unless baseline["delta_gzip_bytes"] == expected_delta
+      error("frontend lazy delta does not match verifier-computed lazy bytes") unless
+        baseline["lazy_chunk_delta_gzip_bytes"] == sizes["lazy_javascript_gzip_bytes"]
+    end
+
+    def validate_frontend_bundle_graph(graph, sizes)
+      files = graph["files"]
+      return error("frontend bundle graph files must be a non-empty array") unless files.is_a?(Array) && !files.empty?
+
+      paths = files.filter_map { |file| file.is_a?(Hash) ? file["path"] : nil }
+      error("frontend bundle graph file paths must be unique") unless paths.uniq.length == paths.length
+      by_path = {}
+      actual = {}
+      files.each do |file|
+        next unless file.is_a?(Hash)
+
+        path = resolve_bundle_file(file["path"])
+        next unless path
+
+        bytes = PerformanceBoundedFile.read(path, max_bytes: MAX_BUNDLE_FILE_BYTES)
+        measured = {
+          "sha256" => Digest::SHA256.hexdigest(bytes),
+          "uncompressed_bytes" => bytes.bytesize,
+          "gzip_bytes" => Zlib.gzip(bytes, level: Zlib::BEST_COMPRESSION).bytesize
+        }
+        measured.each do |field, value|
+          error("frontend bundle #{file['path']} #{field} does not match artifact bytes") unless file[field] == value
+        end
+        rules = manifest.document["telemetry_scan"] || {}
+        PerformanceRetainedEvidenceScan.raw_file_findings(path, rules: rules, max_bytes: MAX_BUNDLE_FILE_BYTES).each do |finding|
+          error("frontend bundle #{file['path']} #{finding}")
+        end
+        by_path[file["path"]] = file
+        actual[file["path"]] = measured
+      end
+
+      files.each do |file|
+        next unless file.is_a?(Hash)
+
+        edges = Array(file["imports"]) + Array(file["dynamic_imports"])
+        error("frontend bundle graph edges must reference declared files") unless (edges - paths).empty?
+      end
+
+      entries = graph["capability_entries"]
+      entries = [] unless entries.is_a?(Array)
+      capabilities = entries.filter_map { |entry| entry.is_a?(Hash) ? entry["capability"] : nil }
+      entry_paths = entries.filter_map { |entry| entry.is_a?(Hash) ? entry["path"] : nil }
+      error("frontend bundle graph must declare each lazy capability exactly once") unless
+        capabilities.sort == FRONTEND_CAPABILITIES.sort && capabilities.uniq.length == capabilities.length
+      error("frontend bundle lazy entry paths must be unique") unless entry_paths.uniq.length == entry_paths.length
+
+      eager_paths = bundle_closure(graph["eager_entry_path"], by_path, dynamic: false)
+      dynamic_frontier = eager_paths.flat_map { |path| Array(by_path.dig(path, "dynamic_imports")) }.uniq.sort
+      error("frontend bundle eager graph must dynamically reference exactly the six capability entries") unless
+        dynamic_frontier == entry_paths.sort
+
+      summaries = sizes["lazy_javascript_chunks"]
+      summaries = [] unless summaries.is_a?(Array)
+      summary_capabilities = summaries.filter_map { |summary| summary.is_a?(Hash) ? summary["capability"] : nil }
+      error("lazy JavaScript summaries must declare each capability exactly once") unless
+        summary_capabilities.sort == FRONTEND_CAPABILITIES.sort && summary_capabilities.uniq.length == summary_capabilities.length
+
+      lazy_union = []
+      entries.each do |entry|
+        next unless entry.is_a?(Hash)
+
+        capability = entry["capability"]
+        capability_paths = bundle_closure(entry["path"], by_path, dynamic: true) - eager_paths
+        capability_paths = capability_paths.sort
+        lazy_union.concat(capability_paths)
+        summary = summaries.find { |candidate| candidate.is_a?(Hash) && candidate["capability"] == capability }
+        unless summary
+          error("lazy JavaScript summary is missing capability #{capability}")
+          next
+        end
+        expected_uncompressed = capability_paths.sum { |path| actual.dig(path, "uncompressed_bytes").to_i }
+        expected_gzip = capability_paths.sum { |path| actual.dig(path, "gzip_bytes").to_i }
+        error("lazy JavaScript summary name must equal its capability") unless summary["name"] == capability
+        error("lazy JavaScript summary entry path does not match graph") unless summary["entry_path"] == entry["path"]
+        error("lazy JavaScript summary file set omits, substitutes, or duplicates transitive graph files") unless
+          Array(summary["file_paths"]).sort == capability_paths
+        error("lazy JavaScript summary uncompressed bytes do not match graph files") unless summary["uncompressed_bytes"] == expected_uncompressed
+        error("lazy JavaScript summary gzip bytes do not match graph files") unless summary["gzip_bytes"] == expected_gzip
+      end
+
+      eager_gzip = eager_paths.sum { |path| actual.dig(path, "gzip_bytes").to_i }
+      lazy_paths = lazy_union.uniq.sort
+      lazy_gzip = lazy_paths.sum { |path| actual.dig(path, "gzip_bytes").to_i }
+      error("frontend bundle graph contains unreachable or unclassified JavaScript files") unless
+        (eager_paths + lazy_paths).uniq.sort == paths.sort
+      error("eager JavaScript bytes do not match the transitive eager graph") unless sizes["eager_javascript_gzip_bytes"] == eager_gzip
+      error("lazy JavaScript bytes do not match the unique transitive lazy graph") unless sizes["lazy_javascript_gzip_bytes"] == lazy_gzip
+    end
+
+    def bundle_closure(start, files, dynamic:)
+      pending = [start]
+      seen = []
+      until pending.empty?
+        path = pending.shift
+        next if seen.include?(path)
+
+        file = files[path]
+        unless file
+          error("frontend bundle entry or import is not declared: #{path.inspect}")
+          next
+        end
+        seen << path
+        pending.concat(Array(file["imports"]))
+        pending.concat(Array(file["dynamic_imports"])) if dynamic
+      end
+      seen
+    end
+
+    def resolve_bundle_file(relative)
+      unless relative.is_a?(String) && BUNDLE_PATH_PREFIXES.any? { |prefix| relative.start_with?(prefix) } &&
+          !relative.start_with?("/") && !relative.split("/").include?("..") && Pathname(relative).cleanpath.to_s == relative
+        error("frontend bundle graph contains an unsafe path")
+        return nil
+      end
+      candidate = manifest.root.join(relative).cleanpath
+      unless candidate.to_s.start_with?("#{manifest.root}/") && candidate.file?
+        error("frontend bundle graph path does not name a file: #{relative}")
+        return nil
+      end
+      current = manifest.root
+      Pathname(relative).each_filename do |component|
+        current = current.join(component)
+        if current.symlink?
+          error("frontend bundle graph paths may not traverse symlinks")
+          return nil
+        end
+      end
+      if candidate.size > MAX_BUNDLE_FILE_BYTES
+        error("frontend bundle file exceeds #{MAX_BUNDLE_FILE_BYTES} bytes: #{relative}")
+        return nil
+      end
+      candidate
     end
 
     def validate_telemetry
@@ -890,6 +1181,13 @@ module Stead
       error("telemetry contains forbidden normalized string values") unless scan["forbidden_value_hits"].zero?
       error("telemetry contains protected-content canary values") unless scan["canary_value_hits"].zero?
       error("telemetry evidence must not retain protected content") unless telemetry["protected_content_retained"] == false
+    end
+
+    def validate_retained_document
+      rules = manifest.document["telemetry_scan"] || {}
+      PerformanceRetainedEvidenceScan.structured_findings(document, rules: rules).each do |finding|
+        error("performance evidence retains protected content: #{finding}")
+      end
     end
 
     def validate_regressions(scenario, reviews:, evidence_sha256:, implementation_owner:)
@@ -1066,6 +1364,8 @@ module Stead
     ALLOWED_REFERENCE_PREFIXES = %w[
       artifacts/performance/ packages/test-fixtures/harness/performance/ tests/performance/datasets/ scripts/performance/
     ].freeze
+    MAX_RETAINED_ARTIFACT_BYTES = 128 * 1024 * 1024
+    MAX_RUNTIME_COMPONENT_BYTES = 512 * 1024 * 1024
 
     attr_reader :document, :root, :schema_gate, :manifest
 
@@ -1096,6 +1396,7 @@ module Stead
       reviews = validate_regression_reviews
       validate_evidence_regressions(evidence_by_scenario, evidence_digests, reviews)
       validate_coverage(evidence_by_scenario, artifacts)
+      validate_structured_retained_document(document, "candidate suite")
       @errors.uniq
     rescue StandardError => error
       [*@errors, "candidate suite validation failed closed: #{error.class}: #{error.message}"].uniq
@@ -1207,7 +1508,7 @@ module Stead
         error("reviewer authority registry is absent at the #{label} revision")
         return nil
       end
-      registry = JSON.parse(registry_json)
+      registry = PerformanceStrictJSON.parse(registry_json)
       Tempfile.create(["stead-reviewer-authorities-", ".json"]) do |file|
         file.write(registry_json)
         file.flush
@@ -1222,7 +1523,10 @@ module Stead
 
     def validate_dataset_reference
       reference = document["dataset"]
-      path = resolve_reference(reference)
+      # The verifier-owned manifest defines the forbidden canary literals themselves;
+      # its exact digest and semantic controls are validated below. It is an input
+      # authority, not candidate-retained measurement evidence.
+      path = resolve_reference(reference, scan: false)
       return unless path
 
       error("candidate suite must use the repository-owned trusted Phase 1 manifest") unless path == manifest.path
@@ -1247,8 +1551,13 @@ module Stead
         next unless component
 
         artifact_reference = component["artifact"]
-        artifact_path = resolve_reference(artifact_reference)
-        verify_reference_digest(artifact_reference, artifact_path, "runtime component #{name}") if artifact_path
+        artifact_path = resolve_reference(artifact_reference, max_bytes: MAX_RUNTIME_COMPONENT_BYTES)
+        verify_reference_digest(
+          artifact_reference,
+          artifact_path,
+          "runtime component #{name}",
+          max_bytes: MAX_RUNTIME_COMPONENT_BYTES
+        ) if artifact_path
         probe = component["version_probe"]
         unless probe.is_a?(Hash)
           error("runtime component #{name} requires a byte-backed version probe")
@@ -1264,7 +1573,7 @@ module Stead
           if output_path.size > 4_096
             error("runtime component #{name} version output exceeds 4096 bytes")
           else
-            output = output_path.binread.dup.force_encoding(Encoding::UTF_8).scrub.strip
+            output = PerformanceBoundedFile.read(output_path, max_bytes: 4_096).dup.force_encoding(Encoding::UTF_8).scrub.strip
             error("runtime component #{name} version output does not prove #{version}") unless output.match?(expected_pattern)
           end
         end
@@ -1274,7 +1583,8 @@ module Stead
             executed_output = stdout + stderr
             error("runtime component #{name} version probe execution failed") unless status.success?
             error("runtime component #{name} stored version output was not produced by executing the digest-bound artifact") unless
-              executed_output == output_path.binread && Digest::SHA256.hexdigest(executed_output) == output_reference["sha256"]
+              executed_output == PerformanceBoundedFile.read(output_path, max_bytes: 4_096) &&
+                Digest::SHA256.hexdigest(executed_output) == output_reference["sha256"]
           rescue SystemCallError => exception
             error("runtime component #{name} version probe could not execute digest-bound artifact: #{exception.class}")
           end
@@ -1354,7 +1664,7 @@ module Stead
         version = artifact.dig("producer", "version")
         error("benchmark artifact producer tool/version is not pinned by suite provenance") unless document.dig("source", "tool_versions", tool) == version
         error("benchmark artifact observations digest mismatch") unless artifact["observations_sha256"] == PerformanceCanonicalJSON.digest(artifact["observations"])
-        validate_measurement_files(artifact)
+        validate_measurement_files(artifact, evidence)
         validate_kind_specific_observations(artifact, evidence)
         validate_causality(artifact, evidence)
         validate_runner_execution(artifact, evidence)
@@ -1369,27 +1679,72 @@ module Stead
       artifacts
     end
 
-    def validate_measurement_files(artifact)
+    def validate_measurement_files(artifact, evidence)
       references = artifact["measurement_files"]
       return error("benchmark artifact measurement_files must be non-empty") unless references.is_a?(Array) && !references.empty?
 
+      resolved = {}
       references.each do |reference|
         path = resolve_reference(reference)
-        verify_reference_digest(reference, path, "benchmark measurement file") if path
+        if path && verify_reference_digest(reference, path, "benchmark measurement file")
+          resolved[reference["path"]] = path
+        end
       end
       return unless artifact["kind"] == "frontend_bundle"
 
-      gzip_bytes = references.sum do |reference|
-        path = resolve_reference(reference)
-        next 0 unless path
+      graph = evidence.dig("sizes", "frontend_bundle_graph")
+      unless graph.is_a?(Hash)
+        error("frontend_bundle artifact requires the evidence byte graph")
+        return
+      end
+      files = graph["files"]
+      unless files.is_a?(Array)
+        error("frontend_bundle evidence byte graph files must be an array")
+        return
+      end
+      expected_references = files.map { |file| file.slice("path", "sha256") }
+      error("frontend_bundle measurement files must exactly bind every eager, lazy, transitive, and shared graph file") unless
+        references == expected_references
+
+      files_by_path = files.to_h { |file| [file["path"], file] }
+      eager_paths = candidate_bundle_closure(graph["eager_entry_path"], files_by_path, dynamic: false)
+      lazy_paths = Array(graph["capability_entries"]).flat_map do |entry|
+        candidate_bundle_closure(entry["path"], files_by_path, dynamic: true)
+      end.uniq - eager_paths
+      gzip_by_path = resolved.to_h do |relative, path|
         unless path.extname == ".js"
           error("frontend_bundle measurement files must be actual JavaScript chunks")
-          next 0
+          next [relative, 0]
         end
-        Zlib.gzip(path.binread, level: Zlib::BEST_COMPRESSION).bytesize
+        bytes = PerformanceBoundedFile.read(path, max_bytes: PerformanceEvidence::MAX_BUNDLE_FILE_BYTES)
+        [relative, Zlib.gzip(bytes, level: Zlib::BEST_COMPRESSION).bytesize]
       end
-      observed = observation_map(artifact)["eager_javascript_gzip_bytes"]&.fetch("value", nil)
-      error("frontend_bundle gzip observation does not match verifier-compressed artifact bytes") unless observed == gzip_bytes
+      observations = observation_map(artifact)
+      eager_observed = observations.dig("eager_javascript_gzip_bytes", "value")
+      lazy_observed = observations.dig("lazy_javascript_gzip_bytes", "value")
+      error("frontend_bundle eager observation does not match verifier-compressed transitive eager bytes") unless
+        eager_observed == eager_paths.sum { |path| gzip_by_path[path].to_i }
+      error("frontend_bundle lazy observation does not match verifier-compressed unique transitive lazy bytes") unless
+        lazy_observed == lazy_paths.sum { |path| gzip_by_path[path].to_i }
+    end
+
+    def candidate_bundle_closure(start, files, dynamic:)
+      pending = [start]
+      seen = []
+      until pending.empty?
+        path = pending.shift
+        next if seen.include?(path)
+
+        file = files[path]
+        unless file
+          error("frontend_bundle graph references an undeclared JavaScript file")
+          next
+        end
+        seen << path
+        pending.concat(Array(file["imports"]))
+        pending.concat(Array(file["dynamic_imports"])) if dynamic
+      end
+      seen
     end
 
     def validate_kind_specific_observations(artifact, evidence)
@@ -1421,6 +1776,7 @@ module Stead
                         when "frontend_bundle"
                           {
                             "eager_javascript_gzip_bytes" => evidence.dig("sizes", "eager_javascript_gzip_bytes"),
+                            "lazy_javascript_gzip_bytes" => evidence.dig("sizes", "lazy_javascript_gzip_bytes"),
                             "lazy_javascript_chunk_count" => evidence.dig("sizes", "lazy_javascript_chunks")&.length
                           }
                         when "go_microbenchmark"
@@ -1569,8 +1925,10 @@ module Stead
             resolved["binary"].to_s, *expected_argv.drop(1), chdir: root.to_s
           )
           error("verifier replay of scenario runner failed") unless replay_status.success?
-          error("runner stdout evidence was not reproduced by verifier execution") unless resolved["stdout"] && replay_stdout == resolved["stdout"].binread
-          error("runner stderr evidence was not reproduced by verifier execution") unless resolved["stderr"] && replay_stderr == resolved["stderr"].binread
+          error("runner stdout evidence was not reproduced by verifier execution") unless
+            resolved["stdout"] && replay_stdout == PerformanceBoundedFile.read(resolved["stdout"], max_bytes: MAX_RETAINED_ARTIFACT_BYTES)
+          error("runner stderr evidence was not reproduced by verifier execution") unless
+            resolved["stderr"] && replay_stderr == PerformanceBoundedFile.read(resolved["stderr"], max_bytes: MAX_RETAINED_ARTIFACT_BYTES)
         rescue SystemCallError => exception
           error("scenario runner could not be replayed by the verifier: #{exception.class}")
         end
@@ -1619,7 +1977,8 @@ module Stead
       begin
         stdout, stderr, status = Open3.capture3(*argv, chdir: root.to_s)
         error("verifier replay rejected #{output['kind']} runner output") unless status.success? && stderr.empty?
-        error("#{output['kind']} runner output record was not reproduced by verifier execution") unless stdout == record_path.binread
+        error("#{output['kind']} runner output record was not reproduced by verifier execution") unless
+          stdout == PerformanceBoundedFile.read(record_path, max_bytes: MAX_RETAINED_ARTIFACT_BYTES)
       rescue SystemCallError => exception
         error("#{output['kind']} runner output could not be replayed by the verifier: #{exception.class}")
       end
@@ -1642,7 +2001,7 @@ module Stead
       return unless output_path
 
       begin
-        observed = JSON.parse(output_path.read(encoding: "UTF-8"))
+        observed = PerformanceStrictJSON.parse_file(output_path)
         expected = manifest.benchmark_environment(artifact["scenario_id"])
         error("runner environment observation does not exactly match trusted CPU, network, topology, corpus, cache, and load controls") unless observed == expected
       rescue JSON::ParserError
@@ -1653,7 +2012,8 @@ module Stead
       begin
         stdout, stderr, status = Open3.capture3(runner_path.to_s, *expected_argv.drop(1), chdir: root.to_s)
         error("verifier replay of runner environment probe failed") unless status.success? && stderr.empty?
-        error("stored runner environment observation was not produced by verifier execution") unless stdout == output_path.binread
+        error("stored runner environment observation was not produced by verifier execution") unless
+          stdout == PerformanceBoundedFile.read(output_path, max_bytes: MAX_RETAINED_ARTIFACT_BYTES)
       rescue SystemCallError => exception
         error("runner environment probe could not be replayed by the verifier: #{exception.class}")
       end
@@ -1810,7 +2170,7 @@ module Stead
       end
     end
 
-    def resolve_reference(reference)
+    def resolve_reference(reference, max_bytes: MAX_RETAINED_ARTIFACT_BYTES, scan: true)
       unless reference.is_a?(Hash) && reference["path"].is_a?(String)
         error("file reference must contain a path")
         return nil
@@ -1837,11 +2197,41 @@ module Stead
           return nil
         end
       end
+      if candidate.size > max_bytes
+        error("candidate artifact exceeds #{max_bytes} byte ceiling: #{relative}")
+        return nil
+      end
+      scan_retained_reference(candidate, relative, max_bytes) if scan
       candidate
     end
 
-    def verify_reference_digest(reference, path, label)
-      actual = PerformanceCanonicalJSON.file_digest(path)
+    def scan_retained_reference(path, relative, max_bytes)
+      @retained_scan_cache ||= {}
+      return if @retained_scan_cache.key?(path.to_s)
+
+      rules = manifest.document["telemetry_scan"] || {}
+      findings = PerformanceRetainedEvidenceScan.raw_file_findings(path, rules: rules, max_bytes: max_bytes)
+      if path.extname.downcase == ".json"
+        begin
+          parsed = PerformanceStrictJSON.parse_file(path)
+          findings.concat(PerformanceRetainedEvidenceScan.structured_findings(parsed, rules: rules))
+        rescue JSON::ParserError => exception
+          findings << "strict JSON preflight failed: #{exception.message}"
+        end
+      end
+      findings.uniq.each { |finding| error("#{relative}: #{finding}") }
+      @retained_scan_cache[path.to_s] = true
+    end
+
+    def validate_structured_retained_document(value, label)
+      rules = manifest.document["telemetry_scan"] || {}
+      PerformanceRetainedEvidenceScan.structured_findings(value, rules: rules).each do |finding|
+        error("#{label} retains protected content: #{finding}")
+      end
+    end
+
+    def verify_reference_digest(reference, path, label, max_bytes: MAX_RETAINED_ARTIFACT_BYTES)
+      actual = PerformanceCanonicalJSON.file_digest(path, max_bytes: max_bytes)
       return true if reference["sha256"] == actual
 
       error("#{label} digest mismatch for #{reference['path']}")
@@ -2010,7 +2400,7 @@ module Stead
         )
         return ["frontend baseline measurement failed: #{measure_stderr.lines.first.to_s.strip}"] unless measure_status.success?
 
-        measured = JSON.parse(measured_json)
+        measured = PerformanceStrictJSON.parse(measured_json)
         errors << "frontend baseline budget differs from deterministic tool output" unless measured["budget_bytes_gzip"] == baseline["budget_bytes_gzip"]
         errors << "frontend baseline eager bytes differ from rebuilt bundle" unless measured["eager_javascript_bytes_gzip"] == baseline["eager_javascript_bytes_gzip"]
         measured_by_name = measured.fetch("measured_files", []).to_h { |entry| [entry["file"], entry] }
@@ -2021,14 +2411,14 @@ module Stead
             errors << "frontend baseline rebuilt bundle file is missing: #{entry['file']}"
             next
           end
-          bytes = bytes_path.binread
+          bytes = PerformanceBoundedFile.read(bytes_path, max_bytes: PerformanceEvidence::MAX_BUNDLE_FILE_BYTES)
           errors << "frontend baseline bundle byte digest mismatch for #{entry['file']}" unless Digest::SHA256.hexdigest(bytes) == entry["file_sha256"]
           errors << "frontend baseline uncompressed byte count mismatch for #{entry['file']}" unless bytes.bytesize == entry["uncompressed_bytes"]
           errors << "frontend baseline gzip byte count mismatch for #{entry['file']}" unless measured_by_name.dig(entry["file"], "gzip_bytes") == entry["gzip_bytes"]
         end
       end
       errors
-    rescue JSON::ParserError, SystemCallError => error
+    rescue JSON::ParserError, SystemCallError, PerformanceBoundedFile::TooLarge => error
       ["frontend baseline rebuild failed closed: #{error.class}: #{error.message}"]
     end
   end

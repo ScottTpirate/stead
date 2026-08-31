@@ -22,9 +22,9 @@
       "type": "object", "additionalProperties": false,
       "required": ["runner", "runner_version", "command", "started_at", "ended_at"],
       "properties": {
-        "runner": { "type": "string", "minLength": 1 },
-        "runner_version": { "type": "string", "minLength": 1 },
-        "command": { "type": "string", "minLength": 1 },
+        "runner": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "runner_version": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "command": { "type": "string", "minLength": 1, "maxLength": 2048 },
         "started_at": { "type": "string", "format": "date-time" },
         "ended_at": { "type": "string", "format": "date-time" }
       }
@@ -33,18 +33,25 @@
     "timings_ms": { "$ref": "#/$defs/timingSummary" },
     "sizes": {
       "type": "object", "additionalProperties": false,
-      "required": ["response_bytes", "eager_javascript_gzip_bytes", "lazy_javascript_chunks", "frontend_baseline"],
+      "required": ["response_bytes", "eager_javascript_gzip_bytes", "lazy_javascript_gzip_bytes", "lazy_javascript_chunks", "frontend_baseline", "frontend_bundle_graph"],
       "properties": {
         "response_bytes": { "type": "integer", "minimum": 0 },
         "eager_javascript_gzip_bytes": { "type": "integer", "minimum": 0, "maximum": 256000 },
+        "lazy_javascript_gzip_bytes": { "type": "integer", "minimum": 0 },
         "lazy_javascript_chunks": {
-          "type": "array",
+          "type": "array", "maxItems": 6,
           "items": {
             "type": "object", "additionalProperties": false,
-            "required": ["name", "capability", "gzip_bytes"],
+            "required": ["name", "capability", "entry_path", "file_paths", "uncompressed_bytes", "gzip_bytes"],
             "properties": {
-              "name": { "type": "string", "minLength": 1 },
-              "capability": { "type": "string", "minLength": 1 },
+              "name": { "$ref": "#/$defs/capability" },
+              "capability": { "$ref": "#/$defs/capability" },
+              "entry_path": { "$ref": "#/$defs/bundlePath" },
+              "file_paths": {
+                "type": "array", "minItems": 1, "maxItems": 128, "uniqueItems": true,
+                "items": { "$ref": "#/$defs/bundlePath" }
+              },
+              "uncompressed_bytes": { "type": "integer", "minimum": 1 },
               "gzip_bytes": { "type": "integer", "minimum": 0 }
             }
           }
@@ -58,6 +65,28 @@
             "current_gzip_bytes": { "type": "integer" },
             "delta_gzip_bytes": { "type": "integer" },
             "lazy_chunk_delta_gzip_bytes": { "type": "integer" }
+          }
+        },
+        "frontend_bundle_graph": {
+          "type": ["object", "null"], "additionalProperties": false,
+          "required": ["eager_entry_path", "capability_entries", "files"],
+          "properties": {
+            "eager_entry_path": { "$ref": "#/$defs/bundlePath" },
+            "capability_entries": {
+              "type": "array", "minItems": 6, "maxItems": 6,
+              "items": {
+                "type": "object", "additionalProperties": false,
+                "required": ["capability", "path"],
+                "properties": {
+                  "capability": { "$ref": "#/$defs/capability" },
+                  "path": { "$ref": "#/$defs/bundlePath" }
+                }
+              }
+            },
+            "files": {
+              "type": "array", "minItems": 7, "maxItems": 256,
+              "items": { "$ref": "#/$defs/bundleFile" }
+            }
           }
         }
       }
@@ -81,7 +110,7 @@
       }
     },
     "scaling_trials": {
-      "type": "array",
+      "type": "array", "maxItems": 32,
       "items": {
         "type": "object", "additionalProperties": false,
         "required": ["result_count", "sql_queries", "postgres_writes", "openfga_calls", "policy_calls", "provider_calls", "logical_audit_operations"],
@@ -112,7 +141,7 @@
             "projection_lag": { "$ref": "#/$defs/sampleSeries" }
           }
         },
-        "counts": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/counts" } },
+        "counts": { "type": "array", "minItems": 1, "maxItems": 1000, "items": { "$ref": "#/$defs/counts" } },
         "response_bytes": { "$ref": "#/$defs/integerSampleSeries" },
         "web_vitals": {
           "type": "object", "additionalProperties": false,
@@ -127,7 +156,7 @@
     },
     "raw_samples_sha256": { "$ref": "#/$defs/sha256" },
     "request_traces": {
-      "type": "array", "minItems": 1,
+      "type": "array", "minItems": 1, "maxItems": 1000,
       "items": {
         "type": "object", "additionalProperties": false,
         "required": ["trace_id_hash", "sample_index", "sample_started_monotonic_ns", "events"],
@@ -136,7 +165,7 @@
           "sample_index": { "type": "integer", "minimum": 0 },
           "sample_started_monotonic_ns": { "type": "integer", "minimum": 0 },
           "events": {
-            "type": "array", "minItems": 1,
+            "type": "array", "minItems": 1, "maxItems": 64,
             "items": {
               "type": "object", "additionalProperties": false,
               "required": ["type", "monotonic_ns", "origin", "route_template"],
@@ -150,7 +179,7 @@
                 },
                 "monotonic_ns": { "type": "integer", "minimum": 0 },
                 "origin": { "enum": ["stead_api", "provider", "internal", null] },
-                "route_template": { "type": ["string", "null"], "minLength": 1 },
+                "route_template": { "type": ["string", "null"], "minLength": 1, "maxLength": 240 },
                 "write_role": { "enum": ["authoritative_state", "transactional_outbox", "aggregate_audit", null] },
                 "transaction_id_hash": {
                   "oneOf": [
@@ -181,19 +210,19 @@
       "properties": {
         "ruleset_id": { "type": "string", "minLength": 1 },
         "records": {
-          "type": "array", "minItems": 1,
+          "type": "array", "minItems": 1, "maxItems": 10000,
           "items": {
             "type": "object", "additionalProperties": false,
             "required": ["metric", "value", "attributes"],
             "properties": {
-              "metric": { "type": "string", "minLength": 1 },
+              "metric": { "type": "string", "minLength": 1, "maxLength": 160 },
               "value": { "type": "number" },
               "attributes": {
                 "type": "object", "maxProperties": 32,
                 "propertyNames": { "type": "string", "minLength": 1, "maxLength": 120 },
                 "additionalProperties": {
                   "anyOf": [
-                    { "type": "string" },
+                    { "type": "string", "maxLength": 1024 },
                     { "type": "number" },
                     { "type": "boolean" }
                   ]
@@ -214,6 +243,29 @@
   },
   "$defs": {
     "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "capability": { "enum": ["docs_editor", "code", "delivery", "administration", "migration", "analytics"] },
+    "bundlePath": {
+      "type": "string", "minLength": 1, "maxLength": 240,
+      "pattern": "^(artifacts/performance|packages/test-fixtures/harness/performance)/[A-Za-z0-9._/-]+\\.js$"
+    },
+    "bundleFile": {
+      "type": "object", "additionalProperties": false,
+      "required": ["path", "sha256", "uncompressed_bytes", "gzip_bytes", "imports", "dynamic_imports"],
+      "properties": {
+        "path": { "$ref": "#/$defs/bundlePath" },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "uncompressed_bytes": { "type": "integer", "minimum": 1, "maximum": 33554432 },
+        "gzip_bytes": { "type": "integer", "minimum": 1, "maximum": 33554432 },
+        "imports": {
+          "type": "array", "maxItems": 64, "uniqueItems": true,
+          "items": { "$ref": "#/$defs/bundlePath" }
+        },
+        "dynamic_imports": {
+          "type": "array", "maxItems": 16, "uniqueItems": true,
+          "items": { "$ref": "#/$defs/bundlePath" }
+        }
+      }
+    },
     "source": {
       "type": "object", "additionalProperties": false,
       "required": ["revision", "dirty", "recorded_at", "tool_versions"],
@@ -223,8 +275,8 @@
         "recorded_at": { "type": "string", "format": "date-time" },
         "tool_versions": {
           "type": "object", "minProperties": 1,
-          "propertyNames": { "type": "string", "minLength": 1 },
-          "additionalProperties": { "type": "string", "minLength": 1 }
+          "propertyNames": { "type": "string", "minLength": 1, "maxLength": 120 },
+          "additionalProperties": { "type": "string", "minLength": 1, "maxLength": 240 }
         }
       }
     },
@@ -277,7 +329,7 @@
         "projection_lag": { "$ref": "#/$defs/percentiles" }
       }
     },
-    "sampleSeries": { "type": "array", "minItems": 1, "items": { "type": "number", "minimum": 0 } },
-    "integerSampleSeries": { "type": "array", "minItems": 1, "items": { "type": "integer", "minimum": 0 } }
+    "sampleSeries": { "type": "array", "minItems": 1, "maxItems": 1000, "items": { "type": "number", "minimum": 0 } },
+    "integerSampleSeries": { "type": "array", "minItems": 1, "maxItems": 1000, "items": { "type": "integer", "minimum": 0 } }
   }
 }

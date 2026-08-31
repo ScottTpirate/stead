@@ -171,7 +171,11 @@ module Stead
     REQUIRED_OBSERVATIONS = {
       "authorization_count" => { "openfga_calls" => "calls", "policy_calls" => "calls", "logical_audit_operations" => "calls" },
       "browser_performance" => { "lcp_ms" => "milliseconds", "inp_ms" => "milliseconds", "cls" => "ratio" },
-      "frontend_bundle" => { "eager_javascript_gzip_bytes" => "bytes", "lazy_javascript_chunk_count" => "count" },
+      "frontend_bundle" => {
+        "eager_javascript_gzip_bytes" => "bytes",
+        "lazy_javascript_gzip_bytes" => "bytes",
+        "lazy_javascript_chunk_count" => "count"
+      },
       "go_microbenchmark" => { "nanoseconds_per_operation" => "nanoseconds", "allocations_per_operation" => "count", "bytes_per_operation" => "bytes" },
       "golden_slice_e2e" => { "latency_p50_ms" => "milliseconds", "latency_p95_ms" => "milliseconds", "latency_p99_ms" => "milliseconds" },
       "peek" => { "peek_p95_ms" => "milliseconds" },

@@ -72,7 +72,12 @@ SHA or caller-asserted CI context cannot pass.
 
 Runtime components, version-probe output, evidence, benchmark artifacts,
 measurement files, runner stdout/stderr/binary, environment observations, and
-reviews use verifier-recomputed SHA-256 references to actual files. The
+reviews use verifier-recomputed SHA-256 references to actual files. Every JSON
+entrypoint first enforces a 128 MiB byte ceiling, UTF-8, decoded-key uniqueness,
+32-level nesting, 100,000 entries per collection, four million total values,
+and 65,536 decoded bytes per string. Referenced evidence is size-checked before
+hashing or materialization; runtime components alone have a separate 512 MiB
+ceiling, and schemas add tighter per-kind array and string bounds. The
 verifier executes every component probe with closed arguments and compares the
 resulting bytes. Every scenario requires exactly one candidate-revision
 tracked runner attestation; the verifier re-executes its closed argv and its
@@ -101,6 +106,12 @@ and measurement tool, then checks each output file's SHA-256 and uncompressed
 and gzip byte counts. Its ID/value/source/environment are also bound to the
 standard manifest. It is a delta baseline, not PERF-005 completion for the
 mature Devlane-derived interface; the absolute ceiling remains 256,000 bytes.
+Frontend-touched evidence additionally binds one eager entry and all six
+required lazy capability entries to an exact digest/size/import graph. The
+verifier walks static and dynamic edges, accounts for shared files once in the
+total, recompresses every file, and derives eager bytes, per-capability bytes,
+unique lazy bytes, and both baseline deltas. A caller cannot hide transitive
+files or substitute lazy totals.
 
 Other timing metrics intentionally have no invented baseline. Once a critical
 baseline is merged, the verifier accepts it only for the same profile,
@@ -114,12 +125,13 @@ candidate commit author; independence is compared against that verified owner,
 not a caller-selected identity. The review signature must verify. Release
 ceilings remain nonwaivable.
 
-Telemetry scanning recursively examines every normalized key and string value.
-It rejects forbidden fields/content and raw, prefixed/suffixed, hexadecimal,
-percent-encoded, standard-Base64, and URL-safe-Base64 canaries, including
-canaries revealed inside delimited encoded substrings of keys or values.
-Evidence retains only safe records and scan counts, never protected canary
-content.
+Protected-content scanning covers the complete evidence document and every
+retained runner stderr, environment observation, kind-output record, payload,
+request trace, measurement file, review, and binary—not only telemetry records.
+Structured files receive normalized key/value checks; all files receive a
+bounded raw scan for forbidden values and raw, hexadecimal, percent-encoded,
+standard-Base64, and URL-safe-Base64 canaries. Binary files are treated as
+opaque bytes. Evidence retains only safe aggregate records and scan counts.
 
 ## Current non-candidate gaps
 

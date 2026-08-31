@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 
-import { readFile } from "node:fs/promises";
 import process from "node:process";
 
 import Ajv2020 from "ajv/dist/2020.js";
 import addFormats from "ajv-formats";
+import { JSON_LIMITS, parseStrictJson, readStrictJson } from "./strict_json.mjs";
 
 const schemaPaths = [
   "tests/performance/harness/performance-evidence-v1.schema.json",
@@ -21,7 +21,7 @@ const evidencePath = "packages/test-fixtures/harness/performance/standard-reques
 const datasetPath = "tests/performance/datasets/standard-request-boundary-v1.json";
 const baselinePath = "packages/test-fixtures/harness/performance/foundation-shell-baseline.json";
 const authoritiesPath = "tests/performance/harness/performance-reviewer-authorities-v1.json";
-const readJson = async (path) => JSON.parse(await readFile(path, "utf8"));
+const readJson = readStrictJson;
 
 const schemas = await Promise.all(schemaPaths.map(readJson));
 const [evidence, dataset, baseline, authorities] = await Promise.all([
@@ -139,6 +139,26 @@ const candidateWithoutTrustedCI = {
   runtime_components: [], evidence: [], benchmark_artifacts: [], regression_reviews: [],
 };
 assert(!candidateValidator(candidateWithoutTrustedCI).valid, "candidate suites must carry the protected trusted-CI binding and complete coverage");
+
+const strictRejects = [
+  '{"source":{"revision":"a","revision":"b"}}',
+  '{"source":{"revision":"a","\\u0072evision":"b"}}',
+  "[".repeat(JSON_LIMITS.maxDepth + 1) + "0" + "]".repeat(JSON_LIMITS.maxDepth + 1),
+  JSON.stringify("x".repeat(JSON_LIMITS.maxStringBytes + 1)),
+];
+assert(strictRejects.every((source) => {
+  try { parseStrictJson(source); return false; } catch (error) { return error instanceof SyntaxError; }
+}), "the Node schema gate must reject duplicate decoded keys and one-over depth/string inputs before JSON.parse");
+assert(Array.isArray(parseStrictJson("[".repeat(JSON_LIMITS.maxDepth) + "0" + "]".repeat(JSON_LIMITS.maxDepth))),
+  "the exact JSON depth ceiling must remain accepted");
+assert(parseStrictJson('{"a":1}', { maxBytes: 7 }).a === 1,
+  "the exact JSON byte ceiling must remain accepted");
+try {
+  parseStrictJson('{"a":1}', { maxBytes: 6 });
+  assert(false, "one-over JSON bytes must fail before parse");
+} catch (error) {
+  assert(error instanceof SyntaxError, "one-over JSON bytes must fail with a strict parse error");
+}
 
 if (failures.length > 0) {
   process.stderr.write(`${failures.join("\n")}\n`);

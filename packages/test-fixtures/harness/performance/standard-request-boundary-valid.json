@@ -38,11 +38,13 @@
   "sizes": {
     "response_bytes": 48000,
     "eager_javascript_gzip_bytes": 60808,
+    "lazy_javascript_gzip_bytes": 0,
     "lazy_javascript_chunks": [],
     "frontend_baseline": {
       "baseline_id": "foundation-shell-a799f2e", "baseline_gzip_bytes": 60808,
       "current_gzip_bytes": 60808, "delta_gzip_bytes": 0, "lazy_chunk_delta_gzip_bytes": 0
-    }
+    },
+    "frontend_bundle_graph": null
   },
   "web_vitals": { "lcp_ms": 400.0, "inp_ms": 30.0, "cls": 0.01 },
   "go_microbenchmark": {
