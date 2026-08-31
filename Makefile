@@ -1,6 +1,8 @@
-.PHONY: foundation-check go-check contract-check
+.PHONY: foundation-check foundation-preflight go-check contract-check
 
-foundation-check: go-check contract-check
+foundation-check: foundation-preflight
+	$(MAKE) --no-print-directory go-check
+	$(MAKE) --no-print-directory contract-check
 	scripts/run_pinned_node.sh npm run typecheck
 	scripts/run_pinned_node.sh npm run test:unit --workspace=@stead/web
 	scripts/run_pinned_node.sh npm run build
@@ -11,6 +13,10 @@ foundation-check: go-check contract-check
 	scripts/run_pinned_node.sh npm audit --audit-level=high
 	ruby scripts/validate_dependencies.rb --release
 	ruby tests/contract/architecture/foundation_contract_test.rb
+
+foundation-preflight:
+	ruby scripts/validate_dependencies.rb --release
+	ruby scripts/validate_dependencies.rb --self-test
 
 go-check:
 	@unformatted="$$(scripts/run_pinned_go.sh gofmt -l apps internal)"; \

@@ -56,6 +56,9 @@ type restrictions, and executes all 16 suites and 80 assertions. The upstream Op
 tree does not pass the no-unwaived-High gate. Production OpenFGA remains mandatory; a future
 CLI test tool requires its own vulnerability-clean exact approval.
 
+The foundation target runs release dependency/provenance validation before any repository
+code or frontend build, then repeats it after the build to bind the verified output.
+
 Initial acquisition and `npm audit` require outbound access. Checked-in validators perform
 no contract upload. Build logs, telemetry, caches, and artifacts must not contain secrets,
 protected bodies, authorization tuples, or classified data.
@@ -121,6 +124,13 @@ non-distributable until independent approval. Before the first import:
 3. remove backend, routing, and ontology coupling;
 4. verify the frontend uses canonical Stead APIs and product concepts; and
 5. run security, accessibility, contract, bundle, and notice tests.
+
+While that approval is pending, the provenance record exact-binds the existing authored
+`apps/web` source, test, configuration, package, and build-control graph. Additional or
+changed frontend entries, alternate destination files, and symlinked inputs fail both normal
+and release validation; `dist` and `node_modules` remain generated, untracked directories.
+A legitimate foundation-shell change during this short gate requires a reviewed successor
+that refreshes the closed manifest—it must not be disguised as an unrecorded source import.
 
 Devlane is a visual/component source, not a Stead ontology or backend. Its MIT notice is
 already retained in [`THIRD_PARTY_NOTICES.md`](../../THIRD_PARTY_NOTICES.md) as a regression

@@ -3,9 +3,11 @@
 
 require "digest"
 require "find"
+require "fileutils"
 require "json"
 require "set"
 require "time"
+require "tmpdir"
 require "uri"
 require "yaml"
 
@@ -32,7 +34,7 @@ PROHIBITED_DIRECT_PACKAGES = Set.new(["@asyncapi/cli", "ajv-cli"]).freeze
 PROHIBITED_SETUP_ACTIONS = Set.new(["actions/setup-node", "actions/setup-go", "ruby/setup-ruby"]).freeze
 FOUNDATION_ROLLBACK_TARGET = "git:e24a4d9d05ad6df19c5bcaa9c385ee74fd5d8c31"
 DEVLANE_CANDIDATE_NAME = "devlane-stead-primitives"
-DEVLANE_PROVENANCE_SURFACE_SHA256 = "52df58f7a346d37c19af1fd4eb1673c2aa720521838dc686c1e9ab10bd424d69"
+DEVLANE_PROVENANCE_SURFACE_SHA256 = "4b0b3d6d91263db16b6c59c59c606775fa92924543fd51cc88ae9a808aafc44e"
 DEVLANE_REGISTRY_SURFACE_SHA256 = "bfe1046598dc8a4a400967a4848ed75d2aca98996a22aa91a1d4790c42704cc0"
 DEVLANE_LICENSE_BLOB_SHA1 = "b39a03349aaf17ccb61bef17f9f0e88d86a746ca"
 DEVLANE_LICENSE_CONTENT_SHA256 = "854e83f31c0027ba9ea80691fcc111c5cccc7ee75378462b1e4d2af99c2d269f"
@@ -41,6 +43,7 @@ DEVLANE_PROPOSED_DESTINATION_PATHS = [
   "packages/design-system/src/tokens.css",
   "packages/design-system/src/primitives.tsx"
 ].freeze
+DEVLANE_GOVERNED_DESTINATION_ROOTS = DEVLANE_PROPOSED_DESTINATION_PATHS.map { |path| File.dirname(path) }.uniq.freeze
 DEVLANE_GOVERNED_STAGING_ROOTS = ["third_party/devlane"].freeze
 DEVLANE_SOURCE_LOCATION_ALLOWLIST = {
   "staging_roots" => DEVLANE_GOVERNED_STAGING_ROOTS,
@@ -55,6 +58,128 @@ DEVLANE_PINNED_SOURCE_FINGERPRINTS = {
   1_165 => "35eb3b4e8ce4562833c03099d28f86d8484dc63a487fd42f66493a418ebe46b4",
   249 => "8ba0dc9ca6e8a1243b433ea757b2aab3ef25d693a88fcb3560ca41601b2b066b"
 }.freeze
+DEVLANE_PENDING_BUILD_GRAPH_FILES = [
+  {
+    "path" => ".npmrc",
+    "type" => "regular_file",
+    "sha256" => "a0dcd9578d43df879467e9de60dfb9b469ed9674a3729e288e57291f6b35f6c4"
+  },
+  {
+    "path" => "Makefile",
+    "type" => "regular_file",
+    "sha256" => "1f51fc6bc6a0ee2b557be94180a00063325539e59f9b0ed9feb539f08c864007"
+  },
+  {
+    "path" => "package.json",
+    "type" => "regular_file",
+    "sha256" => "5c19ea5409af83c54752ad926e39c47dda86403af8e0bd8de12edc76313f196c"
+  },
+  {
+    "path" => "package-lock.json",
+    "type" => "regular_file",
+    "sha256" => "c05ad356c65817e97299903378e5bdcd36d2c926ffbf7b4aa750ef0c5695a917"
+  },
+  {
+    "path" => "scripts/run_pinned_node.sh",
+    "type" => "regular_file",
+    "sha256" => "01a384b7c510aa54af6c3d2ca621325c895442a3c98250c87b204bf71c22271c"
+  },
+  {
+    "path" => "tsconfig.base.json",
+    "type" => "regular_file",
+    "sha256" => "cc6a84094fde40708451f89eaec157c135f82bcaf4b8e535e839c656aa973997"
+  },
+  {
+    "path" => "apps/web/index.html",
+    "type" => "regular_file",
+    "sha256" => "e0ce791634b186b5837900e399c3e60afa0ad6873fa78a8c45cc5e6fec8a88a3"
+  },
+  {
+    "path" => "apps/web/package.json",
+    "type" => "regular_file",
+    "sha256" => "e8d7898c77d0fee45de869c6de8a325ba0a4e5ebe11db09e75f3b87eebce6dd4"
+  },
+  {
+    "path" => "apps/web/tsconfig.json",
+    "type" => "regular_file",
+    "sha256" => "c17de10c1dd6dbd5ab2bcf60ce70b54f72edf7d8f1a1b95db2317bcb76cecf3e"
+  },
+  {
+    "path" => "apps/web/vitest.config.ts",
+    "type" => "regular_file",
+    "sha256" => "c664adc17411cf22a3c17354bcc8273f71ba572dcc4e8dcdb484c36f995e1eba"
+  },
+  {
+    "path" => "apps/web/src/Foundation.test.tsx",
+    "type" => "regular_file",
+    "sha256" => "0ad7bab3f5b4b9989063fcbc8a6c05d920cace478220ef108877b2852d45973a"
+  },
+  {
+    "path" => "apps/web/src/Foundation.tsx",
+    "type" => "regular_file",
+    "sha256" => "975c58412e9e70d5b40b5913760709dcf419c38c789509101e092e5a82387e47"
+  },
+  {
+    "path" => "apps/web/src/main.tsx",
+    "type" => "regular_file",
+    "sha256" => "4a0d5b9a03ae7fe7b5fe91793d451336c9f37a72b6012d905cdae0f15870cb99"
+  },
+  {
+    "path" => "apps/web/src/styles.css",
+    "type" => "regular_file",
+    "sha256" => "5ced421fe16d22804cbd5bb2722f9ec98acec73bd544d2b342b2fa25cee3db12"
+  }
+].freeze
+DEVLANE_PENDING_VERIFIED_OUTPUT_FILES = [
+  {
+    "path" => "apps/web/dist/.vite/manifest.json",
+    "type" => "regular_file",
+    "sha256" => "3fbf96e89bfeafff2e6a60fae5537bd7f434a09a9d7ade866fa9c50a9a7cf825"
+  },
+  {
+    "path" => "apps/web/dist/assets/index-B2D1I_TZ.css",
+    "type" => "regular_file",
+    "sha256" => "89c28a1d169409bd304263b71660f26506d617582a49abf0fd8721556ceb0fef"
+  },
+  {
+    "path" => "apps/web/dist/assets/index-C25eOy4C.js",
+    "type" => "regular_file",
+    "sha256" => "d523f43d46b2f22af76db4d471846beb35a46bb71c4a4aac45100bd710b53d6b"
+  },
+  {
+    "path" => "apps/web/dist/index.html",
+    "type" => "regular_file",
+    "sha256" => "ce0fa618e75b64d07ad6c72f1a0889caaf9dc56148ccc27ef5e8c3bfb5d9e504"
+  }
+].freeze
+DEVLANE_PENDING_BUILD_GRAPH = {
+  "state" => "CLOSED_UNTIL_APPROVED_IMPORT",
+  "frontend_root" => "apps/web",
+  "generated_roots" => [
+    "apps/web/node_modules"
+  ],
+  "verified_optional_output" => {
+    "root" => "apps/web/dist",
+    "files" => DEVLANE_PENDING_VERIFIED_OUTPUT_FILES
+  },
+  "files" => DEVLANE_PENDING_BUILD_GRAPH_FILES,
+  "rule" => (
+    "While source distribution or import remains unapproved, every frontend source, " \
+    "test, configuration, package, and build-control input must remain a regular in-tree " \
+    "file at the recorded digest; no additional frontend entry or symlink may enter the " \
+    "build graph. When dist exists it must match the exact clean-build output manifest; " \
+    "node_modules must be recreated from the exact locked package graph and may not carry " \
+    "authored source."
+  )
+}.freeze
+DEVLANE_PENDING_FRONTEND_FILES = DEVLANE_PENDING_BUILD_GRAPH_FILES
+  .filter_map { |entry| entry["path"] if entry["path"].start_with?("apps/web/") }
+  .to_set
+  .freeze
+DEVLANE_PENDING_OUTPUT_FILES = DEVLANE_PENDING_VERIFIED_OUTPUT_FILES
+  .map { |entry| entry["path"] }
+  .to_set
+  .freeze
 DEVLANE_LICENSE_TEXT = <<~'LICENSE'.freeze
   MIT License
 
@@ -874,9 +999,142 @@ rescue Errno::ENOENT, Errno::ENOTDIR
   false
 end
 
+def devlane_pending_build_graph_file_errors(root, entry)
+  relative = entry.fetch("path")
+  expected_sha256 = entry.fetch("sha256")
+  errors = []
+  cursor = File.expand_path(root)
+
+  relative.split("/")[0...-1].each do |component|
+    cursor = File.join(cursor, component)
+    stat = File.lstat(cursor)
+    if stat.symlink? || !stat.directory?
+      return ["BUILD_GRAPH_PARENT_TYPE #{relative}: #{cursor.delete_prefix("#{File.expand_path(root)}/")} is #{stat.ftype}, expected directory"]
+    end
+  end
+
+  absolute = File.join(root, relative)
+  stat = File.lstat(absolute)
+  unless stat.file? && !stat.symlink?
+    return ["BUILD_GRAPH_FILE_TYPE #{relative}: #{stat.ftype}, expected regular_file"]
+  end
+
+  actual_sha256 = Digest::SHA256.file(absolute).hexdigest
+  unless actual_sha256 == expected_sha256
+    errors << "BUILD_GRAPH_DIGEST #{relative}: expected #{expected_sha256}, got #{actual_sha256}"
+  end
+  errors
+rescue Errno::ENOENT, Errno::ENOTDIR
+  ["BUILD_GRAPH_MISSING #{relative}: expected regular_file"]
+rescue SystemCallError => e
+  ["BUILD_GRAPH_READ #{relative}: #{e.class}"]
+end
+
+def devlane_pending_verified_output_errors(root)
+  output = DEVLANE_PENDING_BUILD_GRAPH.fetch("verified_optional_output")
+  relative_root = output.fetch("root")
+  absolute_root = File.join(root, relative_root)
+  return [] unless path_entry_exists?(absolute_root)
+
+  stat = File.lstat(absolute_root)
+  unless stat.directory? && !stat.symlink?
+    return ["BUILD_GRAPH_OUTPUT_ROOT_TYPE #{relative_root}: #{stat.ftype}, expected directory"]
+  end
+
+  errors = output.fetch("files").flat_map do |entry|
+    devlane_pending_build_graph_file_errors(root, entry)
+  end
+  expanded_root = File.expand_path(root)
+  Find.find(absolute_root) do |path|
+    next if path == absolute_root
+
+    relative = path.delete_prefix("#{expanded_root}/")
+    begin
+      entry_stat = File.lstat(path)
+      next if entry_stat.directory? && !entry_stat.symlink?
+      next if entry_stat.file? && DEVLANE_PENDING_OUTPUT_FILES.include?(relative)
+
+      errors << "BUILD_GRAPH_OUTPUT_UNEXPECTED #{relative}: #{entry_stat.ftype}"
+    rescue SystemCallError => e
+      errors << "BUILD_GRAPH_OUTPUT_SCAN #{relative}: #{e.class}"
+    end
+  end
+  errors.uniq
+rescue SystemCallError => e
+  ["BUILD_GRAPH_OUTPUT_SCAN #{relative_root}: #{e.class}"]
+end
+
+def devlane_pending_build_graph_errors(root = ROOT)
+  errors = DEVLANE_PENDING_BUILD_GRAPH_FILES.flat_map do |entry|
+    devlane_pending_build_graph_file_errors(root, entry)
+  end
+  errors.concat(devlane_pending_verified_output_errors(root))
+  expanded_root = File.expand_path(root)
+  frontend_relative = DEVLANE_PENDING_BUILD_GRAPH.fetch("frontend_root")
+  frontend_root = File.join(expanded_root, frontend_relative)
+  frontend_stat = File.lstat(frontend_root)
+  unless frontend_stat.directory? && !frontend_stat.symlink?
+    errors << "BUILD_GRAPH_ROOT_TYPE #{frontend_relative}: #{frontend_stat.ftype}, expected directory"
+    return errors
+  end
+
+  generated_roots = DEVLANE_PENDING_BUILD_GRAPH.fetch("generated_roots").to_set
+  verified_output_root = DEVLANE_PENDING_BUILD_GRAPH.dig("verified_optional_output", "root")
+  Find.find(frontend_root) do |path|
+    next if path == frontend_root
+
+    relative = path.delete_prefix("#{expanded_root}/")
+    begin
+      stat = File.lstat(path)
+      if relative == verified_output_root
+        Find.prune if stat.directory? && !stat.symlink?
+        next
+      end
+      if generated_roots.include?(relative)
+        if stat.directory? && !stat.symlink?
+          Find.prune
+        else
+          errors << "BUILD_GRAPH_GENERATED_ROOT_TYPE #{relative}: #{stat.ftype}, expected directory"
+        end
+        next
+      end
+
+      next if stat.directory? && !stat.symlink?
+      next if stat.file? && DEVLANE_PENDING_FRONTEND_FILES.include?(relative)
+
+      errors << "BUILD_GRAPH_UNEXPECTED #{relative}: #{stat.ftype}"
+    rescue SystemCallError => e
+      errors << "BUILD_GRAPH_SCAN #{relative}: #{e.class}"
+    end
+  end
+  errors.uniq
+rescue Errno::ENOENT, Errno::ENOTDIR
+  errors << "BUILD_GRAPH_MISSING #{frontend_relative}: expected directory"
+  errors.uniq
+rescue SystemCallError => e
+  errors << "BUILD_GRAPH_SCAN #{frontend_relative}: #{e.class}"
+  errors.uniq
+end
+
 def devlane_repository_material_state(root = ROOT)
   present_destinations = DEVLANE_PROPOSED_DESTINATION_PATHS.select do |relative|
     path_entry_exists?(File.join(root, relative))
+  end
+
+  destination_entries = []
+  DEVLANE_GOVERNED_DESTINATION_ROOTS.each do |relative_root|
+    absolute_root = File.join(root, relative_root)
+    next unless path_entry_exists?(absolute_root)
+
+    unless File.directory?(absolute_root) && !File.symlink?(absolute_root)
+      destination_entries << relative_root
+      next
+    end
+    Find.find(absolute_root) do |path|
+      next if path == absolute_root
+
+      destination_entries << path.delete_prefix("#{root}/")
+    end
   end
 
   staging_entries = []
@@ -921,16 +1179,20 @@ def devlane_repository_material_state(root = ROOT)
 
   {
     present_destinations: present_destinations,
+    destination_entries: destination_entries,
     staging_entries: staging_entries,
     pinned_source_copies: pinned_source_copies,
-    inventory_errors: inventory_errors
+    inventory_errors: inventory_errors,
+    pending_build_graph_errors: devlane_pending_build_graph_errors(root)
   }
 rescue SystemCallError => e
   {
     present_destinations: present_destinations || [],
+    destination_entries: destination_entries || [],
     staging_entries: staging_entries || [],
     pinned_source_copies: pinned_source_copies || [],
-    inventory_errors: ["repository material scan failed: #{e.class}"]
+    inventory_errors: ["repository material scan failed: #{e.class}"],
+    pending_build_graph_errors: ["BUILD_GRAPH_SCAN repository: #{e.class}"]
   }
 end
 
@@ -950,8 +1212,14 @@ def devlane_pending_material_errors(provenance, components, material_state)
   errors = Array(material_state[:inventory_errors]).map do |error|
     "Devlane pending-source inventory could not be verified: #{error}"
   end
+  Array(material_state[:pending_build_graph_errors]).each do |error|
+    errors << "Devlane pending build graph: #{error}"
+  end
   Array(material_state[:present_destinations]).each do |path|
     errors << "Devlane pending-source gate: proposed destination #{path} must be absent before approval, distribution, and import are all recorded"
+  end
+  Array(material_state[:destination_entries]).each do |path|
+    errors << "Devlane pending-source gate: governed destination root must contain no source before approval/import; found #{path}"
   end
   Array(material_state[:staging_entries]).each do |path|
     errors << "Devlane pending-source gate: governed staging root must be empty; found #{path}"
@@ -1006,6 +1274,9 @@ def devlane_candidate_errors(provenance, components)
   unless provenance.dig("import", "governed_source_location_allowlist") == DEVLANE_SOURCE_LOCATION_ALLOWLIST
     errors << "devlane-provenance.yaml: governed source locations must remain the exact closed staging/destination allowlist"
   end
+  unless provenance.dig("import", "pending_build_graph") == DEVLANE_PENDING_BUILD_GRAPH
+    errors << "devlane-provenance.yaml: pending frontend source/module/build graph must remain exact and closed"
+  end
 
   errors.concat(devlane_license_binding_errors(provenance))
   recorded_fingerprints = Array(import["source_files"]).filter_map do |entry|
@@ -1030,6 +1301,18 @@ def devlane_candidate_errors(provenance, components)
   end
 
   errors
+end
+
+def with_devlane_pending_build_graph_fixture
+  Dir.mktmpdir("stead-devlane-pending-graph-") do |fixture_root|
+    DEVLANE_PENDING_BUILD_GRAPH_FILES.each do |entry|
+      relative = entry.fetch("path")
+      destination = File.join(fixture_root, relative)
+      FileUtils.mkdir_p(File.dirname(destination))
+      FileUtils.cp(File.join(ROOT, relative), destination)
+    end
+    yield fixture_root
+  end
 end
 
 def run_validator_self_tests
@@ -1248,6 +1531,22 @@ def run_validator_self_tests
     end,
     "distribution flag changed alone" => lambda do |provenance_copy, _components_copy|
       provenance_copy.fetch("proposed_import")["approved_source_distribution"] = true
+    end,
+    "pending build graph deleted" => lambda do |provenance_copy, _components_copy|
+      provenance_copy.fetch("import").delete("pending_build_graph")
+    end,
+    "pending build graph digest changed" => lambda do |provenance_copy, _components_copy|
+      provenance_copy.dig("import", "pending_build_graph", "files", 0)["sha256"] = "0" * 64
+    end,
+    "pending build graph path appended" => lambda do |provenance_copy, _components_copy|
+      provenance_copy.dig("import", "pending_build_graph", "files") << {
+        "path" => "apps/web/src/unreviewed.tsx",
+        "type" => "regular_file",
+        "sha256" => "0" * 64
+      }
+    end,
+    "pending build graph generated root widened" => lambda do |provenance_copy, _components_copy|
+      provenance_copy.dig("import", "pending_build_graph", "generated_roots") << "apps/web/src"
     end
   }
   devlane_mutation_survivors = []
@@ -1266,7 +1565,12 @@ def run_validator_self_tests
 
   notices_fixture = File.read(NOTICES_PATH)
   empty_material_state = {
-    present_destinations: [], staging_entries: [], pinned_source_copies: [], inventory_errors: []
+    present_destinations: [],
+    destination_entries: [],
+    staging_entries: [],
+    pinned_source_copies: [],
+    inventory_errors: [],
+    pending_build_graph_errors: []
   }
   { "normal" => false, "release" => true }.each do |mode_label, release_mode|
     DEVLANE_PROPOSED_DESTINATION_PATHS.each do |destination|
@@ -1309,6 +1613,170 @@ def run_validator_self_tests
       failures << "#{mode_label} Devlane gate accepted a byte-identical pinned source copy at an alternate location"
     end
     guard_count += 1
+
+    alternate_destination = "#{DEVLANE_GOVERNED_DESTINATION_ROOTS.fetch(0)}/alternate-primitives.tsx"
+    destination_errors = devlane_security_gate_errors(
+      provenance_fixture,
+      registry_components,
+      notices_fixture,
+      empty_material_state.merge(destination_entries: [alternate_destination]),
+      release_mode: release_mode
+    )
+    unless destination_errors.any? { |error| error.include?("governed destination root must contain no source") }
+      failures << "#{mode_label} Devlane gate accepted an alternate file under the governed destination root"
+    end
+    guard_count += 1
+  end
+
+  with_devlane_pending_build_graph_fixture do |fixture_root|
+    FileUtils.mkdir_p(File.join(fixture_root, "apps/web/node_modules/example"))
+    File.binwrite(File.join(fixture_root, "apps/web/node_modules/example/index.js"), "dependency")
+    graph_errors = devlane_repository_material_state(fixture_root).fetch(:pending_build_graph_errors)
+    failures << "exact pending build graph fixture did not validate: #{graph_errors.join('; ')}" unless graph_errors.empty?
+    guard_count += 1
+  end
+
+  pending_material_mutations = {
+    "rendered adapted Button" => {
+      expected: [
+        "BUILD_GRAPH_DIGEST apps/web/src/Foundation.tsx",
+        "BUILD_GRAPH_UNEXPECTED apps/web/src/DevlaneButton.tsx"
+      ],
+      mutate: lambda do |fixture_root|
+        button_path = File.join(fixture_root, "apps/web/src/DevlaneButton.tsx")
+        File.binwrite(
+          button_path,
+          <<~TSX
+            import { forwardRef, type ButtonHTMLAttributes } from "react";
+            export const DevlaneButton = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<HTMLButtonElement>>(
+              ({ children, ...props }, ref) => <button ref={ref} {...props}>{children}</button>,
+            );
+          TSX
+        )
+        foundation_path = File.join(fixture_root, "apps/web/src/Foundation.tsx")
+        source = File.binread(foundation_path)
+        File.binwrite(
+          foundation_path,
+          "import { DevlaneButton } from \"./DevlaneButton\";\n" +
+            source.sub("</main>", "  <DevlaneButton>Hidden pre-approval import</DevlaneButton>\n    </main>")
+        )
+      end
+    },
+    "alternate source symlink imported by CSS" => {
+      expected: [
+        "BUILD_GRAPH_DIGEST apps/web/src/styles.css",
+        "BUILD_GRAPH_UNEXPECTED apps/web/src/devlane-tokens.css: link"
+      ],
+      mutate: lambda do |fixture_root|
+        upstream_fixture = File.join(fixture_root, "pinned-devlane-tokens.css")
+        File.binwrite(upstream_fixture, "/* exact pinned source fixture boundary */\n")
+        File.symlink(upstream_fixture, File.join(fixture_root, "apps/web/src/devlane-tokens.css"))
+        styles_path = File.join(fixture_root, "apps/web/src/styles.css")
+        File.binwrite(styles_path, "@import \"./devlane-tokens.css\";\n" + File.binread(styles_path))
+      end
+    },
+    "approved graph file replaced by symlink" => {
+      expected: ["BUILD_GRAPH_FILE_TYPE apps/web/src/Foundation.tsx: link"],
+      mutate: lambda do |fixture_root|
+        foundation_path = File.join(fixture_root, "apps/web/src/Foundation.tsx")
+        replacement = File.join(fixture_root, "foundation-target.tsx")
+        FileUtils.mv(foundation_path, replacement)
+        File.symlink(replacement, foundation_path)
+      end
+    },
+    "frontend source directory replaced by symlink" => {
+      expected: [
+        "BUILD_GRAPH_PARENT_TYPE apps/web/src/Foundation.tsx",
+        "BUILD_GRAPH_UNEXPECTED apps/web/src: link"
+      ],
+      mutate: lambda do |fixture_root|
+        source_path = File.join(fixture_root, "apps/web/src")
+        replacement = File.join(fixture_root, "escaped-src")
+        FileUtils.mv(source_path, replacement)
+        File.symlink(replacement, source_path)
+      end
+    },
+    "unreviewed Vite configuration" => {
+      expected: ["BUILD_GRAPH_UNEXPECTED apps/web/vite.config.ts"],
+      mutate: lambda do |fixture_root|
+        File.binwrite(File.join(fixture_root, "apps/web/vite.config.ts"), "export default {};\n")
+      end
+    },
+    "unreviewed public asset" => {
+      expected: ["BUILD_GRAPH_UNEXPECTED apps/web/public/devlane.svg"],
+      mutate: lambda do |fixture_root|
+        FileUtils.mkdir_p(File.join(fixture_root, "apps/web/public"))
+        File.binwrite(File.join(fixture_root, "apps/web/public/devlane.svg"), "<svg/>\n")
+      end
+    },
+    "additional frontend test module" => {
+      expected: ["BUILD_GRAPH_UNEXPECTED apps/web/src/hidden.test.tsx"],
+      mutate: lambda do |fixture_root|
+        File.binwrite(File.join(fixture_root, "apps/web/src/hidden.test.tsx"), "throw new Error(\"unreviewed test\");\n")
+      end
+    },
+    "additional hard-linked frontend module" => {
+      expected: ["BUILD_GRAPH_UNEXPECTED apps/web/src/HiddenFoundation.tsx"],
+      mutate: lambda do |fixture_root|
+        File.link(
+          File.join(fixture_root, "apps/web/src/Foundation.tsx"),
+          File.join(fixture_root, "apps/web/src/HiddenFoundation.tsx")
+        )
+      end
+    },
+    "alternate governed destination file" => {
+      expected: ["governed destination root must contain no source"],
+      mutate: lambda do |fixture_root|
+        destination = File.join(fixture_root, "packages/design-system/src/alternate-primitives.tsx")
+        FileUtils.mkdir_p(File.dirname(destination))
+        File.binwrite(destination, "export const hidden = true;\n")
+      end
+    },
+    "build control content changed" => {
+      expected: ["BUILD_GRAPH_DIGEST package.json"],
+      mutate: lambda do |fixture_root|
+        package_path = File.join(fixture_root, "package.json")
+        File.binwrite(package_path, File.binread(package_path) + "\n")
+      end
+    },
+    "unreviewed build output file" => {
+      expected: ["BUILD_GRAPH_OUTPUT_UNEXPECTED apps/web/dist/assets/hidden.js"],
+      mutate: lambda do |fixture_root|
+        output = File.join(fixture_root, "apps/web/dist/assets/hidden.js")
+        FileUtils.mkdir_p(File.dirname(output))
+        File.binwrite(output, "unreviewed output\n")
+      end
+    },
+    "verified output root replaced by symlink" => {
+      expected: ["BUILD_GRAPH_OUTPUT_ROOT_TYPE apps/web/dist: link"],
+      mutate: lambda do |fixture_root|
+        external_output = File.join(fixture_root, "external-dist")
+        FileUtils.mkdir_p(external_output)
+        File.symlink(external_output, File.join(fixture_root, "apps/web/dist"))
+      end
+    }
+  }
+  { "normal" => false, "release" => true }.each do |mode_label, release_mode|
+    pending_material_mutations.each do |mutation_label, scenario|
+      with_devlane_pending_build_graph_fixture do |fixture_root|
+        scenario.fetch(:mutate).call(fixture_root)
+        material_state = devlane_repository_material_state(fixture_root)
+        mutation_errors = devlane_security_gate_errors(
+          provenance_fixture,
+          registry_components,
+          notices_fixture,
+          material_state,
+          release_mode: release_mode
+        )
+        missing = scenario.fetch(:expected).reject do |fragment|
+          mutation_errors.any? { |error| error.include?(fragment) }
+        end
+        unless missing.empty?
+          failures << "#{mode_label} Devlane pending graph accepted #{mutation_label}; missing #{missing.join(', ')}"
+        end
+      end
+      guard_count += 1
+    end
   end
 
   devlane_notice_mutations = {

@@ -37,6 +37,76 @@ import:
       - packages/design-system/src/tokens.css
       - packages/design-system/src/primitives.tsx
     alternate_locations_prohibited: true
+  pending_build_graph:
+    state: CLOSED_UNTIL_APPROVED_IMPORT
+    frontend_root: apps/web
+    generated_roots:
+      - apps/web/node_modules
+    verified_optional_output:
+      root: apps/web/dist
+      files:
+        - path: apps/web/dist/.vite/manifest.json
+          type: regular_file
+          sha256: 3fbf96e89bfeafff2e6a60fae5537bd7f434a09a9d7ade866fa9c50a9a7cf825
+        - path: apps/web/dist/assets/index-B2D1I_TZ.css
+          type: regular_file
+          sha256: 89c28a1d169409bd304263b71660f26506d617582a49abf0fd8721556ceb0fef
+        - path: apps/web/dist/assets/index-C25eOy4C.js
+          type: regular_file
+          sha256: d523f43d46b2f22af76db4d471846beb35a46bb71c4a4aac45100bd710b53d6b
+        - path: apps/web/dist/index.html
+          type: regular_file
+          sha256: ce0fa618e75b64d07ad6c72f1a0889caaf9dc56148ccc27ef5e8c3bfb5d9e504
+    files:
+      - path: .npmrc
+        type: regular_file
+        sha256: a0dcd9578d43df879467e9de60dfb9b469ed9674a3729e288e57291f6b35f6c4
+      - path: Makefile
+        type: regular_file
+        sha256: 1f51fc6bc6a0ee2b557be94180a00063325539e59f9b0ed9feb539f08c864007
+      - path: package.json
+        type: regular_file
+        sha256: 5c19ea5409af83c54752ad926e39c47dda86403af8e0bd8de12edc76313f196c
+      - path: package-lock.json
+        type: regular_file
+        sha256: c05ad356c65817e97299903378e5bdcd36d2c926ffbf7b4aa750ef0c5695a917
+      - path: scripts/run_pinned_node.sh
+        type: regular_file
+        sha256: 01a384b7c510aa54af6c3d2ca621325c895442a3c98250c87b204bf71c22271c
+      - path: tsconfig.base.json
+        type: regular_file
+        sha256: cc6a84094fde40708451f89eaec157c135f82bcaf4b8e535e839c656aa973997
+      - path: apps/web/index.html
+        type: regular_file
+        sha256: e0ce791634b186b5837900e399c3e60afa0ad6873fa78a8c45cc5e6fec8a88a3
+      - path: apps/web/package.json
+        type: regular_file
+        sha256: e8d7898c77d0fee45de869c6de8a325ba0a4e5ebe11db09e75f3b87eebce6dd4
+      - path: apps/web/tsconfig.json
+        type: regular_file
+        sha256: c17de10c1dd6dbd5ab2bcf60ce70b54f72edf7d8f1a1b95db2317bcb76cecf3e
+      - path: apps/web/vitest.config.ts
+        type: regular_file
+        sha256: c664adc17411cf22a3c17354bcc8273f71ba572dcc4e8dcdb484c36f995e1eba
+      - path: apps/web/src/Foundation.test.tsx
+        type: regular_file
+        sha256: 0ad7bab3f5b4b9989063fcbc8a6c05d920cace478220ef108877b2852d45973a
+      - path: apps/web/src/Foundation.tsx
+        type: regular_file
+        sha256: 975c58412e9e70d5b40b5913760709dcf419c38c789509101e092e5a82387e47
+      - path: apps/web/src/main.tsx
+        type: regular_file
+        sha256: 4a0d5b9a03ae7fe7b5fe91793d451336c9f37a72b6012d905cdae0f15870cb99
+      - path: apps/web/src/styles.css
+        type: regular_file
+        sha256: 5ced421fe16d22804cbd5bb2722f9ec98acec73bd544d2b342b2fa25cee3db12
+    rule: >-
+      While source distribution or import remains unapproved, every frontend source,
+      test, configuration, package, and build-control input must remain a regular in-tree
+      file at the recorded digest; no additional frontend entry or symlink may enter the
+      build graph. When dist exists it must match the exact clean-build output manifest;
+      node_modules must be recreated from the exact locked package graph and may not carry
+      authored source.
   rule: >-
     No Devlane code or asset may be copied until this exact source candidate receives
     independent dependency approval. Each later import must record source paths,
