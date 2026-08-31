@@ -150,35 +150,115 @@ ADR_0008_FAILURE_CODES = %w[
   internal_redacted
 ].freeze
 
-ADR_0008_SECURITY_GAP_FRAGMENTS = {
+ADR_0008_FAILURE_CODE_REGISTRY = begin
+  formatted_codes = ADR_0008_FAILURE_CODES.map { |code| "`#{code}`" }
+  "The failure-code registry is exactly #{formatted_codes[0...-1].join(', ')}, and #{formatted_codes.last}."
+end.freeze
+
+# Bind every security correction to its unique normative paragraph inside the
+# exact Decision subsection that owns it. A duplicate phrase in Verification,
+# Consequences, or another paragraph cannot satisfy an operative decision site.
+ADR_0008_SECURITY_DECISION_SITES = {
   terminal_delivery: [
-    "`MaxDeliver=-1`",
-    "Stead, not NATS, owns the finite handler-attempt budget of eight.",
-    "a crash at every handler attempt reaches a durable terminal boundary on recovery"
+    {
+      section: "Consumers, idempotency, and resource ordering",
+      paragraph_prefix: "Production handlers bind durable pull consumers",
+      clauses: [
+        "`MaxDeliver=-1`",
+        "The broker therefore continues redelivery until Stead has durably acknowledged either success or a terminal outcome",
+        "Max-delivery advisories are not a terminal trigger or correctness input."
+      ]
+    },
+    {
+      section: "Consumers, idempotency, and resource ordering",
+      paragraph_prefix: "Stead, not NATS, owns the finite handler-attempt budget of eight.",
+      clauses: [
+        "Stead, not NATS, owns the finite handler-attempt budget of eight.",
+        "a crash at every handler attempt reaches a durable terminal boundary on recovery"
+      ]
+    }
   ],
   tls_and_at_rest: [
-    "Every production NATS path uses authenticated, verified TLS with no plaintext listener",
-    "JetStream file storage is encrypted at rest with the NATS server's authenticated-encryption facility.",
-    "successor as current key and predecessor as transitional previous key"
+    {
+      section: "Production transport, at-rest protection, and closed manifests",
+      paragraph_prefix: "Every production NATS path uses authenticated, verified TLS with no plaintext listener",
+      clauses: [
+        "Every production NATS path uses authenticated, verified TLS with no plaintext listener",
+        "The production client listener uses TLS-first handshakes with fallback disabled.",
+        "Every enabled cluster route, gateway, and leaf-node link uses its own mutually authenticated TLS block"
+      ]
+    },
+    {
+      section: "Production transport, at-rest protection, and closed manifests",
+      paragraph_prefix: "JetStream file storage is encrypted at rest with the NATS server's authenticated-encryption facility.",
+      clauses: [
+        "JetStream file storage is encrypted at rest with the NATS server's authenticated-encryption facility.",
+        "successor as current key and predecessor as transitional previous key",
+        "Any JetStream snapshot entering backup is protected by the deployment's authenticated-encryption backup set"
+      ]
+    }
   ],
   stable_source: [
-    "AsyncAPI registers exactly one restore-stable logical producer source for every channel",
-    "restore, producer replacement, topology migration, and dual-major publication reuse the same logical source",
-    "cloud_event_source` must be the restore-stable AsyncAPI registry value"
+    {
+      section: "Consumers, idempotency, and resource ordering",
+      paragraph_prefix: "The resource ordering key is the validated pair",
+      clauses: [
+        "AsyncAPI registers exactly one restore-stable logical producer source for every channel",
+        "restore, producer replacement, topology migration, and dual-major publication reuse the same logical source"
+      ]
+    },
+    {
+      section: "Consumers, idempotency, and resource ordering",
+      paragraph_prefix: "Each durable consumer contract has an owner-controlled PostgreSQL processed-event table.",
+      clauses: [
+        "cloud_event_source` must be the restore-stable AsyncAPI registry value",
+        "Partition generation, deployment, host, process, and security domain are deliberately absent"
+      ]
+    }
   ],
   closed_manifest: [
-    "canonical `stead.nats.partition-manifest.v1`",
-    "synchronous/default persistence (never asynchronous persistence)",
-    "no mirror, no sources, no subject transform, no republish",
-    "no rollup, no per-message TTL or subject-delete-marker TTL, no direct or mirror-direct access",
-    "`no_ack=false`"
+    {
+      section: "Production transport, at-rest protection, and closed manifests",
+      paragraph_prefix: "The only admitted broker shape is canonical `stead.nats.partition-manifest.v1`.",
+      clauses: [
+        "canonical `stead.nats.partition-manifest.v1`",
+        "a field added by a server upgrade, an omitted field that would take a server default, a duplicate/alias representation, or any read-back difference leaves the generation unready"
+      ]
+    },
+    {
+      section: "Production transport, at-rest protection, and closed manifests",
+      paragraph_prefix: "Every stream read-back must match its table row and the following closed values:",
+      clauses: [
+        "synchronous/default persistence (never asynchronous persistence)",
+        "no mirror, no sources, no subject transform, no republish",
+        "no rollup, no per-message TTL or subject-delete-marker TTL, no direct or mirror-direct access",
+        "`no_ack=false`"
+      ]
+    }
   ],
   failure_evidence: [
-    "The failure-code registry is exactly",
-    "Arbitrary maps, JSON error blobs, raw NATS metadata, exception strings/digests",
-    "authenticated backup/restore fixtures carry protected-value canaries"
+    {
+      section: "Dead-letter and poison-message handling",
+      paragraph_prefix: "The failure-code registry is exactly",
+      clauses: [
+        ADR_0008_FAILURE_CODE_REGISTRY,
+        "Arbitrary maps, JSON error blobs, raw NATS metadata, exception strings/digests"
+      ]
+    },
+    {
+      section: "Dead-letter and poison-message handling",
+      paragraph_prefix: "Before terminating or acknowledging a permanently failed delivery",
+      clauses: [
+        "NATS max-delivery advisories are optional safe observability signals only, never the reliable trigger.",
+        "authenticated backup/restore fixtures carry protected-value canaries"
+      ]
+    }
   ]
-}.transform_values(&:freeze).freeze
+}.transform_values do |sites|
+  sites.map do |site|
+    site.merge(clauses: site.fetch(:clauses).freeze).freeze
+  end.freeze
+end.freeze
 
 EXPECTED_P1_006_ADR_CANDIDATES = %w[
   ADR-CAND-002
@@ -461,22 +541,60 @@ def exact_adr_requirement_mapping_failures(requirements:, adr_number:, expected_
   failures
 end
 
-def adr_0008_security_contract_failures(adr_source:, asyncapi:, bypass_source:)
-  failures = []
+def markdown_level_three_sections(source)
+  sections = Hash.new { |hash, key| hash[key] = [] }
+  current_section = nil
 
-  ADR_0008_SECURITY_GAP_FRAGMENTS.each do |group, fragments|
-    missing = fragments.reject { |fragment| adr_source.include?(fragment) }
-    unless missing.empty?
-      failures << "ADR-0008 #{group} contract omits canonical clauses: #{missing.join(' | ')}"
+  source.each_line do |line|
+    if (heading = line.match(/^### ([^\n]+)\n?$/))
+      current_section = heading[1]
+      sections[current_section] << +""
+    elsif line.match?(/^## /)
+      current_section = nil
+    elsif current_section
+      sections.fetch(current_section).last << line
     end
   end
 
-  formatted_failure_codes = ADR_0008_FAILURE_CODES.map { |code| "`#{code}`" }
-  expected_failure_registry =
-    "The failure-code registry is exactly #{formatted_failure_codes[0...-1].join(', ')}, and #{formatted_failure_codes.last}."
-  unless adr_source.include?(expected_failure_registry)
-    failures << "ADR-0008 failure-code registry must be the exact closed ten-code sequence"
+  sections
+end
+
+def adr_0008_security_decision_site_failures(adr_source)
+  failures = []
+  sections = markdown_level_three_sections(adr_source)
+
+  ADR_0008_SECURITY_DECISION_SITES.each do |group, sites|
+    sites.each do |site|
+      section_name = site.fetch(:section)
+      section_instances = sections.fetch(section_name, [])
+      if section_instances.length != 1
+        failures << "ADR-0008 #{group} decision section #{section_name.inspect} must occur exactly once"
+        next
+      end
+
+      paragraphs = section_instances.first.split(/\n{2,}/).map(&:strip).reject(&:empty?)
+      paragraph_prefix = site.fetch(:paragraph_prefix)
+      matching_paragraphs = paragraphs.select { |paragraph| paragraph.start_with?(paragraph_prefix) }
+      if matching_paragraphs.length != 1
+        failures << "ADR-0008 #{group} operative paragraph #{paragraph_prefix.inspect} must occur exactly once in #{section_name.inspect}"
+        next
+      end
+
+      paragraph = matching_paragraphs.first
+      site.fetch(:clauses).each do |clause|
+        occurrences = paragraph.scan(Regexp.new(Regexp.escape(clause))).length
+        next if occurrences == 1
+
+        failures << "ADR-0008 #{group} operative clause must occur exactly once in #{section_name.inspect}/#{paragraph_prefix.inspect}: #{clause}"
+      end
+    end
   end
+
+  failures
+end
+
+def adr_0008_security_contract_failures(adr_source:, asyncapi:, bypass_source:)
+  failures = adr_0008_security_decision_site_failures(adr_source)
 
   nats_server = asyncapi.dig("servers", "nats") || {}
   unless nats_server["x-production-transport"] == "verified-mutual-tls" &&
@@ -957,6 +1075,22 @@ if adr_0008_source
     deep_copy_asyncapi.call,
     classification_bypass_source
   )
+  localized_finite_terminal_adr = adr_0008_source
+                                  .sub(
+                                    "and `MaxDeliver=-1`. The broker therefore continues redelivery until Stead has durably acknowledged either success or a terminal outcome; it can never strand a message merely because a process crashed through a finite broker counter.",
+                                    "and `MaxDeliver=8`. The broker stops redelivery after the finite broker attempt budget."
+                                  )
+                                  .sub(
+                                    "Max-delivery advisories are not a terminal trigger or correctness input.",
+                                    "Max-delivery advisories are the terminal trigger and correctness input."
+                                  )
+  register_adr_0008_security_mutation.call(
+    :terminal_delivery,
+    "localized finite broker terminal authority",
+    localized_finite_terminal_adr,
+    deep_copy_asyncapi.call,
+    classification_bypass_source
+  )
   register_adr_0008_security_mutation.call(
     :terminal_delivery,
     "removed PostgreSQL attempt authority",
@@ -1108,7 +1242,8 @@ end
 adr_0008_security_mutation_groups = adr_0008_security_mutations.each_with_object(Hash.new(0)) do |mutation, counts|
   counts[mutation.fetch(:group)] += 1
 end
-expected_adr_0008_security_mutation_groups = ADR_0008_SECURITY_GAP_FRAGMENTS.keys.to_h { |group| [group, 3] }
+expected_adr_0008_security_mutation_groups = ADR_0008_SECURITY_DECISION_SITES.keys.to_h { |group| [group, 3] }
+expected_adr_0008_security_mutation_groups[:terminal_delivery] = 4
 expected_adr_0008_security_mutation_groups[:stable_source] = 4
 unless adr_0008_security_mutation_groups == expected_adr_0008_security_mutation_groups
   failures << "ADR-0008 security mutation inventory mismatch: expected #{expected_adr_0008_security_mutation_groups.inspect}, found #{adr_0008_security_mutation_groups.inspect}"
