@@ -36,6 +36,30 @@ export function buildBundleMembership(
   }
   const entryKey = entries[0][0];
   const eagerKeys = visitGraph(manifest, entryKey, ["imports"]);
+  const requiredBoundaryKeys = [...new Set(Object.values(requiredBoundaries))].sort();
+  if (requiredBoundaryKeys.length !== Object.keys(requiredBoundaries).length) {
+    throw new Error("required lazy capability roots must be unique");
+  }
+  const dynamicFrontierKeys = [
+    ...new Set(
+      [...eagerKeys].flatMap((key) => manifest[key].dynamicImports ?? []),
+    ),
+  ].sort();
+  const missingFrontierKeys = requiredBoundaryKeys.filter(
+    (key) => !dynamicFrontierKeys.includes(key),
+  );
+  const unexpectedFrontierKeys = dynamicFrontierKeys.filter(
+    (key) => !requiredBoundaryKeys.includes(key),
+  );
+  if (missingFrontierKeys.length > 0 || unexpectedFrontierKeys.length > 0) {
+    throw new Error(
+      [
+        "eager static closure dynamic frontier must be exactly the required capability roots",
+        `missing: ${missingFrontierKeys.join(", ") || "none"}`,
+        `unexpected: ${unexpectedFrontierKeys.join(", ") || "none"}`,
+      ].join("; "),
+    );
+  }
   const capabilityKeys = {};
   const ownersByKey = new Map();
 
@@ -73,6 +97,7 @@ export function buildBundleMembership(
   return {
     entryKey,
     eagerKeys: [...eagerKeys].sort(),
+    dynamicFrontierKeys,
     capabilityKeys,
     lazyUniqueKeys: [...ownersByKey.keys()].sort(),
     ownersByKey: Object.fromEntries(
@@ -89,6 +114,7 @@ async function measureFile(distributionRoot, source, file) {
     source,
     file,
     sha256: createHash("sha256").update(bytes).digest("hex"),
+    uncompressed_bytes: bytes.byteLength,
     gzip_bytes: gzipSync(bytes, { level: 9 }).byteLength,
   };
 }
@@ -111,13 +137,22 @@ async function main() {
     .filter((key) => measurements.has(key))
     .map((key) => measurements.get(key));
   const eagerBytes = eagerFiles.reduce((total, file) => total + file.gzip_bytes, 0);
+  const eagerUncompressedBytes = eagerFiles.reduce(
+    (total, file) => total + file.uncompressed_bytes,
+    0,
+  );
   const lazyCapabilities = {};
   for (const [name, source] of Object.entries(REQUIRED_LAZY_BOUNDARIES)) {
     const files = membership.capabilityKeys[name].map((key) => measurements.get(key));
     const gzipBytes = files.reduce((total, file) => total + file.gzip_bytes, 0);
+    const uncompressedBytes = files.reduce(
+      (total, file) => total + file.uncompressed_bytes,
+      0,
+    );
     lazyCapabilities[name] = {
       source,
       baseline_bytes_gzip: 0,
+      uncompressed_bytes: uncompressedBytes,
       gzip_bytes: gzipBytes,
       delta_bytes_gzip: gzipBytes,
       files,
@@ -132,28 +167,35 @@ async function main() {
     (total, file) => total + file.gzip_bytes,
     0,
   );
+  const lazyUniqueUncompressedBytes = lazyUniqueFiles.reduce(
+    (total, file) => total + file.uncompressed_bytes,
+    0,
+  );
 
   const baseline = 60_808;
   const budget = 250 * 1024;
   const evidence = {
-    schema_version: "1.0",
+    schema_version: "1.1",
     issue: "P1-005-FE-FOUNDATION",
     contract: "PERF-005",
     generated_by: "apps/web/scripts/measure-bundle.mjs",
     measurement_method:
-      "Node zlib level 9 over closed Vite manifest JavaScript graphs with SHA-256 digests and stable shared-chunk attribution",
+      "Exact uncompressed file bytes plus Node zlib level 9 over closed Vite manifest JavaScript graphs with SHA-256 digests and stable shared-chunk attribution",
     scope: "Wave 0 original non-import foundation",
     mature_interface_perf005_complete: false,
     lazy_boundaries_are_placeholders: true,
     minimal_foundation_baseline_bytes_gzip: baseline,
     budget_bytes_gzip: budget,
+    eager_dynamic_frontier: membership.dynamicFrontierKeys,
     eager_javascript: {
+      uncompressed_bytes: eagerUncompressedBytes,
       gzip_bytes: eagerBytes,
       delta_bytes_gzip: eagerBytes - baseline,
       files: eagerFiles,
     },
     lazy_capabilities: lazyCapabilities,
     lazy_unique_javascript: {
+      uncompressed_bytes: lazyUniqueUncompressedBytes,
       gzip_bytes: lazyUniqueBytes,
       files: lazyUniqueFiles,
     },

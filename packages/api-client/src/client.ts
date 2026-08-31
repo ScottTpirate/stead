@@ -7,7 +7,7 @@ import {
 export type JsonPrimitive = boolean | number | string | null;
 export type JsonValue =
   | JsonPrimitive
-  | JsonValue[]
+  | readonly JsonValue[]
   | { readonly [key: string]: JsonValue };
 
 export interface PlatformRequestOptions {
@@ -125,6 +125,8 @@ export const PLATFORM_MAX_RESPONSE_BYTES = 1024 * 1024;
 const SAFE_CORRELATION_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u;
 const STRONG_ETAG_PATTERN = /^"[\x21\x23-\x7e]*"$/u;
 const GENERIC_SCHEMA_VERSION_PATTERN = /^[1-9][0-9]*\.[0-9]+$/u;
+const MAX_REQUEST_JSON_DEPTH = 100;
+const JSON_STRINGIFY = JSON.stringify;
 
 function assertCanonicalBasePath(basePath: string): void {
   if (
@@ -180,7 +182,8 @@ function schemaMatches(value: unknown, schema: JsonSchema): boolean {
     }
     if (
       schema.uniqueItems &&
-      new Set(value.map((item) => JSON.stringify(item))).size !== value.length
+      new Set(value.map((item) => serializeClosedJson(item as JsonValue))).size !==
+        value.length
     ) {
       return false;
     }
@@ -217,14 +220,167 @@ function assertSchema(value: unknown, schema: JsonSchema, field: string): void {
   }
 }
 
-function assertRecord(
+function cloneJsonValueUnsafe(
   value: unknown,
-  field: string,
-): Readonly<Record<string, unknown>> {
-  if (value === null || typeof value !== "object" || Array.isArray(value)) {
-    throw new Error(`${field} must be an object`);
+  ancestors: Set<object>,
+  depth: number,
+): JsonValue {
+  if (value === null || typeof value === "boolean" || typeof value === "string") {
+    return value;
   }
-  return value as Readonly<Record<string, unknown>>;
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) throw new Error("non-finite JSON number");
+    return value;
+  }
+  if (typeof value !== "object" || depth > MAX_REQUEST_JSON_DEPTH) {
+    throw new Error("non-JSON value");
+  }
+  if (ancestors.has(value)) throw new Error("cyclic JSON value");
+
+  const array = Array.isArray(value);
+  const prototype = Reflect.getPrototypeOf(value);
+  if (
+    (array && prototype !== Array.prototype && prototype !== null) ||
+    (!array && prototype !== Object.prototype && prototype !== null)
+  ) {
+    throw new Error("non-plain JSON value");
+  }
+
+  const keys = Reflect.ownKeys(value);
+  ancestors.add(value);
+  try {
+    if (array) {
+      const lengthDescriptor = Reflect.getOwnPropertyDescriptor(value, "length");
+      if (!lengthDescriptor || !("value" in lengthDescriptor)) {
+        throw new Error("JSON array length is not own data");
+      }
+      const lengthValue = lengthDescriptor.value;
+      if (
+        typeof lengthValue !== "number" ||
+        !Number.isSafeInteger(lengthValue) ||
+        lengthValue < 0
+      ) {
+        throw new Error("invalid JSON array length");
+      }
+      const length = lengthValue;
+      if (
+        keys.length !== length + 1 ||
+        !keys.includes("length") ||
+        keys.some(
+          (key) =>
+            typeof key !== "string" ||
+            (key !== "length" && !/^(0|[1-9][0-9]*)$/u.test(key)) ||
+            (key !== "length" && Number(key) >= length),
+        )
+      ) {
+        throw new Error("sparse or extended JSON array");
+      }
+      const clone: JsonValue[] = [];
+      for (let index = 0; index < length; index += 1) {
+        const descriptor = Reflect.getOwnPropertyDescriptor(value, String(index));
+        if (!descriptor || !("value" in descriptor) || !descriptor.enumerable) {
+          throw new Error("JSON array element is not own data");
+        }
+        Object.defineProperty(clone, String(index), {
+          value: cloneJsonValueUnsafe(descriptor.value, ancestors, depth + 1),
+          enumerable: true,
+          configurable: false,
+          writable: false,
+        });
+      }
+      return Object.freeze(clone);
+    }
+
+    const clone = Object.create(null) as Record<string, JsonValue>;
+    for (const key of keys) {
+      if (typeof key !== "string") throw new Error("symbol JSON property");
+      const descriptor = Reflect.getOwnPropertyDescriptor(value, key);
+      if (!descriptor || !("value" in descriptor) || !descriptor.enumerable) {
+        throw new Error("JSON property is not own enumerable data");
+      }
+      Object.defineProperty(clone, key, {
+        value: cloneJsonValueUnsafe(descriptor.value, ancestors, depth + 1),
+        enumerable: true,
+        configurable: false,
+        writable: false,
+      });
+    }
+    return Object.freeze(clone);
+  } finally {
+    ancestors.delete(value);
+  }
+}
+
+function cloneJsonValue(value: unknown, field: string): JsonValue {
+  try {
+    return cloneJsonValueUnsafe(value, new Set(), 0);
+  } catch {
+    throw new Error(`${field} must contain only closed plain own-data JSON values`);
+  }
+}
+
+function stringifyJsonPrimitive(value: string | number): string {
+  const rendered = JSON_STRINGIFY(value);
+  if (rendered === undefined) throw new Error("closed JSON serialization failed");
+  return rendered;
+}
+
+function serializeClosedJson(value: JsonValue): string {
+  if (value === null) return "null";
+  if (typeof value === "boolean") return value ? "true" : "false";
+  if (typeof value === "string" || typeof value === "number") {
+    return stringifyJsonPrimitive(value);
+  }
+  if (Array.isArray(value)) {
+    const rendered: string[] = [];
+    for (let index = 0; index < value.length; index += 1) {
+      rendered.push(serializeClosedJson(value[index]!));
+    }
+    return `[${rendered.join(",")}]`;
+  }
+  const record = value as Readonly<Record<string, JsonValue>>;
+  const rendered = Object.keys(record).map(
+    (key) => `${stringifyJsonPrimitive(key)}:${serializeClosedJson(record[key]!)}`,
+  );
+  return `{${rendered.join(",")}}`;
+}
+
+function snapshotParameterRecord(
+  rawValues: unknown,
+  location: string,
+): Readonly<Record<string, unknown>> {
+  if (rawValues === undefined) return Object.freeze(Object.create(null));
+  try {
+    if (
+      rawValues === null ||
+      typeof rawValues !== "object" ||
+      Array.isArray(rawValues)
+    ) {
+      throw new Error("not an object");
+    }
+    const prototype = Reflect.getPrototypeOf(rawValues);
+    if (prototype !== Object.prototype && prototype !== null) {
+      throw new Error("non-plain parameter object");
+    }
+    const snapshot = Object.create(null) as Record<string, unknown>;
+    for (const key of Reflect.ownKeys(rawValues)) {
+      if (typeof key !== "string") throw new Error("symbol parameter");
+      const descriptor = Reflect.getOwnPropertyDescriptor(rawValues, key);
+      if (!descriptor || !("value" in descriptor) || !descriptor.enumerable) {
+        throw new Error("parameter is not own enumerable data");
+      }
+      const value = descriptor.value;
+      Object.defineProperty(snapshot, key, {
+        value: value === undefined ? undefined : cloneJsonValueUnsafe(value, new Set(), 0),
+        enumerable: true,
+        configurable: false,
+        writable: false,
+      });
+    }
+    return Object.freeze(snapshot);
+  } catch {
+    throw new Error(`${location} parameters must be a plain own-data object`);
+  }
 }
 
 function validateParameters(
@@ -232,7 +388,7 @@ function validateParameters(
   rawValues: unknown,
   definitions: Readonly<Record<string, ParameterDefinition>>,
 ): Readonly<Record<string, unknown>> {
-  const values = rawValues === undefined ? {} : assertRecord(rawValues, location);
+  const values = snapshotParameterRecord(rawValues, location);
   for (const name of Object.keys(values)) {
     if (!(name in definitions)) throw new Error(`unexpected ${location} parameter ${name}`);
   }
@@ -277,12 +433,19 @@ function validateRequest(
   readonly query: Readonly<Record<string, unknown>>;
   readonly headers: Headers;
   readonly body?: string;
+  readonly signal?: AbortSignal;
 } {
-  const path = validateParameters("path", options.path, definition.request.path);
-  const query = validateParameters("query", options.query, definition.request.query);
+  const rawPath = options.path;
+  const rawQuery = options.query;
+  const rawBody = options.body;
+  const ifMatch = options.ifMatch;
+  const idempotencyKey = options.idempotencyKey;
+  const signal = options.signal;
+  const path = validateParameters("path", rawPath, definition.request.path);
+  const query = validateParameters("query", rawQuery, definition.request.query);
   const headerValues: Readonly<Record<string, string | undefined>> = {
-    ifMatch: options.ifMatch,
-    idempotencyKey: options.idempotencyKey,
+    ifMatch,
+    idempotencyKey,
   };
   for (const [name, value] of Object.entries(headerValues)) {
     if (value !== undefined && !(name in definition.request.headers)) {
@@ -304,16 +467,23 @@ function validateRequest(
   }
 
   if (!definition.request.body) {
-    if (options.body !== undefined) throw new Error("unexpected request body");
-    return { path, query, headers };
+    if (rawBody !== undefined) throw new Error("unexpected request body");
+    return { path, query, headers, ...(signal ? { signal } : {}) };
   }
-  if (options.body === undefined) {
+  if (rawBody === undefined) {
     if (definition.request.body.required) throw new Error("missing request body");
-    return { path, query, headers };
+    return { path, query, headers, ...(signal ? { signal } : {}) };
   }
-  assertSchema(options.body, definition.request.body.schema, "request body");
+  const body = cloneJsonValue(rawBody, "request body");
+  assertSchema(body, definition.request.body.schema, "request body");
   headers.set("Content-Type", definition.request.body.mediaType);
-  return { path, query, headers, body: JSON.stringify(options.body) };
+  return {
+    path,
+    query,
+    headers,
+    body: serializeClosedJson(body),
+    ...(signal ? { signal } : {}),
+  };
 }
 
 function responseMediaType(response: Response): string {
@@ -435,7 +605,7 @@ export function createPlatformClient(
         body: validated.body,
         credentials: "same-origin",
         redirect: "error",
-        signal: requestOptions.signal,
+        signal: validated.signal,
       });
 
       const allowedMediaTypes = response.ok

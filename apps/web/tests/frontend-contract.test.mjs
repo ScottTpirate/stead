@@ -1,5 +1,12 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import test from "node:test";
@@ -90,6 +97,10 @@ test("lazy bundle graphs include transitive and shared chunks exactly once", () 
   const membership = buildBundleMembership(manifest);
 
   assert.deepEqual(membership.eagerKeys, ["eager-shared", "index.html"]);
+  assert.deepEqual(
+    membership.dynamicFrontierKeys,
+    Object.values(REQUIRED_LAZY_BOUNDARIES).sort(),
+  );
   assert.deepEqual(membership.capabilityKeys.docs_editor, [
     "docs-transitive",
     "lazy-shared",
@@ -112,6 +123,35 @@ test("lazy bundle graphs include transitive and shared chunks exactly once", () 
         orphan: { file: "assets/ungoverned.js" },
       }),
     /outside required capability graphs.*orphan/u,
+  );
+
+  const disconnectedManifest = structuredClone(manifest);
+  disconnectedManifest["index.html"].dynamicImports = [];
+  assert.throws(
+    () => buildBundleMembership(disconnectedManifest),
+    (error) => {
+      assert.match(error.message, /dynamic frontier must be exactly.*missing:/u);
+      for (const source of Object.values(REQUIRED_LAZY_BOUNDARIES)) {
+        assert.ok(error.message.includes(source));
+      }
+      return true;
+    },
+  );
+
+  assert.throws(
+    () =>
+      buildBundleMembership({
+        ...manifest,
+        "index.html": {
+          ...manifest["index.html"],
+          dynamicImports: [
+            ...manifest["index.html"].dynamicImports,
+            "unexpected-capability",
+          ],
+        },
+        "unexpected-capability": { file: "assets/unexpected.js" },
+      }),
+    /dynamic frontier must be exactly.*unexpected: unexpected-capability/u,
   );
 });
 
@@ -161,6 +201,59 @@ test("a newly imported forbidden network module cannot escape the graph gate", a
     );
   } finally {
     await rm(fixtureRoot, { recursive: true, force: true });
+  }
+});
+
+test("browser source paths reject symlinks, realpath escapes, and special components", async () => {
+  const fixtureParent =
+    process.env.STEAD_TEST_TMPDIR ?? join(homedir(), ".cache", "stead-test-tmp");
+  await mkdir(fixtureParent, { recursive: true });
+  const fixtureRoot = await mkdtemp(join(fixtureParent, "stead-browser-root-"));
+  const outsideRoot = await mkdtemp(join(fixtureParent, "stead-browser-outside-"));
+  const linkedRoot = `${fixtureRoot}-linked-root`;
+  const linkedComponent = join(fixtureRoot, "linked");
+  try {
+    await writeFile(
+      join(fixtureRoot, "entry.ts"),
+      'import "./linked/outside";\nexport const entry = true;\n',
+      "utf8",
+    );
+    await writeFile(
+      join(outsideRoot, "outside.ts"),
+      "export const escaped = true;\n",
+      "utf8",
+    );
+    await symlink(outsideRoot, linkedComponent, "dir");
+    await assert.rejects(
+      collectBrowserSourceGraph({
+        entryPath: join(fixtureRoot, "entry.ts"),
+        repositoryRoot: fixtureRoot,
+      }),
+      /browser module path contains a symbolic link/u,
+    );
+
+    await rm(linkedComponent, { force: true });
+    await writeFile(linkedComponent, "not a directory\n", "utf8");
+    await assert.rejects(
+      collectBrowserSourceGraph({
+        entryPath: join(fixtureRoot, "entry.ts"),
+        repositoryRoot: fixtureRoot,
+      }),
+      /browser module path contains a non-directory component/u,
+    );
+
+    await symlink(fixtureRoot, linkedRoot, "dir");
+    await assert.rejects(
+      collectBrowserSourceGraph({
+        entryPath: join(linkedRoot, "entry.ts"),
+        repositoryRoot: linkedRoot,
+      }),
+      /browser repository root is not a real directory/u,
+    );
+  } finally {
+    await rm(linkedRoot, { force: true });
+    await rm(fixtureRoot, { recursive: true, force: true });
+    await rm(outsideRoot, { recursive: true, force: true });
   }
 });
 

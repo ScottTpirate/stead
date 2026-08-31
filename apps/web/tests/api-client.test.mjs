@@ -222,6 +222,97 @@ test("all generated operations enforce their allowed and required request shape"
   });
 });
 
+test("request validation and serialization share one closed own-data snapshot", async () => {
+  const sentBodies = [];
+  const client = createPlatformClient({
+    fetchImplementation: async (_input, init) => {
+      sentBodies.push(init.body);
+      return successfulResponse("createWorkItem");
+    },
+  });
+  const request = (body) =>
+    client.request("createWorkItem", {
+      ...validOperationOptions.createWorkItem,
+      body,
+    });
+  const validBody = structuredClone(validOperationOptions.createWorkItem.body);
+
+  const proxyBody = new Proxy(validBody, {
+    get(target, key, receiver) {
+      if (key === "toJSON") return () => ({});
+      if (key === "title") return "unvalidated-proxy-title";
+      return Reflect.get(target, key, receiver);
+    },
+  });
+  await request(proxyBody);
+  assert.equal(sentBodies.length, 1);
+  assert.deepEqual(JSON.parse(sentBodies[0]), validBody);
+
+  const inheritedToJsonBody = Object.assign(
+    Object.create({
+      toJSON() {
+        return {};
+      },
+    }),
+    structuredClone(validBody),
+  );
+  const ownToJsonBody = structuredClone(validBody);
+  Object.defineProperty(ownToJsonBody, "toJSON", {
+    value() {
+      return {};
+    },
+  });
+  let accessorReads = 0;
+  const accessorBody = structuredClone(validBody);
+  Object.defineProperty(accessorBody, "title", {
+    enumerable: true,
+    get() {
+      accessorReads += 1;
+      return "accessor-title";
+    },
+  });
+  class RequestBody {}
+  const nonPlainBody = Object.assign(new RequestBody(), structuredClone(validBody));
+  const cyclicBody = structuredClone(validBody);
+  cyclicBody.assignees.push(cyclicBody);
+  const sparseArrayBody = {
+    ...structuredClone(validBody),
+    assignees: new Array(1),
+  };
+
+  for (const body of [
+    inheritedToJsonBody,
+    ownToJsonBody,
+    accessorBody,
+    nonPlainBody,
+    cyclicBody,
+    sparseArrayBody,
+  ]) {
+    await assert.rejects(request(body), /closed plain own-data JSON values/u);
+    assert.equal(sentBodies.length, 1);
+  }
+  assert.equal(accessorReads, 0);
+
+  let pathAccessorReads = 0;
+  const accessorPath = {};
+  Object.defineProperty(accessorPath, "project_id", {
+    enumerable: true,
+    get() {
+      pathAccessorReads += 1;
+      return VALID_UUID;
+    },
+  });
+  await assert.rejects(
+    client.request("createWorkItem", {
+      ...validOperationOptions.createWorkItem,
+      path: accessorPath,
+    }),
+    /path parameters must be a plain own-data object/u,
+  );
+  assert.equal(pathAccessorReads, 0);
+  assert.equal(sentBodies.length, 1);
+});
+
 test("response envelope rejects unsafe metadata and media before reading the body", async () => {
   for (const headers of [
     { "content-type": "text/plain", "stead-schema-version": "1.0" },

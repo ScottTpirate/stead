@@ -14,7 +14,10 @@ node packages/api-client/scripts/generate-operation-registry.mjs
 
 The generator records the OpenAPI SHA-256 and derives method, path, parameters, mutation
 headers, request-body schemas, media types, and schema-version envelopes. The runtime
-rejects invalid calls before fetch and bounds response bytes and presentation-safe metadata.
+rejects invalid calls before fetch. It snapshots request parameters and bodies into closed
+plain own-data JSON, validates that snapshot, and serializes those exact bytes, so inherited
+or custom serialization behavior cannot change the admitted request. Response bytes and
+presentation-safe metadata are bounded before parsing or exposure.
 The query store is transport-agnostic; it deduplicates in-flight reads, supports prefetch
 and generation-ordered reversible optimistic presentation, and aborts and clears all cached
 authorized state whenever principal, session, or security domain context changes. It is
