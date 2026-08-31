@@ -55,39 +55,57 @@ func TestValidatedIntentRejectsZeroWrongVersionAndEmpty(t *testing.T) {
 	}
 }
 
-func TestTransactionScopeExpiresAcrossCopies(t *testing.T) {
+func TestTransactionScopeIsConsumedOnceAndExpiresAcrossCopies(t *testing.T) {
 	authority := NewScopeAuthority()
-	scope, err := authority.Open()
+	type binding struct{ value string }
+	scope, err := OpenScope[binding, string](authority, binding{value: "exact-session"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	copy := scope
-	if err := scope.Verify(); err != nil || !authority.Owns(scope) {
-		t.Fatal("fresh scope did not verify")
+	calls := 0
+	receipt, result, err := scope.Use(func(value binding) (string, error) {
+		calls++
+		if value.value != "exact-session" {
+			t.Fatalf("binding = %#v", value)
+		}
+		return "completed", nil
+	})
+	if err != nil || result != "completed" {
+		t.Fatalf("fresh scope use: %v", err)
 	}
-	if NewScopeAuthority().Owns(scope) {
-		t.Fatal("foreign authority accepted scope")
+	if _, _, err := copy.Use(func(binding) (string, error) { return "", nil }); !errors.Is(err, ErrInvalidTransactionScope) {
+		t.Fatalf("copied consumed scope error = %v", err)
 	}
-	authority.Close(scope)
-	if err := scope.Verify(); !errors.Is(err, ErrInvalidTransactionScope) {
-		t.Fatalf("closed scope error = %v", err)
+	if CloseScope(NewScopeAuthority(), scope, receipt) {
+		t.Fatal("foreign authority closed scope")
 	}
-	if err := copy.Verify(); !errors.Is(err, ErrInvalidTransactionScope) {
+	if !CloseScope(authority, scope, receipt) || calls != 1 {
+		t.Fatalf("owned consumed scope close = false, calls=%d", calls)
+	}
+	if _, _, err := copy.Use(func(binding) (string, error) { return "", nil }); !errors.Is(err, ErrInvalidTransactionScope) {
 		t.Fatalf("copied closed scope error = %v", err)
 	}
-	if err := (TransactionScope{}).Verify(); !errors.Is(err, ErrInvalidTransactionScope) {
+	if _, _, err := (TransactionScope[binding, string]{}).Use(func(binding) (string, error) { return "", nil }); !errors.Is(err, ErrInvalidTransactionScope) {
 		t.Fatalf("zero scope error = %v", err)
 	}
-	if _, err := (ScopeAuthority{}).Open(); !errors.Is(err, ErrInvalidTransactionScope) {
+	if _, err := OpenScope[binding, string](ScopeAuthority{}, binding{}); !errors.Is(err, ErrInvalidTransactionScope) {
 		t.Fatalf("zero authority error = %v", err)
+	}
+	unused, err := OpenScope[binding, string](authority, binding{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if CloseScope(authority, unused, ScopeReceipt[binding, string]{}) {
+		t.Fatal("unused scope reported consumption")
 	}
 }
 
 func TestAppendPortHasOnlyTransactionScopedAppend(t *testing.T) {
 	type portType interface {
-		Append(context.Context, TransactionScope, ValidatedIntent) error
+		Append(context.Context, TransactionScope[struct{}, string], ValidatedIntent) (ScopeReceipt[struct{}, string], string, error)
 	}
-	interfaceType := reflect.TypeOf((*AppendPort)(nil)).Elem()
+	interfaceType := reflect.TypeOf((*AppendPort[struct{}, string])(nil)).Elem()
 	wantType := reflect.TypeOf((*portType)(nil)).Elem()
 	if interfaceType.NumMethod() != 1 || !interfaceType.Implements(wantType) {
 		t.Fatalf("AppendPort surface drifted: %v", interfaceType)

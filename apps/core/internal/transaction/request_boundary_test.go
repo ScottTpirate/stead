@@ -12,30 +12,35 @@ import (
 )
 
 type fakeFinalizer struct {
-	backend *fakeBackend
-	intent  *outbox.ValidatedIntent
-	rows    int
-	calls   int
-	fail    bool
-	panic   bool
-	zero    bool
-	version string
-	opaque  []byte
+	backend     *fakeBackend
+	intent      *outbox.ValidatedIntent
+	rows        int
+	calls       int
+	fail        bool
+	panic       bool
+	zero        bool
+	zeroBinding bool
+	version     string
+	opaque      []byte
 }
 
-func (finalizer *fakeFinalizer) Finalize(_ context.Context, capability OwnerCapability, issuer BoundRevisionIssuer) (FinalAuthorizationAuditResult, error) {
+func (finalizer *fakeFinalizer) Finalize(_ context.Context, binding SessionBinding, issuer BoundRevisionIssuer) (FinalAuthorizationAuditResult, error) {
 	finalizer.calls++
 	if finalizer.panic {
 		panic("injected finalization panic")
 	}
-	if finalizer.fail || !capability.ValidFor(FinalAuthorizationOwner) {
+	if finalizer.fail {
 		return FinalAuthorizationAuditResult{}, errInjected
 	}
-	if err := finalizer.backend.stage(capability, FinalAuthorizationOwner, "final_authorization_audit"); err != nil {
+	receipt, err := finalizer.backend.stage(binding, FinalAuthorizationOwner, "final_authorization_audit")
+	if err != nil {
 		return FinalAuthorizationAuditResult{}, err
 	}
+	if finalizer.zeroBinding {
+		receipt = BindingReceipt{}
+	}
 	if finalizer.zero {
-		return FinalAuthorizationAuditResult{Intent: finalizer.intent}, nil
+		return FinalAuthorizationAuditResult{Intent: finalizer.intent, Binding: receipt}, nil
 	}
 	version := finalizer.version
 	if version == "" {
@@ -49,12 +54,13 @@ func (finalizer *fakeFinalizer) Finalize(_ context.Context, capability OwnerCapa
 	if err != nil {
 		return FinalAuthorizationAuditResult{}, err
 	}
-	return FinalAuthorizationAuditResult{Revision: revision, Intent: finalizer.intent}, nil
+	return FinalAuthorizationAuditResult{Revision: revision, Intent: finalizer.intent, Binding: receipt}, nil
 }
 
 func minimalRegistry(t testing.TB, backend *fakeBackend) Registry {
 	t.Helper()
-	registry, err := NewRegistry([]PlanTemplate{registeredTestPlan(backend, make([]participantControl, 1), OutboxOptional)})
+	template, _ := registeredTestPlan(backend, make([]participantControl, 1), OutboxOptional)
+	registry, err := NewRegistry([]PlanTemplate{template})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,8 +77,8 @@ func TestFinalLogicalAuthorizationAuditCommitsBeforeReceiptEscapes(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !revision.verify() || finalizer.calls != 1 || appender.calls != 1 {
-		t.Fatalf("finalization counts = final:%d append:%d revision-valid:%t", finalizer.calls, appender.calls, revision.verify())
+	if !revision.verify() || finalizer.calls != 1 || appender.callCount() != 1 {
+		t.Fatalf("finalization counts = final:%d append:%d revision-valid:%t", finalizer.calls, appender.callCount(), revision.verify())
 	}
 	calls, committed, _, _, _, _ := backend.snapshot()
 	wantCalls := []string{"begin", "final_authorization_audit", "outbox", "commit"}
@@ -117,6 +123,7 @@ func TestFinalizationFailuresReturnNoRevisionAndRollback(t *testing.T) {
 		{"owner error", func(finalizer *fakeFinalizer, _ *fakeAppender, _ *fakeBackend) { finalizer.fail = true }, CodeParticipantFailed},
 		{"owner panic", func(finalizer *fakeFinalizer, _ *fakeAppender, _ *fakeBackend) { finalizer.panic = true }, CodeParticipantFailed},
 		{"zero revision", func(finalizer *fakeFinalizer, _ *fakeAppender, _ *fakeBackend) { finalizer.zero = true }, CodeParticipantFailed},
+		{"missing binding receipt", func(finalizer *fakeFinalizer, _ *fakeAppender, _ *fakeBackend) { finalizer.zeroBinding = true }, CodeParticipantFailed},
 		{"wrong revision version", func(finalizer *fakeFinalizer, _ *fakeAppender, _ *fakeBackend) {
 			finalizer.version = BoundRevisionHandoffV1 + ".unknown"
 		}, CodeParticipantFailed},

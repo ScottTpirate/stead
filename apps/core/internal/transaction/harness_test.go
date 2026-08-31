@@ -13,9 +13,12 @@ var errInjected = errors.New("injected failure")
 type fakeBackend struct {
 	mu sync.Mutex
 
-	active    *fakeSession
-	committed []string
-	calls     []string
+	active       map[*fakeSession]struct{}
+	committed    []string
+	committedBy  map[int][]string
+	rolledBackBy map[int][]string
+	calls        []string
+	nextSession  int
 
 	beginCalls    int
 	commitCalls   int
@@ -33,23 +36,38 @@ type fakeBackend struct {
 
 type fakeSession struct {
 	backend *fakeBackend
+	id      int
 	staged  []string
 	closed  bool
+}
+
+func (backend *fakeBackend) initializeLocked() {
+	if backend.active == nil {
+		backend.active = make(map[*fakeSession]struct{})
+	}
+	if backend.committedBy == nil {
+		backend.committedBy = make(map[int][]string)
+	}
+	if backend.rolledBackBy == nil {
+		backend.rolledBackBy = make(map[int][]string)
+	}
 }
 
 func (backend *fakeBackend) Begin(context.Context) (Session, error) {
 	backend.mu.Lock()
 	defer backend.mu.Unlock()
+	backend.initializeLocked()
 	backend.beginCalls++
 	backend.calls = append(backend.calls, "begin")
 	if backend.panicBegin {
 		panic("injected begin panic")
 	}
-	if backend.failBegin || backend.active != nil {
+	if backend.failBegin {
 		return nil, errInjected
 	}
-	session := &fakeSession{backend: backend}
-	backend.active = session
+	backend.nextSession++
+	session := &fakeSession{backend: backend, id: backend.nextSession}
+	backend.active[session] = struct{}{}
 	return session, nil
 }
 
@@ -57,17 +75,22 @@ func (session *fakeSession) Commit(context.Context) error {
 	backend := session.backend
 	backend.mu.Lock()
 	defer backend.mu.Unlock()
+	backend.initializeLocked()
 	backend.commitCalls++
 	backend.calls = append(backend.calls, "commit")
 	if backend.panicCommit {
 		panic("injected commit panic")
 	}
-	if backend.failCommit || session.closed || backend.active != session {
+	if backend.failCommit || session.closed {
+		return errInjected
+	}
+	if _, active := backend.active[session]; !active {
 		return errInjected
 	}
 	backend.committed = append(backend.committed, session.staged...)
+	backend.committedBy[session.id] = append([]string(nil), session.staged...)
 	session.closed = true
-	backend.active = nil
+	delete(backend.active, session)
 	return nil
 }
 
@@ -75,11 +98,13 @@ func (session *fakeSession) Rollback(ctx context.Context) error {
 	backend := session.backend
 	backend.mu.Lock()
 	defer backend.mu.Unlock()
+	backend.initializeLocked()
 	backend.rollbackCalls++
 	backend.calls = append(backend.calls, "rollback")
 	backend.rollbackContextWasLive = ctx != nil && ctx.Err() == nil
-	if backend.active == session {
-		backend.active = nil
+	if _, active := backend.active[session]; active {
+		backend.rolledBackBy[session.id] = append([]string(nil), session.staged...)
+		delete(backend.active, session)
 	}
 	session.closed = true
 	session.staged = nil
@@ -92,32 +117,62 @@ func (session *fakeSession) Rollback(ctx context.Context) error {
 	return nil
 }
 
-func (backend *fakeBackend) stage(capability OwnerCapability, owner, value string) error {
-	if !capability.ValidFor(owner) {
-		return errInjected
-	}
-	backend.mu.Lock()
-	defer backend.mu.Unlock()
-	if backend.active == nil || backend.active.closed {
-		return errInjected
-	}
-	backend.calls = append(backend.calls, value)
-	backend.active.staged = append(backend.active.staged, value)
-	return nil
+// stage is the fake owner-authored typed adapter. SessionBinding.Use encloses
+// the exact synchronous call; resolve is confined to the trusted WS-02 fake
+// lifecycle/storage boundary and returns only the Begin-created Session.
+func (backend *fakeBackend) stage(binding SessionBinding, owner, value string) (BindingReceipt, error) {
+	return binding.Use(func() error {
+		sessionValue, ok := binding.resolve(owner)
+		if !ok {
+			return errInjected
+		}
+		session, ok := sessionValue.(*fakeSession)
+		if !ok || session.backend != backend {
+			return errInjected
+		}
+		backend.mu.Lock()
+		defer backend.mu.Unlock()
+		backend.initializeLocked()
+		if session.closed {
+			return errInjected
+		}
+		if _, active := backend.active[session]; !active {
+			return errInjected
+		}
+		backend.calls = append(backend.calls, value)
+		session.staged = append(session.staged, value)
+		return nil
+	})
 }
 
-func (backend *fakeBackend) stageOutbox(scope outbox.TransactionScope, intent outbox.ValidatedIntent) error {
-	if scope.Verify() != nil || intent.Verify() != nil {
-		return errInjected
+func (backend *fakeBackend) stageOutbox(scope outbox.TransactionScope[SessionBinding, BindingReceipt], intent outbox.ValidatedIntent) (outbox.ScopeReceipt[SessionBinding, BindingReceipt], BindingReceipt, error) {
+	if intent.Verify() != nil {
+		return outbox.ScopeReceipt[SessionBinding, BindingReceipt]{}, BindingReceipt{}, errInjected
 	}
-	backend.mu.Lock()
-	defer backend.mu.Unlock()
-	if backend.active == nil || backend.active.closed {
-		return errInjected
-	}
-	backend.calls = append(backend.calls, "outbox")
-	backend.active.staged = append(backend.active.staged, "outbox")
-	return nil
+	return scope.Use(func(binding SessionBinding) (BindingReceipt, error) {
+		return binding.Use(func() error {
+			sessionValue, ok := binding.resolve("core_outbox")
+			if !ok {
+				return errInjected
+			}
+			session, ok := sessionValue.(*fakeSession)
+			if !ok || session.backend != backend {
+				return errInjected
+			}
+			backend.mu.Lock()
+			defer backend.mu.Unlock()
+			backend.initializeLocked()
+			if session.closed {
+				return errInjected
+			}
+			if _, active := backend.active[session]; !active {
+				return errInjected
+			}
+			backend.calls = append(backend.calls, "outbox")
+			session.staged = append(session.staged, "outbox")
+			return nil
+		})
+	})
 }
 
 func (backend *fakeBackend) snapshot() (calls, committed []string, begin, commit, rollback int, rollbackContextLive bool) {
@@ -127,36 +182,65 @@ func (backend *fakeBackend) snapshot() (calls, committed []string, begin, commit
 		backend.beginCalls, backend.commitCalls, backend.rollbackCalls, backend.rollbackContextWasLive
 }
 
+func (backend *fakeBackend) journals() (committed, rolledBack map[int][]string, active int) {
+	backend.mu.Lock()
+	defer backend.mu.Unlock()
+	committed = make(map[int][]string, len(backend.committedBy))
+	for id, values := range backend.committedBy {
+		committed[id] = append([]string(nil), values...)
+	}
+	rolledBack = make(map[int][]string, len(backend.rolledBackBy))
+	for id, values := range backend.rolledBackBy {
+		rolledBack[id] = append([]string(nil), values...)
+	}
+	return committed, rolledBack, len(backend.active)
+}
+
 type fakeAppender struct {
 	backend *fakeBackend
 	fail    bool
 	panic   bool
+	mu      sync.Mutex
 	calls   int
 }
 
-func (appender *fakeAppender) Append(_ context.Context, scope outbox.TransactionScope, intent outbox.ValidatedIntent) error {
+func (appender *fakeAppender) Append(_ context.Context, scope outbox.TransactionScope[SessionBinding, BindingReceipt], intent outbox.ValidatedIntent) (outbox.ScopeReceipt[SessionBinding, BindingReceipt], BindingReceipt, error) {
+	appender.mu.Lock()
 	appender.calls++
+	appender.mu.Unlock()
 	if appender.panic {
 		panic("injected outbox panic")
 	}
 	if appender.fail {
-		return errInjected
+		return outbox.ScopeReceipt[SessionBinding, BindingReceipt]{}, BindingReceipt{}, errInjected
 	}
 	return appender.backend.stageOutbox(scope, intent)
+}
+
+func (appender *fakeAppender) callCount() int {
+	appender.mu.Lock()
+	defer appender.mu.Unlock()
+	return appender.calls
 }
 
 type participantControl struct {
 	fail       bool
 	panic      bool
 	cancel     context.CancelFunc
-	capture    *OwnerCapability
+	capture    *SessionBinding
 	inFlight   *int
 	maxFlight  *int
 	flightLock *sync.Mutex
+	entered    chan struct{}
+	proceed    chan struct{}
 }
 
-func registeredTestPlan(backend *fakeBackend, controls []participantControl, policy OutboxPolicy) PlanTemplate {
-	participants := make([]ParticipantTemplate, len(controls))
+type testInvocation struct {
+	prefix string
+}
+
+func registeredTestPlan(backend *fakeBackend, controls []participantControl, policy OutboxPolicy) (PlanTemplate, PlanContract[testInvocation]) {
+	participants := make([]TypedParticipant[testInvocation], len(controls))
 	for index := range controls {
 		index := index
 		key := "participant_" + string(rune('a'+index))
@@ -165,12 +249,12 @@ func registeredTestPlan(backend *fakeBackend, controls []participantControl, pol
 		if index > 0 {
 			after = []string{participants[index-1].Key}
 		}
-		participants[index] = ParticipantTemplate{
+		participants[index] = TypedParticipant[testInvocation]{
 			Key:           key,
 			Owner:         owner,
 			After:         after,
 			DeclaresWrite: true,
-			Operation: func(_ context.Context, capability OwnerCapability) error {
+			Operation: func(_ context.Context, binding SessionBinding, invocation testInvocation) (BindingReceipt, error) {
 				control := &controls[index]
 				if control.flightLock != nil {
 					control.flightLock.Lock()
@@ -186,33 +270,36 @@ func registeredTestPlan(backend *fakeBackend, controls []participantControl, pol
 					}()
 				}
 				if control.capture != nil {
-					*control.capture = capability
+					*control.capture = binding
 				}
-				if !capability.ValidFor(owner) || capability.ValidFor("foreign_owner") {
-					return errInjected
+				if control.entered != nil {
+					close(control.entered)
+				}
+				if control.proceed != nil {
+					<-control.proceed
 				}
 				if control.panic {
 					panic("injected participant panic")
 				}
 				if control.fail {
-					return errInjected
+					return BindingReceipt{}, errInjected
 				}
-				if err := backend.stage(capability, owner, key); err != nil {
-					return err
+				receipt, err := backend.stage(binding, owner, invocation.prefix+key)
+				if err != nil {
+					return BindingReceipt{}, err
 				}
 				if control.cancel != nil {
 					control.cancel()
 				}
-				return nil
+				return receipt, nil
 			},
 		}
 	}
-	return PlanTemplate{
-		ContractVersion: ContractVersionV1,
-		Key:             "test_operation",
-		Participants:    participants,
-		OutboxPolicy:    policy,
+	template, contract, err := NewPlanContract(ContractVersionV1, "test_operation", participants, policy)
+	if err != nil {
+		panic(err)
 	}
+	return template, contract
 }
 
 func newTestCoordinator(backend *fakeBackend, registry Registry, appender *fakeAppender, finalizer FinalAuthorizationAuditPort, durable DurableEffectPreparationPort) *Coordinator {

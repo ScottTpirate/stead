@@ -14,7 +14,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ScottTpirate/stead/apps/core/internal/outbox"
 	transaction "github.com/ScottTpirate/stead/apps/core/internal/transaction"
+	testowneradapter "github.com/ScottTpirate/stead/apps/core/internal/transaction/testowneradapter"
 )
 
 type compileCase struct {
@@ -22,6 +24,75 @@ type compileCase struct {
 	Placement string `json:"placement"`
 	Source    string `json:"source"`
 	Expected  string `json:"expected"`
+}
+
+func TestOwnerAuthoredTypedAdapterCompilesOutsideTransactionPackage(t *testing.T) {
+	applyType, exists := reflect.TypeOf((*testowneradapter.Adapter)(nil)).MethodByName("Apply")
+	if !exists || applyType.Type.NumIn() != 4 ||
+		applyType.Type.In(2) != reflect.TypeOf(transaction.SessionBinding{}) ||
+		applyType.Type.In(3) != reflect.TypeOf(testowneradapter.Command{}) {
+		t.Fatalf("external typed adapter surface drifted: %v", applyType.Type)
+	}
+	for _, banned := range []string{"Owner", "Session", "SQL", "Role", "Commit", "Rollback"} {
+		if _, exists := reflect.TypeOf(transaction.SessionBinding{}).FieldByName(banned); exists {
+			t.Fatalf("session binding exposed %s", banned)
+		}
+	}
+}
+
+type externalBackend struct{}
+type externalSession struct{}
+type externalAppender struct{}
+
+func (externalBackend) Begin(context.Context) (transaction.Session, error) {
+	return externalSession{}, nil
+}
+func (externalSession) Commit(context.Context) error   { return nil }
+func (externalSession) Rollback(context.Context) error { return nil }
+func (externalAppender) Append(_ context.Context, scope outbox.TransactionScope[transaction.SessionBinding, transaction.BindingReceipt], intent outbox.ValidatedIntent) (outbox.ScopeReceipt[transaction.SessionBinding, transaction.BindingReceipt], transaction.BindingReceipt, error) {
+	return scope.Use(func(binding transaction.SessionBinding) (transaction.BindingReceipt, error) {
+		return binding.Use(intent.Verify)
+	})
+}
+
+func TestCoordinatorInvokesExternalOwnerAdapterThroughTypedContract(t *testing.T) {
+	adapter := &testowneradapter.Adapter{}
+	template, contract, err := transaction.NewPlanContract(
+		transaction.ContractVersionV1,
+		"external_typed_adapter",
+		[]transaction.TypedParticipant[testowneradapter.Command]{
+			{
+				Key: "owner_write", Owner: "organization", DeclaresWrite: true,
+				Operation: func(ctx context.Context, binding transaction.SessionBinding, command testowneradapter.Command) (transaction.BindingReceipt, error) {
+					return adapter.Apply(ctx, binding, command)
+				},
+			},
+		},
+		transaction.OutboxOptional,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	registry, err := transaction.NewRegistry([]transaction.PlanTemplate{template})
+	if err != nil {
+		t.Fatal(err)
+	}
+	coordinator, err := transaction.NewCoordinator(transaction.Configuration{
+		Backend: externalBackend{}, Registry: registry, Outbox: externalAppender{},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan, err := contract.Bind(registry, testowneradapter.Command{Value: "typed-command"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := coordinator.Execute(context.Background(), plan); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(adapter.Applied(), []string{"typed-command"}) {
+		t.Fatalf("external adapter result = %v", adapter.Applied())
+	}
 }
 
 func TestForeignModulesAndCallersCannotCompileForbiddenCapabilities(t *testing.T) {
@@ -45,7 +116,7 @@ func TestForeignModulesAndCallersCannotCompileForbiddenCapabilities(t *testing.T
 	if err := decoder.Decode(&trailing); err != io.EOF {
 		t.Fatal("compile-fail inventory contains trailing data")
 	}
-	if inventory.Scope != "P1-015-CORE-PORTS compile-time negative boundaries" || len(inventory.Cases) != 11 {
+	if inventory.Scope != "P1-015-CORE-PORTS compile-time negative boundaries" || len(inventory.Cases) != 14 {
 		t.Fatalf("compile-fail inventory drifted: %q cases=%d", inventory.Scope, len(inventory.Cases))
 	}
 	seen := make(map[string]struct{}, len(inventory.Cases))
@@ -95,7 +166,10 @@ func TestForeignModulesAndCallersCannotCompileForbiddenCapabilities(t *testing.T
 func TestOpaqueAndCoordinatorExportedSurfacesHaveNoBypassMethods(t *testing.T) {
 	bannedMethods := []string{"Add", "AddParticipant", "Allowed", "Begin", "Commit", "Exec", "PrepareEffect", "Query", "Raw", "Retry", "Rollback", "SetMode", "SetRole"}
 	types := []reflect.Type{
-		reflect.TypeOf(transaction.OwnerCapability{}),
+		reflect.TypeOf(transaction.SessionBinding{}),
+		reflect.TypeOf(transaction.BindingReceipt{}),
+		reflect.TypeOf(transaction.PlanTemplate{}),
+		reflect.TypeOf(transaction.PlanContract[struct{}]{}),
 		reflect.TypeOf(transaction.Plan{}),
 		reflect.TypeOf(transaction.BoundRevision{}),
 		reflect.TypeOf(transaction.DurableEffectReceipt{}),
@@ -110,7 +184,10 @@ func TestOpaqueAndCoordinatorExportedSurfacesHaveNoBypassMethods(t *testing.T) {
 		}
 	}
 	for _, valueType := range []reflect.Type{
-		reflect.TypeOf(transaction.OwnerCapability{}),
+		reflect.TypeOf(transaction.SessionBinding{}),
+		reflect.TypeOf(transaction.BindingReceipt{}),
+		reflect.TypeOf(transaction.PlanTemplate{}),
+		reflect.TypeOf(transaction.PlanContract[struct{}]{}),
 		reflect.TypeOf(transaction.Plan{}),
 		reflect.TypeOf(transaction.BoundRevision{}),
 		reflect.TypeOf(transaction.DurableEffectReceipt{}),

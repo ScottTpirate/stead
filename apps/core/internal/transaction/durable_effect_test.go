@@ -9,29 +9,34 @@ import (
 )
 
 type fakeDurablePreparation struct {
-	backend *fakeBackend
-	intent  outbox.ValidatedIntent
-	calls   int
-	fail    bool
-	panic   bool
-	zero    bool
-	version string
-	opaque  []byte
+	backend     *fakeBackend
+	intent      outbox.ValidatedIntent
+	calls       int
+	fail        bool
+	panic       bool
+	zero        bool
+	zeroBinding bool
+	version     string
+	opaque      []byte
 }
 
-func (preparation *fakeDurablePreparation) Prepare(_ context.Context, capability OwnerCapability, issuer DurableEffectIssuer) (DurableEffectPreparation, error) {
+func (preparation *fakeDurablePreparation) Prepare(_ context.Context, binding SessionBinding, issuer DurableEffectIssuer) (DurableEffectPreparation, error) {
 	preparation.calls++
 	if preparation.panic {
 		panic("injected durable handoff panic")
 	}
-	if preparation.fail || !capability.ValidFor(DurableEffectOwner) {
+	if preparation.fail {
 		return DurableEffectPreparation{}, errInjected
 	}
-	if err := preparation.backend.stage(capability, DurableEffectOwner, "durable_effect_preparation"); err != nil {
+	receipt, err := preparation.backend.stage(binding, DurableEffectOwner, "durable_effect_preparation")
+	if err != nil {
 		return DurableEffectPreparation{}, err
 	}
+	if preparation.zeroBinding {
+		receipt = BindingReceipt{}
+	}
 	if preparation.zero {
-		return DurableEffectPreparation{Intent: preparation.intent}, nil
+		return DurableEffectPreparation{Intent: preparation.intent, Binding: receipt}, nil
 	}
 	version := preparation.version
 	if version == "" {
@@ -41,11 +46,11 @@ func (preparation *fakeDurablePreparation) Prepare(_ context.Context, capability
 	if opaque == nil {
 		opaque = []byte("opaque-ws06-durable-result")
 	}
-	receipt, err := issuer.BindValidated(version, opaque)
+	durableReceipt, err := issuer.BindValidated(version, opaque)
 	if err != nil {
 		return DurableEffectPreparation{}, err
 	}
-	return DurableEffectPreparation{Receipt: receipt, Intent: preparation.intent}, nil
+	return DurableEffectPreparation{Receipt: durableReceipt, Intent: preparation.intent, Binding: receipt}, nil
 }
 
 func TestDurableEffectHandoffCommitsIntentBeforeReceiptAndPerformsNoEffect(t *testing.T) {
@@ -57,8 +62,8 @@ func TestDurableEffectHandoffCommitsIntentBeforeReceiptAndPerformsNoEffect(t *te
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !receipt.validFor(receipt.seal) || preparation.calls != 1 || appender.calls != 1 {
-		t.Fatalf("receipt valid=%t prepare=%d append=%d", receipt.validFor(receipt.seal), preparation.calls, appender.calls)
+	if !receipt.validFor(receipt.seal) || preparation.calls != 1 || appender.callCount() != 1 {
+		t.Fatalf("receipt valid=%t prepare=%d append=%d", receipt.validFor(receipt.seal), preparation.calls, appender.callCount())
 	}
 	calls, committed, _, _, _, _ := backend.snapshot()
 	wantCalls := []string{"begin", "durable_effect_preparation", "outbox", "commit"}
@@ -81,6 +86,7 @@ func TestDurableEffectFailuresReturnNoReceiptAndRollback(t *testing.T) {
 		{"owner error", func(value *fakeDurablePreparation, _ *fakeAppender, _ *fakeBackend) { value.fail = true }, CodeParticipantFailed},
 		{"owner panic", func(value *fakeDurablePreparation, _ *fakeAppender, _ *fakeBackend) { value.panic = true }, CodeParticipantFailed},
 		{"zero receipt", func(value *fakeDurablePreparation, _ *fakeAppender, _ *fakeBackend) { value.zero = true }, CodeParticipantFailed},
+		{"missing binding receipt", func(value *fakeDurablePreparation, _ *fakeAppender, _ *fakeBackend) { value.zeroBinding = true }, CodeParticipantFailed},
 		{"wrong version", func(value *fakeDurablePreparation, _ *fakeAppender, _ *fakeBackend) {
 			value.version = DurableEffectHandoffV1 + ".unknown"
 		}, CodeParticipantFailed},

@@ -2,6 +2,6 @@ package compilecontract
 
 import transaction "github.com/ScottTpirate/stead/apps/core/internal/transaction"
 
-func rejected(capability transaction.OwnerCapability) {
-	capability.SetRole("schema_owner")
+func rejected(binding transaction.SessionBinding) {
+	binding.SetRole("schema_owner")
 }

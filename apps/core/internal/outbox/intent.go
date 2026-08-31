@@ -92,13 +92,21 @@ func (i ValidatedIntent) PayloadCopy() []byte {
 
 type scopeSeal struct{ marker byte }
 
-type scopeState struct {
-	seal   *scopeSeal
-	active atomic.Bool
+const (
+	scopeFresh uint32 = iota
+	scopeRunning
+	scopeConsumed
+	scopeClosed
+)
+
+type scopeState[T, R any] struct {
+	seal    *scopeSeal
+	binding T
+	state   atomic.Uint32
 }
 
-// ScopeAuthority is owned by one coordinator. It mints short-lived outbox
-// scopes and invalidates them before the transaction ends.
+// ScopeAuthority is owned by one coordinator. It is required to bind and close
+// short-lived outbox scopes; the appender cannot mint one itself.
 type ScopeAuthority struct {
 	seal *scopeSeal
 }
@@ -107,40 +115,57 @@ func NewScopeAuthority() ScopeAuthority {
 	return ScopeAuthority{seal: &scopeSeal{}}
 }
 
-// TransactionScope is an opaque capability. It exposes no SQL, driver,
+// TransactionScope carries one opaque transaction binding into exactly one
+// synchronous append callback. It exposes no binding value, SQL, driver,
 // connection, role, table, commit, or rollback operation.
-type TransactionScope struct {
-	state *scopeState
+type TransactionScope[T, R any] struct {
+	state *scopeState[T, R]
 }
 
-func (a ScopeAuthority) Open() (TransactionScope, error) {
+// ScopeReceipt proves that one exact TransactionScope completed its own Use
+// callback. It carries no binding or result and cannot be forged by callers.
+type ScopeReceipt[T, R any] struct {
+	state *scopeState[T, R]
+}
+
+// OpenScope binds one coordinator-owned transaction value to an outbox scope.
+// Go does not permit parameterized methods, so this is a free function rather
+// than a ScopeAuthority method.
+func OpenScope[T, R any](a ScopeAuthority, binding T) (TransactionScope[T, R], error) {
 	if a.seal == nil {
-		return TransactionScope{}, ErrInvalidTransactionScope
+		return TransactionScope[T, R]{}, ErrInvalidTransactionScope
 	}
-	state := &scopeState{seal: a.seal}
-	state.active.Store(true)
-	return TransactionScope{state: state}, nil
+	state := &scopeState[T, R]{seal: a.seal, binding: binding}
+	return TransactionScope[T, R]{state: state}, nil
 }
 
-func (a ScopeAuthority) Close(scope TransactionScope) {
-	if a.Owns(scope) {
-		scope.state.active.Store(false)
+// Use consumes the scope around one exact synchronous appender operation. A
+// copy, a concurrent second call, or a retained call after return fails.
+func (scope TransactionScope[T, R]) Use(operation func(T) (R, error)) (receipt ScopeReceipt[T, R], result R, resultErr error) {
+	if scope.state == nil || scope.state.seal == nil || operation == nil ||
+		!scope.state.state.CompareAndSwap(scopeFresh, scopeRunning) {
+		return receipt, result, ErrInvalidTransactionScope
 	}
+	defer scope.state.state.CompareAndSwap(scopeRunning, scopeConsumed)
+	result, resultErr = operation(scope.state.binding)
+	if resultErr != nil {
+		return ScopeReceipt[T, R]{}, result, resultErr
+	}
+	return ScopeReceipt[T, R]{state: scope.state}, result, nil
 }
 
-func (a ScopeAuthority) Owns(scope TransactionScope) bool {
-	return a.seal != nil && scope.state != nil && scope.state.seal == a.seal && scope.state.active.Load()
-}
-
-func (scope TransactionScope) Verify() error {
-	if scope.state == nil || scope.state.seal == nil || !scope.state.active.Load() {
-		return ErrInvalidTransactionScope
+// CloseScope invalidates every copy and reports whether the exact owned scope
+// completed one synchronous Use callback and returned that scope's receipt.
+func CloseScope[T, R any](a ScopeAuthority, scope TransactionScope[T, R], receipt ScopeReceipt[T, R]) bool {
+	if a.seal == nil || scope.state == nil || scope.state.seal != a.seal {
+		return false
 	}
-	return nil
+	previous := scope.state.state.Swap(scopeClosed)
+	return previous == scopeConsumed && receipt.state == scope.state
 }
 
 // AppendPort is the only transaction-scoped insertion surface. It deliberately
 // contains no table, SQL, publish, delete, claim, or delivery method.
-type AppendPort interface {
-	Append(context.Context, TransactionScope, ValidatedIntent) error
+type AppendPort[T, R any] interface {
+	Append(context.Context, TransactionScope[T, R], ValidatedIntent) (ScopeReceipt[T, R], R, error)
 }

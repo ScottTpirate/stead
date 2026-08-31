@@ -83,13 +83,14 @@ func (receipt DurableEffectReceipt) validFor(seal *durableSeal) bool {
 type DurableEffectPreparation struct {
 	Receipt DurableEffectReceipt
 	Intent  outbox.ValidatedIntent
+	Binding BindingReceipt
 }
 
 // DurableEffectPreparationPort is the typed handoff to the WS-06 owner. It
 // prepares owner state and one required audit/event intent but performs no
 // provider, network, credential, stream, or other external effect.
 type DurableEffectPreparationPort interface {
-	Prepare(context.Context, OwnerCapability, DurableEffectIssuer) (DurableEffectPreparation, error)
+	Prepare(context.Context, SessionBinding, DurableEffectIssuer) (DurableEffectPreparation, error)
 }
 
 type durableEffectInvocation struct {
@@ -104,26 +105,22 @@ func (invocation *durableEffectInvocation) intent() *outbox.ValidatedIntent {
 	return &invocation.result.Intent
 }
 
-func (coordinator *Coordinator) prepareDurableEffectParticipant(ctx context.Context, capability OwnerCapability) error {
-	if coordinator == nil || isNil(coordinator.durableEffectPreparation) || !capability.ValidFor(DurableEffectOwner) {
-		return fail(CodeDurableHandoffFail)
-	}
-	invocation, ok := capability.state.plan.invocation.(*durableEffectInvocation)
-	if !ok || invocation == nil {
-		return fail(CodeDurableHandoffFail)
+func (coordinator *Coordinator) prepareDurableEffectParticipant(ctx context.Context, binding SessionBinding, invocation *durableEffectInvocation) (BindingReceipt, error) {
+	if coordinator == nil || isNil(coordinator.durableEffectPreparation) || invocation == nil {
+		return BindingReceipt{}, fail(CodeDurableHandoffFail)
 	}
 	issuer := newDurableEffectIssuer()
 	invocation.issuerSeal = issuer.state.seal
-	result, err := coordinator.durableEffectPreparation.Prepare(ctx, capability, issuer)
+	result, err := coordinator.durableEffectPreparation.Prepare(ctx, binding, issuer)
 	issuer.close()
 	if err != nil || !result.Receipt.validFor(invocation.issuerSeal) {
-		return fail(CodeDurableHandoffFail)
+		return BindingReceipt{}, fail(CodeDurableHandoffFail)
 	}
 	if err := result.Intent.Verify(); err != nil {
-		return fail(CodeOutboxFailed)
+		return BindingReceipt{}, fail(CodeOutboxFailed)
 	}
 	invocation.result = result
-	return nil
+	return result.Binding, nil
 }
 
 func (coordinator *Coordinator) PrepareDurableEffect(ctx context.Context) (DurableEffectReceipt, Report, error) {
@@ -131,7 +128,9 @@ func (coordinator *Coordinator) PrepareDurableEffect(ctx context.Context) (Durab
 		return DurableEffectReceipt{}, Report{}, fail(CodeDurableHandoffFail)
 	}
 	invocation := &durableEffectInvocation{}
-	plan, err := coordinator.registry.bind(durableEffectTemplateKey, nil, invocation.intent, invocation)
+	plan, err := coordinator.durableEffectContract.bind(coordinator.registry, invocation, nil, func(value *durableEffectInvocation) *outbox.ValidatedIntent {
+		return value.intent()
+	})
 	if err != nil {
 		return DurableEffectReceipt{}, Report{}, fail(CodeDurableHandoffFail)
 	}

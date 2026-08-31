@@ -3,5 +3,5 @@ package compilecontract
 import transaction "github.com/ScottTpirate/stead/apps/core/internal/transaction"
 
 func rejected(binding transaction.SessionBinding) {
-	binding.Exec("DELETE FROM foreign.table")
+	_ = binding.ValidFor("request-selected-owner")
 }
