@@ -3,6 +3,8 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { parse } from "yaml";
+
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = resolve(scriptDirectory, "../../..");
 const sourcePath = resolve(repositoryRoot, "specs/openapi/platform-v1.yaml");
@@ -13,44 +15,262 @@ const outputPath = resolve(
 
 const source = await readFile(sourcePath, "utf8");
 const sourceSha256 = createHash("sha256").update(source).digest("hex");
-const versionMatch = /^  version:\s*([^\s]+)\s*$/mu.exec(source);
-if (!versionMatch) throw new Error("the Platform OpenAPI contract has no info.version");
-const contractVersion = versionMatch[1];
-const lines = source.split(/\r?\n/u);
-const operations = [];
-let currentPath;
-let currentMethod;
-
-for (const line of lines) {
-  const pathMatch = /^  (\/[^:]+):\s*$/u.exec(line);
-  if (pathMatch) {
-    currentPath = pathMatch[1];
-    currentMethod = undefined;
-    continue;
-  }
-
-  const methodMatch = /^    (get|post|put|patch|delete):\s*$/u.exec(line);
-  if (methodMatch && currentPath) {
-    currentMethod = methodMatch[1].toUpperCase();
-    continue;
-  }
-
-  const operationMatch = /^      operationId:\s*([A-Za-z][A-Za-z0-9]*)\s*$/u.exec(line);
-  if (!operationMatch) continue;
-  if (!currentPath || !currentMethod) {
-    throw new Error(`operationId ${operationMatch[1]} has no path and method`);
-  }
-  operations.push({
-    id: operationMatch[1],
-    method: currentMethod,
-    path: currentPath,
-  });
+const contract = parse(source);
+if (!contract?.info?.version) {
+  throw new Error("the Platform OpenAPI contract has no info.version");
 }
 
+const documents = new Map([[sourcePath, contract]]);
+
+function jsonPointer(document, pointer, reference) {
+  if (!pointer) return document;
+  if (!pointer.startsWith("/")) {
+    throw new Error(`unsupported JSON pointer in ${reference}`);
+  }
+  return pointer
+    .slice(1)
+    .split("/")
+    .map((segment) => segment.replaceAll("~1", "/").replaceAll("~0", "~"))
+    .reduce((value, segment) => {
+      if (value === null || typeof value !== "object" || !(segment in value)) {
+        throw new Error(`unresolved JSON pointer ${reference}`);
+      }
+      return value[segment];
+    }, document);
+}
+
+async function readDocument(path) {
+  if (documents.has(path)) return documents.get(path);
+  const text = await readFile(path, "utf8");
+  const document = path.endsWith(".json") ? JSON.parse(text) : parse(text);
+  documents.set(path, document);
+  return document;
+}
+
+async function dereference(value, documentPath = sourcePath, stack = new Set()) {
+  if (Array.isArray(value)) {
+    return Promise.all(value.map((item) => dereference(item, documentPath, stack)));
+  }
+  if (value === null || typeof value !== "object") return value;
+  if (typeof value.$ref === "string") {
+    const [relativePath, pointer = ""] = value.$ref.split("#", 2);
+    const targetPath = relativePath
+      ? resolve(dirname(documentPath), relativePath)
+      : documentPath;
+    const identity = `${targetPath}#${pointer}`;
+    if (stack.has(identity)) {
+      throw new Error(`recursive request schema reference ${identity}`);
+    }
+    const targetDocument = await readDocument(targetPath);
+    const target = jsonPointer(targetDocument, pointer, value.$ref);
+    const nextStack = new Set(stack);
+    nextStack.add(identity);
+    const resolved = await dereference(target, targetPath, nextStack);
+    const siblings = Object.fromEntries(
+      Object.entries(value).filter(([key]) => key !== "$ref"),
+    );
+    if (Object.keys(siblings).length === 0) return resolved;
+    return {
+      ...resolved,
+      ...(await dereference(siblings, documentPath, stack)),
+    };
+  }
+  return Object.fromEntries(
+    await Promise.all(
+      Object.entries(value).map(async ([key, nested]) => [
+        key,
+        await dereference(nested, documentPath, stack),
+      ]),
+    ),
+  );
+}
+
+const HEADER_OPTION_NAMES = new Map([
+  ["If-Match", "ifMatch"],
+  ["Idempotency-Key", "idempotencyKey"],
+]);
+const SUPPORTED_REQUEST_SCHEMA_KEYWORDS = new Set([
+  "type",
+  "const",
+  "enum",
+  "pattern",
+  "minLength",
+  "minimum",
+  "maximum",
+  "minProperties",
+  "required",
+  "properties",
+  "additionalProperties",
+  "items",
+  "uniqueItems",
+  "oneOf",
+  "allOf",
+]);
+
+function assertSupportedRequestSchema(schema, location) {
+  if (schema === null || typeof schema !== "object" || Array.isArray(schema)) {
+    throw new Error(`${location} is not an object schema`);
+  }
+  for (const keyword of Object.keys(schema)) {
+    if (!SUPPORTED_REQUEST_SCHEMA_KEYWORDS.has(keyword)) {
+      throw new Error(`${location} uses unsupported schema keyword ${keyword}`);
+    }
+  }
+  if (schema.type !== undefined && typeof schema.type !== "string") {
+    throw new Error(`${location} uses an unsupported compound type`);
+  }
+  if (
+    schema.additionalProperties !== undefined &&
+    typeof schema.additionalProperties !== "boolean"
+  ) {
+    throw new Error(`${location} uses an unsupported additionalProperties schema`);
+  }
+  for (const [name, nested] of Object.entries(schema.properties ?? {})) {
+    assertSupportedRequestSchema(nested, `${location}.properties.${name}`);
+  }
+  if (schema.items) assertSupportedRequestSchema(schema.items, `${location}.items`);
+  for (const [index, nested] of (schema.oneOf ?? []).entries()) {
+    assertSupportedRequestSchema(nested, `${location}.oneOf[${index}]`);
+  }
+  for (const [index, nested] of (schema.allOf ?? []).entries()) {
+    assertSupportedRequestSchema(nested, `${location}.allOf[${index}]`);
+  }
+}
+
+async function requestDefinition(pathItem, operation) {
+  const parameters = await Promise.all(
+    [...(pathItem.parameters ?? []), ...(operation.parameters ?? [])].map(
+      (parameter) => dereference(parameter),
+    ),
+  );
+  const request = { path: {}, query: {}, headers: {}, body: null };
+  for (const parameter of parameters) {
+    if (!parameter.name || !parameter.in || !parameter.schema) {
+      throw new Error("every Platform parameter must name its location and schema");
+    }
+    const schema = await dereference(parameter.schema);
+    assertSupportedRequestSchema(
+      schema,
+      `${operation.operationId}.${parameter.in}.${parameter.name}`,
+    );
+    if (parameter.in === "path" || parameter.in === "query") {
+      request[parameter.in][parameter.name] = {
+        required: parameter.in === "path" || parameter.required === true,
+        schema,
+      };
+      continue;
+    }
+    if (parameter.in === "header") {
+      const optionName = HEADER_OPTION_NAMES.get(parameter.name);
+      if (!optionName) {
+        throw new Error(`unsupported browser header parameter ${parameter.name}`);
+      }
+      request.headers[optionName] = {
+        wireName: parameter.name,
+        required: parameter.required === true,
+        schema,
+        ...(parameter.name === "If-Match" && /strong/iu.test(parameter.description ?? "")
+          ? { strongEtag: true }
+          : {}),
+      };
+      continue;
+    }
+    throw new Error(`unsupported browser parameter location ${parameter.in}`);
+  }
+
+  if (operation.requestBody) {
+    const body = await dereference(operation.requestBody);
+    const mediaTypes = Object.keys(body.content ?? {});
+    if (mediaTypes.length !== 1) {
+      throw new Error("browser operations must declare exactly one request media type");
+    }
+    const mediaType = mediaTypes[0];
+    const schema = await dereference(body.content[mediaType].schema);
+    assertSupportedRequestSchema(schema, `${operation.operationId}.body`);
+    request.body = {
+      required: body.required === true,
+      mediaType,
+      schema,
+    };
+  }
+  return request;
+}
+
+async function responseDefinition(operation) {
+  const successes = [];
+  const errors = [];
+  for (const [status, rawResponse] of Object.entries(operation.responses ?? {})) {
+    const response = await dereference(rawResponse);
+    if (/^2[0-9][0-9]$/u.test(status)) successes.push(response);
+    else errors.push(response);
+  }
+  if (successes.length === 0) {
+    throw new Error(`operation ${operation.operationId} has no success response`);
+  }
+  const successMediaTypes = [
+    ...new Set(successes.flatMap((response) => Object.keys(response.content ?? {}))),
+  ].sort();
+  const errorMediaTypes = [
+    ...new Set(errors.flatMap((response) => Object.keys(response.content ?? {}))),
+  ].sort();
+  if (successMediaTypes.length === 0 || errorMediaTypes.length === 0) {
+    throw new Error(`operation ${operation.operationId} has an untyped response`);
+  }
+
+  const schemaHeaders = successes.map(
+    (response) => response.headers?.["Stead-Schema-Version"],
+  );
+  const declaresSchemaVersion = schemaHeaders.every(Boolean);
+  if (!declaresSchemaVersion && schemaHeaders.some(Boolean)) {
+    throw new Error(
+      `operation ${operation.operationId} inconsistently declares Stead-Schema-Version`,
+    );
+  }
+  const schemaVersion = declaresSchemaVersion
+    ? {
+        required: true,
+        schema: (await dereference(schemaHeaders[0])).schema,
+      }
+    : null;
+  if (schemaVersion) {
+    assertSupportedRequestSchema(
+      schemaVersion.schema,
+      `${operation.operationId}.response.Stead-Schema-Version`,
+    );
+  }
+  const compatibleSchemaMajor =
+    contract["x-stead-versioning"]?.compatible_schema_major;
+  if (!Number.isInteger(compatibleSchemaMajor)) {
+    throw new Error("x-stead-versioning.compatible_schema_major must be an integer");
+  }
+  return {
+    successMediaTypes,
+    errorMediaTypes,
+    schemaVersion,
+    compatibleSchemaMajor,
+  };
+}
+
+const operations = [];
+for (const [path, pathItem] of Object.entries(contract.paths ?? {})) {
+  for (const method of ["get", "post", "put", "patch", "delete"]) {
+    const operation = pathItem[method];
+    if (!operation) continue;
+    if (!operation.operationId) {
+      throw new Error(`${method.toUpperCase()} ${path} has no operationId`);
+    }
+    operations.push({
+      id: operation.operationId,
+      method: method.toUpperCase(),
+      path,
+      request: await requestDefinition(pathItem, operation),
+      response: await responseDefinition(operation),
+    });
+  }
+}
 if (operations.length === 0) {
   throw new Error("the Platform OpenAPI contract contains no operations");
 }
-
 const operationIds = new Set();
 for (const operation of operations) {
   if (operationIds.has(operation.id)) {
@@ -61,19 +281,19 @@ for (const operation of operations) {
 
 const renderedOperations = operations
   .map(
-    ({ id, method, path }) =>
-      `  ${JSON.stringify(id)}: { method: ${JSON.stringify(method)}, path: ${JSON.stringify(path)} },`,
+    ({ id, method, path, request, response }) =>
+      `  ${JSON.stringify(id)}: ${JSON.stringify({ method, path, request, response })},`,
   )
   .join("\n");
 
 const output = `// Generated by packages/api-client/scripts/generate-operation-registry.mjs.
 // Source: specs/openapi/platform-v1.yaml
 // Source SHA-256: ${sourceSha256}
-// Do not edit by hand. Response bodies remain unknown until their owning schema
-// generator receives an independently approved dependency and integration gate.
+// Do not edit by hand. Request constraints and transport response envelopes are
+// generated from the canonical Platform contract; response data stays unknown.
 
 export const PLATFORM_API_BASE_PATH = "/api/v1" as const;
-export const PLATFORM_OPENAPI_VERSION = ${JSON.stringify(contractVersion)} as const;
+export const PLATFORM_OPENAPI_VERSION = ${JSON.stringify(contract.info.version)} as const;
 export const PLATFORM_OPENAPI_SOURCE_SHA256 = ${JSON.stringify(sourceSha256)} as const;
 
 export const operationDefinitions = {

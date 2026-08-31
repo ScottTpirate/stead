@@ -17,11 +17,13 @@ npm run validate:web-bundle
 npm run measure:bundle --workspace=@stead/web
 ```
 
-`measure:bundle` reports exact level-9 gzip bytes for the eager entry graph and for Docs
-editor, Code, Delivery, Administration, Migration, and analytics boundaries. The eager
-delta is measured against the merged 60,808-byte minimal shell baseline; each newly
-introduced lazy boundary has a zero-byte baseline. The 250 KiB eager ceiling remains an
-absolute failure.
+`measure:bundle` reports exact level-9 gzip bytes and SHA-256 digests for the closed eager
+entry graph and the complete transitive Docs editor, Code, Delivery, Administration,
+Migration, and analytics graphs. Shared lazy chunks appear in every consuming capability
+and exactly once in the stable unique total. Any JavaScript outside those governed graphs
+fails the check. The eager delta is measured against the merged 60,808-byte minimal shell
+baseline; each newly introduced lazy boundary has a zero-byte baseline. The 250 KiB eager
+ceiling remains an absolute failure.
 
 The `stead:performance` browser event contains only an allowlisted metric name, numeric
 value, and unit. It never contains a route, resource ID, query, title, body, token, policy
@@ -33,7 +35,7 @@ Two gates deliberately remain outside this branch:
 - `DEP-APP-DEVLANE-SOURCE-7719DCAD` authorizes only an inert source reference with no
   distributed artifact. Devlane code/assets cannot be imported until WS-01 records and
   independently approves the exact proposed distribution and file-level provenance.
-- Vitest, React Testing Library, Playwright, and axe are not approved or installed. The
-  dependency-free Node tests cover generated operations, transport boundaries, query-state
-  invalidation, canonical IA, semantic hooks, lazy imports, and ontology/provider guards;
-  they do not claim the required browser, accessibility, or visual-regression evidence.
+- The exact approved Vitest, React Testing Library, DOM Testing Library, user-event, and
+  happy-dom unit harness is installed and covers shell behavior alongside the Node contract
+  tests. Playwright and axe remain absent, so this branch does not claim the required real-
+  browser accessibility, end-to-end, or visual-regression evidence.

@@ -3,64 +3,173 @@
   "issue": "P1-005-FE-FOUNDATION",
   "contract": "PERF-005",
   "generated_by": "apps/web/scripts/measure-bundle.mjs",
-  "measurement_method": "Node zlib level 9 over Vite manifest JavaScript graph",
+  "measurement_method": "Node zlib level 9 over closed Vite manifest JavaScript graphs with SHA-256 digests and stable shared-chunk attribution",
   "scope": "Wave 0 original non-import foundation",
   "mature_interface_perf005_complete": false,
   "lazy_boundaries_are_placeholders": true,
   "minimal_foundation_baseline_bytes_gzip": 60808,
   "budget_bytes_gzip": 256000,
   "eager_javascript": {
-    "gzip_bytes": 65691,
-    "delta_bytes_gzip": 4883,
+    "gzip_bytes": 67615,
+    "delta_bytes_gzip": 6807,
     "files": [
       {
-        "file": "assets/index-BH-Mqxut.js",
-        "gzip_bytes": 65691
+        "source": "index.html",
+        "file": "assets/index-BtA9Pu5T.js",
+        "sha256": "4d11e692dc6bea9d53b413ee7257d8d48e69da86cf452af59c3d35306c438fe6",
+        "gzip_bytes": 67615
       }
     ]
   },
   "lazy_capabilities": {
     "docs_editor": {
       "source": "src/capabilities/docs-editor.ts",
-      "file": "assets/docs-editor-MzfoGaDr.js",
       "baseline_bytes_gzip": 0,
       "gzip_bytes": 79,
-      "delta_bytes_gzip": 79
+      "delta_bytes_gzip": 79,
+      "files": [
+        {
+          "source": "src/capabilities/docs-editor.ts",
+          "file": "assets/docs-editor-MzfoGaDr.js",
+          "sha256": "c47b68727d3175c390813adbf502cf98797a2ccbc7bd2a6ec11430d913e40f68",
+          "gzip_bytes": 79
+        }
+      ]
     },
     "code": {
       "source": "src/capabilities/code.ts",
-      "file": "assets/code-B89Khe_K.js",
       "baseline_bytes_gzip": 0,
       "gzip_bytes": 72,
-      "delta_bytes_gzip": 72
+      "delta_bytes_gzip": 72,
+      "files": [
+        {
+          "source": "src/capabilities/code.ts",
+          "file": "assets/code-B89Khe_K.js",
+          "sha256": "312e698e4ca194a24650c0b1a8aafd959dd41a8d89ef13d64c4f0cc372232844",
+          "gzip_bytes": 72
+        }
+      ]
     },
     "delivery": {
       "source": "src/capabilities/delivery.ts",
-      "file": "assets/delivery-CyvOSHoh.js",
       "baseline_bytes_gzip": 0,
       "gzip_bytes": 76,
-      "delta_bytes_gzip": 76
+      "delta_bytes_gzip": 76,
+      "files": [
+        {
+          "source": "src/capabilities/delivery.ts",
+          "file": "assets/delivery-CyvOSHoh.js",
+          "sha256": "a5c9e9920b8a54dfc18a160ce589e2434cc29432521038d1a244a51a8a79417f",
+          "gzip_bytes": 76
+        }
+      ]
     },
     "administration": {
       "source": "src/capabilities/administration.ts",
-      "file": "assets/administration-DUBAxT-J.js",
       "baseline_bytes_gzip": 0,
       "gzip_bytes": 82,
-      "delta_bytes_gzip": 82
+      "delta_bytes_gzip": 82,
+      "files": [
+        {
+          "source": "src/capabilities/administration.ts",
+          "file": "assets/administration-DUBAxT-J.js",
+          "sha256": "83d3f162141705d8e679c1ceb88e4f7957f7d6cf95e89d42794c82087348673d",
+          "gzip_bytes": 82
+        }
+      ]
     },
     "migration": {
       "source": "src/capabilities/migration.ts",
-      "file": "assets/migration-BtQwf3v_.js",
       "baseline_bytes_gzip": 0,
       "gzip_bytes": 77,
-      "delta_bytes_gzip": 77
+      "delta_bytes_gzip": 77,
+      "files": [
+        {
+          "source": "src/capabilities/migration.ts",
+          "file": "assets/migration-BtQwf3v_.js",
+          "sha256": "7ea33251f704add6d1132a8b41ff4db55d68f3380f8ae976a457d42add74e97e",
+          "gzip_bytes": 77
+        }
+      ]
     },
     "analytics": {
       "source": "src/capabilities/analytics.ts",
-      "file": "assets/analytics-sfWqm0Iz.js",
       "baseline_bytes_gzip": 0,
       "gzip_bytes": 77,
-      "delta_bytes_gzip": 77
+      "delta_bytes_gzip": 77,
+      "files": [
+        {
+          "source": "src/capabilities/analytics.ts",
+          "file": "assets/analytics-sfWqm0Iz.js",
+          "sha256": "b8ad4110d5d125aa13fa552e39cefb28480e399c9109f058a76c925b33b9ab5a",
+          "gzip_bytes": 77
+        }
+      ]
     }
+  },
+  "lazy_unique_javascript": {
+    "gzip_bytes": 463,
+    "files": [
+      {
+        "source": "src/capabilities/administration.ts",
+        "file": "assets/administration-DUBAxT-J.js",
+        "sha256": "83d3f162141705d8e679c1ceb88e4f7957f7d6cf95e89d42794c82087348673d",
+        "gzip_bytes": 82,
+        "capabilities": [
+          "administration"
+        ],
+        "attributed_to": "administration"
+      },
+      {
+        "source": "src/capabilities/analytics.ts",
+        "file": "assets/analytics-sfWqm0Iz.js",
+        "sha256": "b8ad4110d5d125aa13fa552e39cefb28480e399c9109f058a76c925b33b9ab5a",
+        "gzip_bytes": 77,
+        "capabilities": [
+          "analytics"
+        ],
+        "attributed_to": "analytics"
+      },
+      {
+        "source": "src/capabilities/code.ts",
+        "file": "assets/code-B89Khe_K.js",
+        "sha256": "312e698e4ca194a24650c0b1a8aafd959dd41a8d89ef13d64c4f0cc372232844",
+        "gzip_bytes": 72,
+        "capabilities": [
+          "code"
+        ],
+        "attributed_to": "code"
+      },
+      {
+        "source": "src/capabilities/delivery.ts",
+        "file": "assets/delivery-CyvOSHoh.js",
+        "sha256": "a5c9e9920b8a54dfc18a160ce589e2434cc29432521038d1a244a51a8a79417f",
+        "gzip_bytes": 76,
+        "capabilities": [
+          "delivery"
+        ],
+        "attributed_to": "delivery"
+      },
+      {
+        "source": "src/capabilities/docs-editor.ts",
+        "file": "assets/docs-editor-MzfoGaDr.js",
+        "sha256": "c47b68727d3175c390813adbf502cf98797a2ccbc7bd2a6ec11430d913e40f68",
+        "gzip_bytes": 79,
+        "capabilities": [
+          "docs_editor"
+        ],
+        "attributed_to": "docs_editor"
+      },
+      {
+        "source": "src/capabilities/migration.ts",
+        "file": "assets/migration-BtQwf3v_.js",
+        "sha256": "7ea33251f704add6d1132a8b41ff4db55d68f3380f8ae976a457d42add74e97e",
+        "gzip_bytes": 77,
+        "capabilities": [
+          "migration"
+        ],
+        "attributed_to": "migration"
+      }
+    ]
   }
 }

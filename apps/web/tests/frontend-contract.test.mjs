@@ -1,6 +1,18 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { homedir } from "node:os";
+import { join, resolve } from "node:path";
 import test from "node:test";
+
+import {
+  collectBrowserSourceGraph,
+  findBrowserBoundaryViolations,
+  undeclaredRuntimePackages,
+} from "../scripts/browser-source-graph.mjs";
+import {
+  buildBundleMembership,
+  REQUIRED_LAZY_BOUNDARIES,
+} from "../scripts/measure-bundle.mjs";
 
 const webSource = new URL("../src/", import.meta.url);
 
@@ -50,30 +62,106 @@ test("every required capability remains behind a dynamic import", async () => {
   }
 });
 
-test("browser source has no direct provider or infrastructure network path", async () => {
-  const files = [
-    "AppShell.tsx",
-    "CommandPalette.tsx",
-    "Foundation.tsx",
-    "main.tsx",
-    "platform.ts",
-    "routes.ts",
-    "useRoute.ts",
-  ];
-  const combined = (await Promise.all(files.map(source))).join("\n");
-  assert.doesNotMatch(combined, /gitea|commonplace|openfga|nats|\/api\/v1\/repos/iu);
-  assert.doesNotMatch(combined, /fetch\s*\(/u);
+test("lazy bundle graphs include transitive and shared chunks exactly once", () => {
+  const manifest = {
+    "index.html": {
+      file: "assets/index.js",
+      isEntry: true,
+      imports: ["eager-shared"],
+      dynamicImports: Object.values(REQUIRED_LAZY_BOUNDARIES),
+    },
+    "eager-shared": { file: "assets/eager.js" },
+    "src/capabilities/docs-editor.ts": {
+      file: "assets/docs.js",
+      imports: ["lazy-shared"],
+      dynamicImports: ["docs-transitive"],
+    },
+    "src/capabilities/code.ts": {
+      file: "assets/code.js",
+      imports: ["lazy-shared"],
+    },
+    "src/capabilities/delivery.ts": { file: "assets/delivery.js" },
+    "src/capabilities/administration.ts": { file: "assets/admin.js" },
+    "src/capabilities/migration.ts": { file: "assets/migration.js" },
+    "src/capabilities/analytics.ts": { file: "assets/analytics.js" },
+    "lazy-shared": { file: "assets/lazy-shared.js" },
+    "docs-transitive": { file: "assets/docs-transitive.js" },
+  };
+  const membership = buildBundleMembership(manifest);
+
+  assert.deepEqual(membership.eagerKeys, ["eager-shared", "index.html"]);
+  assert.deepEqual(membership.capabilityKeys.docs_editor, [
+    "docs-transitive",
+    "lazy-shared",
+    "src/capabilities/docs-editor.ts",
+  ]);
+  assert.deepEqual(membership.capabilityKeys.code, [
+    "lazy-shared",
+    "src/capabilities/code.ts",
+  ]);
+  assert.deepEqual(membership.ownersByKey["lazy-shared"], ["code", "docs_editor"]);
+  assert.equal(
+    membership.lazyUniqueKeys.filter((key) => key === "lazy-shared").length,
+    1,
+  );
+
+  assert.throws(
+    () =>
+      buildBundleMembership({
+        ...manifest,
+        orphan: { file: "assets/ungoverned.js" },
+      }),
+    /outside required capability graphs.*orphan/u,
+  );
 });
 
-test("original shell does not introduce Devlane ontology", async () => {
-  const files = [
-    "AppShell.tsx",
-    "CommandPalette.tsx",
-    "Foundation.tsx",
-    "routes.ts",
-  ];
-  const combined = (await Promise.all(files.map(source))).join("\n");
-  assert.doesNotMatch(combined, /\bModules\b|\bEpics\b|\bPages\b|\bBoard\b|\bIntake\b|\bArchives\b|\bDrafts\b/u);
+test("the complete browser module graph closes network, provider, ontology, and dependency boundaries", async () => {
+  const repositoryRoot = resolve(new URL("../../..", import.meta.url).pathname);
+  const manifest = JSON.parse(
+    await readFile(new URL("../package.json", import.meta.url), "utf8"),
+  );
+  const graph = await collectBrowserSourceGraph({
+    entryPath: new URL("../src/main.tsx", import.meta.url).pathname,
+    repositoryRoot,
+  });
+  const relativePaths = graph.modules.map((module) =>
+    module.path.slice(repositoryRoot.length + 1),
+  );
+
+  assert.ok(relativePaths.includes("apps/web/src/capabilities/docs-editor.ts"));
+  assert.ok(relativePaths.includes("packages/api-client/src/client.ts"));
+  assert.ok(relativePaths.includes("packages/design-system/src/primitives.tsx"));
+  assert.deepEqual(findBrowserBoundaryViolations(graph), []);
+  assert.deepEqual(undeclaredRuntimePackages(graph, manifest), []);
+});
+
+test("a newly imported forbidden network module cannot escape the graph gate", async () => {
+  const fixtureParent =
+    process.env.STEAD_TEST_TMPDIR ?? join(homedir(), ".cache", "stead-test-tmp");
+  await mkdir(fixtureParent, { recursive: true });
+  const fixtureRoot = await mkdtemp(join(fixtureParent, "stead-browser-graph-"));
+  try {
+    await writeFile(
+      join(fixtureRoot, "entry.ts"),
+      'import "./new-module";\nexport const entry = true;\n',
+      "utf8",
+    );
+    await writeFile(
+      join(fixtureRoot, "new-module.ts"),
+      'export const bypass = () => fetch("https://gitea.invalid/api/v1/repos");\n',
+      "utf8",
+    );
+    const graph = await collectBrowserSourceGraph({
+      entryPath: join(fixtureRoot, "entry.ts"),
+      repositoryRoot: fixtureRoot,
+    });
+    assert.deepEqual(
+      findBrowserBoundaryViolations(graph).map(({ rule }) => rule),
+      ["direct-browser-network", "provider-or-infrastructure"],
+    );
+  } finally {
+    await rm(fixtureRoot, { recursive: true, force: true });
+  }
 });
 
 test("merged provenance still prohibits a Devlane distribution import", async () => {
