@@ -553,13 +553,21 @@ encoded_canary["telemetry"]["normalized_key_count"] = 7
 encoded_canary["telemetry"]["normalized_string_value_count"] = 5
 encoded_canary["telemetry"]["records_sha256"] = Stead::PerformanceCanonicalJSON.digest(encoded_canary.dig("telemetry", "records"))
 encoded_canary_errors = semantic_errors.call(encoded_canary)
+
+split_encoded_canary = copy.call(fixture)
+split_encoded = [Stead::PerformanceNormativeControls::TELEMETRY_CANARIES.first].pack("m0").scan(/.{1,4}/).join(" \n")
+split_encoded_canary["telemetry"]["records"][0]["attributes"]["description"] = "otel:#{split_encoded}:tag"
+split_encoded_canary["telemetry"]["normalized_key_count"] = 6
+split_encoded_canary["telemetry"]["normalized_string_value_count"] = 4
+split_encoded_canary["telemetry"]["records_sha256"] = Stead::PerformanceCanonicalJSON.digest(split_encoded_canary.dig("telemetry", "records"))
+split_encoded_canary_errors = semantic_errors.call(split_encoded_canary)
 assert.call(
   "T-P1-012-PERF-REDACTION",
-  [raw_canary_errors, encoded_canary_errors].all? do |errors|
+  [raw_canary_errors, encoded_canary_errors, split_encoded_canary_errors].all? do |errors|
     errors.include?("telemetry.canary_value_hits does not match verifier-computed scan") &&
       errors.include?("telemetry contains protected-content canary values")
   end,
-  "recursive telemetry scanning must detect raw and URL-safe encoded canaries as key/value substrings with prefixes and suffixes"
+  "recursive telemetry scanning must detect raw, URL-safe, and separator-obfuscated encoded canaries as key/value substrings"
 )
 
 forbidden_key = copy.call(fixture)
@@ -785,10 +793,12 @@ Dir.mktmpdir("performance-adversarial-", artifacts_parent.to_s) do |directory|
   encoded_canary = Stead::PerformanceRetainedEvidenceScan.encoded_forms("synthetic-canary")
   hexadecimal_canary = "synthetic-canary".unpack1("H*")
   percent_canary = "synthetic-canary".bytes.map { |byte| format("%%%02X", byte) }.join
+  split_base64_canary = encoded_canary[1].scan(/.{1,4}/).join(" \n")
   retained_cases = {
     "runner-stderr.log" => "prefix synthetic-canary suffix",
     "environment.json" => JSON.generate({ "safe" => encoded_canary[1] }),
     "runner-output.json" => JSON.generate({ "safe" => hexadecimal_canary }),
+    "split-encoded.log" => "prefix #{split_base64_canary} suffix",
     "payload.json" => JSON.generate({ "Secret_Token" => "redacted" }),
     "request-traces.json" => JSON.generate({ "safe" => percent_canary }),
     "measurement.txt" => "Authorization: Bearer prohibited",

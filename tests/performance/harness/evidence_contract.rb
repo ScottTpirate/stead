@@ -82,11 +82,7 @@ module Stead
     end
 
     def raw_file_findings(path, rules:, max_bytes:)
-      needles = rules.fetch("forbidden_normalized_value_patterns", []).map(&:downcase)
-      PerformanceNormativeControls::TELEMETRY_CANARIES.each do |canary|
-        needles.concat(encoded_forms(canary))
-      end
-      needles.uniq!
+      forbidden_needles = rules.fetch("forbidden_normalized_value_patterns", []).map(&:downcase)
       findings = []
       tail = +""
       scanned_bytes = 0
@@ -99,8 +95,11 @@ module Stead
             break
           end
           haystack = (tail + chunk).downcase
-          needles.each do |needle|
+          forbidden_needles.each do |needle|
             findings << "retained bytes contain protected or forbidden content" if haystack.include?(needle)
+          end
+          if encoded_canary?(haystack)
+            findings << "retained bytes contain protected or forbidden content"
           end
           unless binary_extension
             without_whitespace = haystack.gsub(/\s+/, "")
@@ -125,9 +124,23 @@ module Stead
 
     def encoded_canary?(value)
       haystack = value.to_s.downcase
+      representations = normalized_encoded_representations(haystack)
       PerformanceNormativeControls::TELEMETRY_CANARIES.any? do |canary|
-        encoded_forms(canary).any? { |form| haystack.include?(form) }
+        encoded_forms(canary).any? do |form|
+          normalized_encoded_representations(form).each_with_index.any? do |needle, index|
+            representations.fetch(index).include?(needle)
+          end
+        end
       end
+    end
+
+    def normalized_encoded_representations(value)
+      normalized = value.to_s.downcase
+      [
+        normalized,
+        normalized.gsub(/[[:space:]]+/, ""),
+        normalized.gsub(/[^a-z0-9]/, "")
+      ]
     end
 
     def encoded_forms(canary)
@@ -1293,7 +1306,14 @@ module Stead
         ].map(&:downcase).uniq
         encoded_hits = forms.count { |form| haystack.include?(form) }
         decoded_hits = decoded_text_forms(text).count { |decoded| decoded.downcase.include?(canary.downcase) }
-        encoded_hits + decoded_hits
+        representations = PerformanceRetainedEvidenceScan.normalized_encoded_representations(text)
+        normalized_form_hit = forms.any? do |form|
+          PerformanceRetainedEvidenceScan.normalized_encoded_representations(form).each_with_index.any? do |needle, index|
+            representations.fetch(index).include?(needle)
+          end
+        end
+        normalized_hit = normalized_form_hit ? 1 : 0
+        [encoded_hits + decoded_hits, normalized_hit].max
       end
     end
 
