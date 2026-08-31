@@ -2,6 +2,7 @@
 # frozen_string_literal: true
 
 require "digest"
+require "find"
 require "json"
 require "set"
 require "time"
@@ -31,8 +32,68 @@ PROHIBITED_DIRECT_PACKAGES = Set.new(["@asyncapi/cli", "ajv-cli"]).freeze
 PROHIBITED_SETUP_ACTIONS = Set.new(["actions/setup-node", "actions/setup-go", "ruby/setup-ruby"]).freeze
 FOUNDATION_ROLLBACK_TARGET = "git:e24a4d9d05ad6df19c5bcaa9c385ee74fd5d8c31"
 DEVLANE_CANDIDATE_NAME = "devlane-stead-primitives"
-DEVLANE_PROVENANCE_SURFACE_SHA256 = "ad933a4856cb7dab30e1bf5d8c9eb1b17ea86478185472b55967b745a8345fdb"
+DEVLANE_PROVENANCE_SURFACE_SHA256 = "52df58f7a346d37c19af1fd4eb1673c2aa720521838dc686c1e9ab10bd424d69"
 DEVLANE_REGISTRY_SURFACE_SHA256 = "bfe1046598dc8a4a400967a4848ed75d2aca98996a22aa91a1d4790c42704cc0"
+DEVLANE_LICENSE_BLOB_SHA1 = "b39a03349aaf17ccb61bef17f9f0e88d86a746ca"
+DEVLANE_LICENSE_CONTENT_SHA256 = "854e83f31c0027ba9ea80691fcc111c5cccc7ee75378462b1e4d2af99c2d269f"
+DEVLANE_LICENSE_SIZE_BYTES = 1064
+DEVLANE_PROPOSED_DESTINATION_PATHS = [
+  "packages/design-system/src/tokens.css",
+  "packages/design-system/src/primitives.tsx"
+].freeze
+DEVLANE_GOVERNED_STAGING_ROOTS = ["third_party/devlane"].freeze
+DEVLANE_SOURCE_LOCATION_ALLOWLIST = {
+  "staging_roots" => DEVLANE_GOVERNED_STAGING_ROOTS,
+  "destination_files" => DEVLANE_PROPOSED_DESTINATION_PATHS,
+  "alternate_locations_prohibited" => true
+}.freeze
+DEVLANE_PINNED_SOURCE_FINGERPRINTS = {
+  13_613 => "870cd43b2af00ee047217ca72882343550fa0a862e0c86fb29771ae8aabcc7f2",
+  2_077 => "7c5f4bb8d08a00dbafcf2e26023f2cbb238fea70b465a54b4fe349069983a0ae",
+  1_328 => "e62355d412674de0fea7fde6a3ebf7aa2eeb57aa317fd2e2bf8bd61a6f14dd66",
+  978 => "c709b3508c61ff8886c5859804d09a46b8d202b76ab68dda0ca31e3d07ff35bc",
+  1_165 => "35eb3b4e8ce4562833c03099d28f86d8484dc63a487fd42f66493a418ebe46b4",
+  249 => "8ba0dc9ca6e8a1243b433ea757b2aab3ef25d693a88fcb3560ca41601b2b066b"
+}.freeze
+DEVLANE_LICENSE_TEXT = <<~'LICENSE'.freeze
+  MIT License
+
+  Copyright (c) 2026 Devlane
+
+  Permission is hereby granted, free of charge, to any person obtaining a copy
+  of this software and associated documentation files (the "Software"), to deal
+  in the Software without restriction, including without limitation the rights
+  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  copies of the Software, and to permit persons to whom the Software is
+  furnished to do so, subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included in all
+  copies or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  SOFTWARE.
+LICENSE
+DEVLANE_NOTICE_SECTION = <<~MARKDOWN.chomp.freeze
+  ## NOTICE-DEVLANE-MIT — Devlane
+
+  Pinned source: <https://github.com/Devlaner/devlane> at commit
+  `7719dcadf91f881b5aefe8b74012ffcfbba0bc17`.
+  Verified upstream `LICENSE` blob: `b39a03349aaf17ccb61bef17f9f0e88d86a746ca`;
+  SHA-256: `854e83f31c0027ba9ea80691fcc111c5cccc7ee75378462b1e4d2af99c2d269f`;
+  size: 1,064 bytes.
+
+  No Devlane source or asset has been imported yet. This notice is checked in now as a
+  provenance regression fixture. It must remain with every future distributed copy or
+  substantial portion of Devlane-derived material, together with an accurate modification
+  statement.
+
+  #{DEVLANE_LICENSE_TEXT.chomp}
+MARKDOWN
 EXPECTED_DEVLANE_PENDING_DECISION = {
   "category" => "ALLOW-PERMISSIVE",
   "status" => "REVIEWED_PENDING_INDEPENDENT_APPROVAL",
@@ -748,6 +809,173 @@ def canonical_sha256(value)
   Digest::SHA256.hexdigest(JSON.generate(canonical_json_value(value)))
 end
 
+def git_blob_sha1(content)
+  Digest::SHA1.hexdigest("blob #{content.bytesize}\0#{content}")
+end
+
+def devlane_license_binding_errors(provenance)
+  errors = []
+  unless provenance.is_a?(Hash)
+    return ["devlane-provenance.yaml: document must be a mapping"]
+  end
+
+  license = provenance.dig("upstream", "license")
+  unless license.is_a?(Hash)
+    return ["devlane-provenance.yaml: upstream.license must be a mapping"]
+  end
+
+  expected = {
+    "path" => "LICENSE",
+    "blob" => DEVLANE_LICENSE_BLOB_SHA1,
+    "sha256" => DEVLANE_LICENSE_CONTENT_SHA256,
+    "size_bytes" => DEVLANE_LICENSE_SIZE_BYTES,
+    "expression" => "MIT",
+    "notice" => "NOTICE-DEVLANE-MIT"
+  }
+  unless license == expected
+    errors << "devlane-provenance.yaml: upstream MIT license identity/content binding differs from the verified blob"
+  end
+  unless DEVLANE_LICENSE_TEXT.bytesize == DEVLANE_LICENSE_SIZE_BYTES &&
+         Digest::SHA256.hexdigest(DEVLANE_LICENSE_TEXT) == DEVLANE_LICENSE_CONTENT_SHA256 &&
+         git_blob_sha1(DEVLANE_LICENSE_TEXT) == DEVLANE_LICENSE_BLOB_SHA1
+    errors << "dependency validator: embedded Devlane MIT license does not reproduce the verified blob/content binding"
+  end
+  errors
+end
+
+def devlane_notice_errors(source, provenance)
+  errors = devlane_license_binding_errors(provenance)
+  heading = /^## NOTICE-DEVLANE-MIT — Devlane$/
+  heading_count = source.scan(heading).length
+  unless heading_count == 1
+    errors << "THIRD_PARTY_NOTICES.md: NOTICE-DEVLANE-MIT heading must occur exactly once"
+    return errors
+  end
+
+  section_start = source.index(heading)
+  section_end = source.index(PGX_NOTICE_QUARANTINE_BEGIN, section_start)
+  if section_end.nil?
+    errors << "THIRD_PARTY_NOTICES.md: NOTICE-DEVLANE-MIT must precede the rejected-notice quarantine boundary"
+    return errors
+  end
+
+  actual = source[section_start...section_end]
+  expected = "#{DEVLANE_NOTICE_SECTION}\n\n"
+  unless actual == expected
+    errors << "THIRD_PARTY_NOTICES.md: NOTICE-DEVLANE-MIT body must exactly preserve the verified MIT license, copyright, retention, and modification terms"
+  end
+  errors
+end
+
+def path_entry_exists?(path)
+  File.lstat(path)
+  true
+rescue Errno::ENOENT, Errno::ENOTDIR
+  false
+end
+
+def devlane_repository_material_state(root = ROOT)
+  present_destinations = DEVLANE_PROPOSED_DESTINATION_PATHS.select do |relative|
+    path_entry_exists?(File.join(root, relative))
+  end
+
+  staging_entries = []
+  DEVLANE_GOVERNED_STAGING_ROOTS.each do |relative_root|
+    absolute_root = File.join(root, relative_root)
+    next unless path_entry_exists?(absolute_root)
+
+    unless File.directory?(absolute_root) && !File.symlink?(absolute_root)
+      staging_entries << relative_root
+      next
+    end
+    Find.find(absolute_root) do |path|
+      next if path == absolute_root
+
+      staging_entries << path.delete_prefix("#{root}/")
+    end
+  end
+
+  pinned_source_copies = []
+  inventory_errors = []
+  expanded_root = File.expand_path(root)
+  Find.find(expanded_root) do |path|
+    relative = path.delete_prefix("#{expanded_root}/")
+    next if path == expanded_root
+
+    begin
+      stat = File.lstat(path)
+      if relative == ".git"
+        Find.prune if stat.directory?
+        next
+      end
+      next unless stat.file?
+
+      expected_sha256 = DEVLANE_PINNED_SOURCE_FINGERPRINTS[stat.size]
+      next unless expected_sha256
+
+      pinned_source_copies << relative if Digest::SHA256.file(path).hexdigest == expected_sha256
+    rescue SystemCallError => e
+      inventory_errors << "#{relative}: #{e.class}"
+    end
+  end
+
+  {
+    present_destinations: present_destinations,
+    staging_entries: staging_entries,
+    pinned_source_copies: pinned_source_copies,
+    inventory_errors: inventory_errors
+  }
+rescue SystemCallError => e
+  {
+    present_destinations: present_destinations || [],
+    staging_entries: staging_entries || [],
+    pinned_source_copies: pinned_source_copies || [],
+    inventory_errors: ["repository material scan failed: #{e.class}"]
+  }
+end
+
+def devlane_allowlisted_source_path?(path)
+  DEVLANE_PROPOSED_DESTINATION_PATHS.include?(path) || DEVLANE_GOVERNED_STAGING_ROOTS.any? do |root|
+    path == root || path.start_with?("#{root}/")
+  end
+end
+
+def devlane_pending_material_errors(provenance, components, material_state)
+  decision_status = nested_value(components, [DEVLANE_CANDIDATE_NAME, "decision", "status"])
+  distribution_approved = nested_value(provenance, ["proposed_import", "approved_source_distribution"])
+  imported = nested_value(provenance, ["import", "imported"])
+  barrier_active = decision_status != "APPROVED" || distribution_approved != true || imported != true
+  return [] unless barrier_active
+
+  errors = Array(material_state[:inventory_errors]).map do |error|
+    "Devlane pending-source inventory could not be verified: #{error}"
+  end
+  Array(material_state[:present_destinations]).each do |path|
+    errors << "Devlane pending-source gate: proposed destination #{path} must be absent before approval, distribution, and import are all recorded"
+  end
+  Array(material_state[:staging_entries]).each do |path|
+    errors << "Devlane pending-source gate: governed staging root must be empty; found #{path}"
+  end
+  Array(material_state[:pinned_source_copies]).each do |path|
+    if devlane_allowlisted_source_path?(path)
+      errors << "Devlane pending-source gate: byte-identical pinned source is present before approval/import at #{path}"
+    else
+      errors << "Devlane pending-source gate: byte-identical pinned source at #{path} is outside the closed import-location allowlist"
+    end
+  end
+  errors
+end
+
+def devlane_security_gate_errors(provenance, components, notices, material_state, release_mode:)
+  raise ArgumentError, "release_mode must be boolean" unless [true, false].include?(release_mode)
+
+  (
+    devlane_candidate_errors(provenance, components) +
+    devlane_pending_material_errors(provenance, components, material_state) +
+    devlane_notice_errors(notices, provenance)
+  ).uniq
+end
+
 def devlane_candidate_errors(provenance, components)
   errors = []
   unless provenance.is_a?(Hash)
@@ -773,6 +1001,18 @@ def devlane_candidate_errors(provenance, components)
 
   unless record["decision"] == EXPECTED_DEVLANE_PENDING_DECISION
     errors << "#{DEVLANE_CANDIDATE_NAME}: decision must remain at the exact pending state until a reviewed successor revision is recorded"
+  end
+
+  unless provenance.dig("import", "governed_source_location_allowlist") == DEVLANE_SOURCE_LOCATION_ALLOWLIST
+    errors << "devlane-provenance.yaml: governed source locations must remain the exact closed staging/destination allowlist"
+  end
+
+  errors.concat(devlane_license_binding_errors(provenance))
+  recorded_fingerprints = Array(import["source_files"]).filter_map do |entry|
+    [entry["size_bytes"], entry["sha256"]] if entry.is_a?(Hash)
+  end.to_h
+  unless recorded_fingerprints == DEVLANE_PINNED_SOURCE_FINGERPRINTS
+    errors << "devlane-provenance.yaml: pinned source size/SHA-256 inventory differs from the exact repository-copy fingerprints"
   end
 
   provenance_surface = Marshal.load(Marshal.dump(provenance))
@@ -1024,6 +1264,81 @@ def run_validator_self_tests
     failures << "Devlane candidate mutation survivors: #{devlane_mutation_survivors.join(', ')}"
   end
 
+  notices_fixture = File.read(NOTICES_PATH)
+  empty_material_state = {
+    present_destinations: [], staging_entries: [], pinned_source_copies: [], inventory_errors: []
+  }
+  { "normal" => false, "release" => true }.each do |mode_label, release_mode|
+    DEVLANE_PROPOSED_DESTINATION_PATHS.each do |destination|
+      material_state = empty_material_state.merge(present_destinations: [destination])
+      mutation_errors = devlane_security_gate_errors(
+        provenance_fixture,
+        registry_components,
+        notices_fixture,
+        material_state,
+        release_mode: release_mode
+      )
+      unless mutation_errors.any? { |error| error.include?("proposed destination #{destination} must be absent") }
+        failures << "#{mode_label} Devlane gate accepted pre-approval destination presence at #{destination}"
+      end
+      guard_count += 1
+    end
+
+    staging_path = "#{DEVLANE_GOVERNED_STAGING_ROOTS.fetch(0)}/copied-source.tsx"
+    staging_errors = devlane_security_gate_errors(
+      provenance_fixture,
+      registry_components,
+      notices_fixture,
+      empty_material_state.merge(staging_entries: [staging_path]),
+      release_mode: release_mode
+    )
+    unless staging_errors.any? { |error| error.include?("governed staging root must be empty") }
+      failures << "#{mode_label} Devlane gate accepted content under a governed staging root"
+    end
+    guard_count += 1
+
+    alternate_path = "unreviewed-import/devlane/Button.tsx"
+    copied_source_errors = devlane_security_gate_errors(
+      provenance_fixture,
+      registry_components,
+      notices_fixture,
+      empty_material_state.merge(pinned_source_copies: [alternate_path]),
+      release_mode: release_mode
+    )
+    unless copied_source_errors.any? { |error| error.include?("outside the closed import-location allowlist") }
+      failures << "#{mode_label} Devlane gate accepted a byte-identical pinned source copy at an alternate location"
+    end
+    guard_count += 1
+  end
+
+  devlane_notice_mutations = {
+    "one-byte copyright corruption" => notices_fixture.sub("Copyright (c) 2026 Devlane", "Copyright (c) 2027 Devlane"),
+    "deleted MIT retention clause" => notices_fixture.sub(
+      "The above copyright notice and this permission notice shall be included in all\n" \
+      "copies or substantial portions of the Software.\n",
+      ""
+    ),
+    "substituted license clause" => notices_fixture.sub(
+      "Permission is hereby granted, free of charge, to any person obtaining a copy",
+      "Permission is granted only after separate written authorization"
+    )
+  }
+  { "normal" => false, "release" => true }.each do |mode_label, release_mode|
+    devlane_notice_mutations.each do |mutation_label, mutated_notices|
+      mutation_errors = devlane_security_gate_errors(
+        provenance_fixture,
+        registry_components,
+        mutated_notices,
+        empty_material_state,
+        release_mode: release_mode
+      )
+      unless mutation_errors.any? { |error| error.include?("NOTICE-DEVLANE-MIT body must exactly preserve") }
+        failures << "#{mode_label} Devlane gate accepted #{mutation_label}"
+      end
+      guard_count += 1
+    end
+  end
+
   decision_mutation_survivors = []
   EXPECTED_REJECTED_DECISIONS.each do |name, expected_decision|
     expected_decision.each_key do |field|
@@ -1156,7 +1471,6 @@ def run_validator_self_tests
     failures << "evidence notice-quarantine mutation survivors: #{evidence_quarantine_survivors.join(', ')}"
   end
 
-  notices_fixture = File.read(NOTICES_PATH)
   source_mutations = {
     "begin marker removed" => notices_fixture.sub(PGX_NOTICE_QUARANTINE_BEGIN, ""),
     "end marker removed" => notices_fixture.sub(PGX_NOTICE_QUARANTINE_END, ""),
@@ -1213,6 +1527,7 @@ if ARGV.first == "--self-test"
   exit 0
 end
 
+release_mode = ARGV.include?("--release")
 registry = load_yaml(REGISTRY_PATH)
 schema = JSON.parse(File.read(SCHEMA_PATH))
 errors = schema_errors(registry, schema, schema)
@@ -1283,13 +1598,24 @@ REQUIRED_PINS.each do |name, (version, digest)|
 end
 
 provenance = load_yaml(PROVENANCE_PATH)
-errors.concat(devlane_candidate_errors(provenance, components))
+notices = File.read(NOTICES_PATH)
+errors.concat(
+  devlane_security_gate_errors(
+    provenance,
+    components,
+    notices,
+    devlane_repository_material_state,
+    release_mode: release_mode
+  )
+)
 expected_provenance = {
   ["status"] => "PINNED_SOURCE_NOT_IMPORTED",
   ["upstream", "repository"] => "https://github.com/Devlaner/devlane",
   ["upstream", "commit"] => "7719dcadf91f881b5aefe8b74012ffcfbba0bc17",
   ["upstream", "tree"] => "a568d1d11bab6012ffce1345193dcb537fa43556",
-  ["upstream", "license", "blob"] => "b39a03349aaf17ccb61bef17f9f0e88d86a746ca",
+  ["upstream", "license", "blob"] => DEVLANE_LICENSE_BLOB_SHA1,
+  ["upstream", "license", "sha256"] => DEVLANE_LICENSE_CONTENT_SHA256,
+  ["upstream", "license", "size_bytes"] => DEVLANE_LICENSE_SIZE_BYTES,
   ["upstream", "license", "expression"] => "MIT",
   ["import", "imported"] => false
 }
@@ -1305,31 +1631,37 @@ expected_devlane_sources = {
   "apps/web/src/styles/tokens.css" => {
     "git_blob" => "36901af0c10553a8ad6d0860a58435912b274239",
     "sha256" => "870cd43b2af00ee047217ca72882343550fa0a862e0c86fb29771ae8aabcc7f2",
+    "size_bytes" => 13_613,
     "destination_path" => "packages/design-system/src/tokens.css"
   },
   "apps/web/src/components/ui/Button.tsx" => {
     "git_blob" => "d0297e53de76f4a13d2b1b351cd33134824b842c",
     "sha256" => "7c5f4bb8d08a00dbafcf2e26023f2cbb238fea70b465a54b4fe349069983a0ae",
+    "size_bytes" => 2_077,
     "destination_path" => "packages/design-system/src/primitives.tsx"
   },
   "apps/web/src/components/ui/Card.tsx" => {
     "git_blob" => "ff8e971a0e8f9030b2168bf02d6117a8ad544c7b",
     "sha256" => "e62355d412674de0fea7fde6a3ebf7aa2eeb57aa317fd2e2bf8bd61a6f14dd66",
+    "size_bytes" => 1_328,
     "destination_path" => "packages/design-system/src/primitives.tsx"
   },
   "apps/web/src/components/ui/Badge.tsx" => {
     "git_blob" => "f4187e997315105f6b5337b4fd7a319b08caa315",
     "sha256" => "c709b3508c61ff8886c5859804d09a46b8d202b76ab68dda0ca31e3d07ff35bc",
+    "size_bytes" => 978,
     "destination_path" => "packages/design-system/src/primitives.tsx"
   },
   "apps/web/src/components/ui/Input.tsx" => {
     "git_blob" => "22977a8cbfb24f155594564e076e86858c7cdb4e",
     "sha256" => "35eb3b4e8ce4562833c03099d28f86d8484dc63a487fd42f66493a418ebe46b4",
+    "size_bytes" => 1_165,
     "destination_path" => "packages/design-system/src/primitives.tsx"
   },
   "apps/web/src/components/ui/Skeleton.tsx" => {
     "git_blob" => "cb274b88ee26d7c834cbc1e0a052e6f18f41fc8f",
     "sha256" => "8ba0dc9ca6e8a1243b433ea757b2aab3ef25d693a88fcb3560ca41601b2b066b",
+    "size_bytes" => 249,
     "destination_path" => "packages/design-system/src/primitives.tsx"
   }
 }.freeze
@@ -1342,7 +1674,7 @@ else
   expected_import_fields = {
     "approval_id" => "DEP-APP-DEVLANE-STEAD-PRIMITIVES-7719DCAD",
     "scope_version" => "stead-primitives-v1",
-    "proposed_destination_paths" => ["packages/design-system/src/tokens.css", "packages/design-system/src/primitives.tsx"]
+    "proposed_destination_paths" => DEVLANE_PROPOSED_DESTINATION_PATHS
   }
   expected_import_fields.each do |field, expected|
     errors << "devlane-provenance.yaml: proposed_import.#{field} must equal #{expected.inspect}" unless devlane_import[field] == expected
@@ -1524,7 +1856,6 @@ openfga_runner = File.read(File.join(ROOT, "scripts/validate_openfga.sh"))
 errors << "scripts/validate_openfga.sh: repository-owned model evaluator is missing" unless openfga_runner.include?("validate_openfga_model.mjs")
 errors << "scripts/validate_openfga.sh: external OpenFGA CLI execution is prohibited until a vulnerability-clean exact release is approved" if openfga_runner.match?(/\bfga\s+model\s+test\b|openfga\/cli\/releases/)
 
-notices = File.read(NOTICES_PATH)
 errors.concat(notice_quarantine_errors(notices))
 required_notices = records.select { |record| record.dig("decision", "status") == "APPROVED" }
                           .flat_map { |record| Array(record.dig("obligations", "notices")) }
@@ -1537,7 +1868,6 @@ if lockfile.fetch("packages", {}).key?("node_modules/scheduler")
   errors << "THIRD_PARTY_NOTICES.md: distributed React scheduler notice/version is missing" unless notices.include?("`scheduler` 0.27.0")
 end
 
-release_mode = ARGV.include?("--release")
 if release_mode
   workflow_source = workflow_paths.map { |path| File.read(path) }.join("\n")
   active_record_names << "node-v26.8.1-linux-x64.tar.xz" if workflow_source.include?("node-version: 26.8.1")

@@ -8,6 +8,8 @@ upstream:
   license:
     path: LICENSE
     blob: b39a03349aaf17ccb61bef17f9f0e88d86a746ca
+    sha256: 854e83f31c0027ba9ea80691fcc111c5cccc7ee75378462b1e4d2af99c2d269f
+    size_bytes: 1064
     expression: MIT
     notice: NOTICE-DEVLANE-MIT
 intended_use:
@@ -28,6 +30,13 @@ import:
   imported_paths: []
   destination_paths: []
   import_commit: null
+  governed_source_location_allowlist:
+    staging_roots:
+      - third_party/devlane
+    destination_files:
+      - packages/design-system/src/tokens.css
+      - packages/design-system/src/primitives.tsx
+    alternate_locations_prohibited: true
   rule: >-
     No Devlane code or asset may be copied until this exact source candidate receives
     independent dependency approval. Each later import must record source paths,
@@ -46,6 +55,7 @@ proposed_import:
     - source_path: apps/web/src/styles/tokens.css
       git_blob: 36901af0c10553a8ad6d0860a58435912b274239
       sha256: 870cd43b2af00ee047217ca72882343550fa0a862e0c86fb29771ae8aabcc7f2
+      size_bytes: 13613
       destination_path: packages/design-system/src/tokens.css
       modification: >-
         Retain the neutral, brand, semantic-surface, dark-theme, spacing, radius, and
@@ -54,6 +64,7 @@ proposed_import:
     - source_path: apps/web/src/components/ui/Button.tsx
       git_blob: d0297e53de76f4a13d2b1b351cd33134824b842c
       sha256: 7c5f4bb8d08a00dbafcf2e26023f2cbb238fea70b465a54b4fe349069983a0ae
+      size_bytes: 2077
       destination_path: packages/design-system/src/primitives.tsx
       modification: >-
         Adapt the button variants and pending indicator to dependency-free Stead CSS,
@@ -61,6 +72,7 @@ proposed_import:
     - source_path: apps/web/src/components/ui/Card.tsx
       git_blob: ff8e971a0e8f9030b2168bf02d6117a8ad544c7b
       sha256: e62355d412674de0fea7fde6a3ebf7aa2eeb57aa317fd2e2bf8bd61a6f14dd66
+      size_bytes: 1328
       destination_path: packages/design-system/src/primitives.tsx
       modification: >-
         Adapt the outlined and raised container pattern into the semantic Stead Surface
@@ -68,6 +80,7 @@ proposed_import:
     - source_path: apps/web/src/components/ui/Badge.tsx
       git_blob: f4187e997315105f6b5337b4fd7a319b08caa315
       sha256: c709b3508c61ff8886c5859804d09a46b8d202b76ab68dda0ca31e3d07ff35bc
+      size_bytes: 978
       destination_path: packages/design-system/src/primitives.tsx
       modification: >-
         Adapt the closed semantic color variants for presentational status and security
@@ -75,6 +88,7 @@ proposed_import:
     - source_path: apps/web/src/components/ui/Input.tsx
       git_blob: 22977a8cbfb24f155594564e076e86858c7cdb4e
       sha256: 35eb3b4e8ce4562833c03099d28f86d8484dc63a487fd42f66493a418ebe46b4
+      size_bytes: 1165
       destination_path: packages/design-system/src/primitives.tsx
       modification: >-
         Adapt the labeled input pattern into TextField, use collision-safe generated IDs,
@@ -82,6 +96,7 @@ proposed_import:
     - source_path: apps/web/src/components/ui/Skeleton.tsx
       git_blob: cb274b88ee26d7c834cbc1e0a052e6f18f41fc8f
       sha256: 8ba0dc9ca6e8a1243b433ea757b2aab3ef25d693a88fcb3560ca41601b2b066b
+      size_bytes: 249
       destination_path: packages/design-system/src/primitives.tsx
       modification: >-
         Adapt the decorative loading block into a bounded accessible LoadingState with a

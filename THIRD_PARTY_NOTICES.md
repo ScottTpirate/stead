@@ -13,6 +13,9 @@ lockfile/SBOM even when they require no notice in this file.
 
 Pinned source: <https://github.com/Devlaner/devlane> at commit
 `7719dcadf91f881b5aefe8b74012ffcfbba0bc17`.
+Verified upstream `LICENSE` blob: `b39a03349aaf17ccb61bef17f9f0e88d86a746ca`;
+SHA-256: `854e83f31c0027ba9ea80691fcc111c5cccc7ee75378462b1e4d2af99c2d269f`;
+size: 1,064 bytes.
 
 No Devlane source or asset has been imported yet. This notice is checked in now as a
 provenance regression fixture. It must remain with every future distributed copy or
