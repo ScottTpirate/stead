@@ -24,15 +24,12 @@ func (benchmarkAppender) Append(_ context.Context, scope outbox.TransactionScope
 
 type benchmarkFinalizer struct{}
 
-func (benchmarkFinalizer) Finalize(_ context.Context, binding SessionBinding, issuer BoundRevisionIssuer) (result FinalAuthorizationAuditResult, resultErr error) {
-	var receipt BindingReceipt
-	receipt, resultErr = binding.Use(func() error {
-		revision, err := issuer.BindValidated(BoundRevisionHandoffV1, []byte("benchmark-revision"))
-		result = FinalAuthorizationAuditResult{Revision: revision}
-		return err
-	})
-	result.Binding = receipt
-	return result, resultErr
+func (benchmarkFinalizer) Finalize(ctx context.Context, port OperationPort[*FinalAuthorizationAuditOperation], issuer BoundRevisionIssuer) (FinalAuthorizationAuditResult, error) {
+	if err := port.Execute(ctx); err != nil {
+		return FinalAuthorizationAuditResult{}, err
+	}
+	revision, err := issuer.BindValidated(BoundRevisionHandoffV1, []byte("benchmark-revision"))
+	return FinalAuthorizationAuditResult{Revision: revision}, err
 }
 
 type benchmarkRechecker struct{}
@@ -46,18 +43,29 @@ type benchmarkResponse struct{}
 func (benchmarkResponse) Release(context.Context) error { return nil }
 func (benchmarkResponse) Suppress()                     {}
 
-func benchmarkRegistry(b testing.TB) (Registry, PlanContract[struct{}]) {
+func benchmarkRegistry(b testing.TB) (BackendContract, Registry, PlanContract[struct{}]) {
 	b.Helper()
+	backend, err := NewBackendContract(benchmarkBackend{})
+	if err != nil {
+		b.Fatal(err)
+	}
+	operation := func(owner string) RegisteredOperation[struct{}] {
+		backendOperation, err := NewBackendOperation(backend, owner, func(context.Context, Session, struct{}) error { return nil })
+		if err != nil {
+			b.Fatal(err)
+		}
+		registered, err := NewRegisteredOperation(backendOperation, func(ctx context.Context, port OperationPort[struct{}], _ struct{}) error { return port.Execute(ctx) })
+		if err != nil {
+			b.Fatal(err)
+		}
+		return registered
+	}
 	template, contract, err := NewPlanContract(
 		ContractVersionV1,
 		"benchmark_operation",
 		[]TypedParticipant[struct{}]{
-			{Key: "authorization", Owner: "authorization", DeclaresWrite: true, Operation: func(_ context.Context, binding SessionBinding, _ struct{}) (BindingReceipt, error) {
-				return binding.Use(func() error { return nil })
-			}},
-			{Key: "domain", Owner: "domain", After: []string{"authorization"}, DeclaresWrite: true, Operation: func(_ context.Context, binding SessionBinding, _ struct{}) (BindingReceipt, error) {
-				return binding.Use(func() error { return nil })
-			}},
+			{Key: "authorization", DeclaresWrite: true, Operation: operation("authorization")},
+			{Key: "domain", After: []string{"authorization"}, DeclaresWrite: true, Operation: operation("domain")},
 		},
 		OutboxRequired,
 	)
@@ -68,16 +76,21 @@ func benchmarkRegistry(b testing.TB) (Registry, PlanContract[struct{}]) {
 	if err != nil {
 		b.Fatal(err)
 	}
-	return registry, contract
+	return backend, registry, contract
 }
 
-func benchmarkCoordinator(b testing.TB, registry Registry, finalizer FinalAuthorizationAuditPort) *Coordinator {
+func benchmarkCoordinator(b testing.TB, backend BackendContract, registry Registry, finalizer FinalAuthorizationAuditPort) *Coordinator {
 	b.Helper()
+	var finalOperation BackendOperation[*FinalAuthorizationAuditOperation]
+	if !isNil(finalizer) {
+		finalOperation, _ = NewBackendOperation(backend, FinalAuthorizationOwner, func(context.Context, Session, *FinalAuthorizationAuditOperation) error { return nil })
+	}
 	coordinator, err := NewCoordinator(Configuration{
-		Backend:                 benchmarkBackend{},
-		Registry:                registry,
-		Outbox:                  benchmarkAppender{},
-		FinalAuthorizationAudit: finalizer,
+		Backend:                     backend,
+		Registry:                    registry,
+		Outbox:                      benchmarkAppender{},
+		FinalAuthorizationAudit:     finalizer,
+		FinalAuthorizationOperation: finalOperation,
 	})
 	if err != nil {
 		b.Fatal(err)
@@ -86,8 +99,8 @@ func benchmarkCoordinator(b testing.TB, registry Registry, finalizer FinalAuthor
 }
 
 func BenchmarkExecuteClosedPlan(b *testing.B) {
-	registry, contract := benchmarkRegistry(b)
-	coordinator := benchmarkCoordinator(b, registry, nil)
+	backend, registry, contract := benchmarkRegistry(b)
+	coordinator := benchmarkCoordinator(b, backend, registry, nil)
 	intent := testIntent()
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -103,8 +116,8 @@ func BenchmarkExecuteClosedPlan(b *testing.B) {
 }
 
 func BenchmarkFinalizeReadNoIntent(b *testing.B) {
-	registry, _ := benchmarkRegistry(b)
-	coordinator := benchmarkCoordinator(b, registry, benchmarkFinalizer{})
+	backend, registry, _ := benchmarkRegistry(b)
+	coordinator := benchmarkCoordinator(b, backend, registry, benchmarkFinalizer{})
 	b.ReportAllocs()
 	b.ResetTimer()
 	for range b.N {

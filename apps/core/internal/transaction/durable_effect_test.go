@@ -9,18 +9,18 @@ import (
 )
 
 type fakeDurablePreparation struct {
-	backend     *fakeBackend
-	intent      outbox.ValidatedIntent
-	calls       int
-	fail        bool
-	panic       bool
-	zero        bool
-	zeroBinding bool
-	version     string
-	opaque      []byte
+	backend       *fakeBackend
+	intent        outbox.ValidatedIntent
+	calls         int
+	fail          bool
+	panic         bool
+	zero          bool
+	skipOperation bool
+	version       string
+	opaque        []byte
 }
 
-func (preparation *fakeDurablePreparation) Prepare(_ context.Context, binding SessionBinding, issuer DurableEffectIssuer) (DurableEffectPreparation, error) {
+func (preparation *fakeDurablePreparation) Prepare(ctx context.Context, port OperationPort[*DurableEffectOperation], issuer DurableEffectIssuer) (DurableEffectPreparation, error) {
 	preparation.calls++
 	if preparation.panic {
 		panic("injected durable handoff panic")
@@ -28,15 +28,13 @@ func (preparation *fakeDurablePreparation) Prepare(_ context.Context, binding Se
 	if preparation.fail {
 		return DurableEffectPreparation{}, errInjected
 	}
-	receipt, err := preparation.backend.stage(binding, DurableEffectOwner, "durable_effect_preparation")
-	if err != nil {
-		return DurableEffectPreparation{}, err
-	}
-	if preparation.zeroBinding {
-		receipt = BindingReceipt{}
+	if !preparation.skipOperation {
+		if err := port.Execute(ctx); err != nil {
+			return DurableEffectPreparation{}, err
+		}
 	}
 	if preparation.zero {
-		return DurableEffectPreparation{Intent: preparation.intent, Binding: receipt}, nil
+		return DurableEffectPreparation{Intent: preparation.intent}, nil
 	}
 	version := preparation.version
 	if version == "" {
@@ -50,7 +48,7 @@ func (preparation *fakeDurablePreparation) Prepare(_ context.Context, binding Se
 	if err != nil {
 		return DurableEffectPreparation{}, err
 	}
-	return DurableEffectPreparation{Receipt: durableReceipt, Intent: preparation.intent, Binding: receipt}, nil
+	return DurableEffectPreparation{Receipt: durableReceipt, Intent: preparation.intent}, nil
 }
 
 func TestDurableEffectHandoffCommitsIntentBeforeReceiptAndPerformsNoEffect(t *testing.T) {
@@ -86,7 +84,7 @@ func TestDurableEffectFailuresReturnNoReceiptAndRollback(t *testing.T) {
 		{"owner error", func(value *fakeDurablePreparation, _ *fakeAppender, _ *fakeBackend) { value.fail = true }, CodeParticipantFailed},
 		{"owner panic", func(value *fakeDurablePreparation, _ *fakeAppender, _ *fakeBackend) { value.panic = true }, CodeParticipantFailed},
 		{"zero receipt", func(value *fakeDurablePreparation, _ *fakeAppender, _ *fakeBackend) { value.zero = true }, CodeParticipantFailed},
-		{"missing binding receipt", func(value *fakeDurablePreparation, _ *fakeAppender, _ *fakeBackend) { value.zeroBinding = true }, CodeParticipantFailed},
+		{"missing operation execution", func(value *fakeDurablePreparation, _ *fakeAppender, _ *fakeBackend) { value.skipOperation = true }, CodeParticipantFailed},
 		{"wrong version", func(value *fakeDurablePreparation, _ *fakeAppender, _ *fakeBackend) {
 			value.version = DurableEffectHandoffV1 + ".unknown"
 		}, CodeParticipantFailed},

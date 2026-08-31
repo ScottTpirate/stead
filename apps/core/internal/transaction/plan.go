@@ -28,16 +28,14 @@ const (
 )
 
 // TypedParticipant is a server-startup registration, never request input.
-// Owner is fixed here and is not accepted by Bind. After may name only earlier
-// participants, making the registered execution order closed and acyclic.
-// Operation receives one opaque binding active only during this exact call and
-// the statically typed request-local invocation selected by PlanContract[T].
+// Its RegisteredOperation already fixes the backend, owner, repository
+// executor, and typed adapter. After may name only earlier participants,
+// making the registered execution order closed and acyclic.
 type TypedParticipant[T any] struct {
 	Key           string
-	Owner         string
 	After         []string
 	DeclaresWrite bool
-	Operation     func(context.Context, SessionBinding, T) (BindingReceipt, error)
+	Operation     RegisteredOperation[T]
 }
 
 type participantDefinition struct {
@@ -53,6 +51,7 @@ type templateSeal struct{ marker byte }
 
 type templateDefinition struct {
 	seal            *templateSeal
+	backend         *backendSeal
 	contractVersion string
 	key             string
 	participants    []participantDefinition
@@ -65,14 +64,12 @@ type PlanTemplate struct {
 	definition *templateDefinition
 }
 
-type typedOperation[T any] func(context.Context, SessionBinding, T) (BindingReceipt, error)
-
 // PlanContract preserves the exact invocation type and owner operations for
 // one PlanTemplate. Its fields are opaque, so a caller cannot replace or
 // reorder participants. Bind accepts no template key, owner, or operation.
 type PlanContract[T any] struct {
 	definition *templateDefinition
-	operations []typedOperation[T]
+	operations []RegisteredOperation[T]
 }
 
 // NewPlanContract freezes a typed plan registration before the registry can
@@ -82,7 +79,6 @@ func NewPlanContract[T any](contractVersion, key string, participants []TypedPar
 	for index, participant := range participants {
 		definitions[index] = typedParticipantDefinition[T]{
 			key:           participant.Key,
-			owner:         participant.Owner,
 			after:         slices.Clone(participant.After),
 			declaresWrite: participant.DeclaresWrite,
 			operation:     participant.Operation,
@@ -93,10 +89,9 @@ func NewPlanContract[T any](contractVersion, key string, participants []TypedPar
 
 type typedParticipantDefinition[T any] struct {
 	key                       string
-	owner                     string
 	after                     []string
 	declaresWrite             bool
-	operation                 typedOperation[T]
+	operation                 RegisteredOperation[T]
 	logicalAuthorizationAudit bool
 	durableEffectHandoff      bool
 }
@@ -109,11 +104,18 @@ func newPlanContract[T any](contractVersion, key string, participants []typedPar
 		participants:    make([]participantDefinition, len(participants)),
 		outboxPolicy:    policy,
 	}
-	operations := make([]typedOperation[T], len(participants))
+	operations := make([]RegisteredOperation[T], len(participants))
 	for index, participant := range participants {
+		operation := participant.operation.definition
+		if operation == nil {
+			return PlanTemplate{}, PlanContract[T]{}, fail(CodeInvalidPlan)
+		}
+		if definition.backend == nil {
+			definition.backend = operation.backend
+		}
 		definition.participants[index] = participantDefinition{
 			key:                       participant.key,
-			owner:                     participant.owner,
+			owner:                     operation.owner,
 			after:                     slices.Clone(participant.after),
 			declaresWrite:             participant.declaresWrite,
 			logicalAuthorizationAudit: participant.logicalAuthorizationAudit,
@@ -130,8 +132,8 @@ func newPlanContract[T any](contractVersion, key string, participants []typedPar
 	}, nil
 }
 
-func validateTemplateDefinition[T any](definition *templateDefinition, operations []typedOperation[T]) error {
-	if definition == nil || definition.seal == nil || definition.contractVersion != ContractVersionV1 ||
+func validateTemplateDefinition[T any](definition *templateDefinition, operations []RegisteredOperation[T]) error {
+	if definition == nil || definition.seal == nil || definition.backend == nil || definition.contractVersion != ContractVersionV1 ||
 		!identifierPattern.MatchString(definition.key) {
 		return fail(CodeInvalidContract)
 	}
@@ -144,7 +146,10 @@ func validateTemplateDefinition[T any](definition *templateDefinition, operation
 	}
 	seen := make(map[string]struct{}, len(definition.participants))
 	for index, participant := range definition.participants {
-		if !identifierPattern.MatchString(participant.key) || !identifierPattern.MatchString(participant.owner) || operations[index] == nil {
+		operation := operations[index].definition
+		if !identifierPattern.MatchString(participant.key) || !identifierPattern.MatchString(participant.owner) ||
+			operation == nil || operation.backend != definition.backend || operation.operation == nil ||
+			operation.owner != participant.owner || operation.execute == nil || operation.invoke == nil {
 			return fail(CodeInvalidPlan)
 		}
 		if participant.key == "core_outbox" || participant.owner == "core_outbox" {
@@ -189,6 +194,7 @@ type registeredTemplate struct {
 // discovery, or mutation method on a live coordinator.
 type Registry struct {
 	seal      *registrySeal
+	backend   *backendSeal
 	templates map[string]registeredTemplate
 }
 
@@ -201,13 +207,18 @@ func NewRegistry(templates []PlanTemplate) (Registry, error) {
 	registry := Registry{seal: &registrySeal{}, templates: make(map[string]registeredTemplate, len(templates))}
 	for _, template := range templates {
 		definition := template.definition
-		if definition == nil || definition.seal == nil || definition.contractVersion != ContractVersionV1 ||
+		if definition == nil || definition.seal == nil || definition.backend == nil || definition.contractVersion != ContractVersionV1 ||
 			!identifierPattern.MatchString(definition.key) || len(definition.participants) == 0 ||
 			len(definition.participants) > maxParticipants ||
 			(definition.outboxPolicy != OutboxRequired && definition.outboxPolicy != OutboxOptional) {
 			return Registry{}, fail(CodeInvalidPlan)
 		}
 		if _, exists := registry.templates[definition.key]; exists {
+			return Registry{}, fail(CodeInvalidPlan)
+		}
+		if registry.backend == nil {
+			registry.backend = definition.backend
+		} else if registry.backend != definition.backend {
 			return Registry{}, fail(CodeInvalidPlan)
 		}
 		registry.templates[definition.key] = registeredTemplate{definition: cloneTemplateDefinition(definition)}
@@ -222,13 +233,13 @@ func (registry Registry) withTemplates(templates []PlanTemplate) (Registry, erro
 	if registry.seal == nil || len(registry.templates) == 0 || len(templates) == 0 {
 		return Registry{}, fail(CodeInvalidContract)
 	}
-	result := Registry{seal: registry.seal, templates: make(map[string]registeredTemplate, len(registry.templates)+len(templates))}
+	result := Registry{seal: registry.seal, backend: registry.backend, templates: make(map[string]registeredTemplate, len(registry.templates)+len(templates))}
 	for key, template := range registry.templates {
 		result.templates[key] = registeredTemplate{definition: cloneTemplateDefinition(template.definition)}
 	}
 	for _, template := range templates {
 		definition := template.definition
-		if definition == nil || definition.seal == nil || definition.contractVersion != ContractVersionV1 ||
+		if definition == nil || definition.seal == nil || definition.backend == nil || definition.backend != result.backend || definition.contractVersion != ContractVersionV1 ||
 			!identifierPattern.MatchString(definition.key) || len(definition.participants) == 0 {
 			return Registry{}, fail(CodeInvalidContract)
 		}
@@ -268,7 +279,7 @@ type runtimeParticipant struct {
 	declaresWrite             bool
 	logicalAuthorizationAudit bool
 	durableEffectHandoff      bool
-	operation                 func(context.Context, SessionBinding) (BindingReceipt, error)
+	operation                 func(context.Context, *sessionState) error
 }
 
 // Bind accepts only the exact Registry containing this contract's immutable
@@ -292,18 +303,22 @@ func (contract PlanContract[T]) bind(registry Registry, invocation T, intent *ou
 	}
 	participants := make([]runtimeParticipant, len(contract.operations))
 	for index, operation := range contract.operations {
-		if operation == nil {
+		if operation.definition == nil {
 			return Plan{}, fail(CodeInvalidPlan)
 		}
 		definition := registered.definition.participants[index]
+		if operation.definition.backend != registered.definition.backend ||
+			operation.definition.operation == nil || operation.definition.owner != definition.owner {
+			return Plan{}, fail(CodeInvalidPlan)
+		}
 		typedOperation := operation
 		participants[index] = runtimeParticipant{
 			owner:                     definition.owner,
 			declaresWrite:             definition.declaresWrite,
 			logicalAuthorizationAudit: definition.logicalAuthorizationAudit,
 			durableEffectHandoff:      definition.durableEffectHandoff,
-			operation: func(ctx context.Context, binding SessionBinding) (BindingReceipt, error) {
-				return typedOperation(ctx, binding, invocation)
+			operation: func(ctx context.Context, session *sessionState) error {
+				return typedOperation.run(ctx, session, invocation)
 			},
 		}
 	}

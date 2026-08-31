@@ -17,7 +17,7 @@ import (
 
 func TestRegisteredTypedPlanRunsSeriallyAndOutboxLast(t *testing.T) {
 	backend := &fakeBackend{}
-	var captured [3]SessionBinding
+	var captured [3]OperationPort[testInvocation]
 	inFlight, maxFlight := 0, 0
 	flightLock := &sync.Mutex{}
 	controls := make([]participantControl, 3)
@@ -66,10 +66,9 @@ func TestRegisteredTypedPlanRunsSeriallyAndOutboxLast(t *testing.T) {
 	if report != wantReport {
 		t.Fatalf("report = %#v, want %#v", report, wantReport)
 	}
-	for index, binding := range captured {
-		called := false
-		if _, err := binding.Use(func() error { called = true; return nil }); ErrorCodeOf(err) != CodeParticipantFailed || called {
-			t.Fatalf("participant %d retained a usable binding: err=%v called=%t", index, err, called)
+	for index, port := range captured {
+		if err := port.Execute(context.Background()); ErrorCodeOf(err) != CodeParticipantFailed {
+			t.Fatalf("participant %d retained a usable port: err=%v", index, err)
 		}
 	}
 	if _, err := coordinator.Execute(context.Background(), plan); ErrorCodeOf(err) != CodePlanUnavailable {
@@ -108,23 +107,29 @@ func TestOptionalOutboxStillHasOneFinalSlot(t *testing.T) {
 func TestTypedContractFreezesOrderOwnersAndOperationsBeforeRequestBinding(t *testing.T) {
 	backend := &fakeBackend{}
 	events := []string{}
+	operation := func(owner, event string) RegisteredOperation[struct{}] {
+		return registeredOperationForTest(
+			backend,
+			owner,
+			func(ctx context.Context, session Session, _ struct{}) error {
+				return backend.stage(ctx, session, owner, event)
+			},
+			func(ctx context.Context, port OperationPort[struct{}], _ struct{}) error {
+				events = append(events, event)
+				return port.Execute(ctx)
+			},
+		)
+	}
 	participants := []TypedParticipant[struct{}]{
-		{Key: "first", Owner: "owner_a", Operation: func(_ context.Context, binding SessionBinding, _ struct{}) (BindingReceipt, error) {
-			return binding.Use(func() error { events = append(events, "first"); return nil })
-		}},
-		{Key: "second", Owner: "owner_b", After: []string{"first"}, Operation: func(_ context.Context, binding SessionBinding, _ struct{}) (BindingReceipt, error) {
-			return binding.Use(func() error { events = append(events, "second"); return nil })
-		}},
+		{Key: "first", Operation: operation("owner_a", "first")},
+		{Key: "second", After: []string{"first"}, Operation: operation("owner_b", "second")},
 	}
 	template, contract, err := NewPlanContract(ContractVersionV1, "frozen_typed_contract", participants, OutboxOptional)
 	if err != nil {
 		t.Fatal(err)
 	}
 	participants[0].Key = "injected"
-	participants[0].Owner = "request_owner"
-	participants[0].Operation = func(_ context.Context, binding SessionBinding, _ struct{}) (BindingReceipt, error) {
-		return binding.Use(func() error { events = append(events, "injected"); return nil })
-	}
+	participants[0].Operation = operation("request_owner", "injected")
 	participants[1].After[0] = "injected"
 	registry, err := NewRegistry([]PlanTemplate{template})
 	if err != nil {
@@ -143,13 +148,10 @@ func TestTypedContractFreezesOrderOwnersAndOperationsBeforeRequestBinding(t *tes
 }
 
 func TestPlanContractsRejectInvalidDefinitionsAndMismatchesBeforeBegin(t *testing.T) {
+	backend := &fakeBackend{}
 	validParticipants := []TypedParticipant[testInvocation]{
-		{Key: "first", Owner: "owner_a", DeclaresWrite: true, Operation: func(_ context.Context, binding SessionBinding, _ testInvocation) (BindingReceipt, error) {
-			return binding.Use(func() error { return nil })
-		}},
-		{Key: "second", Owner: "owner_b", After: []string{"first"}, DeclaresWrite: true, Operation: func(_ context.Context, binding SessionBinding, _ testInvocation) (BindingReceipt, error) {
-			return binding.Use(func() error { return nil })
-		}},
+		{Key: "first", DeclaresWrite: true, Operation: passthroughOperationForTest(backend, "owner_a", func(testInvocation) string { return "first" })},
+		{Key: "second", After: []string{"first"}, DeclaresWrite: true, Operation: passthroughOperationForTest(backend, "owner_b", func(testInvocation) string { return "second" })},
 	}
 	tests := []struct {
 		name    string
@@ -183,12 +185,8 @@ func TestPlanContractsRejectInvalidDefinitionsAndMismatchesBeforeBegin(t *testin
 			value[0].Key = "core_outbox"
 			return value
 		}},
-		{name: "outbox owner", version: ContractVersionV1, key: "operation", policy: OutboxOptional, mutate: func(value []TypedParticipant[testInvocation]) []TypedParticipant[testInvocation] {
-			value[0].Owner = "core_outbox"
-			return value
-		}},
 		{name: "nil operation", version: ContractVersionV1, key: "operation", policy: OutboxOptional, mutate: func(value []TypedParticipant[testInvocation]) []TypedParticipant[testInvocation] {
-			value[0].Operation = nil
+			value[0].Operation = RegisteredOperation[testInvocation]{}
 			return value
 		}},
 	}
@@ -204,12 +202,11 @@ func TestPlanContractsRejectInvalidDefinitionsAndMismatchesBeforeBegin(t *testin
 		})
 	}
 	tooMany := make([]TypedParticipant[testInvocation], maxParticipants+1)
+	sharedOperation := passthroughOperationForTest(backend, "owner", func(testInvocation) string { return "participant" })
 	for index := range tooMany {
 		tooMany[index] = TypedParticipant[testInvocation]{
-			Key: "p." + string(rune('a'+index%26)) + string(rune('a'+index/26)), Owner: "owner",
-			Operation: func(_ context.Context, binding SessionBinding, _ testInvocation) (BindingReceipt, error) {
-				return binding.Use(func() error { return nil })
-			},
+			Key:       "p." + string(rune('a'+index%26)) + string(rune('a'+index/26)),
+			Operation: sharedOperation,
 		}
 	}
 	if _, _, err := NewPlanContract(ContractVersionV1, "operation", tooMany, OutboxOptional); err == nil {
@@ -219,7 +216,6 @@ func TestPlanContractsRejectInvalidDefinitionsAndMismatchesBeforeBegin(t *testin
 		t.Fatal("empty registry accepted")
 	}
 
-	backend := &fakeBackend{}
 	template, contract := registeredTestPlan(backend, make([]participantControl, 1), OutboxRequired)
 	if _, err := NewRegistry([]PlanTemplate{template, template}); err == nil {
 		t.Fatal("duplicate template accepted")
@@ -235,7 +231,8 @@ func TestPlanContractsRejectInvalidDefinitionsAndMismatchesBeforeBegin(t *testin
 	if _, err := (PlanContract[testInvocation]{}).Bind(registry, testInvocation{}, &intent); err == nil {
 		t.Fatal("zero contract accepted")
 	}
-	foreignTemplate, foreignContract := registeredTestPlan(backend, make([]participantControl, 1), OutboxRequired)
+	foreignBackend := &fakeBackend{}
+	foreignTemplate, foreignContract := registeredTestPlan(foreignBackend, make([]participantControl, 1), OutboxRequired)
 	foreignRegistry, err := NewRegistry([]PlanTemplate{foreignTemplate})
 	if err != nil {
 		t.Fatal(err)
@@ -250,9 +247,7 @@ func TestPlanContractsRejectInvalidDefinitionsAndMismatchesBeforeBegin(t *testin
 		ContractVersionV1,
 		"pointer_invocation",
 		[]TypedParticipant[*testInvocation]{
-			{Key: "typed", Owner: "owner", Operation: func(_ context.Context, binding SessionBinding, _ *testInvocation) (BindingReceipt, error) {
-				return binding.Use(func() error { return nil })
-			}},
+			{Key: "typed", Operation: passthroughOperationForTest(backend, "owner", func(*testInvocation) string { return "typed" })},
 		},
 		OutboxOptional,
 	)
@@ -271,7 +266,6 @@ func TestPlanContractsRejectInvalidDefinitionsAndMismatchesBeforeBegin(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	foreignBackend := &fakeBackend{}
 	foreignCoordinator := newTestCoordinator(foreignBackend, foreignRegistry, &fakeAppender{backend: foreignBackend}, nil, nil)
 	if _, err := foreignCoordinator.Execute(context.Background(), plan); ErrorCodeOf(err) != CodeInvalidPlan {
 		t.Fatalf("foreign plan error = %v", err)
@@ -451,21 +445,25 @@ func TestConcurrentSessionsInterleaveAndKeepCommitRollbackOutboxIndependent(t *t
 	}
 	backend := &fakeBackend{}
 	participants := []TypedParticipant[invocation]{
-		{Key: "first", Owner: "owner", DeclaresWrite: true, Operation: func(_ context.Context, binding SessionBinding, value invocation) (BindingReceipt, error) {
-			return backend.stage(binding, "owner", value.label+":first")
-		}},
-		{Key: "second", Owner: "owner", After: []string{"first"}, DeclaresWrite: true, Operation: func(_ context.Context, binding SessionBinding, value invocation) (BindingReceipt, error) {
-			close(value.entered)
-			<-value.proceed
-			receipt, err := backend.stage(binding, "owner", value.label+":second")
-			if err != nil {
-				return BindingReceipt{}, err
-			}
-			if value.fail {
-				return receipt, errInjected
-			}
-			return receipt, nil
-		}},
+		{Key: "first", DeclaresWrite: true, Operation: passthroughOperationForTest(backend, "owner", func(value invocation) string { return value.label + ":first" })},
+		{Key: "second", After: []string{"first"}, DeclaresWrite: true, Operation: registeredOperationForTest(
+			backend,
+			"owner",
+			func(ctx context.Context, session Session, value invocation) error {
+				return backend.stage(ctx, session, "owner", value.label+":second")
+			},
+			func(ctx context.Context, port OperationPort[invocation], value invocation) error {
+				close(value.entered)
+				<-value.proceed
+				if err := port.Execute(ctx); err != nil {
+					return err
+				}
+				if value.fail {
+					return errInjected
+				}
+				return nil
+			},
+		)},
 	}
 	template, contract, err := NewPlanContract(ContractVersionV1, "interleaved_operation", participants, OutboxRequired)
 	if err != nil {
@@ -540,23 +538,28 @@ func TestConcurrentSessionsInterleaveAndKeepCommitRollbackOutboxIndependent(t *t
 	}
 }
 
-func TestCrossSwappedLiveBindingsReturnForeignReceiptsAndBothRollBack(t *testing.T) {
+func TestCrossSwappedLiveOperationPortsFailBeforeRepositoryExecution(t *testing.T) {
 	type invocation struct {
 		index int
 		label string
 	}
 	type exchange struct {
-		mu       sync.Mutex
-		bindings [2]SessionBinding
-		count    int
-		ready    chan struct{}
+		mu    sync.Mutex
+		ports [2]OperationPort[invocation]
+		count int
+		ready chan struct{}
 	}
 	backend := &fakeBackend{}
 	shared := &exchange{ready: make(chan struct{})}
-	participants := []TypedParticipant[invocation]{
-		{Key: "write", Owner: "owner", DeclaresWrite: true, Operation: func(_ context.Context, binding SessionBinding, value invocation) (BindingReceipt, error) {
+	operation := registeredOperationForTest(
+		backend,
+		"owner",
+		func(ctx context.Context, session Session, value invocation) error {
+			return backend.stage(ctx, session, "owner", value.label+":cross-swapped")
+		},
+		func(ctx context.Context, port OperationPort[invocation], value invocation) error {
 			shared.mu.Lock()
-			shared.bindings[value.index] = binding
+			shared.ports[value.index] = port
 			shared.count++
 			if shared.count == 2 {
 				close(shared.ready)
@@ -564,10 +567,13 @@ func TestCrossSwappedLiveBindingsReturnForeignReceiptsAndBothRollBack(t *testing
 			shared.mu.Unlock()
 			<-shared.ready
 			shared.mu.Lock()
-			foreign := shared.bindings[1-value.index]
+			foreign := shared.ports[1-value.index]
 			shared.mu.Unlock()
-			return backend.stage(foreign, "owner", value.label+":cross-swapped")
-		}},
+			return foreign.Execute(ctx)
+		},
+	)
+	participants := []TypedParticipant[invocation]{
+		{Key: "write", DeclaresWrite: true, Operation: operation},
 	}
 	template, contract, err := NewPlanContract(ContractVersionV1, "cross_swapped_binding", participants, OutboxOptional)
 	if err != nil {
@@ -602,6 +608,10 @@ func TestCrossSwappedLiveBindingsReturnForeignReceiptsAndBothRollBack(t *testing
 	_, _, begins, commits, rollbacks, _ := backend.snapshot()
 	if begins != 2 || commits != 0 || rollbacks != 2 {
 		t.Fatalf("cross-swapped lifecycle begin=%d commit=%d rollback=%d", begins, commits, rollbacks)
+	}
+	_, staged, _, _, _, _ := backend.snapshot()
+	if len(staged) != 0 {
+		t.Fatalf("cross-swapped ports reached repository executor: %v", staged)
 	}
 }
 
@@ -641,7 +651,7 @@ func TestCrossSwappedLiveOutboxScopesFailExactReceiptVerification(t *testing.T) 
 		t.Fatal(err)
 	}
 	appender := &crossSwapAppender{backend: backend, ready: make(chan struct{})}
-	coordinator, err := NewCoordinator(Configuration{Backend: backend, Registry: registry, Outbox: appender})
+	coordinator, err := NewCoordinator(Configuration{Backend: backend.backendContract(), Registry: registry, Outbox: appender})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -687,7 +697,7 @@ func TestOutboxCannotClaimSuccessWithoutExactScopeAndBindingReceipts(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	coordinator, err := NewCoordinator(Configuration{Backend: backend, Registry: registry, Outbox: receiptDroppingAppender{backend: backend}})
+	coordinator, err := NewCoordinator(Configuration{Backend: backend.backendContract(), Registry: registry, Outbox: receiptDroppingAppender{backend: backend}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -705,15 +715,13 @@ func TestOutboxCannotClaimSuccessWithoutExactScopeAndBindingReceipts(t *testing.
 	}
 }
 
-func TestWrongBackendBindingFailsClosedWithoutCrossSessionCommit(t *testing.T) {
+func TestWrongBackendRegistrationCannotConstructCoordinator(t *testing.T) {
 	backend := &fakeBackend{}
 	foreign := &fakeBackend{}
 	participants := []TypedParticipant[struct{}]{
-		{Key: "wrong_backend", Owner: "owner", DeclaresWrite: true, Operation: func(_ context.Context, binding SessionBinding, _ struct{}) (BindingReceipt, error) {
-			return foreign.stage(binding, "owner", "foreign")
-		}},
+		{Key: "wrong_backend", DeclaresWrite: true, Operation: passthroughOperationForTest(foreign, "owner", func(struct{}) string { return "foreign" })},
 	}
-	template, contract, err := NewPlanContract(ContractVersionV1, "wrong_backend_binding", participants, OutboxOptional)
+	template, _, err := NewPlanContract(ContractVersionV1, "wrong_backend_binding", participants, OutboxOptional)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -721,29 +729,25 @@ func TestWrongBackendBindingFailsClosedWithoutCrossSessionCommit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	plan, err := contract.Bind(registry, struct{}{}, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := newTestCoordinator(backend, registry, &fakeAppender{backend: backend}, nil, nil).Execute(context.Background(), plan); ErrorCodeOf(err) != CodeParticipantFailed {
+	if _, err := NewCoordinator(Configuration{Backend: backend.backendContract(), Registry: registry, Outbox: &fakeAppender{backend: backend}}); ErrorCodeOf(err) != CodeInvalidContract {
 		t.Fatalf("wrong backend error = %v", err)
 	}
 	_, committed, begins, commits, rollbacks, _ := backend.snapshot()
 	_, foreignCommitted, foreignBegins, _, _, _ := foreign.snapshot()
-	if begins != 1 || commits != 0 || rollbacks != 1 || len(committed) != 0 || foreignBegins != 0 || len(foreignCommitted) != 0 {
+	if begins != 0 || commits != 0 || rollbacks != 0 || len(committed) != 0 || foreignBegins != 0 || len(foreignCommitted) != 0 {
 		t.Fatalf("local=%d/%d/%d %v foreign=%d %v", begins, commits, rollbacks, committed, foreignBegins, foreignCommitted)
 	}
 }
 
 func TestRegisteredOwnerBindingRejectsOwnerSubstitution(t *testing.T) {
 	backend := &fakeBackend{}
+	type invocation struct{ attemptedOwner string }
+	operation := passthroughOperationForTest(backend, "registered_owner", func(invocation) string { return "registered-owner-write" })
 	template, contract, err := NewPlanContract(
 		ContractVersionV1,
 		"owner_substitution",
-		[]TypedParticipant[struct{}]{
-			{Key: "write", Owner: "registered_owner", DeclaresWrite: true, Operation: func(_ context.Context, binding SessionBinding, _ struct{}) (BindingReceipt, error) {
-				return backend.stage(binding, "request_selected_owner", "must-not-stage")
-			}},
+		[]TypedParticipant[invocation]{
+			{Key: "write", DeclaresWrite: true, Operation: operation},
 		},
 		OutboxOptional,
 	)
@@ -754,42 +758,45 @@ func TestRegisteredOwnerBindingRejectsOwnerSubstitution(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	plan, err := contract.Bind(registry, struct{}{}, nil)
+	plan, err := contract.Bind(registry, invocation{attemptedOwner: "request_selected_owner"}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := newTestCoordinator(backend, registry, &fakeAppender{backend: backend}, nil, nil).Execute(context.Background(), plan); ErrorCodeOf(err) != CodeParticipantFailed {
-		t.Fatalf("owner substitution error = %v", err)
+	if _, err := newTestCoordinator(backend, registry, &fakeAppender{backend: backend}, nil, nil).Execute(context.Background(), plan); err != nil {
+		t.Fatalf("fixed owner execution error = %v", err)
 	}
 	_, committed, begins, commits, rollbacks, _ := backend.snapshot()
-	if begins != 1 || commits != 0 || rollbacks != 1 || len(committed) != 0 {
+	if begins != 1 || commits != 1 || rollbacks != 0 || !reflect.DeepEqual(committed, []string{"registered-owner-write"}) {
 		t.Fatalf("owner substitution lifecycle begin=%d commit=%d rollback=%d committed=%v", begins, commits, rollbacks, committed)
 	}
 }
 
-func TestRetainedAndGoroutineAfterReturnBindingsFailWithoutCallingOperation(t *testing.T) {
+func TestRetainedAndGoroutineAfterReturnPortsFailWithoutCallingRepository(t *testing.T) {
 	backend := &fakeBackend{}
-	var retained SessionBinding
+	var retained OperationPort[struct{}]
+	var retainedContext context.Context
 	done := make(chan error, 1)
-	participants := []TypedParticipant[struct{}]{
-		{Key: "capture", Owner: "owner", DeclaresWrite: true, Operation: func(_ context.Context, binding SessionBinding, _ struct{}) (BindingReceipt, error) {
-			retained = binding
-			receipt, err := backend.stage(binding, "owner", "local")
-			if err != nil {
-				return BindingReceipt{}, err
+	operation := registeredOperationForTest(
+		backend,
+		"owner",
+		func(ctx context.Context, session Session, _ struct{}) error {
+			return backend.stage(ctx, session, "owner", "local")
+		},
+		func(ctx context.Context, port OperationPort[struct{}], _ struct{}) error {
+			retained = port
+			retainedContext = ctx
+			if err := port.Execute(ctx); err != nil {
+				return err
 			}
-			go func(copy SessionBinding) {
+			go func(copy OperationPort[struct{}], operationContext context.Context) {
 				<-time.After(10 * time.Millisecond)
-				called := false
-				_, err := copy.Use(func() error { called = true; return nil })
-				if called {
-					done <- errors.New("retained goroutine operation ran")
-					return
-				}
-				done <- err
-			}(binding)
-			return receipt, nil
-		}},
+				done <- copy.Execute(operationContext)
+			}(port, ctx)
+			return nil
+		},
+	)
+	participants := []TypedParticipant[struct{}]{
+		{Key: "capture", DeclaresWrite: true, Operation: operation},
 	}
 	template, contract, err := NewPlanContract(ContractVersionV1, "binding_lifecycle", participants, OutboxOptional)
 	if err != nil {
@@ -809,9 +816,8 @@ func TestRetainedAndGoroutineAfterReturnBindingsFailWithoutCallingOperation(t *t
 	if err := <-done; ErrorCodeOf(err) != CodeParticipantFailed {
 		t.Fatalf("retained goroutine error = %v", err)
 	}
-	called := false
-	if _, err := retained.Use(func() error { called = true; return nil }); ErrorCodeOf(err) != CodeParticipantFailed || called {
-		t.Fatalf("retained binding err=%v called=%t", err, called)
+	if err := retained.Execute(retainedContext); ErrorCodeOf(err) != CodeParticipantFailed {
+		t.Fatalf("retained port err=%v", err)
 	}
 }
 
@@ -822,18 +828,62 @@ func TestConfigurationRejectsNilDependencies(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var typedNilBackend *fakeBackend
 	var typedNilAppender *fakeAppender
 	for _, configuration := range []Configuration{
 		{Registry: registry, Outbox: &fakeAppender{backend: backend}},
-		{Backend: backend, Registry: registry},
-		{Backend: typedNilBackend, Registry: registry, Outbox: &fakeAppender{backend: backend}},
-		{Backend: backend, Registry: registry, Outbox: typedNilAppender},
-		{Backend: backend, Registry: Registry{}, Outbox: &fakeAppender{backend: backend}},
+		{Backend: backend.backendContract(), Registry: registry},
+		{Backend: BackendContract{}, Registry: registry, Outbox: &fakeAppender{backend: backend}},
+		{Backend: backend.backendContract(), Registry: registry, Outbox: typedNilAppender},
+		{Backend: backend.backendContract(), Registry: Registry{}, Outbox: &fakeAppender{backend: backend}},
 	} {
 		if _, err := NewCoordinator(configuration); ErrorCodeOf(err) != CodeInvalidContract {
 			t.Fatalf("invalid configuration error = %v", err)
 		}
+	}
+}
+
+func TestConfiguredReservedOwnerPortsRequireExactBackendAndOwnerOperations(t *testing.T) {
+	backend := &fakeBackend{}
+	foreign := &fakeBackend{}
+	registry := minimalRegistry(t, backend)
+	appender := &fakeAppender{backend: backend}
+	finalizer := &fakeFinalizer{backend: backend}
+	durable := &fakeDurablePreparation{backend: backend, intent: testIntent()}
+	foreignFinal, _ := NewBackendOperation(foreign.backendContract(), FinalAuthorizationOwner, func(context.Context, Session, *FinalAuthorizationAuditOperation) error { return nil })
+	wrongFinalOwner, _ := NewBackendOperation(backend.backendContract(), "wrong.final.owner", func(context.Context, Session, *FinalAuthorizationAuditOperation) error { return nil })
+	foreignDurable, _ := NewBackendOperation(foreign.backendContract(), DurableEffectOwner, func(context.Context, Session, *DurableEffectOperation) error { return nil })
+	wrongDurableOwner, _ := NewBackendOperation(backend.backendContract(), "wrong.durable.owner", func(context.Context, Session, *DurableEffectOperation) error { return nil })
+	tests := []Configuration{
+		{Backend: backend.backendContract(), Registry: registry, Outbox: appender, FinalAuthorizationAudit: finalizer},
+		{Backend: backend.backendContract(), Registry: registry, Outbox: appender, FinalAuthorizationAudit: finalizer, FinalAuthorizationOperation: foreignFinal},
+		{Backend: backend.backendContract(), Registry: registry, Outbox: appender, FinalAuthorizationAudit: finalizer, FinalAuthorizationOperation: wrongFinalOwner},
+		{Backend: backend.backendContract(), Registry: registry, Outbox: appender, DurableEffectPreparation: durable},
+		{Backend: backend.backendContract(), Registry: registry, Outbox: appender, DurableEffectPreparation: durable, DurableEffectOperation: foreignDurable},
+		{Backend: backend.backendContract(), Registry: registry, Outbox: appender, DurableEffectPreparation: durable, DurableEffectOperation: wrongDurableOwner},
+	}
+	for index, configuration := range tests {
+		if _, err := NewCoordinator(configuration); ErrorCodeOf(err) != CodeInvalidContract {
+			t.Fatalf("case %d accepted mismatched reserved operation: %v", index, err)
+		}
+	}
+	_, _, begins, _, _, _ := backend.snapshot()
+	if begins != 0 {
+		t.Fatalf("mismatched reserved operation reached Begin %d times", begins)
+	}
+}
+
+func TestRegistryRejectsTemplatesBoundToDifferentBackends(t *testing.T) {
+	backend := &fakeBackend{}
+	foreign := &fakeBackend{}
+	template, _ := registeredTestPlan(backend, make([]participantControl, 1), OutboxOptional)
+	foreignTemplate, _, err := NewPlanContract(ContractVersionV1, "foreign_backend_template", []TypedParticipant[struct{}]{
+		{Key: "foreign", Operation: passthroughOperationForTest(foreign, "foreign", func(struct{}) string { return "foreign" })},
+	}, OutboxOptional)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := NewRegistry([]PlanTemplate{template, foreignTemplate}); ErrorCodeOf(err) != CodeInvalidPlan {
+		t.Fatalf("mixed-backend registry error = %v", err)
 	}
 }
 
@@ -866,9 +916,7 @@ func TestReservedHandoffTemplatesAreFrozenAtCoordinatorConstruction(t *testing.T
 		}
 	}
 	conflict, _, err := NewPlanContract(ContractVersionV1, finalReadTemplateKey, []TypedParticipant[struct{}]{
-		{Key: "caller_override", Owner: "caller", Operation: func(_ context.Context, binding SessionBinding, _ struct{}) (BindingReceipt, error) {
-			return binding.Use(func() error { return nil })
-		}},
+		{Key: "caller_override", Operation: passthroughOperationForTest(backend, "caller", func(struct{}) string { return "caller" })},
 	}, OutboxOptional)
 	if err != nil {
 		t.Fatal(err)
@@ -877,7 +925,7 @@ func TestReservedHandoffTemplatesAreFrozenAtCoordinatorConstruction(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := NewCoordinator(Configuration{Backend: backend, Registry: conflictingRegistry, Outbox: &fakeAppender{backend: backend}}); ErrorCodeOf(err) != CodeInvalidContract {
+	if _, err := NewCoordinator(Configuration{Backend: backend.backendContract(), Registry: conflictingRegistry, Outbox: &fakeAppender{backend: backend}}); ErrorCodeOf(err) != CodeInvalidContract {
 		t.Fatalf("caller replaced reserved handoff template: %v", err)
 	}
 }
@@ -887,10 +935,11 @@ func FuzzTemplateIdentifiersFailClosed(f *testing.F) {
 	f.Add("UPPER", "participant", "owner")
 	f.Add("operation", "../escape", "owner")
 	f.Fuzz(func(t *testing.T, operation, participant, owner string) {
+		backend := &fakeBackend{}
+		backendOperation, _ := NewBackendOperation(backend.backendContract(), owner, func(context.Context, Session, struct{}) error { return nil })
+		registered, _ := NewRegisteredOperation(backendOperation, func(ctx context.Context, port OperationPort[struct{}], _ struct{}) error { return port.Execute(ctx) })
 		_, _, err := NewPlanContract(ContractVersionV1, operation, []TypedParticipant[struct{}]{
-			{Key: participant, Owner: owner, Operation: func(_ context.Context, binding SessionBinding, _ struct{}) (BindingReceipt, error) {
-				return binding.Use(func() error { return nil })
-			}},
+			{Key: participant, Operation: registered},
 		}, OutboxOptional)
 		valid := identifierPattern.MatchString(operation) && identifierPattern.MatchString(participant) && identifierPattern.MatchString(owner) && participant != "core_outbox" && owner != "core_outbox"
 		if valid != (err == nil) {

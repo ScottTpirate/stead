@@ -98,46 +98,48 @@ func (revision BoundRevision) verify() bool {
 type FinalAuthorizationAuditResult struct {
 	Revision BoundRevision
 	Intent   *outbox.ValidatedIntent
-	Binding  BindingReceipt
 }
 
 // FinalAuthorizationAuditPort is the one logical WS-06/WS-07 handoff for a
 // finite composed read. Implementations may return zero or one aggregate
 // validated intent, never a list or a per-row callback.
 type FinalAuthorizationAuditPort interface {
-	Finalize(context.Context, SessionBinding, BoundRevisionIssuer) (FinalAuthorizationAuditResult, error)
+	Finalize(context.Context, OperationPort[*FinalAuthorizationAuditOperation], BoundRevisionIssuer) (FinalAuthorizationAuditResult, error)
 }
 
-type finalReadInvocation struct {
+// FinalAuthorizationAuditOperation is an opaque invocation identity used only
+// to type the registration-bound repository port. Its result is private to the
+// coordinator and cannot be supplied or changed by the backend executor.
+type FinalAuthorizationAuditOperation struct {
 	result FinalAuthorizationAuditResult
 }
 
-func (invocation *finalReadInvocation) intent() *outbox.ValidatedIntent {
+func (invocation *FinalAuthorizationAuditOperation) intent() *outbox.ValidatedIntent {
 	if invocation == nil {
 		return nil
 	}
 	return invocation.result.Intent
 }
 
-func (coordinator *Coordinator) finalizeReadParticipant(ctx context.Context, binding SessionBinding, invocation *finalReadInvocation) (BindingReceipt, error) {
+func (coordinator *Coordinator) finalizeReadParticipant(ctx context.Context, port OperationPort[*FinalAuthorizationAuditOperation], invocation *FinalAuthorizationAuditOperation) error {
 	if coordinator == nil || isNil(coordinator.finalAuthorizationAudit) || invocation == nil {
-		return BindingReceipt{}, fail(CodeBoundaryDenied)
+		return fail(CodeBoundaryDenied)
 	}
 	issuer := newBoundRevisionIssuer()
-	result, err := coordinator.finalAuthorizationAudit.Finalize(ctx, binding, issuer)
+	result, err := coordinator.finalAuthorizationAudit.Finalize(ctx, port, issuer)
 	issuer.close()
 	if err != nil || !result.Revision.verify() || result.Revision.state.seal != issuer.state.seal {
-		return BindingReceipt{}, fail(CodeBoundaryDenied)
+		return fail(CodeBoundaryDenied)
 	}
 	if result.Intent != nil {
 		if err := result.Intent.Verify(); err != nil {
-			return BindingReceipt{}, fail(CodeOutboxFailed)
+			return fail(CodeOutboxFailed)
 		}
 		intent := *result.Intent
 		result.Intent = &intent
 	}
 	invocation.result = result
-	return result.Binding, nil
+	return nil
 }
 
 // FinalizeRead invokes the registered final logical operation once, then the
@@ -147,8 +149,8 @@ func (coordinator *Coordinator) FinalizeRead(ctx context.Context) (BoundRevision
 	if coordinator == nil || isNil(coordinator.finalAuthorizationAudit) {
 		return BoundRevision{}, Report{}, fail(CodeBoundaryDenied)
 	}
-	invocation := &finalReadInvocation{}
-	plan, err := coordinator.finalReadContract.bind(coordinator.registry, invocation, nil, func(value *finalReadInvocation) *outbox.ValidatedIntent {
+	invocation := &FinalAuthorizationAuditOperation{}
+	plan, err := coordinator.finalReadContract.bind(coordinator.registry, invocation, nil, func(value *FinalAuthorizationAuditOperation) *outbox.ValidatedIntent {
 		return value.intent()
 	})
 	if err != nil {

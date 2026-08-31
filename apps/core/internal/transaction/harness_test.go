@@ -32,6 +32,8 @@ type fakeBackend struct {
 	panicRollback bool
 
 	rollbackContextWasLive bool
+	contractOnce           sync.Once
+	contract               BackendContract
 }
 
 type fakeSession struct {
@@ -117,32 +119,36 @@ func (session *fakeSession) Rollback(ctx context.Context) error {
 	return nil
 }
 
-// stage is the fake owner-authored typed adapter. SessionBinding.Use encloses
-// the exact synchronous call; resolve is confined to the trusted WS-02 fake
-// lifecycle/storage boundary and returns only the Begin-created Session.
-func (backend *fakeBackend) stage(binding SessionBinding, owner, value string) (BindingReceipt, error) {
-	return binding.Use(func() error {
-		sessionValue, ok := binding.resolve(owner)
-		if !ok {
-			return errInjected
+func (backend *fakeBackend) backendContract() BackendContract {
+	backend.contractOnce.Do(func() {
+		contract, err := NewBackendContract(backend)
+		if err != nil {
+			panic(err)
 		}
-		session, ok := sessionValue.(*fakeSession)
-		if !ok || session.backend != backend {
-			return errInjected
-		}
-		backend.mu.Lock()
-		defer backend.mu.Unlock()
-		backend.initializeLocked()
-		if session.closed {
-			return errInjected
-		}
-		if _, active := backend.active[session]; !active {
-			return errInjected
-		}
-		backend.calls = append(backend.calls, value)
-		session.staged = append(session.staged, value)
-		return nil
+		backend.contract = contract
 	})
+	return backend.contract
+}
+
+// stage is the trusted fake repository executor. The owner-authored adapter
+// reaches it only through OperationPort; it cannot receive this Session.
+func (backend *fakeBackend) stage(_ context.Context, sessionValue Session, owner, value string) error {
+	session, ok := sessionValue.(*fakeSession)
+	if !ok || session.backend != backend {
+		return errInjected
+	}
+	backend.mu.Lock()
+	defer backend.mu.Unlock()
+	backend.initializeLocked()
+	if session.closed {
+		return errInjected
+	}
+	if _, active := backend.active[session]; !active {
+		return errInjected
+	}
+	backend.calls = append(backend.calls, value)
+	session.staged = append(session.staged, value)
+	return nil
 }
 
 func (backend *fakeBackend) stageOutbox(scope outbox.TransactionScope[SessionBinding, BindingReceipt], intent outbox.ValidatedIntent) (outbox.ScopeReceipt[SessionBinding, BindingReceipt], BindingReceipt, error) {
@@ -227,7 +233,7 @@ type participantControl struct {
 	fail       bool
 	panic      bool
 	cancel     context.CancelFunc
-	capture    *SessionBinding
+	capture    *OperationPort[testInvocation]
 	inFlight   *int
 	maxFlight  *int
 	flightLock *sync.Mutex
@@ -237,6 +243,31 @@ type participantControl struct {
 
 type testInvocation struct {
 	prefix string
+}
+
+func registeredOperationForTest[T any](backend *fakeBackend, owner string, execute func(context.Context, Session, T) error, invoke func(context.Context, OperationPort[T], T) error) RegisteredOperation[T] {
+	backendOperation, err := NewBackendOperation(backend.backendContract(), owner, execute)
+	if err != nil {
+		panic(err)
+	}
+	operation, err := NewRegisteredOperation(backendOperation, invoke)
+	if err != nil {
+		panic(err)
+	}
+	return operation
+}
+
+func passthroughOperationForTest[T any](backend *fakeBackend, owner string, value func(T) string) RegisteredOperation[T] {
+	return registeredOperationForTest(
+		backend,
+		owner,
+		func(ctx context.Context, session Session, invocation T) error {
+			return backend.stage(ctx, session, owner, value(invocation))
+		},
+		func(ctx context.Context, port OperationPort[T], _ T) error {
+			return port.Execute(ctx)
+		},
+	)
 }
 
 func registeredTestPlan(backend *fakeBackend, controls []participantControl, policy OutboxPolicy) (PlanTemplate, PlanContract[testInvocation]) {
@@ -251,49 +282,57 @@ func registeredTestPlan(backend *fakeBackend, controls []participantControl, pol
 		}
 		participants[index] = TypedParticipant[testInvocation]{
 			Key:           key,
-			Owner:         owner,
 			After:         after,
 			DeclaresWrite: true,
-			Operation: func(_ context.Context, binding SessionBinding, invocation testInvocation) (BindingReceipt, error) {
-				control := &controls[index]
-				if control.flightLock != nil {
-					control.flightLock.Lock()
-					*control.inFlight++
-					if *control.inFlight > *control.maxFlight {
-						*control.maxFlight = *control.inFlight
-					}
-					control.flightLock.Unlock()
-					defer func() {
-						control.flightLock.Lock()
-						*control.inFlight--
-						control.flightLock.Unlock()
-					}()
-				}
-				if control.capture != nil {
-					*control.capture = binding
-				}
-				if control.entered != nil {
-					close(control.entered)
-				}
-				if control.proceed != nil {
-					<-control.proceed
-				}
-				if control.panic {
-					panic("injected participant panic")
-				}
-				if control.fail {
-					return BindingReceipt{}, errInjected
-				}
-				receipt, err := backend.stage(binding, owner, invocation.prefix+key)
-				if err != nil {
-					return BindingReceipt{}, err
-				}
-				if control.cancel != nil {
-					control.cancel()
-				}
-				return receipt, nil
-			},
 		}
+		backendOperation, err := NewBackendOperation(backend.backendContract(), owner, func(ctx context.Context, session Session, invocation testInvocation) error {
+			return backend.stage(ctx, session, owner, invocation.prefix+key)
+		})
+		if err != nil {
+			panic(err)
+		}
+		registeredOperation, err := NewRegisteredOperation(backendOperation, func(ctx context.Context, port OperationPort[testInvocation], invocation testInvocation) error {
+			control := &controls[index]
+			if control.flightLock != nil {
+				control.flightLock.Lock()
+				*control.inFlight++
+				if *control.inFlight > *control.maxFlight {
+					*control.maxFlight = *control.inFlight
+				}
+				control.flightLock.Unlock()
+				defer func() {
+					control.flightLock.Lock()
+					*control.inFlight--
+					control.flightLock.Unlock()
+				}()
+			}
+			if control.capture != nil {
+				*control.capture = port
+			}
+			if control.entered != nil {
+				close(control.entered)
+			}
+			if control.proceed != nil {
+				<-control.proceed
+			}
+			if control.panic {
+				panic("injected participant panic")
+			}
+			if control.fail {
+				return errInjected
+			}
+			if err := port.Execute(ctx); err != nil {
+				return err
+			}
+			if control.cancel != nil {
+				control.cancel()
+			}
+			return nil
+		})
+		if err != nil {
+			panic(err)
+		}
+		participants[index].Operation = registeredOperation
 	}
 	template, contract, err := NewPlanContract(ContractVersionV1, "test_operation", participants, policy)
 	if err != nil {
@@ -303,12 +342,26 @@ func registeredTestPlan(backend *fakeBackend, controls []participantControl, pol
 }
 
 func newTestCoordinator(backend *fakeBackend, registry Registry, appender *fakeAppender, finalizer FinalAuthorizationAuditPort, durable DurableEffectPreparationPort) *Coordinator {
+	var finalOperation BackendOperation[*FinalAuthorizationAuditOperation]
+	if !isNil(finalizer) {
+		finalOperation, _ = NewBackendOperation(backend.backendContract(), FinalAuthorizationOwner, func(ctx context.Context, session Session, _ *FinalAuthorizationAuditOperation) error {
+			return backend.stage(ctx, session, FinalAuthorizationOwner, "final_authorization_audit")
+		})
+	}
+	var durableOperation BackendOperation[*DurableEffectOperation]
+	if !isNil(durable) {
+		durableOperation, _ = NewBackendOperation(backend.backendContract(), DurableEffectOwner, func(ctx context.Context, session Session, _ *DurableEffectOperation) error {
+			return backend.stage(ctx, session, DurableEffectOwner, "durable_effect_preparation")
+		})
+	}
 	coordinator, err := NewCoordinator(Configuration{
-		Backend:                  backend,
-		Registry:                 registry,
-		Outbox:                   appender,
-		FinalAuthorizationAudit:  finalizer,
-		DurableEffectPreparation: durable,
+		Backend:                     backend.backendContract(),
+		Registry:                    registry,
+		Outbox:                      appender,
+		FinalAuthorizationAudit:     finalizer,
+		FinalAuthorizationOperation: finalOperation,
+		DurableEffectPreparation:    durable,
+		DurableEffectOperation:      durableOperation,
 	})
 	if err != nil {
 		panic(err)

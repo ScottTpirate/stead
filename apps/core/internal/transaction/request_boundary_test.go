@@ -2,6 +2,7 @@ package transaction
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"reflect"
 	"sync"
@@ -12,19 +13,19 @@ import (
 )
 
 type fakeFinalizer struct {
-	backend     *fakeBackend
-	intent      *outbox.ValidatedIntent
-	rows        int
-	calls       int
-	fail        bool
-	panic       bool
-	zero        bool
-	zeroBinding bool
-	version     string
-	opaque      []byte
+	backend       *fakeBackend
+	intent        *outbox.ValidatedIntent
+	rows          int
+	calls         int
+	fail          bool
+	panic         bool
+	zero          bool
+	skipOperation bool
+	version       string
+	opaque        []byte
 }
 
-func (finalizer *fakeFinalizer) Finalize(_ context.Context, binding SessionBinding, issuer BoundRevisionIssuer) (FinalAuthorizationAuditResult, error) {
+func (finalizer *fakeFinalizer) Finalize(ctx context.Context, port OperationPort[*FinalAuthorizationAuditOperation], issuer BoundRevisionIssuer) (FinalAuthorizationAuditResult, error) {
 	finalizer.calls++
 	if finalizer.panic {
 		panic("injected finalization panic")
@@ -32,15 +33,13 @@ func (finalizer *fakeFinalizer) Finalize(_ context.Context, binding SessionBindi
 	if finalizer.fail {
 		return FinalAuthorizationAuditResult{}, errInjected
 	}
-	receipt, err := finalizer.backend.stage(binding, FinalAuthorizationOwner, "final_authorization_audit")
-	if err != nil {
-		return FinalAuthorizationAuditResult{}, err
-	}
-	if finalizer.zeroBinding {
-		receipt = BindingReceipt{}
+	if !finalizer.skipOperation {
+		if err := port.Execute(ctx); err != nil {
+			return FinalAuthorizationAuditResult{}, err
+		}
 	}
 	if finalizer.zero {
-		return FinalAuthorizationAuditResult{Intent: finalizer.intent, Binding: receipt}, nil
+		return FinalAuthorizationAuditResult{Intent: finalizer.intent}, nil
 	}
 	version := finalizer.version
 	if version == "" {
@@ -54,7 +53,7 @@ func (finalizer *fakeFinalizer) Finalize(_ context.Context, binding SessionBindi
 	if err != nil {
 		return FinalAuthorizationAuditResult{}, err
 	}
-	return FinalAuthorizationAuditResult{Revision: revision, Intent: finalizer.intent, Binding: receipt}, nil
+	return FinalAuthorizationAuditResult{Revision: revision, Intent: finalizer.intent}, nil
 }
 
 func minimalRegistry(t testing.TB, backend *fakeBackend) Registry {
@@ -123,7 +122,7 @@ func TestFinalizationFailuresReturnNoRevisionAndRollback(t *testing.T) {
 		{"owner error", func(finalizer *fakeFinalizer, _ *fakeAppender, _ *fakeBackend) { finalizer.fail = true }, CodeParticipantFailed},
 		{"owner panic", func(finalizer *fakeFinalizer, _ *fakeAppender, _ *fakeBackend) { finalizer.panic = true }, CodeParticipantFailed},
 		{"zero revision", func(finalizer *fakeFinalizer, _ *fakeAppender, _ *fakeBackend) { finalizer.zero = true }, CodeParticipantFailed},
-		{"missing binding receipt", func(finalizer *fakeFinalizer, _ *fakeAppender, _ *fakeBackend) { finalizer.zeroBinding = true }, CodeParticipantFailed},
+		{"missing operation execution", func(finalizer *fakeFinalizer, _ *fakeAppender, _ *fakeBackend) { finalizer.skipOperation = true }, CodeParticipantFailed},
 		{"wrong revision version", func(finalizer *fakeFinalizer, _ *fakeAppender, _ *fakeBackend) {
 			finalizer.version = BoundRevisionHandoffV1 + ".unknown"
 		}, CodeParticipantFailed},
@@ -510,10 +509,11 @@ func TestBoundRevisionCopiesAreDefensiveAndZeroDenies(t *testing.T) {
 	digest := revision.Digest()
 	copy := revision.OpaqueCopy()
 	copy[0] ^= 0xff
-	if revision.Digest() != digest || !revision.verify() {
+	if revision.Digest() != digest || revision.HandoffVersion() != BoundRevisionHandoffV1 || !revision.verify() {
 		t.Fatal("opaque copy mutated bound revision")
 	}
-	if (BoundRevision{}).verify() {
+	zero := BoundRevision{}
+	if zero.verify() || zero.HandoffVersion() != "" || zero.Digest() != ([sha256.Size]byte{}) || zero.OpaqueCopy() != nil {
 		t.Fatal("zero bound revision verified")
 	}
 	issuer := newBoundRevisionIssuer()

@@ -24,11 +24,13 @@ type Session interface {
 }
 
 type Configuration struct {
-	Backend                  Backend
-	Registry                 Registry
-	Outbox                   outbox.AppendPort[SessionBinding, BindingReceipt]
-	FinalAuthorizationAudit  FinalAuthorizationAuditPort
-	DurableEffectPreparation DurableEffectPreparationPort
+	Backend                     BackendContract
+	Registry                    Registry
+	Outbox                      outbox.AppendPort[SessionBinding, BindingReceipt]
+	FinalAuthorizationAudit     FinalAuthorizationAuditPort
+	FinalAuthorizationOperation BackendOperation[*FinalAuthorizationAuditOperation]
+	DurableEffectPreparation    DurableEffectPreparationPort
+	DurableEffectOperation      BackendOperation[*DurableEffectOperation]
 }
 
 // Report contains fixed, low-cardinality seam counters. PostgreSQL, OpenFGA,
@@ -56,27 +58,31 @@ type Report struct {
 
 type Coordinator struct {
 	backend                  Backend
+	backendContract          BackendContract
 	registry                 Registry
 	outbox                   outbox.AppendPort[SessionBinding, BindingReceipt]
 	scopes                   outbox.ScopeAuthority
 	finalAuthorizationAudit  FinalAuthorizationAuditPort
 	durableEffectPreparation DurableEffectPreparationPort
-	finalReadContract        PlanContract[*finalReadInvocation]
-	durableEffectContract    PlanContract[*durableEffectInvocation]
+	finalReadContract        PlanContract[*FinalAuthorizationAuditOperation]
+	durableEffectContract    PlanContract[*DurableEffectOperation]
 }
 
 func NewCoordinator(configuration Configuration) (*Coordinator, error) {
-	if isNil(configuration.Backend) || isNil(configuration.Outbox) || configuration.Registry.seal == nil {
+	if configuration.Backend.seal == nil || isNil(configuration.Backend.backend) || isNil(configuration.Outbox) ||
+		configuration.Registry.seal == nil || configuration.Registry.backend == nil ||
+		configuration.Registry.backend != configuration.Backend.seal {
 		return nil, fail(CodeInvalidContract)
 	}
 	coordinator := &Coordinator{
-		backend:                  configuration.Backend,
+		backend:                  configuration.Backend.backend,
+		backendContract:          configuration.Backend,
 		outbox:                   configuration.Outbox,
 		scopes:                   outbox.NewScopeAuthority(),
 		finalAuthorizationAudit:  configuration.FinalAuthorizationAudit,
 		durableEffectPreparation: configuration.DurableEffectPreparation,
 	}
-	reserved, err := coordinator.reservedTemplates()
+	reserved, err := coordinator.reservedTemplates(configuration.FinalAuthorizationOperation, configuration.DurableEffectOperation)
 	if err != nil {
 		return nil, fail(CodeInvalidContract)
 	}
@@ -88,16 +94,26 @@ func NewCoordinator(configuration Configuration) (*Coordinator, error) {
 	return coordinator, nil
 }
 
-func (coordinator *Coordinator) reservedTemplates() ([]PlanTemplate, error) {
+func (coordinator *Coordinator) reservedTemplates(finalOperation BackendOperation[*FinalAuthorizationAuditOperation], durableOperation BackendOperation[*DurableEffectOperation]) ([]PlanTemplate, error) {
+	if isNil(coordinator.finalAuthorizationAudit) {
+		finalOperation, _ = NewBackendOperation(coordinator.backendContract, FinalAuthorizationOwner, func(context.Context, Session, *FinalAuthorizationAuditOperation) error {
+			return fail(CodeBoundaryDenied)
+		})
+	} else if !backendOperationMatches(finalOperation, coordinator.backendContract.seal, FinalAuthorizationOwner) {
+		return nil, fail(CodeInvalidContract)
+	}
+	registeredFinal, err := NewRegisteredOperation(finalOperation, coordinator.finalizeReadParticipant)
+	if err != nil {
+		return nil, err
+	}
 	finalTemplate, finalContract, err := newPlanContract(
 		ContractVersionV1,
 		finalReadTemplateKey,
-		[]typedParticipantDefinition[*finalReadInvocation]{
+		[]typedParticipantDefinition[*FinalAuthorizationAuditOperation]{
 			{
 				key:                       "final_authorization_audit",
-				owner:                     FinalAuthorizationOwner,
 				declaresWrite:             true,
-				operation:                 coordinator.finalizeReadParticipant,
+				operation:                 registeredFinal,
 				logicalAuthorizationAudit: true,
 			},
 		},
@@ -106,15 +122,25 @@ func (coordinator *Coordinator) reservedTemplates() ([]PlanTemplate, error) {
 	if err != nil {
 		return nil, err
 	}
+	if isNil(coordinator.durableEffectPreparation) {
+		durableOperation, _ = NewBackendOperation(coordinator.backendContract, DurableEffectOwner, func(context.Context, Session, *DurableEffectOperation) error {
+			return fail(CodeDurableHandoffFail)
+		})
+	} else if !backendOperationMatches(durableOperation, coordinator.backendContract.seal, DurableEffectOwner) {
+		return nil, fail(CodeInvalidContract)
+	}
+	registeredDurable, err := NewRegisteredOperation(durableOperation, coordinator.prepareDurableEffectParticipant)
+	if err != nil {
+		return nil, err
+	}
 	durableTemplate, durableContract, err := newPlanContract(
 		ContractVersionV1,
 		durableEffectTemplateKey,
-		[]typedParticipantDefinition[*durableEffectInvocation]{
+		[]typedParticipantDefinition[*DurableEffectOperation]{
 			{
 				key:                  "durable_effect_preparation",
-				owner:                DurableEffectOwner,
 				declaresWrite:        true,
-				operation:            coordinator.prepareDurableEffectParticipant,
+				operation:            registeredDurable,
 				durableEffectHandoff: true,
 			},
 		},
@@ -137,6 +163,7 @@ const (
 
 type sessionState struct {
 	registry *registrySeal
+	backend  *backendSeal
 	plan     *planState
 	session  Session
 	active   atomic.Bool
@@ -148,10 +175,9 @@ type bindingState struct {
 	state   atomic.Uint32
 }
 
-// SessionBinding is an opaque, exact-call lease for one registered owner on
-// the one Session returned by this execution's Begin. An owner-authored typed
-// adapter consumes it only through Use; it cannot inspect, compare, retain,
-// validate, widen, or obtain the underlying session or lifecycle methods.
+// SessionBinding is the opaque WS-02-owned lease used only to enlist the
+// predeclared core outbox append in the exact Session returned by this
+// execution's Begin. Domain owner adapters receive OperationPort instead.
 type SessionBinding struct {
 	state *bindingState
 }
@@ -163,7 +189,7 @@ type BindingReceipt struct {
 	state *bindingState
 }
 
-// Use runs one exact synchronous owner-adapter operation. There is no
+// Use runs the one exact synchronous outbox storage operation. There is no
 // separable validity boolean: zero, copied, concurrent, retained, wrong-plan,
 // and post-return uses fail before invoking operation.
 func (binding SessionBinding) Use(operation func() error) (BindingReceipt, error) {
@@ -193,9 +219,9 @@ func (binding SessionBinding) close(receipt BindingReceipt) bool {
 	return binding.state.state.Swap(bindingClosed) == bindingConsumed && receipt.state == binding.state
 }
 
-// resolve is used only by the trusted WS-02 lifecycle/storage adapter to bind
-// its typed operation to the exact returned Session. Owner packages consume
-// only Use and never receive this resolver or the Session.
+// resolve is used only by the trusted WS-02 outbox storage adapter to bind its
+// append to the exact returned Session. Domain owner packages never receive a
+// SessionBinding, this resolver, or the Session.
 func (binding SessionBinding) resolve(owner string) (Session, bool) {
 	if binding.state == nil || binding.state.session == nil || binding.state.session.registry == nil || binding.state.owner != owner ||
 		binding.state.state.Load() != bindingRunning || !binding.state.session.active.Load() ||
@@ -284,7 +310,7 @@ func (coordinator *Coordinator) run(ctx context.Context, specification execution
 		return report, fail(CodeBeginFailed)
 	}
 
-	operation := &sessionState{registry: specification.registry, plan: specification.plan, session: session}
+	operation := &sessionState{registry: specification.registry, backend: coordinator.backendContract.seal, plan: specification.plan, session: session}
 	operation.active.Store(true)
 	defer operation.active.Store(false)
 
@@ -297,7 +323,6 @@ func (coordinator *Coordinator) run(ctx context.Context, specification execution
 		if err := contextFailure(ctx); err != nil {
 			return rollback(err)
 		}
-		binding := newSessionBinding(operation, participant.owner)
 		report.ParticipantCalls++
 		if participant.declaresWrite {
 			report.DeclaredWriteParticipantCalls++
@@ -308,9 +333,7 @@ func (coordinator *Coordinator) run(ctx context.Context, specification execution
 		if participant.durableEffectHandoff {
 			report.DurableEffectHandoffs++
 		}
-		receipt, err := safeParticipant(ctx, participant.operation, binding)
-		consumed := binding.close(receipt)
-		if err != nil || !consumed {
+		if err := safeParticipant(ctx, participant.operation, operation); err != nil {
 			return rollback(fail(CodeParticipantFailed))
 		}
 	}
@@ -391,14 +414,18 @@ func safeBegin(ctx context.Context, backend Backend) (session Session, err error
 	return backend.Begin(ctx)
 }
 
-func safeParticipant(ctx context.Context, operation func(context.Context, SessionBinding) (BindingReceipt, error), binding SessionBinding) (receipt BindingReceipt, err error) {
+func safeParticipant(ctx context.Context, operation func(context.Context, *sessionState) error, session *sessionState) (err error) {
 	defer func() {
 		if recover() != nil {
-			receipt = BindingReceipt{}
 			err = fail(CodeParticipantFailed)
 		}
 	}()
-	return operation(ctx, binding)
+	return operation(ctx, session)
+}
+
+func backendOperationMatches[T any](operation BackendOperation[T], backend *backendSeal, owner string) bool {
+	return operation.definition != nil && operation.definition.backend == backend && operation.definition.seal != nil &&
+		operation.definition.owner == owner && operation.definition.execute != nil
 }
 
 func safeAppend(ctx context.Context, appender outbox.AppendPort[SessionBinding, BindingReceipt], scope outbox.TransactionScope[SessionBinding, BindingReceipt], intent outbox.ValidatedIntent) (scopeReceipt outbox.ScopeReceipt[SessionBinding, BindingReceipt], bindingReceipt BindingReceipt, err error) {
