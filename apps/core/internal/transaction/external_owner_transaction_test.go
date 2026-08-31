@@ -203,6 +203,63 @@ func TestExternalOwnerNeverConsumedPortCannotStartInGoroutineAfterReturn(t *test
 	}
 }
 
+func TestExternalOwnerReturnWaitsForRunningBackendBeforeRollback(t *testing.T) {
+	harness := newExternalHarness(t)
+	backendEntered, releaseBackend := harness.backend.Block("running-after-owner-return")
+	portResult := make(chan error, 1)
+	ownerReturning := make(chan struct{})
+	operation := harness.registered(t, "organization", func(ctx context.Context, port transaction.OperationPort[testowneradapter.Command], _ testowneradapter.Command) error {
+		go func() { portResult <- port.Execute(ctx) }()
+		<-backendEntered
+		close(ownerReturning)
+		return nil
+	})
+	template, contract := externalTemplate(t, "external_running_after_return", operation)
+	coordinator, registry := externalCoordinator(t, harness, template)
+	plan, err := contract.Bind(registry, testowneradapter.Command{Value: "running-after-owner-return"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	coordinatorResult := make(chan error, 1)
+	go func() {
+		_, executeErr := coordinator.Execute(context.Background(), plan)
+		coordinatorResult <- executeErr
+	}()
+	awaitSignal(t, ownerReturning, "owner did not return while backend was running")
+
+	select {
+	case executeErr := <-coordinatorResult:
+		t.Fatalf("coordinator reached rollback while backend was running: %v", executeErr)
+	case <-time.After(100 * time.Millisecond):
+	}
+	select {
+	case executeErr := <-portResult:
+		t.Fatalf("port returned while backend was blocked: %v", executeErr)
+	default:
+	}
+	committed, rolledBack, active, executed := harness.backend.Snapshot()
+	begins, commits, rollbacks := harness.backend.Lifecycle()
+	if len(committed) != 0 || len(rolledBack) != 0 || active != 1 || executed["organization"] != 1 ||
+		begins != 1 || commits != 0 || rollbacks != 0 {
+		t.Fatalf("premature lifecycle commit=%v rollback=%v active=%d executed=%v lifecycle=%d/%d/%d", committed, rolledBack, active, executed, begins, commits, rollbacks)
+	}
+
+	releaseBackend()
+	if executeErr := <-portResult; transaction.ErrorCodeOf(executeErr) != transaction.CodeParticipantFailed {
+		t.Fatalf("late port completion error = %v", executeErr)
+	}
+	if executeErr := <-coordinatorResult; transaction.ErrorCodeOf(executeErr) != transaction.CodeParticipantFailed {
+		t.Fatalf("coordinator error = %v", executeErr)
+	}
+	committed, rolledBack, active, executed = harness.backend.Snapshot()
+	begins, commits, rollbacks = harness.backend.Lifecycle()
+	if len(committed) != 0 || len(rolledBack) != 1 || rolledBack[0].Value != "running-after-owner-return" ||
+		active != 0 || executed["organization"] != 1 || begins != 1 || commits != 0 || rollbacks != 1 {
+		t.Fatalf("completed lifecycle commit=%v rollback=%v active=%d executed=%v lifecycle=%d/%d/%d", committed, rolledBack, active, executed, begins, commits, rollbacks)
+	}
+}
+
 func TestExternalOwnerCrossSessionAndCrossOwnerPortSubstitutionFailBeforeRepository(t *testing.T) {
 	for _, testCase := range []struct {
 		name   string
