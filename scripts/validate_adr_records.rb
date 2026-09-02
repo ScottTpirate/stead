@@ -87,7 +87,7 @@ EXPECTED_REQUIREMENT_TEST_LINKS = {
 # Close the complete ADR-0009 Decision body so a semantic weakening cannot
 # retain valid traceability merely by preserving test names and review rows.
 ADR_0009_DECISION_BODY_SHA256 =
-  "d1cb0089d38a16ad9b100df6efe7863d786159223f595abc027a8b5227a8163c".freeze
+  "f869f904dfec8ba736e587434894c2e040fe4fb6fe8f01abfd6b9bbbc0a5af06".freeze
 
 EXPECTED_P1_006_ADR_CANDIDATES = %w[
   ADR-CAND-002
@@ -804,6 +804,22 @@ paths.each do |path|
       "apply-revert ABA admitted" => source.sub(
         "Without such proof, snapshot comparison guides containment only; the original permit remains `reconciling`",
         "Without such proof, a complete current snapshot may terminalize success or `failed_without_effect`"
+      ),
+      "initiating principal omitted from bounded scope" => source.sub(
+        "binding the acting service principal, initiating principal when relevant",
+        "binding only the acting service principal"
+      ),
+      "provider output widens read plan" => source.sub(
+        "It cannot be widened or renewed from provider output.",
+        "Provider pagination may widen and renew the scope."
+      ),
+      "read scope authorizes mutation" => source.sub(
+        "freshly authorize that effect, commit its own one-use `AuthorizationEffectPermit`",
+        "reuse the read scope as authorization for that effect"
+      ),
+      "final canonical acceptance fence removed" => source.sub(
+        "then compare final activation, authorization, provider-enforcement, resource, and operation revisions inside the owning transaction",
+        "then accept the provider result without another revision comparison"
       )
     }
     security_mutations.each do |label, mutated_source|
@@ -977,8 +993,8 @@ end
 unless adr_0009_review_mutation_survivors.empty?
   failures << "ADR-0009 review-separation mutation survivors: #{adr_0009_review_mutation_survivors.join(', ')}"
 end
-unless adr_0009_security_mutation_count == 6
-  failures << "ADR-0009 semantic-security mutation inventory must contain exactly 6 cases, found #{adr_0009_security_mutation_count}"
+unless adr_0009_security_mutation_count == 10
+  failures << "ADR-0009 semantic-security mutation inventory must contain exactly 10 cases, found #{adr_0009_security_mutation_count}"
 end
 unless adr_0009_security_mutation_survivors.empty?
   failures << "ADR-0009 semantic-security mutation survivors: #{adr_0009_security_mutation_survivors.join(', ')}"
@@ -1881,7 +1897,7 @@ if failures.empty?
   puts "ADR-0007 exact-mapping mutation guard: PASS (#{adr_0007_killed_mutations}/#{adr_0007_expected_edges.length} required edge deletions killed)"
   puts "ADR-0009 exact-mapping mutation guard: PASS (#{adr_0009_killed_mutations}/#{adr_0009_expected_edges.length} required edge deletions killed)"
   puts "ADR-0009 review-separation mutation guard: PASS (#{adr_0009_review_mutation_count}/4 mutations killed)"
-  puts "ADR-0009 semantic-security mutation guard: PASS (#{adr_0009_security_mutation_count}/6 mutations killed)"
+  puts "ADR-0009 semantic-security mutation guard: PASS (#{adr_0009_security_mutation_count}/10 mutations killed)"
   puts "ADR traceability validation: PASS (records=#{paths.length}, requirements=#{known_requirement_ids.length}, tests=#{all_test_owners.length})"
 else
   warn "ADR traceability validation: FAIL (#{failures.length} issue#{failures.length == 1 ? '' : 's'})"

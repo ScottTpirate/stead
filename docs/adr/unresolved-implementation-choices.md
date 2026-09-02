@@ -27,7 +27,7 @@ Phase 0 fixed each candidate's non-negotiable boundary without selecting its phy
 
 | Candidate | Proposed decision | Required decision-time review |
 |---|---|---|
-| `ADR-CAND-008` Provider reconciliation conflict semantics | [ADR-0009](./0009-gitea-provider-reconciliation-precedence-and-conflict-handling.md) proposes closed field precedence, webhook-as-dirty-notification, per-call authorization-effect permits, deterministic accept/reset/quarantine, bounded scheduled reconciliation, and ambiguity-preserving recovery. | WS-03 ownership plus WS-01, WS-02, WS-06, WS-07, WS-12, and distinct independent WS-13 QA/security reviews must accept one immutable revision before dependent implementation. Project-owner approval is not required unless review changes a locked or project-owner-controlled contract. |
+| `ADR-CAND-008` Provider reconciliation conflict semantics | [ADR-0009](./0009-gitea-provider-reconciliation-precedence-and-conflict-handling.md) proposes closed field precedence, webhook-as-dirty-notification, one fresh bounded logical-operation authorization scope, durable permits only for mutations and other external effects, deterministic accept/reset/quarantine, bounded scheduled reconciliation, and ambiguity-preserving recovery. | WS-03 ownership plus WS-01, WS-02, WS-06, WS-07, WS-12, and distinct independent WS-13 QA/security reviews must accept one immutable revision before dependent implementation. Project-owner approval is not required unless review changes a locked or project-owner-controlled contract. |
 
 ## Deferred choices required before dependent implementation
 
