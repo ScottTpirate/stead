@@ -2,9 +2,13 @@
 # frozen_string_literal: true
 
 require "digest"
+require "date"
+require "fileutils"
 require "json"
+require "open3"
 require "pathname"
 require "set"
+require "tmpdir"
 require "yaml"
 
 ROOT = Pathname.new(__dir__).parent.expand_path
@@ -295,12 +299,94 @@ ADR_0008_DECISION_BODY_SHA256 =
 # only the exact status/resolution pair and the trailing review records; those
 # forms normalize to fixed sentinels before the closed digest is checked.
 ADR_0008_PROPOSED_STATUS_LINE = "- **Status:** Proposed\n".freeze
-ADR_0008_ACCEPTED_STATUS_PATTERN =
-  /\A- \*\*Status:\*\* Accepted at immutable decision revision `[0-9a-f]{40}` on [0-9]{4}-[0-9]{2}-[0-9]{2}\n\z/
 ADR_0008_PROPOSED_RESOLUTION_LINE =
   "- **Resolves on acceptance:** `ADR-CAND-006`\n".freeze
 ADR_0008_ACCEPTED_RESOLUTION_LINE = "- **Resolves:** `ADR-CAND-006`\n".freeze
 ADR_0008_REVIEWS_HEADING = "## Reviews and approvals\n".freeze
+ADR_0008_REVIEW_TABLE_HEADER =
+  "| Role | Identity | Decision revision | Disposition | Evidence |\n".freeze
+ADR_0008_REVIEW_TABLE_SEPARATOR = "|---|---|---|---|---|\n".freeze
+ADR_0008_DECISION_AUTHOR_IDENTITY = "/root/adr_cand_006".freeze
+ADR_0008_DECISION_AUTHOR_ROLE = "Decision author (WS-07)".freeze
+ADR_0008_ACCEPTANCE_GATE_PATH = "docs/governance/adr-0008-acceptance-gate.yaml".freeze
+ADR_0008_ACCEPTANCE_RECORD_PATH = "docs/governance/adr-0008-approval-record.md".freeze
+ADR_0008_ACCEPTANCE_ONLY_PATHS = Set[
+  "docs/adr/0008-nats-stream-subject-retention-replay-ordering-and-dlq.md",
+  "docs/adr/INDEX.md",
+  "docs/adr/unresolved-implementation-choices.md",
+  ADR_0008_ACCEPTANCE_GATE_PATH,
+  ADR_0008_ACCEPTANCE_RECORD_PATH,
+  "docs/governance/adr-candidate-index.md",
+  "docs/planning/epic-issue-hierarchy.md",
+  "docs/planning/implementation-issue-catalog.yaml"
+].freeze
+ADR_0008_REVIEW_ROLES = [
+  {
+    key: "WS-07-events-workers",
+    label: "Event/worker owner (WS-07, non-author)",
+    pending_evidence: "Partition, delivery, replay, audit, and worker ownership review required"
+  },
+  {
+    key: "WS-01-architecture",
+    label: "Architecture and standards (WS-01, non-author)",
+    pending_evidence: "Topology, portability, compatibility, and supersession review required"
+  },
+  {
+    key: "WS-02-core-outbox",
+    label: "Core/outbox integration owner (WS-02, non-author)",
+    pending_evidence: "Atomic outbox, delivery port, fence, and failure-boundary review required"
+  },
+  {
+    key: "WS-06-security-contract",
+    label: "Authorization/classification/security owner (WS-06, non-author)",
+    pending_evidence: "Authorization, classification, isolation, and non-disclosure review required"
+  },
+  {
+    key: "WS-08-projection-consumer",
+    label: "Search/projection consumer owner (WS-08, non-author)",
+    pending_evidence: "Projection ordering, rebuild, lag, and visibility review required"
+  },
+  {
+    key: "WS-12-deployment-operations",
+    label: "Operations/backup/restore owner (WS-12, non-author)",
+    pending_evidence: "Provisioning, TLS, storage, capacity, recovery, and rollback review required"
+  },
+  {
+    key: "WS-13-independent-qa",
+    label: "Independent QA and traceability (distinct WS-13 identity)",
+    pending_evidence: "Exact mapping, mutation, performance, and release-evidence review required"
+  },
+  {
+    key: "WS-13-independent-security",
+    label: "Independent security (distinct WS-13 identity)",
+    pending_evidence: "Fail-closed transport, authority, payload, replay, and DLQ review required"
+  },
+  {
+    key: "project-owner",
+    label: "Project owner",
+    pending_evidence: "Not required unless review changes a locked or project-owner-controlled decision"
+  }
+].map(&:freeze).freeze
+ADR_0008_PENDING_REVIEW_ROWS = (
+  [
+    {
+      role: ADR_0008_DECISION_AUTHOR_ROLE,
+      identity: ADR_0008_DECISION_AUTHOR_IDENTITY,
+      revision: "pending exact immutable revision",
+      disposition: "PROPOSED",
+      evidence: "Authored decision candidate; author cannot approve"
+    }
+  ] + ADR_0008_REVIEW_ROLES.map do |role|
+    project_owner = role.fetch(:key) == "project-owner"
+    {
+      role: role.fetch(:label),
+      identity: project_owner ? "not required for this conforming selection" : "pending non-author reviewer",
+      revision: "pending exact immutable revision",
+      disposition: project_owner ? "NOT_REQUIRED" : "PENDING",
+      evidence: role.fetch(:pending_evidence)
+    }
+  end
+).map(&:freeze).freeze
 ADR_0008_NORMALIZED_STATUS_LINE =
   "- **Status:** <normalized-proposed-or-accepted-immutable-revision>\n".freeze
 ADR_0008_NORMALIZED_RESOLUTION_LINE = "- **Resolution:** `ADR-CAND-006`\n".freeze
@@ -637,7 +723,433 @@ def markdown_heading_structure(source)
   }
 end
 
-def adr_0008_substantive_source_failures(adr_source)
+def adr_0008_review_table_source(rows)
+  body = +"\n#{ADR_0008_REVIEW_TABLE_HEADER}#{ADR_0008_REVIEW_TABLE_SEPARATOR}"
+  rows.each do |row|
+    body << "| #{row.fetch(:role)} | `#{row.fetch(:identity)}` | `#{row.fetch(:revision)}` | " \
+            "#{row.fetch(:disposition)} | #{row.fetch(:evidence)} |\n"
+  end
+  body
+end
+
+def adr_0008_acceptance_metadata_failures(metadata)
+  failures = []
+  unless metadata.is_a?(Hash)
+    return ["ADR-0008 accepted state requires exact acceptance metadata"]
+  end
+
+  expected_keys = Set[
+    :immutable_revision,
+    :immutable_tree,
+    :accepted_at,
+    :approval_record_path,
+    :decision_author_identity,
+    :approval_records
+  ]
+  unless metadata.keys.to_set == expected_keys
+    failures << "ADR-0008 acceptance metadata must contain exactly #{expected_keys.to_a.sort.join(', ')}"
+  end
+
+  revision = metadata[:immutable_revision]
+  tree = metadata[:immutable_tree]
+  accepted_at = metadata[:accepted_at]
+  author_identity = metadata[:decision_author_identity]
+  approval_record_path = metadata[:approval_record_path]
+  records = metadata[:approval_records]
+
+  failures << "ADR-0008 acceptance metadata immutable revision must be one exact SHA" unless revision&.match?(/\A[0-9a-f]{40}\z/)
+  failures << "ADR-0008 acceptance metadata immutable tree must be one exact SHA" unless tree&.match?(/\A[0-9a-f]{40}\z/)
+  begin
+    failures << "ADR-0008 acceptance metadata accepted_at must be canonical YYYY-MM-DD" unless Date.iso8601(accepted_at).iso8601 == accepted_at
+    failures << "ADR-0008 acceptance metadata accepted_at cannot be in the future" if Date.iso8601(accepted_at) > Date.today
+  rescue ArgumentError, TypeError
+    failures << "ADR-0008 acceptance metadata accepted_at must be canonical YYYY-MM-DD"
+  end
+  unless author_identity == ADR_0008_DECISION_AUTHOR_IDENTITY
+    failures << "ADR-0008 acceptance metadata must bind the exact decision-author identity"
+  end
+  unless approval_record_path == ADR_0008_ACCEPTANCE_RECORD_PATH
+    failures << "ADR-0008 acceptance metadata must use #{ADR_0008_ACCEPTANCE_RECORD_PATH}"
+  end
+  unless records.is_a?(Array)
+    failures << "ADR-0008 acceptance metadata approval_records must be an ordered array"
+    return failures
+  end
+
+  expected_roles = ADR_0008_REVIEW_ROLES.map { |role| role.fetch(:key) }
+  actual_roles = records.filter_map { |record| record["role"] if record.is_a?(Hash) }
+  unless actual_roles == expected_roles
+    failures << "ADR-0008 acceptance metadata must name every exact review role once in canonical order"
+  end
+
+  records.each_with_index do |record, index|
+    context = "ADR-0008 acceptance metadata approval_records[#{index}]"
+    unless record.is_a?(Hash)
+      failures << "#{context} must be a mapping"
+      next
+    end
+    expected_record_keys = Set["role", "identity", "decision_revision", "disposition", "evidence"]
+    unless record.keys.to_set == expected_record_keys
+      failures << "#{context} must contain exactly role, identity, decision_revision, disposition, evidence"
+    end
+
+    role_key = record["role"]
+    role = ADR_0008_REVIEW_ROLES.find { |entry| entry.fetch(:key) == role_key }
+    next unless role
+
+    identity = record["identity"]
+    disposition = record["disposition"]
+    evidence = record["evidence"]
+    expected_disposition = role_key == "project-owner" ? "NOT_REQUIRED" : "APPROVED"
+    unless disposition == expected_disposition
+      failures << "#{context}.disposition must be #{expected_disposition}"
+    end
+    unless record["decision_revision"] == revision
+      failures << "#{context}.decision_revision must bind the exact accepted immutable revision"
+    end
+    if role_key == "project-owner"
+      unless identity == "not required for this conforming selection"
+        failures << "#{context}.identity must preserve the exact not-required disposition"
+      end
+    elsif !identity.is_a?(String) ||
+          !identity.match?(/\A\/root\/[a-z0-9](?:[a-z0-9_-]*[a-z0-9])?(?:\/[a-z0-9](?:[a-z0-9_-]*[a-z0-9])?)*\z/) ||
+          identity.bytesize > 134
+      failures << "#{context}.identity must be one bounded non-author reviewer identity"
+    elsif identity == ADR_0008_DECISION_AUTHOR_IDENTITY
+      failures << "#{context}.identity must not be the decision author"
+    end
+    expected_evidence_pattern = if role_key == "project-owner"
+                                  /\Aadr-0008-project-owner-not-required\z/
+                                else
+                                  /\Agithub-(?:pr|issue)-[1-9][0-9]*-comment-[1-9][0-9]*\z/
+                                end
+    unless evidence.is_a?(String) && evidence.match?(expected_evidence_pattern)
+      failures << "#{context}.evidence must be one bounded immutable evidence reference"
+    end
+  end
+
+  records_by_role = records.select { |record| record.is_a?(Hash) }.to_h { |record| [record["role"], record] }
+  qa = records_by_role["WS-13-independent-qa"]
+  security = records_by_role["WS-13-independent-security"]
+  if qa && security
+    if qa["identity"] == security["identity"] || qa["identity"] == author_identity || security["identity"] == author_identity
+      failures << "ADR-0008 independent QA and security must be distinct non-author identities"
+    end
+    if qa["evidence"] == security["evidence"]
+      failures << "ADR-0008 independent QA and security must carry distinct exact evidence references"
+    end
+  end
+  failures
+end
+
+def adr_0008_acceptance_gate_source(state:, metadata: nil)
+  source = +<<~YAML
+    schema_version: "1.0"
+    adr_id: ADR-0008
+    candidate_id: ADR-CAND-006
+    state: #{state == :accepted ? 'ACCEPTED' : 'PROPOSED'}
+    decision_author_identity: #{ADR_0008_DECISION_AUTHOR_IDENTITY}
+  YAML
+  if state == :accepted
+    source << "immutable_revision: #{metadata.fetch(:immutable_revision)}\n"
+    source << "immutable_tree: #{metadata.fetch(:immutable_tree)}\n"
+    source << "accepted_at: \"#{metadata.fetch(:accepted_at)}\"\n"
+  else
+    source << "immutable_revision: null\n"
+    source << "immutable_tree: null\n"
+    source << "accepted_at: null\n"
+  end
+  source << "approval_record_path: #{ADR_0008_ACCEPTANCE_RECORD_PATH}\n"
+  if state == :accepted
+    source << "approval_records:\n"
+    metadata.fetch(:approval_records).each do |record|
+      source << "  - role: #{record.fetch('role')}\n"
+      source << "    identity: #{record.fetch('identity')}\n"
+      source << "    decision_revision: #{record.fetch('decision_revision')}\n"
+      source << "    disposition: #{record.fetch('disposition')}\n"
+      source << "    evidence: #{record.fetch('evidence')}\n"
+    end
+  else
+    source << "approval_records: []\n"
+  end
+  source
+end
+
+ADR_0008_PROPOSED_ACCEPTANCE_GATE_SOURCE = adr_0008_acceptance_gate_source(state: :proposed).freeze
+
+def adr_0008_acceptance_gate_state(document, source)
+  failures = []
+  expected_keys = %w[
+    schema_version
+    adr_id
+    candidate_id
+    state
+    decision_author_identity
+    immutable_revision
+    immutable_tree
+    accepted_at
+    approval_record_path
+    approval_records
+  ]
+  unless document.is_a?(Hash) && document.keys == expected_keys
+    failures << "#{ADR_0008_ACCEPTANCE_GATE_PATH}: must contain the exact ordered closed gate fields"
+    return [:invalid, nil, failures]
+  end
+  {
+    "schema_version" => "1.0",
+    "adr_id" => "ADR-0008",
+    "candidate_id" => "ADR-CAND-006",
+    "decision_author_identity" => ADR_0008_DECISION_AUTHOR_IDENTITY,
+    "approval_record_path" => ADR_0008_ACCEPTANCE_RECORD_PATH
+  }.each do |field, expected|
+    failures << "#{ADR_0008_ACCEPTANCE_GATE_PATH}: #{field} must equal #{expected.inspect}" unless document[field] == expected
+  end
+
+  case document["state"]
+  when "PROPOSED"
+    unless document["immutable_revision"].nil? && document["immutable_tree"].nil? &&
+           document["accepted_at"].nil? && document["approval_records"] == []
+      failures << "#{ADR_0008_ACCEPTANCE_GATE_PATH}: proposed state cannot carry acceptance metadata"
+    end
+    unless source == ADR_0008_PROPOSED_ACCEPTANCE_GATE_SOURCE
+      failures << "#{ADR_0008_ACCEPTANCE_GATE_PATH}: proposed record must match the exact closed byte form"
+    end
+    [:proposed, nil, failures]
+  when "ACCEPTED"
+    metadata = {
+      immutable_revision: document["immutable_revision"],
+      immutable_tree: document["immutable_tree"],
+      accepted_at: document["accepted_at"],
+      approval_record_path: document["approval_record_path"],
+      decision_author_identity: document["decision_author_identity"],
+      approval_records: document["approval_records"]
+    }
+    failures.concat(adr_0008_acceptance_metadata_failures(metadata))
+    if failures.empty? && source != adr_0008_acceptance_gate_source(state: :accepted, metadata: metadata)
+      failures << "#{ADR_0008_ACCEPTANCE_GATE_PATH}: accepted record must match the exact closed byte form"
+    end
+    [:accepted, metadata, failures]
+  else
+    failures << "#{ADR_0008_ACCEPTANCE_GATE_PATH}: state must be PROPOSED or ACCEPTED"
+    [:invalid, nil, failures]
+  end
+end
+
+def adr_0008_git_capture(root, *arguments)
+  Open3.capture3("git", *arguments, chdir: root.to_s)
+end
+
+def adr_0008_acceptance_history_failures(metadata, gate_source:, root: ROOT)
+  failures = []
+  revision = metadata.fetch(:immutable_revision)
+  expected_tree = metadata.fetch(:immutable_tree)
+  accepted_at = metadata.fetch(:accepted_at)
+
+  _stdout, _stderr, object_status = adr_0008_git_capture(root, "cat-file", "-e", "#{revision}^{commit}")
+  unless object_status.success?
+    return ["ADR-0008 accepted immutable revision #{revision} is not a repository commit"]
+  end
+  tree_stdout, _tree_stderr, tree_status = adr_0008_git_capture(root, "rev-parse", "#{revision}^{tree}")
+  unless tree_status.success? && tree_stdout.strip == expected_tree
+    failures << "ADR-0008 accepted immutable tree must equal the exact tree of #{revision}"
+  end
+  _ancestor_stdout, _ancestor_stderr, ancestor_status = adr_0008_git_capture(
+    root,
+    "merge-base",
+    "--is-ancestor",
+    revision,
+    "HEAD"
+  )
+  failures << "ADR-0008 accepted immutable revision must be an ancestor of HEAD" unless ancestor_status.success?
+
+  date_stdout, _date_stderr, date_status = adr_0008_git_capture(root, "show", "-s", "--format=%cs", revision)
+  if !date_status.success?
+    failures << "ADR-0008 accepted immutable revision date could not be verified"
+  elsif Date.iso8601(date_stdout.strip) > Date.iso8601(accepted_at)
+    failures << "ADR-0008 accepted_at cannot precede the immutable decision revision"
+  end
+
+  proposal_gate_stdout, _proposal_gate_stderr, proposal_gate_status = adr_0008_git_capture(
+    root,
+    "show",
+    "#{revision}:#{ADR_0008_ACCEPTANCE_GATE_PATH}"
+  )
+  unless proposal_gate_status.success? && proposal_gate_stdout == ADR_0008_PROPOSED_ACCEPTANCE_GATE_SOURCE
+    failures << "ADR-0008 immutable decision revision must contain the exact proposed acceptance gate"
+  end
+
+  adr_path = "docs/adr/0008-nats-stream-subject-retention-replay-ordering-and-dlq.md"
+  proposal_adr_stdout, _proposal_adr_stderr, proposal_adr_status = adr_0008_git_capture(
+    root,
+    "show",
+    "#{revision}:#{adr_path}"
+  )
+  if !proposal_adr_status.success?
+    failures << "ADR-0008 immutable decision revision does not contain the decision record"
+  else
+    proposal_failures = adr_0008_substantive_source_failures(proposal_adr_stdout)
+    unless proposal_failures.empty?
+      failures << "ADR-0008 immutable decision revision is not the exact closed proposed decision: #{proposal_failures.join('; ')}"
+    end
+  end
+
+  commits_stdout, _commits_stderr, commits_status = adr_0008_git_capture(
+    root,
+    "rev-list",
+    "--reverse",
+    "--ancestry-path",
+    "#{revision}..HEAD",
+    "--",
+    ADR_0008_ACCEPTANCE_GATE_PATH
+  )
+  unless commits_status.success?
+    failures << "ADR-0008 acceptance transition history could not be enumerated"
+    return failures
+  end
+  acceptance_commit = commits_stdout.lines.map(&:strip).find do |commit|
+    candidate_source, _candidate_stderr, candidate_status = adr_0008_git_capture(
+      root,
+      "show",
+      "#{commit}:#{ADR_0008_ACCEPTANCE_GATE_PATH}"
+    )
+    candidate_status.success? && candidate_source == gate_source
+  end
+  unless acceptance_commit
+    failures << "ADR-0008 accepted gate must originate in a reachable acceptance commit"
+    return failures
+  end
+
+  parents_stdout, _parents_stderr, parents_status = adr_0008_git_capture(
+    root,
+    "show",
+    "-s",
+    "--format=%P",
+    acceptance_commit
+  )
+  parents = parents_status.success? ? parents_stdout.split : []
+  unless parents == [revision]
+    failures << "ADR-0008 acceptance commit must directly descend from the immutable decision revision"
+  end
+
+  paths_stdout, _paths_stderr, paths_status = adr_0008_git_capture(
+    root,
+    "diff",
+    "--name-only",
+    "--diff-filter=ACDMRTUXB",
+    revision,
+    acceptance_commit
+  )
+  if !paths_status.success?
+    failures << "ADR-0008 acceptance commit scope could not be verified"
+  else
+    changed_paths = paths_stdout.lines.map(&:strip).reject(&:empty?).to_set
+    required_paths = Set[
+      adr_path,
+      "docs/adr/INDEX.md",
+      ADR_0008_ACCEPTANCE_GATE_PATH,
+      ADR_0008_ACCEPTANCE_RECORD_PATH,
+      "docs/governance/adr-candidate-index.md",
+      "docs/planning/implementation-issue-catalog.yaml"
+    ]
+    missing_paths = required_paths - changed_paths
+    extra_paths = changed_paths - ADR_0008_ACCEPTANCE_ONLY_PATHS
+    failures << "ADR-0008 acceptance commit is missing required gate records: #{missing_paths.to_a.sort.join(', ')}" unless missing_paths.empty?
+    failures << "ADR-0008 acceptance commit changes non-record paths: #{extra_paths.to_a.sort.join(', ')}" unless extra_paths.empty?
+  end
+  failures
+rescue ArgumentError => e
+  ["ADR-0008 acceptance history metadata is invalid: #{e.message}"]
+end
+
+def adr_0008_accepted_review_rows(metadata)
+  revision = metadata.fetch(:immutable_revision)
+  author_identity = metadata.fetch(:decision_author_identity)
+  records = metadata.fetch(:approval_records).to_h { |record| [record.fetch("role"), record] }
+  author_row = {
+    role: ADR_0008_DECISION_AUTHOR_ROLE,
+    identity: author_identity,
+    revision: revision,
+    disposition: "PROPOSED",
+    evidence: "Authored decision candidate; author did not approve"
+  }
+  review_rows = ADR_0008_REVIEW_ROLES.map do |role|
+    record = records.fetch(role.fetch(:key))
+    {
+      role: role.fetch(:label),
+      identity: record.fetch("identity"),
+      revision: record.fetch("decision_revision"),
+      disposition: record.fetch("disposition"),
+      evidence: record.fetch("evidence")
+    }
+  end
+  [author_row, *review_rows]
+end
+
+def adr_0008_review_record_failures(review_body, state:, metadata:)
+  failures = []
+  metadata_failures = state == :accepted ? adr_0008_acceptance_metadata_failures(metadata) : []
+  failures.concat(metadata_failures)
+  rows = if state == :accepted && metadata_failures.empty?
+           adr_0008_accepted_review_rows(metadata)
+         else
+           ADR_0008_PENDING_REVIEW_ROWS
+         end
+  expected_body = adr_0008_review_table_source(rows)
+  return failures if review_body == expected_body
+
+  failures << "ADR-0008 Reviews and approvals must match the closed #{state} review-record table grammar"
+  actual_table_rows = review_body.lines.filter_map do |line|
+    next unless line.start_with?("|") && line != ADR_0008_REVIEW_TABLE_HEADER && line != ADR_0008_REVIEW_TABLE_SEPARATOR
+
+    cells = line.split("|", -1)[1...-1]&.map(&:strip)
+    cells if cells&.length == 5
+  end
+  actual_roles = actual_table_rows.map(&:first)
+  expected_roles = rows.map { |row| row.fetch(:role) }
+  missing_roles = expected_roles - actual_roles
+  extra_roles = actual_roles - expected_roles
+  duplicate_roles = actual_roles.tally.select { |_role, count| count > 1 }.keys
+  failures << "ADR-0008 Reviews and approvals missing exact roles: #{missing_roles.join(', ')}" unless missing_roles.empty?
+  failures << "ADR-0008 Reviews and approvals contain unknown roles: #{extra_roles.join(', ')}" unless extra_roles.empty?
+  failures << "ADR-0008 Reviews and approvals duplicate roles: #{duplicate_roles.join(', ')}" unless duplicate_roles.empty?
+  failures
+end
+
+def adr_0008_accepted_status_line(metadata)
+  "- **Status:** Accepted at immutable decision revision `#{metadata.fetch(:immutable_revision)}` " \
+    "on #{metadata.fetch(:accepted_at)}\n"
+end
+
+def adr_0008_approval_record_source(metadata)
+  source = +<<~MARKDOWN
+    # ADR-0008 approval record
+
+    Status: **APPROVED**
+
+    - **ADR candidate:** `ADR-CAND-006`
+    - **Decision record:** `docs/adr/0008-nats-stream-subject-retention-replay-ordering-and-dlq.md`
+    - **Immutable decision revision:** `#{metadata.fetch(:immutable_revision)}`
+    - **Immutable decision tree:** `#{metadata.fetch(:immutable_tree)}`
+    - **Accepted at:** #{metadata.fetch(:accepted_at)}
+
+    ## Exact-revision dispositions
+  MARKDOWN
+  source.chomp + "\n" +
+    adr_0008_review_table_source(adr_0008_accepted_review_rows(metadata).drop(1))
+end
+
+def adr_0008_approval_record_failures(source, metadata)
+  failures = adr_0008_acceptance_metadata_failures(metadata)
+  return failures unless failures.empty?
+
+  revision = metadata.fetch(:immutable_revision)
+  unless source == adr_0008_approval_record_source(metadata)
+    failures << "#{ADR_0008_ACCEPTANCE_RECORD_PATH}: complete approval record must match the closed exact-revision form for #{revision}"
+  end
+  failures
+end
+
+def adr_0008_substantive_source_failures(adr_source, accepted_record_metadata: nil)
   failures = []
   status_lines = adr_source.lines.select { |line| line.start_with?("- **Status:**") }
   if status_lines.length != 1
@@ -646,14 +1158,20 @@ def adr_0008_substantive_source_failures(adr_source)
   end
 
   status_line = status_lines.first
-  state = if status_line == ADR_0008_PROPOSED_STATUS_LINE
-            :proposed
-          elsif status_line.match?(ADR_0008_ACCEPTED_STATUS_PATTERN)
-            :accepted
-          end
+  accepted_shape = status_line.start_with?("- **Status:** Accepted at immutable decision revision ")
+  state = status_line == ADR_0008_PROPOSED_STATUS_LINE ? :proposed : (accepted_shape ? :accepted : nil)
   unless state
     failures << "ADR-0008 status must use the exact Proposed or Accepted immutable-revision form"
     return failures
+  end
+  if state == :proposed && accepted_record_metadata
+    failures << "ADR-0008 proposal status cannot carry accepted-record metadata"
+  elsif state == :accepted
+    metadata_failures = adr_0008_acceptance_metadata_failures(accepted_record_metadata)
+    failures.concat(metadata_failures)
+    if metadata_failures.empty? && status_line != adr_0008_accepted_status_line(accepted_record_metadata)
+      failures << "ADR-0008 accepted status must bind the exact metadata immutable revision and accepted_at date"
+    end
   end
 
   resolution_lines = adr_source.lines.select do |line|
@@ -683,11 +1201,13 @@ def adr_0008_substantive_source_failures(adr_source)
 
   review_match = review_matches.first
   review_body = adr_source[review_match.end(0)..]
-  if review_body.match?(/^ {0,3}[#]{1,2}[ \t]+|^<h[12](?:[ \t>])/i) ||
-     review_body.each_line.each_cons(2).any? { |_line, underline| underline.match?(/^ {0,3}(?:=+|-+)[ \t]*\n?$/) }
-    failures << "ADR-0008 Reviews and approvals must remain the trailing level-two section"
-    return failures
-  end
+  failures.concat(
+    adr_0008_review_record_failures(
+      review_body,
+      state: state,
+      metadata: accepted_record_metadata
+    )
+  )
 
   normalized_source = adr_source.sub(status_line, ADR_0008_NORMALIZED_STATUS_LINE)
                                 .sub(expected_resolution, ADR_0008_NORMALIZED_RESOLUTION_LINE)
@@ -755,8 +1275,11 @@ def adr_0008_raw_decision_body_failures(adr_source)
   failures
 end
 
-def adr_0008_security_decision_site_failures(adr_source)
-  failures = adr_0008_substantive_source_failures(adr_source)
+def adr_0008_security_decision_site_failures(adr_source, accepted_record_metadata: nil)
+  failures = adr_0008_substantive_source_failures(
+    adr_source,
+    accepted_record_metadata: accepted_record_metadata
+  )
   failures.concat(adr_0008_raw_decision_body_failures(adr_source))
   structure = markdown_heading_structure(adr_source)
   decision_heading = ADR_0008_DECISION_HEADING
@@ -822,8 +1345,11 @@ def adr_0008_security_decision_site_failures(adr_source)
   failures
 end
 
-def adr_0008_security_contract_failures(adr_source:, asyncapi:, bypass_source:)
-  failures = adr_0008_security_decision_site_failures(adr_source)
+def adr_0008_security_contract_failures(adr_source:, asyncapi:, bypass_source:, accepted_record_metadata: nil)
+  failures = adr_0008_security_decision_site_failures(
+    adr_source,
+    accepted_record_metadata: accepted_record_metadata
+  )
 
   nats_server = asyncapi.dig("servers", "nats") || {}
   unless nats_server["x-production-transport"] == "verified-mutual-tls" &&
@@ -1164,13 +1690,35 @@ classification_bypass_source = ROOT.join("docs/security/classification-bypass-in
 adr_index = ROOT.join("docs/adr/INDEX.md").read(encoding: "UTF-8")
 candidate_index = ROOT.join("docs/governance/adr-candidate-index.md").read(encoding: "UTF-8")
 choice_queue = ROOT.join("docs/adr/unresolved-implementation-choices.md").read(encoding: "UTF-8")
-accepted_numbers = EXPECTED_RECORDS.select { |_number, record| record.fetch(:state) == "ACCEPTED" }.keys.to_set
-expected_metadata_numbers = accepted_numbers - LEGACY_ACCEPTED_WITHOUT_IMMUTABLE_METADATA
-unless ACCEPTED_RECORD_METADATA.keys.to_set == expected_metadata_numbers
-  failures << "accepted ADR metadata mismatch: expected #{expected_metadata_numbers.to_a.sort.join(', ')}, found #{ACCEPTED_RECORD_METADATA.keys.sort.join(', ')}"
+adr_0008_acceptance_gate_source = ROOT.join(ADR_0008_ACCEPTANCE_GATE_PATH).read(encoding: "UTF-8")
+adr_0008_acceptance_gate = parse_yaml(
+  adr_0008_acceptance_gate_source,
+  filename: ADR_0008_ACCEPTANCE_GATE_PATH
+)
+adr_0008_acceptance_state, adr_0008_acceptance_metadata, adr_0008_acceptance_gate_failures =
+  adr_0008_acceptance_gate_state(adr_0008_acceptance_gate, adr_0008_acceptance_gate_source)
+failures.concat(adr_0008_acceptance_gate_failures)
+
+expected_records = EXPECTED_RECORDS.transform_values(&:dup)
+expected_records.fetch("0008")[:state] = adr_0008_acceptance_state == :accepted ? "ACCEPTED" : "PROPOSED"
+accepted_record_metadata = ACCEPTED_RECORD_METADATA.dup
+if adr_0008_acceptance_state == :accepted && adr_0008_acceptance_gate_failures.empty?
+  accepted_record_metadata["0008"] = adr_0008_acceptance_metadata
+  failures.concat(
+    adr_0008_acceptance_history_failures(
+      adr_0008_acceptance_metadata,
+      gate_source: adr_0008_acceptance_gate_source
+    )
+  )
 end
 
-ACCEPTED_RECORD_METADATA.each do |number, metadata|
+accepted_numbers = expected_records.select { |_number, record| record.fetch(:state) == "ACCEPTED" }.keys.to_set
+expected_metadata_numbers = accepted_numbers - LEGACY_ACCEPTED_WITHOUT_IMMUTABLE_METADATA
+unless accepted_record_metadata.keys.to_set == expected_metadata_numbers
+  failures << "accepted ADR metadata mismatch: expected #{expected_metadata_numbers.to_a.sort.join(', ')}, found #{accepted_record_metadata.keys.sort.join(', ')}"
+end
+
+accepted_record_metadata.each do |number, metadata|
   approval_record_path = metadata.fetch(:approval_record_path)
   approval_record = ROOT.join(approval_record_path).read(encoding: "UTF-8")
   immutable_revision = metadata.fetch(:immutable_revision)
@@ -1178,11 +1726,12 @@ ACCEPTED_RECORD_METADATA.each do |number, metadata|
   metadata.fetch(:approval_records).map { |record| record.fetch("identity") }.uniq.each do |identity|
     failures << "#{approval_record_path}: ADR-#{number} missing reviewer identity #{identity}" unless approval_record.include?(identity)
   end
+  failures.concat(adr_0008_approval_record_failures(approval_record, metadata)) if number == "0008"
 end
 
 paths = Dir.glob(ROOT.join("docs/adr/0[0-9][0-9][1-9]-*.md")).sort.map { |path| Pathname.new(path) }
 actual_numbers = paths.filter_map { |path| path.basename.to_s[/\A(\d{4})-/, 1] }
-expected_numbers = EXPECTED_RECORDS.keys
+expected_numbers = expected_records.keys
 failures << "ADR record set mismatch: expected #{expected_numbers.join(', ')}, found #{actual_numbers.join(', ')}" unless actual_numbers == expected_numbers
 
 all_test_owners = Hash.new { |hash, key| hash[key] = [] }
@@ -1193,9 +1742,9 @@ adr_0008_source = nil
 paths.each do |path|
   basename = path.basename.to_s
   number = basename[/\A(\d{4})-/, 1]
-  next unless EXPECTED_RECORDS.key?(number)
+  next unless expected_records.key?(number)
 
-  expected = EXPECTED_RECORDS.fetch(number)
+  expected = expected_records.fetch(number)
   source = path.read(encoding: "UTF-8")
   adr_0008_source = source if number == "0008"
   relative = path.relative_path_from(ROOT).to_s
@@ -1244,9 +1793,9 @@ paths.each do |path|
   failures << "implementation issue catalog: #{candidate} decision_record must be #{relative}" unless gate["decision_record"] == relative
   failures << "implementation issue catalog: #{candidate} project-owner flag mismatch" unless gate["project_owner_approval_required"] == expected.fetch(:owner_approval)
 
-  acceptance = ACCEPTED_RECORD_METADATA[number]
+  acceptance = accepted_record_metadata[number]
   unless acceptance
-    premature_fields = %w[immutable_revision accepted_at approval_record approval_records].select { |field| gate.key?(field) }
+    premature_fields = %w[immutable_revision immutable_tree accepted_at approval_record approval_records].select { |field| gate.key?(field) }
     failures << "implementation issue catalog: proposed #{candidate} carries premature acceptance fields #{premature_fields.join(', ')}" unless premature_fields.empty?
     next
   end
@@ -1257,6 +1806,9 @@ paths.each do |path|
   expected_approval_records = acceptance.fetch(:approval_records)
   failures << "#{relative}: accepted record must name exact decision revision #{immutable_revision}" unless source.include?(immutable_revision)
   failures << "implementation issue catalog: #{candidate} immutable revision mismatch" unless gate["immutable_revision"] == immutable_revision
+  if number == "0008"
+    failures << "implementation issue catalog: #{candidate} immutable tree mismatch" unless gate["immutable_tree"] == acceptance.fetch(:immutable_tree)
+  end
   failures << "implementation issue catalog: #{candidate} accepted_at must be #{accepted_at}" unless gate["accepted_at"] == accepted_at
   failures << "implementation issue catalog: #{candidate} approval_record mismatch" unless gate["approval_record"] == approval_record_path
   unless gate["approval_records"] == expected_approval_records
@@ -1274,7 +1826,8 @@ if adr_0008_source
     adr_0008_security_contract_failures(
       adr_source: adr_0008_source,
       asyncapi: asyncapi,
-      bypass_source: classification_bypass_source
+      bypass_source: classification_bypass_source,
+      accepted_record_metadata: accepted_record_metadata["0008"]
     )
   )
 else
@@ -1286,7 +1839,7 @@ end
 # mutants only; passing them is not NATS runtime evidence.
 adr_0008_security_mutations = []
 register_adr_0008_security_mutation = lambda do |group, name, mutated_adr, mutated_asyncapi, mutated_bypass,
-                                                  expected_failure_fragment = nil|
+                                                  expected_failure_fragment = nil, accepted_record_metadata = nil|
   mutation = {
     group: group,
     name: name,
@@ -1295,6 +1848,7 @@ register_adr_0008_security_mutation = lambda do |group, name, mutated_adr, mutat
     bypass: mutated_bypass
   }
   mutation[:expected_failure_fragment] = expected_failure_fragment if expected_failure_fragment
+  mutation[:accepted_record_metadata] = accepted_record_metadata if accepted_record_metadata
   adr_0008_security_mutations << mutation
 end
 deep_copy_asyncapi = -> { Marshal.load(Marshal.dump(asyncapi)) }
@@ -1620,30 +2174,371 @@ if adr_0008_source
     classification_bypass_source,
     "substantive ADR source must match closed digest"
   )
+
+  review_amendment_adr = adr_0008_source + <<~AMENDMENT
+
+    ### Acceptance amendment
+
+    The accepted configuration uses `MaxDeliver=8`; broker exhaustion is terminal authority.
+  AMENDMENT
+  register_adr_0008_security_mutation.call(
+    :review_records,
+    "H3 acceptance amendment reverses terminal authority",
+    review_amendment_adr,
+    deep_copy_asyncapi.call,
+    classification_bypass_source,
+    "closed proposed review-record table grammar"
+  )
+
+  register_adr_0008_security_mutation.call(
+    :review_records,
+    "arbitrary trailing review prose",
+    adr_0008_source + "\nAll review rows are advisory and may be overridden.\n",
+    deep_copy_asyncapi.call,
+    classification_bypass_source,
+    "closed proposed review-record table grammar"
+  )
+
+  register_adr_0008_security_mutation.call(
+    :review_records,
+    "trailing HTML amendment",
+    adr_0008_source + "\n<!-- accepted: finite broker delivery is authoritative -->\n",
+    deep_copy_asyncapi.call,
+    classification_bypass_source,
+    "closed proposed review-record table grammar"
+  )
+
+  register_adr_0008_security_mutation.call(
+    :review_records,
+    "arbitrary Markdown amendment link",
+    adr_0008_source + "\n[Acceptance amendment](https://example.invalid/finite-broker-authority)\n",
+    deep_copy_asyncapi.call,
+    classification_bypass_source,
+    "closed proposed review-record table grammar"
+  )
+
+  review_extra_row = "| Unregistered acceptance role | `/root/extra-reviewer` | `pending exact immutable revision` | PENDING | unregistered-evidence |\n"
+  register_adr_0008_security_mutation.call(
+    :review_records,
+    "extra review role",
+    adr_0008_source.sub(ADR_0008_REVIEW_TABLE_SEPARATOR, ADR_0008_REVIEW_TABLE_SEPARATOR + review_extra_row),
+    deep_copy_asyncapi.call,
+    classification_bypass_source,
+    "contain unknown roles"
+  )
+
+  qa_pending_row = adr_0008_review_table_source(ADR_0008_PENDING_REVIEW_ROWS).lines.find do |line|
+    line.start_with?("| Independent QA and traceability")
+  end
+  register_adr_0008_security_mutation.call(
+    :review_records,
+    "missing required review role",
+    adr_0008_source.sub(qa_pending_row, ""),
+    deep_copy_asyncapi.call,
+    classification_bypass_source,
+    "missing exact roles"
+  )
+  register_adr_0008_security_mutation.call(
+    :review_records,
+    "duplicated required review role",
+    adr_0008_source.sub(qa_pending_row, qa_pending_row * 2),
+    deep_copy_asyncapi.call,
+    classification_bypass_source,
+    "duplicate roles"
+  )
 end
 
 
 if adr_0008_source
+  fixture_revision = "a" * 40
+  fixture_roles = {
+    "WS-07-events-workers" => ["/root/adr0008_example_events_review", "github-pr-28-comment-1001"],
+    "WS-01-architecture" => ["/root/adr0008_example_arch_review", "github-pr-28-comment-1002"],
+    "WS-02-core-outbox" => ["/root/adr0008_example_core_review", "github-pr-28-comment-1003"],
+    "WS-06-security-contract" => ["/root/adr0008_example_contract_review", "github-pr-28-comment-1004"],
+    "WS-08-projection-consumer" => ["/root/adr0008_example_projection_review", "github-pr-28-comment-1005"],
+    "WS-12-deployment-operations" => ["/root/adr0008_example_ops_review", "github-pr-28-comment-1006"],
+    "WS-13-independent-qa" => ["/root/adr0008_example_qa_review", "github-pr-28-comment-1007"],
+    "WS-13-independent-security" => ["/root/adr0008_example_security_review", "github-pr-28-comment-1008"],
+    "project-owner" => ["not required for this conforming selection", "adr-0008-project-owner-not-required"]
+  }
+  accepted_metadata_fixture = {
+    immutable_revision: fixture_revision,
+    immutable_tree: "b" * 40,
+    accepted_at: "2026-08-30",
+    approval_record_path: ADR_0008_ACCEPTANCE_RECORD_PATH,
+    decision_author_identity: ADR_0008_DECISION_AUTHOR_IDENTITY,
+    approval_records: ADR_0008_REVIEW_ROLES.map do |role|
+      identity, evidence = fixture_roles.fetch(role.fetch(:key))
+      {
+        "role" => role.fetch(:key),
+        "identity" => identity,
+        "decision_revision" => fixture_revision,
+        "disposition" => role.fetch(:key) == "project-owner" ? "NOT_REQUIRED" : "APPROVED",
+        "evidence" => evidence
+      }
+    end
+  }
+  accepted_gate_fixture_source = adr_0008_acceptance_gate_source(
+    state: :accepted,
+    metadata: accepted_metadata_fixture
+  )
+  accepted_gate_fixture = parse_yaml(
+    accepted_gate_fixture_source,
+    filename: "accepted-adr-0008-gate-fixture.yaml"
+  )
+  accepted_gate_state, accepted_gate_metadata, accepted_gate_failures = adr_0008_acceptance_gate_state(
+    accepted_gate_fixture,
+    accepted_gate_fixture_source
+  )
+  unless accepted_gate_state == :accepted && accepted_gate_metadata == accepted_metadata_fixture && accepted_gate_failures.empty?
+    failures << "ADR-0008 explicit accepted gate fixture failed without constant self-reference: #{accepted_gate_failures.join('; ')}"
+  end
   accepted_form_fixture = adr_0008_source
                           .sub(
                             ADR_0008_PROPOSED_STATUS_LINE,
-                            "- **Status:** Accepted at immutable decision revision `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa` on 2026-08-30\n"
+                            adr_0008_accepted_status_line(accepted_metadata_fixture)
                           )
                           .sub(
                             ADR_0008_PROPOSED_RESOLUTION_LINE,
                             ADR_0008_ACCEPTED_RESOLUTION_LINE
                           )
   accepted_review_offset = accepted_form_fixture.match(/^#{Regexp.escape(ADR_0008_REVIEWS_HEADING)}/).begin(0)
-  accepted_form_fixture = accepted_form_fixture[0, accepted_review_offset] + <<~REVIEWS
-    ## Reviews and approvals
-
-    | Role | Identity | Disposition |
-    |---|---|---|
-    | Independent QA | `/root/example-qa` | ACCEPT |
-  REVIEWS
-  acceptance_form_failures = adr_0008_substantive_source_failures(accepted_form_fixture)
+  accepted_form_fixture = accepted_form_fixture[0, accepted_review_offset] +
+                          ADR_0008_REVIEWS_HEADING +
+                          adr_0008_review_table_source(adr_0008_accepted_review_rows(accepted_metadata_fixture))
+  acceptance_form_failures = adr_0008_security_contract_failures(
+    adr_source: accepted_form_fixture,
+    asyncapi: asyncapi,
+    bypass_source: classification_bypass_source,
+    accepted_record_metadata: accepted_metadata_fixture
+  )
   unless acceptance_form_failures.empty?
     failures << "ADR-0008 acceptance-only normalization fixture failed: #{acceptance_form_failures.join('; ')}"
+  end
+
+  approval_record_fixture = adr_0008_approval_record_source(accepted_metadata_fixture)
+  approval_fixture_failures = adr_0008_approval_record_failures(
+    approval_record_fixture,
+    accepted_metadata_fixture
+  )
+  unless approval_fixture_failures.empty?
+    failures << "ADR-0008 approval-record fixture failed: #{approval_fixture_failures.join('; ')}"
+  end
+
+  approval_prefix_mutations = {
+    "arbitrary prose" => approval_record_fixture.sub("Status: **APPROVED**\n", "Status: **APPROVED**\n\nApproval rows are advisory.\n"),
+    "H3 amendment" => approval_record_fixture.sub("## Exact-revision dispositions\n", "### Acceptance amendment\n\nBroker MaxDeliver=8 is terminal.\n\n## Exact-revision dispositions\n"),
+    "HTML comment" => approval_record_fixture.sub("Status: **APPROVED**\n", "Status: **APPROVED**\n<!-- finite broker override -->\n"),
+    "Markdown link" => approval_record_fixture.sub("Status: **APPROVED**\n", "Status: **APPROVED**\n\n[Override](https://example.invalid/latest)\n"),
+    "reordered header records" => approval_record_fixture.sub(
+      "- **ADR candidate:** `ADR-CAND-006`\n- **Decision record:** `docs/adr/0008-nats-stream-subject-retention-replay-ordering-and-dlq.md`\n",
+      "- **Decision record:** `docs/adr/0008-nats-stream-subject-retention-replay-ordering-and-dlq.md`\n- **ADR candidate:** `ADR-CAND-006`\n"
+    )
+  }
+  approval_prefix_mutations.each do |name, mutated_record|
+    unless adr_0008_approval_record_failures(mutated_record, accepted_metadata_fixture).any? do |failure|
+             failure.include?("complete approval record must match")
+           end
+      failures << "ADR-0008 approval record accepted #{name} outside its closed grammar"
+    end
+  end
+
+  begin
+    history_tmp_parent = ENV["TMPDIR"]
+    if history_tmp_parent.nil? || history_tmp_parent.empty? || history_tmp_parent.start_with?("/tmp")
+      history_tmp_parent = File.join(Dir.home, ".cache", "stead-validator-tmp")
+    end
+    FileUtils.mkdir_p(history_tmp_parent)
+    Dir.mktmpdir("stead-adr0008-acceptance-history-", history_tmp_parent) do |history_root|
+      fixture_write = lambda do |relative, content|
+        path = File.join(history_root, relative)
+        FileUtils.mkdir_p(File.dirname(path))
+        File.binwrite(path, content)
+      end
+      git_environment = {
+        "GIT_AUTHOR_DATE" => "2026-08-30T12:00:00-04:00",
+        "GIT_COMMITTER_DATE" => "2026-08-30T12:00:00-04:00"
+      }
+      fixture_git = lambda do |*arguments|
+        stdout, stderr, status = Open3.capture3(
+          git_environment,
+          "git",
+          "-c",
+          "commit.gpgsign=false",
+          *arguments,
+          chdir: history_root
+        )
+        raise "git #{arguments.join(' ')} failed: #{stderr.strip}" unless status.success?
+
+        stdout
+      end
+
+      fixture_git.call("init", "-q")
+      fixture_git.call("config", "user.name", "ADR-0008 fixture")
+      fixture_git.call("config", "user.email", "adr0008-fixture@stead.invalid")
+      fixture_write.call(
+        "docs/adr/0008-nats-stream-subject-retention-replay-ordering-and-dlq.md",
+        adr_0008_source
+      )
+      fixture_write.call(ADR_0008_ACCEPTANCE_GATE_PATH, ADR_0008_PROPOSED_ACCEPTANCE_GATE_SOURCE)
+      fixture_write.call("docs/adr/INDEX.md", "ADR-0008 proposed\n")
+      fixture_write.call("docs/governance/adr-candidate-index.md", "ADR-CAND-006 proposed\n")
+      fixture_write.call("docs/planning/implementation-issue-catalog.yaml", "ADR-CAND-006: PROPOSED\n")
+      fixture_git.call("add", ".")
+      fixture_git.call("commit", "-q", "-m", "propose exact ADR-0008 decision")
+      history_revision = fixture_git.call("rev-parse", "HEAD").strip
+      history_tree = fixture_git.call("rev-parse", "HEAD^{tree}").strip
+
+      history_metadata = Marshal.load(Marshal.dump(accepted_metadata_fixture))
+      history_metadata[:immutable_revision] = history_revision
+      history_metadata[:immutable_tree] = history_tree
+      history_metadata.fetch(:approval_records).each do |record|
+        record["decision_revision"] = history_revision
+      end
+      history_accepted_adr = adr_0008_source
+                             .sub(
+                               ADR_0008_PROPOSED_STATUS_LINE,
+                               adr_0008_accepted_status_line(history_metadata)
+                             )
+                             .sub(
+                               ADR_0008_PROPOSED_RESOLUTION_LINE,
+                               ADR_0008_ACCEPTED_RESOLUTION_LINE
+                             )
+      history_review_offset = history_accepted_adr.match(/^#{Regexp.escape(ADR_0008_REVIEWS_HEADING)}/).begin(0)
+      history_accepted_adr = history_accepted_adr[0, history_review_offset] +
+                             ADR_0008_REVIEWS_HEADING +
+                             adr_0008_review_table_source(adr_0008_accepted_review_rows(history_metadata))
+      history_gate_source = adr_0008_acceptance_gate_source(state: :accepted, metadata: history_metadata)
+      fixture_write.call(
+        "docs/adr/0008-nats-stream-subject-retention-replay-ordering-and-dlq.md",
+        history_accepted_adr
+      )
+      fixture_write.call(ADR_0008_ACCEPTANCE_GATE_PATH, history_gate_source)
+      fixture_write.call(ADR_0008_ACCEPTANCE_RECORD_PATH, adr_0008_approval_record_source(history_metadata))
+      fixture_write.call("docs/adr/INDEX.md", "ADR-0008 accepted at #{history_revision}\n")
+      fixture_write.call("docs/governance/adr-candidate-index.md", "ADR-CAND-006 accepted at #{history_revision}\n")
+      fixture_write.call(
+        "docs/planning/implementation-issue-catalog.yaml",
+        "ADR-CAND-006: ACCEPTED at #{history_revision}\n"
+      )
+      fixture_git.call("add", ".")
+      fixture_git.call("commit", "-q", "-m", "record ADR-0008 acceptance")
+      history_failures = adr_0008_acceptance_history_failures(
+        history_metadata,
+        gate_source: history_gate_source,
+        root: Pathname.new(history_root)
+      )
+      unless history_failures.empty?
+        failures << "ADR-0008 direct records-only acceptance fixture failed: #{history_failures.join('; ')}"
+      end
+    end
+  rescue StandardError => e
+    failures << "ADR-0008 direct records-only acceptance fixture could not run: #{e.class}: #{e.message}"
+  end
+
+  accepted_status_mutations = {
+    "wrong status SHA with correct review revisions" => accepted_form_fixture.sub(fixture_revision, "b" * 40),
+    "wrong accepted status date" => accepted_form_fixture.sub(" on 2026-08-30\n", " on 2026-08-31\n"),
+    "mixed review revisions" => accepted_form_fixture.sub(
+      "`#{fixture_revision}` | APPROVED | github-pr-28-comment-1008",
+      "`#{'b' * 40}` | APPROVED | github-pr-28-comment-1008"
+    )
+  }
+  accepted_status_mutations.each do |name, mutated_adr|
+    register_adr_0008_security_mutation.call(
+      :acceptance_binding,
+      name,
+      mutated_adr,
+      deep_copy_asyncapi.call,
+      classification_bypass_source,
+      name.start_with?("mixed") ? "closed accepted review-record table grammar" : "accepted status must bind",
+      accepted_metadata_fixture
+    )
+  end
+
+  acceptance_metadata_mutations = {
+    "QA and security identity reused" => lambda do |metadata|
+      qa = metadata.fetch(:approval_records).find { |record| record.fetch("role") == "WS-13-independent-qa" }
+      security = metadata.fetch(:approval_records).find { |record| record.fetch("role") == "WS-13-independent-security" }
+      security["identity"] = qa.fetch("identity")
+    end,
+    "decision author self-approved" => lambda do |metadata|
+      metadata.fetch(:approval_records).find do |record|
+        record.fetch("role") == "WS-13-independent-qa"
+      end["identity"] = ADR_0008_DECISION_AUTHOR_IDENTITY
+    end,
+    "QA and security evidence reused" => lambda do |metadata|
+      qa = metadata.fetch(:approval_records).find { |record| record.fetch("role") == "WS-13-independent-qa" }
+      security = metadata.fetch(:approval_records).find { |record| record.fetch("role") == "WS-13-independent-security" }
+      security["evidence"] = qa.fetch("evidence")
+    end,
+    "unbounded Markdown evidence" => lambda do |metadata|
+      metadata.fetch(:approval_records).find do |record|
+        record.fetch("role") == "WS-13-independent-security"
+      end["evidence"] = "[amendment](https://example.invalid/authority)"
+    end,
+    "malformed reviewer path" => lambda do |metadata|
+      metadata.fetch(:approval_records).find do |record|
+        record.fetch("role") == "WS-13-independent-qa"
+      end["identity"] = "/root/a//"
+    end,
+    "mutable evidence locator" => lambda do |metadata|
+      metadata.fetch(:approval_records).find do |record|
+        record.fetch("role") == "WS-13-independent-security"
+      end["evidence"] = "https://example.invalid/latest"
+    end
+  }
+  acceptance_metadata_mutations.each do |name, mutate|
+    mutated_metadata = Marshal.load(Marshal.dump(accepted_metadata_fixture))
+    mutate.call(mutated_metadata)
+    register_adr_0008_security_mutation.call(
+      :acceptance_metadata,
+      name,
+      accepted_form_fixture,
+      deep_copy_asyncapi.call,
+      classification_bypass_source,
+      "ADR-0008",
+      mutated_metadata
+    )
+  end
+
+  nonexistent_future_metadata = Marshal.load(Marshal.dump(accepted_metadata_fixture))
+  nonexistent_future_metadata[:immutable_revision] = "f" * 40
+  nonexistent_future_metadata[:immutable_tree] = "f" * 40
+  nonexistent_future_metadata[:accepted_at] = "2099-12-31"
+  nonexistent_future_metadata.fetch(:approval_records).each do |record|
+    record["decision_revision"] = nonexistent_future_metadata.fetch(:immutable_revision)
+  end
+  unless adr_0008_acceptance_metadata_failures(nonexistent_future_metadata).any? do |failure|
+           failure.include?("cannot be in the future")
+         end
+    failures << "ADR-0008 acceptance metadata admitted a future acceptance date"
+  end
+  unless adr_0008_acceptance_history_failures(
+    nonexistent_future_metadata,
+    gate_source: adr_0008_acceptance_gate_source(state: :accepted, metadata: nonexistent_future_metadata)
+  ).any? { |failure| failure.include?("is not a repository commit") }
+    failures << "ADR-0008 acceptance history admitted a nonexistent immutable revision"
+  end
+
+  mixed_approval_record = approval_record_fixture.sub(
+    "`#{fixture_revision}` | APPROVED | github-pr-28-comment-1007",
+    "`#{'b' * 40}` | APPROVED | github-pr-28-comment-1007"
+  )
+  unless adr_0008_approval_record_failures(mixed_approval_record, accepted_metadata_fixture).any? do |failure|
+           failure.include?("complete approval record must match")
+         end
+    failures << "ADR-0008 approval record accepted a mixed decision revision"
+  end
+  wrong_approval_revision_field = approval_record_fixture.sub(
+    "- **Immutable decision revision:** `#{fixture_revision}`",
+    "- **Immutable decision revision:** `#{'b' * 40}`"
+  )
+  unless adr_0008_approval_record_failures(wrong_approval_revision_field, accepted_metadata_fixture).any? do |failure|
+           failure.include?("complete approval record must match")
+         end
+    failures << "ADR-0008 approval record accepted a wrong metadata revision because the correct SHA appeared in rows"
   end
 end
 
@@ -1655,6 +2550,9 @@ expected_adr_0008_security_mutation_groups[:terminal_delivery] = 5
 expected_adr_0008_security_mutation_groups[:stable_source] = 4
 expected_adr_0008_security_mutation_groups[:decision_structure] = 6
 expected_adr_0008_security_mutation_groups[:substantive_source] = 4
+expected_adr_0008_security_mutation_groups[:review_records] = 7
+expected_adr_0008_security_mutation_groups[:acceptance_binding] = 3
+expected_adr_0008_security_mutation_groups[:acceptance_metadata] = 6
 unless adr_0008_security_mutation_groups == expected_adr_0008_security_mutation_groups
   failures << "ADR-0008 security mutation inventory mismatch: expected #{expected_adr_0008_security_mutation_groups.inspect}, found #{adr_0008_security_mutation_groups.inspect}"
 end
@@ -1663,7 +2561,8 @@ adr_0008_security_mutation_survivors = adr_0008_security_mutations.filter_map do
   mutation_failures = adr_0008_security_contract_failures(
     adr_source: mutation.fetch(:adr),
     asyncapi: mutation.fetch(:asyncapi),
-    bypass_source: mutation.fetch(:bypass)
+    bypass_source: mutation.fetch(:bypass),
+    accepted_record_metadata: mutation[:accepted_record_metadata]
   )
   expected_failure_fragment = mutation[:expected_failure_fragment]
   if mutation_failures.empty?

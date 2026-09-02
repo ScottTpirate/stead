@@ -213,16 +213,15 @@ Rollback restores the last accepted exact-version declarative manifest and compa
 
 ## Reviews and approvals
 
-Required decision-time dispositions against the exact immutable decision revision:
-
-- WS-07 event/worker owner: pending.
-- WS-01 architecture/standards: pending.
-- WS-02 core/outbox integration: pending.
-- WS-06 authorization/classification/security: pending.
-- WS-08 search/projection consumer: pending.
-- WS-12 operations/backup/restore: pending.
-- distinct WS-13 independent QA reviewer: pending.
-- distinct WS-13 independent security reviewer: pending.
-- Project owner: not required unless review changes a locked or project-owner-controlled decision; this proposal does not.
-
-Until all required non-author dispositions accept one immutable revision and the acceptance-only descendant is recorded, this ADR remains proposed and `STEAD-P1-007` remains blocked.
+| Role | Identity | Decision revision | Disposition | Evidence |
+|---|---|---|---|---|
+| Decision author (WS-07) | `/root/adr_cand_006` | `pending exact immutable revision` | PROPOSED | Authored decision candidate; author cannot approve |
+| Event/worker owner (WS-07, non-author) | `pending non-author reviewer` | `pending exact immutable revision` | PENDING | Partition, delivery, replay, audit, and worker ownership review required |
+| Architecture and standards (WS-01, non-author) | `pending non-author reviewer` | `pending exact immutable revision` | PENDING | Topology, portability, compatibility, and supersession review required |
+| Core/outbox integration owner (WS-02, non-author) | `pending non-author reviewer` | `pending exact immutable revision` | PENDING | Atomic outbox, delivery port, fence, and failure-boundary review required |
+| Authorization/classification/security owner (WS-06, non-author) | `pending non-author reviewer` | `pending exact immutable revision` | PENDING | Authorization, classification, isolation, and non-disclosure review required |
+| Search/projection consumer owner (WS-08, non-author) | `pending non-author reviewer` | `pending exact immutable revision` | PENDING | Projection ordering, rebuild, lag, and visibility review required |
+| Operations/backup/restore owner (WS-12, non-author) | `pending non-author reviewer` | `pending exact immutable revision` | PENDING | Provisioning, TLS, storage, capacity, recovery, and rollback review required |
+| Independent QA and traceability (distinct WS-13 identity) | `pending non-author reviewer` | `pending exact immutable revision` | PENDING | Exact mapping, mutation, performance, and release-evidence review required |
+| Independent security (distinct WS-13 identity) | `pending non-author reviewer` | `pending exact immutable revision` | PENDING | Fail-closed transport, authority, payload, replay, and DLQ review required |
+| Project owner | `not required for this conforming selection` | `pending exact immutable revision` | NOT_REQUIRED | Not required unless review changes a locked or project-owner-controlled decision |

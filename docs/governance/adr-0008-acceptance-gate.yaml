@@ -1,0 +1,10 @@
+schema_version: "1.0"
+adr_id: ADR-0008
+candidate_id: ADR-CAND-006
+state: PROPOSED
+decision_author_identity: /root/adr_cand_006
+immutable_revision: null
+immutable_tree: null
+accepted_at: null
+approval_record_path: docs/governance/adr-0008-approval-record.md
+approval_records: []
