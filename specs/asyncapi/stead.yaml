@@ -345,6 +345,10 @@ x-delivery-contract:
   dlq: required
   protected-body-payloads: prohibited
   logical-producer-source: closed-asyncapi-channel-registry
+  account-topology: one-application-account-per-deployment-security-domain
+  organization-broker-provisioning: forbidden
+  stream-topology: two-fixed-streams-per-deployment-security-domain
+  credential-topology: service-role-only-no-browser-or-end-user
   broker-max-deliver: unlimited-until-durable-terminal-outcome
   terminal-attempt-authority: consumer-owner-postgresql
   production-transport: verified-mutual-tls-no-fallback

@@ -9,11 +9,18 @@
 - **Resolves on acceptance:** `ADR-CAND-006`
 - **Supersedes / superseded by:** supersedes no accepted decision; a different broker, subject grammar, cross-domain transfer, or NATS-authoritative business state requires a superseding ADR
 
-## Context
+## Context and decision scope
 
 The Master Build Directive already fixes NATS JetStream, CloudEvents 1.0, AsyncAPI 3.1.x, transactional outbox publication, at-least-once delivery, idempotent consumers, replay and dead-letter handling, protected-content minimization, and no synchronous NATS wait in request handling. PostgreSQL remains authoritative. The unresolved implementation choice is how Phase 1 partitions accounts and streams and how it makes retries, ordering, replay, recovery, and credentials deterministic without turning Organization lifecycle into broker administration.
 
 The original proposal created one NATS account, signing hierarchy, resolver lifecycle, and four-stream set for every Organization. That is disproportionate for ordinary Phase 1 deployments and makes local startup and Organization creation depend on broker provisioning. Phase 1 needs a smaller secure baseline that preserves a future stronger topology without adopting it prematurely.
+
+## Decision drivers
+
+- Keep Organization creation and the supported development stack independent from broker-account provisioning and operator-key ceremonies.
+- Isolate deployment security domains while retaining application-level Organization/container authorization.
+- Preserve provider-neutral events, bounded operations, replay, recovery, and future topology compatibility.
+- Make request latency independent from NATS and keep PostgreSQL as the correctness and recovery boundary.
 
 ## Decision
 
@@ -54,11 +61,11 @@ JetStream is reconstructible transport, not backup authority. Recovery starts fr
 
 ### Credentials and supported development mode
 
-Production NATS client and cluster links use authenticated encrypted transport with peer verification and no plaintext fallback. Credentials are generated or supplied through deployment secret references, scoped by service role and deployment domain, rotated without changing canonical event identity, and excluded from PostgreSQL business data, events, logs, metrics, and backups.
+Production NATS client and cluster links use authenticated encrypted transport with peer verification and no plaintext fallback. JetStream file storage uses deployment-managed authenticated encryption at rest through a secret reference; exported snapshots remain inside the authenticated backup boundary. Credentials are generated or supplied through deployment secret references, scoped by service role and deployment domain, rotated without changing canonical event identity, and excluded from PostgreSQL business data, events, logs, metrics, and backups.
 
 The supported development stack automatically generates local-only account and service credentials plus validated NATS configuration. It requires no operator-key ceremony, account JWT signing hierarchy, or external resolver. Production deployments may use documented NATS operator mode, but that is an interchangeable deployment mechanism for the same deployment-domain account contract and never participates in Organization lifecycle.
 
-## Rejected alternatives
+## Considered options
 
 - **One account and stream set per Organization:** rejected for the Phase 1 baseline because it couples product creation to broker provisioning and imposes unproven connection, key, resolver, restore, and operational costs. It remains a possible later high-isolation topology after evidence.
 - **One global account spanning deployment security domains:** rejected because a credential or configuration error could cross the deployment-domain boundary.
@@ -76,13 +83,13 @@ The supported development stack automatically generates local-only account and s
 - Stronger per-Organization broker isolation is not forbidden, but Phase 1 does not pay its operational cost or claim its security benefit without evidence.
 - Detailed stream values, schemas, fixtures, failure-code registry, and version-specific read-back rules live in machine-readable deployment and AsyncAPI contracts rather than this ADR.
 
-## Compatibility and migration
+## Rollout and supersession
 
 There is no accepted production predecessor to migrate. Any experimental per-Organization topology must stop publication, drain or preserve pending outbox rows, create the deployment-domain account and fixed streams, start compatible consumers from explicit checkpoints, rebuild projections, and retire old credentials only after reconciliation. Event subjects, CloudEvent source identities, semantic idempotency keys, and canonical resource identities remain stable across that topology change.
 
 Stream and event evolution uses expand/coexist/contract. Producers do not emit a new major until compatible consumers are deployed; rollback preserves readable old representations and all PostgreSQL outbox, processed, checkpoint, terminal, and audit state. Unknown schema majors or unsafe server/client configuration fail closed.
 
-## Tests
+## Verification
 
 - `T-ADR-0008-SUBJECT-PARTITION`: two Organizations in one domain share the domain account without broker provisioning; another domain has a distinct account; cross-domain credentials and subjects deny, and no browser/end-user credential exists.
 - `T-ADR-0008-SUBSCRIBER-ISOLATION`: enumerate publisher, consumer, replay, and maintenance permissions and deny wildcard expansion, cross-domain access, unregistered subjects, and management operations outside each role.
