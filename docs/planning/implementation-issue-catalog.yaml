@@ -533,18 +533,18 @@ issues:
     upgrade_and_rollback_behavior: "Rebuild and sign only from pinned compatible source/locks; distribute exact immutable archive/attestation pairs; rollback is a new forward release under current/higher trust and never reuses revoked signing evidence or mutable transport tags."
     documentation_obligations: ["Document deterministic construction order, embedded versus post-signing evidence, DSSE/parser limits, strict archive format, deployment-policy-driven thresholds and custody separation, TUF's non-authoritative v1 disposition, offline vectors, dependency/license review, transport identity, failure recovery, and the WS-09-to-WS-06 handoff."]
   - id: "STEAD-P1-017"
-    title: "Materialize the WS-11 Phase 1 migration namespace boundary"
-    epic_id: "EPIC-P1"
-    phase: "phase-1"
-    status: DEPENDENCY_BLOCKED
+    title: "Materialize the WS-11 migration namespace with the first migration implementation"
+    epic_id: "EPIC-P2"
+    phase: "phase-2"
+    status: PHASE_GATED
     requirement_ids: ["ARCH-004", "DEP-005", "OPS-003", "OPS-004", "TEST-007"]
     owner: "WS-11"
     contributors: ["WS-01", "WS-02", "WS-12"]
-    dependencies: ["GATE-P0-APPROVED", "STEAD-P1-001", "STEAD-P1-015"]
+    dependencies: ["GATE-P0-APPROVED", "STEAD-P1-001", "STEAD-P1-012", "STEAD-P1-015"]
     module: ["migration-namespace-foundation"]
     owned_directories: ["modules/migration", "tests/contract/migration", "tests/integration/migration", "packages/test-fixtures/migration"]
-    prohibited_boundaries: ["Do not begin until ADR-CAND-002 is accepted against one immutable revision and the generic STEAD-P1-015 bootstrap/migration harness is available.", "WS-11 owns only the Phase 1 migration namespace, qualified owner/runtime roles, deny-by-default ACL/default-ACL registration, and its owner ledger; it must not add import, mapping, cutover, redirect, provider-sync, or Phase 2/3 migration semantics.", "No foreign-schema write or ownership of the aggregate migration runner, operator roles, backup, restore, or upgrade workflow is permitted; an implementation author must not edit WS-13-owned specs/traceability."]
-    acceptance_criteria: ["Create the otherwise empty migration namespace, its deployment-qualified owner/runtime roles, deny-by-default existing/default ACL registration, and owner-controlled schema migration ledger, then register it with the generic STEAD-P1-015 harness.", "Contribute only the WS-11 migration-namespace cases to T-ADR-0007-NAMESPACE-ROLES, T-ADR-0007-FOREIGN-WRITE-DENIAL, T-ADR-0007-MIGRATION-ORDERING, and T-ADR-0007-UPGRADE-ROLLBACK, including exact grantor plus ADMIN FALSE/INHERIT/SET membership tuples, effective live-PostgreSQL catalog predicates, denied role re-grant/reconfiguration, and actual allow/deny operations; STEAD-P1-011 retains operator/shared-cluster/aggregate-runner, upgrade, backup/restore, failure, and benchmark cases.", "All mapped requirement acceptance tests pass at the required layer and coverage floor.", "Independent WS-13 review finds no unresolved critical/high defect, foreign privilege, ownership violation, traceability conflict, dirty-ledger bypass, or unsupported rollback claim."]
+    prohibited_boundaries: ["Do not begin during Phase 1. Begin only after the formal STEAD-P1-012 release gate and immediately before the first STEAD-P2-009 importer code path requires owned migration state; ADR-CAND-002 must remain accepted and the generic STEAD-P1-015 bootstrap/migration harness must be available.", "WS-11 owns only the migration namespace, qualified owner/runtime roles, deny-by-default ACL/default-ACL registration, and its owner ledger; it must not add import mapping, provider-sync, cross-domain transfer, or later cutover/redirect semantics through this boundary.", "No foreign-schema write or ownership of the aggregate migration runner, operator roles, backup, restore, or upgrade workflow is permitted; an implementation author must not edit WS-13-owned specs/traceability."]
+    acceptance_criteria: ["As the first database step of STEAD-P2-009, create the migration namespace, its deployment-qualified owner/runtime roles, deny-by-default existing/default ACL registration, and owner-controlled schema migration ledger, then register it with the generic STEAD-P1-015 harness; no empty migration database namespace is materialized in Phase 1.", "Contribute only the WS-11 migration-namespace cases to T-ADR-0007-NAMESPACE-ROLES, T-ADR-0007-FOREIGN-WRITE-DENIAL, T-ADR-0007-MIGRATION-ORDERING, and T-ADR-0007-UPGRADE-ROLLBACK, including exact grantor plus ADMIN FALSE/INHERIT/SET membership tuples, effective live-PostgreSQL catalog predicates, denied role re-grant/reconfiguration, and actual allow/deny operations; STEAD-P1-011 retains operator/shared-cluster/aggregate-runner, upgrade, backup/restore, failure, and benchmark cases.", "All mapped requirement acceptance tests pass at the required layer and coverage floor.", "Independent WS-13 review finds no unresolved critical/high defect, foreign privilege, ownership violation, traceability conflict, dirty-ledger bypass, or unsupported rollback claim."]
     automated_tests: ["T-STEAD-P1-017-CONTRACT", "T-ARCH-004-ACCEPTANCE", "T-DEP-005-ACCEPTANCE", "T-OPS-003-ACCEPTANCE", "T-OPS-004-ACCEPTANCE", "T-TEST-007-ACCEPTANCE", "T-ADR-0007-NAMESPACE-ROLES", "T-ADR-0007-FOREIGN-WRITE-DENIAL", "T-ADR-0007-MIGRATION-ORDERING", "T-ADR-0007-UPGRADE-ROLLBACK"]
     performance_contract:
       expected_request_count: "STEAD-P1-017: 0 production browser/BFF requests; namespace bootstrap and migration run only through the bounded migration harness."
@@ -958,7 +958,7 @@ issues:
     status: DEPENDENCY_BLOCKED
     requirement_ids: ["PRIN-008", "PRIN-009", "PRIN-011", "DEP-001", "DEP-002", "DEP-005", "OPS-001", "OPS-002", "OPS-003", "OPS-004", "TEST-007", "TEST-008", "PERF-001", "PERF-002", "PERF-006"]
     owner: "WS-12"
-    dependencies: ["GATE-P0-APPROVED", "STEAD-P1-001", "STEAD-P1-002", "STEAD-P1-003", "STEAD-P1-004", "STEAD-P1-005", "STEAD-P1-006", "STEAD-P1-007", "STEAD-P1-008", "STEAD-P1-009", "STEAD-P1-010", "STEAD-P1-013", "STEAD-P1-014", "STEAD-P1-015", "STEAD-P1-016", "STEAD-P1-017", "STEAD-P0-013"]
+    dependencies: ["GATE-P0-APPROVED", "STEAD-P1-001", "STEAD-P1-002", "STEAD-P1-003", "STEAD-P1-004", "STEAD-P1-005", "STEAD-P1-006", "STEAD-P1-007", "STEAD-P1-008", "STEAD-P1-009", "STEAD-P1-010", "STEAD-P1-013", "STEAD-P1-014", "STEAD-P1-015", "STEAD-P1-016", "STEAD-P0-013"]
     module: ["installation-operations"]
     owned_directories: ["apps/steadctl", "deploy/compose", "packages/domain-schemas/config", "docs/operator", "tests/contract/operations", "tests/performance/datasets", "tests/upgrade", "tests/backup-restore", "packages/test-fixtures/operations"]
     prohibited_boundaries: ["No required public cloud/SaaS control plane, outbound telemetry by default, cloud-specific deployment dependency, or upgrade without compatibility/preflight/backup.", "Phase 1 may prove generic network-disabled policy verification but must not claim or implement the Phase 3 high-assurance-airgap deployment bundle or complete an external-regime profile.", "NATS backup may not be treated as the sole recovery source."]
@@ -993,7 +993,7 @@ issues:
     status: DEPENDENCY_BLOCKED
     requirement_ids: ["PRIN-010", "SEC-001", "SEC-002", "SEC-004", "SEC-006", "TEST-001", "TEST-002", "TEST-003", "TEST-005", "TEST-008", "TEST-009", "TEST-010", "PERF-001", "PERF-002", "PERF-004", "PERF-005", "PERF-006"]
     owner: "WS-13"
-    dependencies: ["GATE-P0-APPROVED", "STEAD-P1-001", "STEAD-P1-002", "STEAD-P1-003", "STEAD-P1-004", "STEAD-P1-005", "STEAD-P1-006", "STEAD-P1-007", "STEAD-P1-008", "STEAD-P1-009", "STEAD-P1-010", "STEAD-P1-011", "STEAD-P1-013", "STEAD-P1-014", "STEAD-P1-015", "STEAD-P1-016", "STEAD-P1-017", "STEAD-P0-014"]
+    dependencies: ["GATE-P0-APPROVED", "STEAD-P1-001", "STEAD-P1-002", "STEAD-P1-003", "STEAD-P1-004", "STEAD-P1-005", "STEAD-P1-006", "STEAD-P1-007", "STEAD-P1-008", "STEAD-P1-009", "STEAD-P1-010", "STEAD-P1-011", "STEAD-P1-013", "STEAD-P1-014", "STEAD-P1-015", "STEAD-P1-016", "STEAD-P0-014"]
     module: ["qa-security-release"]
     owned_directories: ["specs/traceability", "specs/oscal", "docs/testing", "docs/security", "docs/governance/release-evidence", "docs/governance/waivers", "tests/contract/harness", "tests/e2e", "tests/security", "tests/classification", "tests/performance/harness", "packages/test-fixtures/harness"]
     prohibited_boundaries: ["May not approve its own implementation work, waive gates without documented authority/time bounds, edit production modules as a hidden fix, or pass a release with a known disclosure path, missing artifact, failed required test, or disallowed/unknown license."]
@@ -1227,7 +1227,7 @@ issues:
     status: PHASE_GATED
     requirement_ids: ["PRIN-004", "MIG-001", "MIG-002", "MIG-003", "MIG-004"]
     owner: "WS-11"
-    dependencies: ["GATE-P0-APPROVED", "STEAD-P1-012"]
+    dependencies: ["GATE-P0-APPROVED", "STEAD-P1-012", "STEAD-P1-017"]
     module: ["migration"]
     owned_directories: ["modules/migration", "packages/provider-sdk/migration", "tests/integration/migration", "packages/test-fixtures/migration"]
     prohibited_boundaries: ["No one-off importer scripts, direct upstream database access, silent data loss, or imported semantics that extend the fixed ontology.", "Migration workers may not bypass central authorization/classification or write other modules' tables directly."]
