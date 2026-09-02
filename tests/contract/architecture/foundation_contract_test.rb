@@ -290,6 +290,8 @@ end
 
 if failed.empty?
   puts "Foundation contract validation passed: #{EXPECTED_TEST_IDS.length}/#{EXPECTED_TEST_IDS.length} named tests."
+  postscan_output = ROOT.join("apps/web/dist/assets/unreviewed-after-final-scan.js")
+  postscan_output.write("globalThis.unreviewedAfterFinalScan = true;\n")
   exit 0
 end
 
