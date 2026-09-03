@@ -201,7 +201,7 @@ ADR_0008_CBI_030_SHA256 =
   "25b5d8e6e7c32b572635a02622e8c429b54de8bbfed876b220d16e05da851082".freeze
 
 ADR_0008_EXPECTED_SECURITY_MUTATION_GROUPS = {
-  topology: 6,
+  topology: 9,
   authorization: 1,
   streams: 1,
   delivery: 2,
@@ -693,6 +693,33 @@ def adr_0008_decision_body(adr_source)
   [adr_source[start_match.end(0)...end_match.begin(0)], []]
 end
 
+def adr_0008_bypass_inventory_rows(source)
+  failures = []
+  section_heading = "## Complete bypass inventory\n"
+  section_starts = source.enum_for(:scan, /^#{Regexp.escape(section_heading)}/).map { Regexp.last_match }
+  section_ends = source.enum_for(:scan, /^## Common test fixture and oracle\n/).map { Regexp.last_match }
+  unless section_starts.length == 1 && section_ends.length == 1 &&
+         section_ends.first.begin(0) > section_starts.first.end(0)
+    return [[], ["classification bypass inventory must contain one bounded complete-inventory table"]]
+  end
+
+  section = source[section_starts.first.end(0)...section_ends.first.begin(0)]
+  lines = section.lines
+  header_index = lines.index { |line| line.start_with?("| ID | Path / surface |") }
+  if header_index.nil? || lines[header_index + 1] != "|---|---|---|---|---|---|---|\n"
+    return [[], ["classification bypass inventory must contain the canonical complete-inventory table header"]]
+  end
+
+  rows = lines.drop(header_index + 2).take_while { |line| !line.strip.empty? }
+  failures << "classification bypass inventory complete-inventory table must not be empty" if rows.empty?
+  rows.each_with_index do |row, index|
+    next if row.match?(/\A\| CBI-[0-9]{3} \|.*\|\n?\z/)
+
+    failures << "classification bypass inventory row #{index + 1} must use canonical CBI table-row syntax"
+  end
+  [rows, failures]
+end
+
 def adr_0008_security_contract_failures(adr_source:, asyncapi:, bypass_source:)
   failures = adr_0008_substantive_source_failures(adr_source)
   decision_body, body_failures = adr_0008_decision_body(adr_source)
@@ -757,10 +784,9 @@ def adr_0008_security_contract_failures(adr_source:, asyncapi:, bypass_source:)
     failures << "AsyncAPI x-delivery-contract must match the exact closed ADR-0008 delivery contract"
   end
 
-  # GFM permits up to three leading spaces before a table row. Include every
-  # rendered spelling in the multiplicity check, then require the sole row to
-  # be the canonical unindented, digest-pinned form.
-  bypass_rows = bypass_source.lines.grep(/\A {0,3}\| CBI-030 \|/)
+  inventory_rows, inventory_failures = adr_0008_bypass_inventory_rows(bypass_source)
+  failures.concat(inventory_failures)
+  bypass_rows = inventory_rows.grep(/\A\| CBI-030 \|/)
   if bypass_rows.length != 1
     failures << "classification bypass inventory must contain exactly one CBI-030 row"
   else
@@ -1426,18 +1452,25 @@ end
 
 canonical_bypass_row = classification_bypass_source.lines.grep(/\A\| CBI-030 \|/).first
 if canonical_bypass_row
-  mutated_duplicate_bypass = classification_bypass_source.sub(
-    canonical_bypass_row,
-    "#{canonical_bypass_row} #{canonical_bypass_row}"
-  )
-  adr_0008_security_mutations << {
-    group: :topology,
-    name: "space-indented duplicate CBI-030 row",
-    adr: adr_0008_source,
-    asyncapi: deep_copy_asyncapi.call,
-    bypass: mutated_duplicate_bypass,
-    expected_failure_fragment: "must contain exactly one CBI-030 row"
-  }
+  {
+    "space-indented duplicate CBI-030 row" => " #{canonical_bypass_row}",
+    "no-leading-pipe duplicate CBI-030 row" => canonical_bypass_row.delete_prefix("| "),
+    "no-padding duplicate CBI-030 row" => canonical_bypass_row.sub("| CBI-030 |", "|CBI-030|"),
+    "entity-spelled duplicate CBI-030 row" => canonical_bypass_row.sub("CBI-030", "CBI-&#48;30")
+  }.each do |name, duplicate_row|
+    mutated_duplicate_bypass = classification_bypass_source.sub(
+      canonical_bypass_row,
+      "#{canonical_bypass_row}#{duplicate_row}"
+    )
+    adr_0008_security_mutations << {
+      group: :topology,
+      name: name,
+      adr: adr_0008_source,
+      asyncapi: deep_copy_asyncapi.call,
+      bypass: mutated_duplicate_bypass,
+      expected_failure_fragment: "canonical CBI table-row syntax"
+    }
+  end
 end
 
 adr_0008_security_mutation_survivors = adr_0008_security_mutations.filter_map do |mutation|
