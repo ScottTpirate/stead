@@ -291,8 +291,15 @@ func validateSnapshotValue(value reflect.Value, depth int, budget *snapshotBudge
 		if elementSize > 0 && uintptr(value.Cap()) > ^uintptr(0)/elementSize {
 			return fail(CodeInvalidPlan)
 		}
-		if err := registerSnapshotReference(value, budget, seen, uintptr(value.Cap())*elementSize); err != nil {
-			return fail(CodeInvalidPlan)
+		regionSize := uintptr(value.Cap()) * elementSize
+		// Distinct non-nil zero-capacity slices may share the runtime's
+		// zero-base address, but they expose no mutable backing storage and
+		// cannot carry observable alias topology. Do not reject that safe JSON
+		// shape as a repeated reference.
+		if regionSize > 0 {
+			if err := registerSnapshotReference(value, budget, seen, regionSize); err != nil {
+				return fail(CodeInvalidPlan)
+			}
 		}
 		if value.Type().Elem().Kind() == reflect.Uint8 {
 			if value.Len() > maxInvocationSnapshotNodes-budget.nodes {

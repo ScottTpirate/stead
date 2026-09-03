@@ -169,6 +169,29 @@ func TestInvocationSnapshotRoundTripsAllSupportedReferenceShapes(t *testing.T) {
 	}
 }
 
+func TestInvocationSnapshotAcceptsIndependentEmptySlices(t *testing.T) {
+	original := &snapshotSharedSlices{
+		First:  make([]string, 0),
+		Second: make([]string, 0),
+	}
+	profile, err := newInvocationSnapshotProfile[*snapshotSharedSlices]()
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := captureImmutableInvocation(profile, original)
+	if err != nil {
+		t.Fatalf("independent empty slices rejected: %v", err)
+	}
+	view, err := snapshot.view()
+	if err != nil || !reflect.DeepEqual(view, original) {
+		t.Fatalf("empty-slice view = %#v, %v", view, err)
+	}
+	view.First = append(view.First, "changed")
+	if len(view.Second) != 0 || len(original.First) != 0 || len(original.Second) != 0 {
+		t.Fatalf("empty slices became aliased: view=%#v original=%#v", view, original)
+	}
+}
+
 type snapshotSharedPointers struct {
 	First  *snapshotPointerValue
 	Second *snapshotPointerValue
