@@ -1,0 +1,1 @@
+{"fixture_id":"deny-oriented-decision-table","rules":[{"effect":"deny","rule_id":"explicit-deny-default"}],"schema_version":"1.0.0"}
