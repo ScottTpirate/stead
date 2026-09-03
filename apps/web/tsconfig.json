@@ -3,6 +3,7 @@
   "compilerOptions": {
     "useDefineForClassFields": true,
     "allowJs": false,
+    "allowImportingTsExtensions": true,
     "skipLibCheck": true,
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,

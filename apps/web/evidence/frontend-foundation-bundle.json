@@ -1,0 +1,388 @@
+{
+  "schema_version": "1.3",
+  "issue": "P1-005-FE-FOUNDATION",
+  "contract": "PERF-005",
+  "generated_by": "apps/web/scripts/measure-bundle.mjs",
+  "measurement_method": "Exact inventory, SHA-256 binding, bounded reads, and executable capability classification for every transformed browser artifact plus uncompressed file bytes and Node zlib level 9 over closed Vite manifest JavaScript graphs with stable shared-chunk attribution",
+  "scope": "Wave 0 original non-import foundation",
+  "mature_interface_perf005_complete": false,
+  "lazy_boundaries_are_placeholders": true,
+  "minimal_foundation_baseline_bytes_gzip": 60808,
+  "budget_bytes_gzip": 256000,
+  "eager_dynamic_frontier": [
+    "src/capabilities/administration.ts",
+    "src/capabilities/analytics.ts",
+    "src/capabilities/code.ts",
+    "src/capabilities/delivery.ts",
+    "src/capabilities/docs-editor.ts",
+    "src/capabilities/migration.ts"
+  ],
+  "distribution_limits": {
+    "maxAggregateBytes": 33554432,
+    "maxDepth": 16,
+    "maxEntries": 1024,
+    "maxFileBytes": 8388608
+  },
+  "maximum_distribution_network_call_sites": 1,
+  "distribution_artifacts": [
+    {
+      "file": ".vite/manifest.json",
+      "sha256": "0e4ffe35121410350d39faa213a087d67ef033e9726d4b537a29dde9e65455a6",
+      "uncompressed_bytes": 1546
+    },
+    {
+      "file": "assets/administration-DUBAxT-J.js",
+      "sha256": "83d3f162141705d8e679c1ceb88e4f7957f7d6cf95e89d42794c82087348673d",
+      "uncompressed_bytes": 62
+    },
+    {
+      "file": "assets/analytics-sfWqm0Iz.js",
+      "sha256": "b8ad4110d5d125aa13fa552e39cefb28480e399c9109f058a76c925b33b9ab5a",
+      "uncompressed_bytes": 57
+    },
+    {
+      "file": "assets/code-B89Khe_K.js",
+      "sha256": "312e698e4ca194a24650c0b1a8aafd959dd41a8d89ef13d64c4f0cc372232844",
+      "uncompressed_bytes": 52
+    },
+    {
+      "file": "assets/delivery-CyvOSHoh.js",
+      "sha256": "a5c9e9920b8a54dfc18a160ce589e2434cc29432521038d1a244a51a8a79417f",
+      "uncompressed_bytes": 56
+    },
+    {
+      "file": "assets/docs-editor-MzfoGaDr.js",
+      "sha256": "c47b68727d3175c390813adbf502cf98797a2ccbc7bd2a6ec11430d913e40f68",
+      "uncompressed_bytes": 59
+    },
+    {
+      "file": "assets/index-CQIDk0L8.js",
+      "sha256": "ed2282b98e602e2481097a92e2346bfb934bf99fd2e90cce41d3d89df62b6acb",
+      "uncompressed_bytes": 333987
+    },
+    {
+      "file": "assets/index-flqa-JJY.css",
+      "sha256": "069b92488fb96f8eba703a7f851a2087cad8d6ae1d5ca040068d8acaf4d93199",
+      "uncompressed_bytes": 17156
+    },
+    {
+      "file": "assets/migration-BtQwf3v_.js",
+      "sha256": "7ea33251f704add6d1132a8b41ff4db55d68f3380f8ae976a457d42add74e97e",
+      "uncompressed_bytes": 57
+    },
+    {
+      "file": "index.html",
+      "sha256": "08fffb932af477cc37a45b31c467d794bd4e070938d857cbfe316c2bb99d24e9",
+      "uncompressed_bytes": 444
+    }
+  ],
+  "browser_javascript_capabilities": [
+    {
+      "file": "assets/administration-DUBAxT-J.js",
+      "dynamicResourceTargets": 0,
+      "dynamicNetworkCalls": 0,
+      "externalDestinations": [],
+      "indirectNetworkAccesses": 0,
+      "indirectResourceAccesses": 0,
+      "networkCalls": 0,
+      "resourceMethodCalls": 0,
+      "staticResourceTargets": [],
+      "staticNetworkTargets": [],
+      "unsafeExternalDestinations": [],
+      "unsafeIndirectNetworkAccesses": 0,
+      "unsafeIndirectResourceAccesses": 0,
+      "unsafeStaticResourceTargets": [],
+      "unsafeStaticNetworkTargets": []
+    },
+    {
+      "file": "assets/analytics-sfWqm0Iz.js",
+      "dynamicResourceTargets": 0,
+      "dynamicNetworkCalls": 0,
+      "externalDestinations": [],
+      "indirectNetworkAccesses": 0,
+      "indirectResourceAccesses": 0,
+      "networkCalls": 0,
+      "resourceMethodCalls": 0,
+      "staticResourceTargets": [],
+      "staticNetworkTargets": [],
+      "unsafeExternalDestinations": [],
+      "unsafeIndirectNetworkAccesses": 0,
+      "unsafeIndirectResourceAccesses": 0,
+      "unsafeStaticResourceTargets": [],
+      "unsafeStaticNetworkTargets": []
+    },
+    {
+      "file": "assets/code-B89Khe_K.js",
+      "dynamicResourceTargets": 0,
+      "dynamicNetworkCalls": 0,
+      "externalDestinations": [],
+      "indirectNetworkAccesses": 0,
+      "indirectResourceAccesses": 0,
+      "networkCalls": 0,
+      "resourceMethodCalls": 0,
+      "staticResourceTargets": [],
+      "staticNetworkTargets": [],
+      "unsafeExternalDestinations": [],
+      "unsafeIndirectNetworkAccesses": 0,
+      "unsafeIndirectResourceAccesses": 0,
+      "unsafeStaticResourceTargets": [],
+      "unsafeStaticNetworkTargets": []
+    },
+    {
+      "file": "assets/delivery-CyvOSHoh.js",
+      "dynamicResourceTargets": 0,
+      "dynamicNetworkCalls": 0,
+      "externalDestinations": [],
+      "indirectNetworkAccesses": 0,
+      "indirectResourceAccesses": 0,
+      "networkCalls": 0,
+      "resourceMethodCalls": 0,
+      "staticResourceTargets": [],
+      "staticNetworkTargets": [],
+      "unsafeExternalDestinations": [],
+      "unsafeIndirectNetworkAccesses": 0,
+      "unsafeIndirectResourceAccesses": 0,
+      "unsafeStaticResourceTargets": [],
+      "unsafeStaticNetworkTargets": []
+    },
+    {
+      "file": "assets/docs-editor-MzfoGaDr.js",
+      "dynamicResourceTargets": 0,
+      "dynamicNetworkCalls": 0,
+      "externalDestinations": [],
+      "indirectNetworkAccesses": 0,
+      "indirectResourceAccesses": 0,
+      "networkCalls": 0,
+      "resourceMethodCalls": 0,
+      "staticResourceTargets": [],
+      "staticNetworkTargets": [],
+      "unsafeExternalDestinations": [],
+      "unsafeIndirectNetworkAccesses": 0,
+      "unsafeIndirectResourceAccesses": 0,
+      "unsafeStaticResourceTargets": [],
+      "unsafeStaticNetworkTargets": []
+    },
+    {
+      "file": "assets/index-CQIDk0L8.js",
+      "dynamicResourceTargets": 19,
+      "dynamicNetworkCalls": 1,
+      "externalDestinations": [],
+      "indirectNetworkAccesses": 0,
+      "indirectResourceAccesses": 0,
+      "networkCalls": 1,
+      "resourceMethodCalls": 66,
+      "staticResourceTargets": [
+        " at new ",
+        "<anonymous>",
+        "<script></script>"
+      ],
+      "staticNetworkTargets": [],
+      "unsafeExternalDestinations": [],
+      "unsafeIndirectNetworkAccesses": 0,
+      "unsafeIndirectResourceAccesses": 0,
+      "unsafeStaticResourceTargets": [],
+      "unsafeStaticNetworkTargets": []
+    },
+    {
+      "file": "assets/migration-BtQwf3v_.js",
+      "dynamicResourceTargets": 0,
+      "dynamicNetworkCalls": 0,
+      "externalDestinations": [],
+      "indirectNetworkAccesses": 0,
+      "indirectResourceAccesses": 0,
+      "networkCalls": 0,
+      "resourceMethodCalls": 0,
+      "staticResourceTargets": [],
+      "staticNetworkTargets": [],
+      "unsafeExternalDestinations": [],
+      "unsafeIndirectNetworkAccesses": 0,
+      "unsafeIndirectResourceAccesses": 0,
+      "unsafeStaticResourceTargets": [],
+      "unsafeStaticNetworkTargets": []
+    }
+  ],
+  "eager_javascript": {
+    "uncompressed_bytes": 333987,
+    "gzip_bytes": 73389,
+    "delta_bytes_gzip": 12581,
+    "files": [
+      {
+        "source": "index.html",
+        "file": "assets/index-CQIDk0L8.js",
+        "sha256": "ed2282b98e602e2481097a92e2346bfb934bf99fd2e90cce41d3d89df62b6acb",
+        "uncompressed_bytes": 333987,
+        "gzip_bytes": 73389
+      }
+    ]
+  },
+  "lazy_capabilities": {
+    "docs_editor": {
+      "source": "src/capabilities/docs-editor.ts",
+      "baseline_bytes_gzip": 0,
+      "uncompressed_bytes": 59,
+      "gzip_bytes": 79,
+      "delta_bytes_gzip": 79,
+      "files": [
+        {
+          "source": "src/capabilities/docs-editor.ts",
+          "file": "assets/docs-editor-MzfoGaDr.js",
+          "sha256": "c47b68727d3175c390813adbf502cf98797a2ccbc7bd2a6ec11430d913e40f68",
+          "uncompressed_bytes": 59,
+          "gzip_bytes": 79
+        }
+      ]
+    },
+    "code": {
+      "source": "src/capabilities/code.ts",
+      "baseline_bytes_gzip": 0,
+      "uncompressed_bytes": 52,
+      "gzip_bytes": 72,
+      "delta_bytes_gzip": 72,
+      "files": [
+        {
+          "source": "src/capabilities/code.ts",
+          "file": "assets/code-B89Khe_K.js",
+          "sha256": "312e698e4ca194a24650c0b1a8aafd959dd41a8d89ef13d64c4f0cc372232844",
+          "uncompressed_bytes": 52,
+          "gzip_bytes": 72
+        }
+      ]
+    },
+    "delivery": {
+      "source": "src/capabilities/delivery.ts",
+      "baseline_bytes_gzip": 0,
+      "uncompressed_bytes": 56,
+      "gzip_bytes": 76,
+      "delta_bytes_gzip": 76,
+      "files": [
+        {
+          "source": "src/capabilities/delivery.ts",
+          "file": "assets/delivery-CyvOSHoh.js",
+          "sha256": "a5c9e9920b8a54dfc18a160ce589e2434cc29432521038d1a244a51a8a79417f",
+          "uncompressed_bytes": 56,
+          "gzip_bytes": 76
+        }
+      ]
+    },
+    "administration": {
+      "source": "src/capabilities/administration.ts",
+      "baseline_bytes_gzip": 0,
+      "uncompressed_bytes": 62,
+      "gzip_bytes": 82,
+      "delta_bytes_gzip": 82,
+      "files": [
+        {
+          "source": "src/capabilities/administration.ts",
+          "file": "assets/administration-DUBAxT-J.js",
+          "sha256": "83d3f162141705d8e679c1ceb88e4f7957f7d6cf95e89d42794c82087348673d",
+          "uncompressed_bytes": 62,
+          "gzip_bytes": 82
+        }
+      ]
+    },
+    "migration": {
+      "source": "src/capabilities/migration.ts",
+      "baseline_bytes_gzip": 0,
+      "uncompressed_bytes": 57,
+      "gzip_bytes": 77,
+      "delta_bytes_gzip": 77,
+      "files": [
+        {
+          "source": "src/capabilities/migration.ts",
+          "file": "assets/migration-BtQwf3v_.js",
+          "sha256": "7ea33251f704add6d1132a8b41ff4db55d68f3380f8ae976a457d42add74e97e",
+          "uncompressed_bytes": 57,
+          "gzip_bytes": 77
+        }
+      ]
+    },
+    "analytics": {
+      "source": "src/capabilities/analytics.ts",
+      "baseline_bytes_gzip": 0,
+      "uncompressed_bytes": 57,
+      "gzip_bytes": 77,
+      "delta_bytes_gzip": 77,
+      "files": [
+        {
+          "source": "src/capabilities/analytics.ts",
+          "file": "assets/analytics-sfWqm0Iz.js",
+          "sha256": "b8ad4110d5d125aa13fa552e39cefb28480e399c9109f058a76c925b33b9ab5a",
+          "uncompressed_bytes": 57,
+          "gzip_bytes": 77
+        }
+      ]
+    }
+  },
+  "lazy_unique_javascript": {
+    "uncompressed_bytes": 343,
+    "gzip_bytes": 463,
+    "files": [
+      {
+        "source": "src/capabilities/administration.ts",
+        "file": "assets/administration-DUBAxT-J.js",
+        "sha256": "83d3f162141705d8e679c1ceb88e4f7957f7d6cf95e89d42794c82087348673d",
+        "uncompressed_bytes": 62,
+        "gzip_bytes": 82,
+        "capabilities": [
+          "administration"
+        ],
+        "attributed_to": "administration"
+      },
+      {
+        "source": "src/capabilities/analytics.ts",
+        "file": "assets/analytics-sfWqm0Iz.js",
+        "sha256": "b8ad4110d5d125aa13fa552e39cefb28480e399c9109f058a76c925b33b9ab5a",
+        "uncompressed_bytes": 57,
+        "gzip_bytes": 77,
+        "capabilities": [
+          "analytics"
+        ],
+        "attributed_to": "analytics"
+      },
+      {
+        "source": "src/capabilities/code.ts",
+        "file": "assets/code-B89Khe_K.js",
+        "sha256": "312e698e4ca194a24650c0b1a8aafd959dd41a8d89ef13d64c4f0cc372232844",
+        "uncompressed_bytes": 52,
+        "gzip_bytes": 72,
+        "capabilities": [
+          "code"
+        ],
+        "attributed_to": "code"
+      },
+      {
+        "source": "src/capabilities/delivery.ts",
+        "file": "assets/delivery-CyvOSHoh.js",
+        "sha256": "a5c9e9920b8a54dfc18a160ce589e2434cc29432521038d1a244a51a8a79417f",
+        "uncompressed_bytes": 56,
+        "gzip_bytes": 76,
+        "capabilities": [
+          "delivery"
+        ],
+        "attributed_to": "delivery"
+      },
+      {
+        "source": "src/capabilities/docs-editor.ts",
+        "file": "assets/docs-editor-MzfoGaDr.js",
+        "sha256": "c47b68727d3175c390813adbf502cf98797a2ccbc7bd2a6ec11430d913e40f68",
+        "uncompressed_bytes": 59,
+        "gzip_bytes": 79,
+        "capabilities": [
+          "docs_editor"
+        ],
+        "attributed_to": "docs_editor"
+      },
+      {
+        "source": "src/capabilities/migration.ts",
+        "file": "assets/migration-BtQwf3v_.js",
+        "sha256": "7ea33251f704add6d1132a8b41ff4db55d68f3380f8ae976a457d42add74e97e",
+        "uncompressed_bytes": 57,
+        "gzip_bytes": 77,
+        "capabilities": [
+          "migration"
+        ],
+        "attributed_to": "migration"
+      }
+    ]
+  }
+}
