@@ -1,7 +1,8 @@
 // Package testbackendadapter is a trusted lifecycle/storage integration test
-// fixture. Unlike an owner adapter, it resolves an opaque executor binding while
-// registering a fixed typed repository operation. Its per-session journal
-// proves that owner calls through OperationPort enlist in commit and rollback.
+// fixture. Unlike an owner adapter, it owns a private binding-to-session journal
+// while registering fixed typed repository operations. The journal proves that
+// owner calls through OperationPort enlist in commit and rollback and that a
+// binding expires with its transaction.
 package testbackendadapter
 
 import (
@@ -35,6 +36,8 @@ type Backend struct {
 	commits    int
 	rollbacks  int
 	active     map[*session]struct{}
+	bindings   map[transaction.ExecutorBinding]*session
+	bound      map[*session]transaction.ExecutorBinding
 	committed  []Record
 	rolledBack []Record
 	executed   map[string]int
@@ -48,13 +51,15 @@ type session struct {
 	closed  bool
 }
 
-type executorBinding struct {
-	session *session
-}
-
 func (backend *Backend) initializeLocked() {
 	if backend.active == nil {
 		backend.active = make(map[*session]struct{})
+	}
+	if backend.bindings == nil {
+		backend.bindings = make(map[transaction.ExecutorBinding]*session)
+	}
+	if backend.bound == nil {
+		backend.bound = make(map[*session]transaction.ExecutorBinding)
 	}
 	if backend.executed == nil {
 		backend.executed = make(map[string]int)
@@ -72,10 +77,12 @@ func (backend *Backend) Begin(context.Context) (transaction.Session, transaction
 	backend.begins++
 	value := &session{backend: backend, id: backend.next}
 	backend.active[value] = struct{}{}
-	binding, err := transaction.NewExecutorBinding(value, &executorBinding{session: value})
+	binding, err := transaction.NewExecutorBinding(value)
 	if err != nil {
 		return nil, transaction.ExecutorBinding{}, err
 	}
+	backend.bindings[binding] = value
+	backend.bound[value] = binding
 	return value, binding, nil
 }
 
@@ -92,6 +99,7 @@ func (value *session) Commit(context.Context) error {
 		return errInvalidSession
 	}
 	backend.committed = append(backend.committed, value.staged...)
+	backend.expireBindingLocked(value)
 	delete(backend.active, value)
 	value.closed = true
 	return nil
@@ -107,9 +115,19 @@ func (value *session) Rollback(context.Context) error {
 		backend.rolledBack = append(backend.rolledBack, value.staged...)
 		delete(backend.active, value)
 	}
+	backend.expireBindingLocked(value)
 	value.closed = true
 	value.staged = nil
 	return nil
+}
+
+func (backend *Backend) expireBindingLocked(value *session) {
+	binding, exists := backend.bound[value]
+	if !exists {
+		return
+	}
+	delete(backend.bound, value)
+	delete(backend.bindings, binding)
 }
 
 // RegisterCommandOperation is the trusted integration step. The returned
@@ -117,22 +135,23 @@ func (value *session) Rollback(context.Context) error {
 // the contract or the executor binding.
 func RegisterCommandOperation(backend *Backend, contract transaction.BackendContract, owner string) (transaction.BackendOperation[testowneradapter.Command], error) {
 	return transaction.NewBackendOperation(contract, owner, func(ctx context.Context, binding transaction.ExecutorBinding, command testowneradapter.Command) error {
-		executor, ok := transaction.ResolveExecutorBinding[*executorBinding](binding)
-		if !ok || executor == nil || executor.session == nil || executor.session.backend != backend {
-			return errInvalidSession
-		}
-		return backend.stage(ctx, executor.session, owner, command.Value)
+		return backend.stage(ctx, binding, owner, command.Value)
 	})
 }
 
-func (backend *Backend) stage(ctx context.Context, value *session, owner, item string) error {
+func (backend *Backend) stage(ctx context.Context, binding transaction.ExecutorBinding, owner, item string) error {
 	backend.mu.Lock()
 	backend.initializeLocked()
+	value, ok := backend.bindings[binding]
+	if !ok || value == nil || value.backend != backend {
+		backend.mu.Unlock()
+		return errInvalidSession
+	}
 	if value.closed {
 		backend.mu.Unlock()
 		return errInvalidSession
 	}
-	if _, ok := backend.active[value]; !ok {
+	if _, ok = backend.active[value]; !ok {
 		backend.mu.Unlock()
 		return errInvalidSession
 	}

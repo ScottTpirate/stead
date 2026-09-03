@@ -21,7 +21,7 @@ func TestSessionBindingCloseWaitsForActiveUseAndSuppressesLateReceipt(t *testing
 	plan := &planState{}
 	plan.state.Store(planRunning)
 	lifecycleSession := &fakeSession{}
-	executorBinding, err := NewExecutorBinding(lifecycleSession, &fakeExecutorBinding{session: lifecycleSession})
+	executorBinding, err := NewExecutorBinding(lifecycleSession)
 	if err != nil {
 		t.Fatal(err)
 	}

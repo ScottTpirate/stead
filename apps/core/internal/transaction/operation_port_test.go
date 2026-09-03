@@ -2,34 +2,38 @@ package transaction
 
 import (
 	"context"
-	"errors"
 	"reflect"
 	"sync/atomic"
 	"testing"
 	"time"
 )
 
-type commitOnlyBinding struct{}
-
-func (*commitOnlyBinding) Commit(context.Context) error { return nil }
-
-type rollbackOnlyBinding struct{}
-
-func (*rollbackOnlyBinding) Rollback(context.Context) error { return nil }
-
 func TestExecutorBindingExcludesLifecycleAuthorityAtConstructionAndExecution(t *testing.T) {
 	anchor := &fakeSession{}
-	if binding, err := NewExecutorBinding(nil, struct{}{}); ErrorCodeOf(err) != CodeInvalidContract || binding.valid() {
+	if bindingType := reflect.TypeOf(ExecutorBinding{}); !bindingType.Comparable() || bindingType.NumField() != 1 || bindingType.Field(0).IsExported() {
+		t.Fatalf("executor binding is not a comparable opaque identity: %v", bindingType)
+	}
+	constructorType := reflect.TypeOf(NewExecutorBinding)
+	if constructorType.NumIn() != 1 || constructorType.In(0) != reflect.TypeOf((*Session)(nil)).Elem() || constructorType.NumOut() != 2 {
+		t.Fatalf("executor binding constructor accepts more than the lifecycle association: %v", constructorType)
+	}
+	if binding, err := NewExecutorBinding(nil); ErrorCodeOf(err) != CodeInvalidContract || binding.valid() {
 		t.Fatalf("binding without lifecycle association accepted: binding=%#v err=%v", binding, err)
 	}
-	for _, value := range []any{nil, (*commitOnlyBinding)(nil), &commitOnlyBinding{}, &rollbackOnlyBinding{}, &fakeSession{}} {
-		if binding, err := NewExecutorBinding(anchor, value); ErrorCodeOf(err) != CodeInvalidContract || binding.valid() {
-			t.Fatalf("lifecycle-bearing binding accepted: type=%T binding=%#v err=%v", value, binding, err)
-		}
+	if forged := (ExecutorBinding{state: &executorBindingState{session: anchor}}); forged.valid() {
+		t.Fatal("executor identity without the package seal was accepted")
 	}
-	bound, err := NewExecutorBinding(anchor, struct{}{})
+	bound, err := NewExecutorBinding(anchor)
 	if err != nil || !bound.validFor(anchor) || bound.validFor(&fakeSession{}) {
 		t.Fatalf("executor binding was not sealed to one lifecycle session: binding=%#v err=%v", bound, err)
+	}
+	if copy := bound; copy != bound || copy.state != bound.state {
+		t.Fatal("executor binding copy changed opaque identity")
+	}
+	for _, prohibited := range []string{"Commit", "Rollback", "Resolve", "Session", "Value"} {
+		if _, exists := reflect.TypeOf(bound).MethodByName(prohibited); exists {
+			t.Fatalf("executor binding exposes prohibited method %s", prohibited)
+		}
 	}
 
 	backend := &fakeBackend{}
@@ -39,15 +43,6 @@ func TestExecutorBindingExcludesLifecycleAuthorityAtConstructionAndExecution(t *
 		"owner",
 		func(ctx context.Context, binding ExecutorBinding, _ struct{}) error {
 			callbackCalls.Add(1)
-			if _, ok := ResolveExecutorBinding[Session](binding); ok {
-				return errors.New("executor resolved coordinator lifecycle session")
-			}
-			if _, ok := ResolveExecutorBinding[commitCapability](binding); ok {
-				return errors.New("executor resolved commit authority")
-			}
-			if _, ok := ResolveExecutorBinding[rollbackCapability](binding); ok {
-				return errors.New("executor resolved rollback authority")
-			}
 			return backend.stage(ctx, binding, "owner", "write")
 		},
 		func(ctx context.Context, port OperationPort[struct{}], _ struct{}) error { return port.Execute(ctx) },
@@ -109,6 +104,133 @@ func TestCoordinatorRejectsCrossSessionExecutorBindingBeforeOperation(t *testing
 	if callbackCalls.Load() != 0 || len(committed) != 0 || begins != 1 || commits != 0 || rollbacks != 1 || active != 0 {
 		t.Fatalf("cross-session binding reached operation: callbacks=%d lifecycle=%d/%d/%d active=%d committed=%v",
 			callbackCalls.Load(), begins, commits, rollbacks, active, committed)
+	}
+}
+
+func TestBackendBindingJournalRejectsUnknownForeignCrossSessionAndExpiredIdentities(t *testing.T) {
+	backend := &fakeBackend{}
+	firstSessionValue, firstBinding, err := backend.Begin(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondSessionValue, secondBinding, err := backend.Begin(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	firstSession := firstSessionValue.(*fakeSession)
+	secondSession := secondSessionValue.(*fakeSession)
+	if firstBinding == secondBinding || !firstBinding.validFor(firstSession) || !secondBinding.validFor(secondSession) ||
+		firstBinding.validFor(secondSession) || secondBinding.validFor(firstSession) {
+		t.Fatal("executor identities were not distinct and exact-session bound")
+	}
+	if err := backend.stage(context.Background(), ExecutorBinding{}, "owner", "zero"); err == nil {
+		t.Fatal("zero executor identity reached storage")
+	}
+	foreign := &fakeBackend{}
+	foreignSession, foreignBinding, err := foreign.Begin(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := backend.stage(context.Background(), foreignBinding, "owner", "foreign"); err == nil {
+		t.Fatal("foreign-backend executor identity reached storage")
+	}
+	if err := foreignSession.Rollback(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if err := backend.stage(context.Background(), firstBinding, "owner", "first"); err != nil {
+		t.Fatal(err)
+	}
+	if err := backend.stage(context.Background(), secondBinding, "owner", "second"); err != nil {
+		t.Fatal(err)
+	}
+	firstCopy := firstBinding
+	if err := firstSession.Commit(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if err := backend.stage(context.Background(), firstCopy, "owner", "after-commit"); err == nil {
+		t.Fatal("copied executor identity survived commit")
+	}
+	if err := backend.stage(context.Background(), secondBinding, "owner", "second-still-live"); err != nil {
+		t.Fatalf("committing first identity invalidated independent second identity: %v", err)
+	}
+	secondCopy := secondBinding
+	if err := secondSession.Rollback(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if err := backend.stage(context.Background(), secondCopy, "owner", "after-rollback"); err == nil {
+		t.Fatal("copied executor identity survived rollback")
+	}
+	committed, rolledBack, active := backend.journals()
+	backend.mu.Lock()
+	bindings, bound := len(backend.bindings), len(backend.boundSession)
+	backend.mu.Unlock()
+	if !reflect.DeepEqual(committed[1], []string{"first"}) ||
+		!reflect.DeepEqual(rolledBack[2], []string{"second", "second-still-live"}) ||
+		active != 0 || bindings != 0 || bound != 0 {
+		t.Fatalf("journal lifecycle committed=%v rolled-back=%v active=%d identities=%d/%d", committed, rolledBack, active, bindings, bound)
+	}
+}
+
+func TestRegisteredExecutorLeakedBindingExpiresBeforePostTransactionStorageUse(t *testing.T) {
+	for _, testCase := range []struct {
+		name      string
+		ownerFail bool
+	}{
+		{name: "commit"},
+		{name: "rollback", ownerFail: true},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			backend := &fakeBackend{}
+			var leaked ExecutorBinding
+			operation := registeredOperationForTest(
+				backend,
+				"owner",
+				func(ctx context.Context, binding ExecutorBinding, _ struct{}) error {
+					leaked = binding
+					return backend.stage(ctx, binding, "owner", "write")
+				},
+				func(ctx context.Context, port OperationPort[struct{}], _ struct{}) error {
+					if err := port.Execute(ctx); err != nil {
+						return err
+					}
+					if testCase.ownerFail {
+						return errInjected
+					}
+					return nil
+				},
+			)
+			template, contract, err := NewPlanContract(ContractVersionV1, "leaked_binding_"+testCase.name, []TypedParticipant[struct{}]{{
+				Key: "write", DeclaresWrite: true, Operation: operation,
+			}}, OutboxOptional)
+			if err != nil {
+				t.Fatal(err)
+			}
+			registry, err := NewRegistry([]PlanTemplate{template})
+			if err != nil {
+				t.Fatal(err)
+			}
+			plan, err := contract.Bind(registry, struct{}{}, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, executeErr := newTestCoordinator(backend, registry, &fakeAppender{backend: backend}, nil, nil).Execute(context.Background(), plan)
+			if (testCase.ownerFail && ErrorCodeOf(executeErr) != CodeParticipantFailed) || (!testCase.ownerFail && executeErr != nil) {
+				t.Fatalf("transaction result = %v", executeErr)
+			}
+			if !leaked.valid() {
+				t.Fatal("registered executor did not receive a sealed identity")
+			}
+			if err := backend.stage(context.Background(), leaked, "owner", "late-write"); err == nil {
+				t.Fatal("binding leaked by registered executor remained usable after transaction")
+			}
+			_, _, active := backend.journals()
+			backend.mu.Lock()
+			bindings, bound := len(backend.bindings), len(backend.boundSession)
+			backend.mu.Unlock()
+			if active != 0 || bindings != 0 || bound != 0 {
+				t.Fatalf("expired binding journal active=%d identities=%d/%d", active, bindings, bound)
+			}
+		})
 	}
 }
 

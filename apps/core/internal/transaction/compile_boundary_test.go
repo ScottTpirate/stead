@@ -122,7 +122,7 @@ func TestForeignModulesAndCallersCannotCompileForbiddenCapabilities(t *testing.T
 	if err := decoder.Decode(&trailing); err != io.EOF {
 		t.Fatal("compile-fail inventory contains trailing data")
 	}
-	if inventory.Scope != "P1-015-CORE-PORTS compile-time negative boundaries" || len(inventory.Cases) != 17 {
+	if inventory.Scope != "P1-015-CORE-PORTS compile-time negative boundaries" || len(inventory.Cases) != 20 {
 		t.Fatalf("compile-fail inventory drifted: %q cases=%d", inventory.Scope, len(inventory.Cases))
 	}
 	seen := make(map[string]struct{}, len(inventory.Cases))
@@ -170,7 +170,7 @@ func TestForeignModulesAndCallersCannotCompileForbiddenCapabilities(t *testing.T
 }
 
 func TestOpaqueAndCoordinatorExportedSurfacesHaveNoBypassMethods(t *testing.T) {
-	bannedMethods := []string{"Add", "AddParticipant", "Allowed", "Begin", "Commit", "Exec", "PrepareEffect", "Query", "Raw", "Retry", "Rollback", "SetMode", "SetRole"}
+	bannedMethods := []string{"Add", "AddParticipant", "Allowed", "Begin", "Commit", "Exec", "Payload", "PrepareEffect", "Query", "Raw", "Resolve", "Retry", "Rollback", "Session", "SetMode", "SetRole", "Value"}
 	types := []reflect.Type{
 		reflect.TypeOf(transaction.OperationPort[struct{}]{}),
 		reflect.TypeOf(transaction.ExecutorBinding{}),

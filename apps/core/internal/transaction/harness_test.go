@@ -14,6 +14,8 @@ type fakeBackend struct {
 	mu sync.Mutex
 
 	active       map[*fakeSession]struct{}
+	bindings     map[ExecutorBinding]*fakeSession
+	boundSession map[*fakeSession]ExecutorBinding
 	committed    []string
 	committedBy  map[int][]string
 	rolledBackBy map[int][]string
@@ -44,13 +46,15 @@ type fakeSession struct {
 	closed  bool
 }
 
-type fakeExecutorBinding struct {
-	session *fakeSession
-}
-
 func (backend *fakeBackend) initializeLocked() {
 	if backend.active == nil {
 		backend.active = make(map[*fakeSession]struct{})
+	}
+	if backend.bindings == nil {
+		backend.bindings = make(map[ExecutorBinding]*fakeSession)
+	}
+	if backend.boundSession == nil {
+		backend.boundSession = make(map[*fakeSession]ExecutorBinding)
 	}
 	if backend.committedBy == nil {
 		backend.committedBy = make(map[int][]string)
@@ -79,10 +83,12 @@ func (backend *fakeBackend) Begin(context.Context) (Session, ExecutorBinding, er
 	if backend.mismatchBinding {
 		bindingSession = &fakeSession{backend: backend, id: -session.id}
 	}
-	binding, err := NewExecutorBinding(bindingSession, &fakeExecutorBinding{session: session})
+	binding, err := NewExecutorBinding(bindingSession)
 	if err != nil {
 		return nil, ExecutorBinding{}, err
 	}
+	backend.bindings[binding] = session
+	backend.boundSession[session] = binding
 	return session, binding, nil
 }
 
@@ -104,6 +110,7 @@ func (session *fakeSession) Commit(context.Context) error {
 	}
 	backend.committed = append(backend.committed, session.staged...)
 	backend.committedBy[session.id] = append([]string(nil), session.staged...)
+	backend.expireBindingLocked(session)
 	session.closed = true
 	delete(backend.active, session)
 	return nil
@@ -121,6 +128,7 @@ func (session *fakeSession) Rollback(ctx context.Context) error {
 		backend.rolledBackBy[session.id] = append([]string(nil), session.staged...)
 		delete(backend.active, session)
 	}
+	backend.expireBindingLocked(session)
 	session.closed = true
 	session.staged = nil
 	if backend.panicRollback {
@@ -130,6 +138,15 @@ func (session *fakeSession) Rollback(ctx context.Context) error {
 		return errInjected
 	}
 	return nil
+}
+
+func (backend *fakeBackend) expireBindingLocked(session *fakeSession) {
+	binding, exists := backend.boundSession[session]
+	if !exists {
+		return
+	}
+	delete(backend.boundSession, session)
+	delete(backend.bindings, binding)
 }
 
 func (backend *fakeBackend) backendContract() BackendContract {
@@ -146,17 +163,13 @@ func (backend *fakeBackend) backendContract() BackendContract {
 // stage is the trusted fake repository executor. The owner-authored adapter
 // reaches it only through OperationPort and receives no lifecycle capability.
 func (backend *fakeBackend) stage(_ context.Context, binding ExecutorBinding, owner, value string) error {
-	executor, ok := ResolveExecutorBinding[*fakeExecutorBinding](binding)
-	if !ok || executor == nil {
-		return errInjected
-	}
-	session := executor.session
-	if session == nil || session.backend != backend {
-		return errInjected
-	}
 	backend.mu.Lock()
 	defer backend.mu.Unlock()
 	backend.initializeLocked()
+	session, ok := backend.bindings[binding]
+	if !ok || session == nil || session.backend != backend {
+		return errInjected
+	}
 	if session.closed {
 		return errInjected
 	}
@@ -178,14 +191,13 @@ func (backend *fakeBackend) stageOutbox(scope outbox.TransactionScope[SessionBin
 			if !ok {
 				return errInjected
 			}
-			executor, ok := ResolveExecutorBinding[*fakeExecutorBinding](executorBinding)
-			if !ok || executor == nil || executor.session == nil || executor.session.backend != backend {
-				return errInjected
-			}
-			session := executor.session
 			backend.mu.Lock()
 			defer backend.mu.Unlock()
 			backend.initializeLocked()
+			session, ok := backend.bindings[executorBinding]
+			if !ok || session == nil || session.backend != backend {
+				return errInjected
+			}
 			if session.closed {
 				return errInjected
 			}

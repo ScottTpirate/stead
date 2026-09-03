@@ -6,68 +6,37 @@ import (
 	"sync/atomic"
 )
 
-type commitCapability interface {
-	Commit(context.Context) error
-}
+type executorBindingSeal struct{ marker byte }
 
-type rollbackCapability interface {
-	Rollback(context.Context) error
-}
+const executorBindingMarker byte = 0xa7
 
 type executorBindingState struct {
+	seal    executorBindingSeal
 	session Session
-	value   any
 }
 
 // ExecutorBinding is the opaque per-transaction storage binding delivered to
-// registered backend operations. Unlike Session, its method set contains no
-// commit or rollback authority. The trusted backend adapter supplies a distinct
-// non-lifecycle value for each successful Begin and resolves only its own type.
+// registered backend operations. It is only a comparable identity: it contains
+// no caller-supplied payload and exposes no resolver, session, commit, or
+// rollback authority. The trusted backend adapter keeps its own private mapping
+// from this identity to storage state and expires that mapping with Session.
 type ExecutorBinding struct {
 	state *executorBindingState
 }
 
-// NewExecutorBinding seals an adapter-private non-lifecycle value to the exact
-// lifecycle session returned beside it from Backend.Begin.
-func NewExecutorBinding(session Session, value any) (ExecutorBinding, error) {
-	if isNil(session) || !reflect.TypeOf(session).Comparable() || isNil(value) {
+// NewExecutorBinding mints a distinct identity paired internally with the exact
+// lifecycle session returned beside it from Backend.Begin. The pairing is used
+// only by the coordinator to reject a missing or cross-session identity.
+func NewExecutorBinding(session Session) (ExecutorBinding, error) {
+	if isNil(session) || !reflect.TypeOf(session).Comparable() {
 		return ExecutorBinding{}, fail(CodeInvalidContract)
 	}
-	if _, carriesCommit := value.(commitCapability); carriesCommit {
-		return ExecutorBinding{}, fail(CodeInvalidContract)
-	}
-	if _, carriesRollback := value.(rollbackCapability); carriesRollback {
-		return ExecutorBinding{}, fail(CodeInvalidContract)
-	}
-	return ExecutorBinding{state: &executorBindingState{session: session, value: value}}, nil
-}
-
-// ResolveExecutorBinding recovers one adapter-private non-lifecycle binding.
-// It cannot resolve the coordinator-owned Session because construction rejects
-// values carrying either lifecycle method.
-func ResolveExecutorBinding[T any](binding ExecutorBinding) (T, bool) {
-	var zero T
-	if !binding.valid() {
-		return zero, false
-	}
-	value, ok := binding.state.value.(T)
-	if !ok || isNil(value) {
-		return zero, false
-	}
-	return value, true
+	return ExecutorBinding{state: &executorBindingState{seal: executorBindingSeal{marker: executorBindingMarker}, session: session}}, nil
 }
 
 func (binding ExecutorBinding) valid() bool {
-	if binding.state == nil || isNil(binding.state.session) || !reflect.TypeOf(binding.state.session).Comparable() || isNil(binding.state.value) {
-		return false
-	}
-	if _, carriesCommit := binding.state.value.(commitCapability); carriesCommit {
-		return false
-	}
-	if _, carriesRollback := binding.state.value.(rollbackCapability); carriesRollback {
-		return false
-	}
-	return true
+	return binding.state != nil && binding.state.seal.marker == executorBindingMarker && !isNil(binding.state.session) &&
+		reflect.TypeOf(binding.state.session).Comparable()
 }
 
 func (binding ExecutorBinding) validFor(session Session) bool {
