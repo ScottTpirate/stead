@@ -992,6 +992,16 @@ function isBrowserGlobalExpression(node, bindings) {
     const property = memberName(unwrapped, bindings);
     return property !== undefined && BROWSER_GLOBAL_IDENTIFIERS.has(property);
   }
+  if (
+    ts.isCallExpression(unwrapped) &&
+    unwrapped.arguments.length === 1 &&
+    ts.isPropertyAccessExpression(unwrapped.expression) &&
+    ts.isIdentifier(unwrapped.expression.expression) &&
+    unwrapped.expression.expression.text === "Object" &&
+    unwrapped.expression.name.text === "create"
+  ) {
+    return isBrowserGlobalExpression(unwrapped.arguments[0], bindings);
+  }
   return false;
 }
 
@@ -1020,6 +1030,59 @@ function isAssignmentOperator(kind) {
   return (
     kind >= ts.SyntaxKind.FirstAssignment && kind <= ts.SyntaxKind.LastAssignment
   );
+}
+
+function objectLiteralPropertyName(name, bindings) {
+  if (ts.isIdentifier(name) || ts.isStringLiteral(name)) return name.text;
+  if (ts.isComputedPropertyName(name)) return staticString(name.expression, bindings);
+  return undefined;
+}
+
+function objectAssignResourceTargets(node, expression, bindings) {
+  if (
+    !ts.isCallExpression(node) ||
+    memberName(expression, bindings) !== "assign" ||
+    !(
+      ts.isPropertyAccessExpression(expression) ||
+      ts.isElementAccessExpression(expression)
+    ) ||
+    !ts.isIdentifier(unwrappedExpression(expression.expression, bindings)) ||
+    unwrappedExpression(expression.expression, bindings).text !== "Object"
+  ) {
+    return [];
+  }
+  const targets = [];
+  for (const argument of node.arguments.slice(1)) {
+    const source = unwrappedExpression(argument, bindings);
+    if (!source || !ts.isObjectLiteralExpression(source)) continue;
+    for (const property of source.properties) {
+      if (
+        !ts.isPropertyAssignment(property) &&
+        !ts.isShorthandPropertyAssignment(property) &&
+        !ts.isMethodDeclaration(property) &&
+        !ts.isGetAccessorDeclaration(property) &&
+        !ts.isSetAccessorDeclaration(property)
+      ) {
+        continue;
+      }
+      const name = objectLiteralPropertyName(property.name, bindings)?.toLowerCase();
+      if (
+        name === undefined ||
+        ![...RESOURCE_PROPERTY_NAMES].some(
+          (candidate) => candidate.toLowerCase() === name,
+        )
+      ) {
+        continue;
+      }
+      const value = ts.isPropertyAssignment(property)
+        ? staticString(property.initializer, bindings)
+        : ts.isShorthandPropertyAssignment(property)
+          ? staticString(property.name, bindings)
+          : undefined;
+      targets.push(value);
+    }
+  }
+  return targets;
 }
 
 function jsxAttributeValue(attribute, bindings) {
@@ -1220,6 +1283,9 @@ function scriptBoundaryRules(path, source) {
     if (ts.isCallExpression(node) || ts.isNewExpression(node)) {
       const expression = unwrappedExpression(node.expression, bindings);
       const calledName = memberName(expression, bindings);
+      if (objectAssignResourceTargets(node, expression, bindings).length > 0) {
+        directNetwork = true;
+      }
       if (
         (ts.isIdentifier(expression) &&
           (DIRECT_NETWORK_IDENTIFIERS.has(expression.text) ||
@@ -1424,6 +1490,28 @@ export function classifyBrowserJavaScriptCapabilities(path, source) {
         (ts.isIdentifier(expression) ? expression.text : undefined);
       let callArguments = [...(node.arguments ?? [])];
       let indirect = false;
+      const assignedResourceTargets = objectAssignResourceTargets(
+        node,
+        expression,
+        bindings,
+      );
+      for (const target of assignedResourceTargets) {
+        resourceMethodCalls += 1;
+        indirectResourceAccesses += 1;
+        if (target === undefined) dynamicResourceTargets += 1;
+        else staticResourceTargets.add(target);
+      }
+      if (
+        ts.isCallExpression(node) &&
+        (ts.isPropertyAccessExpression(expression) ||
+          ts.isElementAccessExpression(expression)) &&
+        isBrowserGlobalExpression(expression.expression, bindings) &&
+        calledName === undefined
+      ) {
+        networkCalls += 1;
+        dynamicNetworkCalls += 1;
+        indirectNetworkAccesses += 1;
+      }
       if (
         ts.isCallExpression(node) &&
         (ts.isPropertyAccessExpression(expression) ||

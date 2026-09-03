@@ -19,6 +19,29 @@ export interface FrontendMetric {
   readonly unit: "bytes" | "count" | "milliseconds" | "score";
 }
 
+const METRIC_UNITS = Object.freeze({
+  "cold-interactive": "milliseconds",
+  "command-open-acknowledgement": "milliseconds",
+  "command-local-results": "milliseconds",
+  "route-useful-content": "milliseconds",
+  "first-contentful-paint": "milliseconds",
+  "largest-contentful-paint": "milliseconds",
+  "cumulative-layout-shift": "score",
+  "interaction-next-paint": "milliseconds",
+  "platform-request-duration": "milliseconds",
+  "platform-response-bytes": "bytes",
+  "platform-request-count": "count",
+  "route-navigation-count": "count",
+  "lazy-capability-chunk-count": "count",
+}) satisfies Readonly<Record<FrontendMetricName, FrontendMetric["unit"]>>;
+
+const SPAN_METRIC_NAMES = new Set<FrontendMetricName>([
+  "cold-interactive",
+  "command-open-acknowledgement",
+  "command-local-results",
+  "route-useful-content",
+]);
+
 declare global {
   interface WindowEventMap {
     "stead:performance": CustomEvent<FrontendMetric>;
@@ -30,21 +53,92 @@ let cumulativeLayoutShift = 0;
 let platformRequestCount = 0;
 let routeNavigationCount = 0;
 
+function snapshotMetric(rawMetric: unknown): Readonly<FrontendMetric> {
+  try {
+    if (
+      rawMetric === null ||
+      typeof rawMetric !== "object" ||
+      Array.isArray(rawMetric)
+    ) {
+      throw new Error("metric is not an object");
+    }
+    const prototype = Reflect.getPrototypeOf(rawMetric);
+    if (prototype !== Object.prototype && prototype !== null) {
+      throw new Error("metric is not plain");
+    }
+    const fields = new Map<string, unknown>();
+    for (const key of ["name", "value", "unit"]) {
+      const descriptor = Reflect.getOwnPropertyDescriptor(rawMetric, key);
+      if (!descriptor || !("value" in descriptor) || !descriptor.enumerable) {
+        throw new Error("metric field is not own enumerable data");
+      }
+      fields.set(key, descriptor.value);
+    }
+    const name = fields.get("name");
+    const value = fields.get("value");
+    const unit = fields.get("unit");
+    if (
+      typeof name !== "string" ||
+      !Object.hasOwn(METRIC_UNITS, name) ||
+      typeof value !== "number" ||
+      !Number.isFinite(value) ||
+      value < 0 ||
+      unit !== METRIC_UNITS[name as FrontendMetricName] ||
+      ((unit === "bytes" || unit === "count") && !Number.isSafeInteger(value))
+    ) {
+      throw new Error("invalid metric value");
+    }
+    return Object.freeze({
+      name: name as FrontendMetricName,
+      value,
+      unit: unit as FrontendMetric["unit"],
+    });
+  } catch {
+    throw new TypeError("frontend performance metric must be closed and allowlisted");
+  }
+}
+
+function assertSpanMetricName(name: unknown): asserts name is FrontendMetricName {
+  if (
+    typeof name !== "string" ||
+    !Object.hasOwn(METRIC_UNITS, name) ||
+    METRIC_UNITS[name as FrontendMetricName] !== "milliseconds" ||
+    !SPAN_METRIC_NAMES.has(name as FrontendMetricName)
+  ) {
+    throw new TypeError("frontend performance span name is not allowlisted");
+  }
+}
+
+function performanceNow(): number {
+  const value = performance.now();
+  if (!Number.isFinite(value) || value < 0) {
+    throw new TypeError("frontend performance clock returned an invalid value");
+  }
+  return value;
+}
+
 export function emitPerformanceMetric(metric: FrontendMetric): void {
-  window.dispatchEvent(new CustomEvent("stead:performance", { detail: metric }));
+  const detail = snapshotMetric(metric);
+  window.dispatchEvent(new CustomEvent("stead:performance", { detail }));
 }
 
 export function beginPerformanceSpan(name: FrontendMetricName): void {
-  activeSpans.set(name, performance.now());
+  assertSpanMetricName(name);
+  activeSpans.set(name, performanceNow());
 }
 
 export function endPerformanceSpan(name: FrontendMetricName): void {
+  assertSpanMetricName(name);
   const startedAt = activeSpans.get(name);
   if (startedAt === undefined) return;
   activeSpans.delete(name);
+  const endedAt = performanceNow();
+  if (endedAt < startedAt) {
+    throw new TypeError("frontend performance clock moved backwards");
+  }
   emitPerformanceMetric({
     name,
-    value: performance.now() - startedAt,
+    value: endedAt - startedAt,
     unit: "milliseconds",
   });
 }

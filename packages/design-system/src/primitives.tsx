@@ -210,11 +210,20 @@ export interface ErrorStateProps {
   readonly onRetry?: () => void;
 }
 
+const SAFE_CORRELATION_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u;
+
+function safeCorrelationId(value: unknown): string | undefined {
+  return typeof value === "string" && SAFE_CORRELATION_ID_PATTERN.test(value)
+    ? value
+    : undefined;
+}
+
 export function ErrorState({
   title = "This view is unavailable",
   correlationId,
   onRetry,
 }: ErrorStateProps) {
+  const visibleCorrelationId = safeCorrelationId(correlationId);
   return (
     <div className="stead-state" data-state="error" role="alert">
       <span className="stead-state__glyph stead-state__glyph--error" aria-hidden="true">
@@ -222,7 +231,7 @@ export function ErrorState({
       </span>
       <h2>{title}</h2>
       <p>Try again. If the problem continues, share the correlation ID with an administrator.</p>
-      {correlationId ? <code>{correlationId}</code> : null}
+      {visibleCorrelationId ? <code>{visibleCorrelationId}</code> : null}
       {onRetry ? (
         <div className="stead-state__action">
           <Button onClick={onRetry}>Try again</Button>

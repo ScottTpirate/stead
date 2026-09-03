@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import {
   Button,
+  ErrorState,
   type ButtonProps,
 } from "../../../packages/design-system/src/index";
 
@@ -44,6 +45,21 @@ describe("Foundation", () => {
     expect(screen.getByRole("heading", { level: 1, name: "Inbox" })).toBeDefined();
   });
 
+  it("leaves modifier clicks to the browser", () => {
+    render(<Foundation />);
+    const navigation = screen.getByRole("navigation", { name: "Primary navigation" });
+    const inboxLink = within(navigation).getByRole("link", { name: "Inbox" });
+    const modifierClick = new MouseEvent("click", {
+      bubbles: true,
+      button: 0,
+      cancelable: true,
+      ctrlKey: true,
+    });
+
+    expect(inboxLink.dispatchEvent(modifierClick)).toBe(true);
+    expect(modifierClick.defaultPrevented).toBe(false);
+  });
+
   it("contains no software-capability links in the general shell fixture", () => {
     render(<Foundation />);
 
@@ -69,5 +85,15 @@ describe("Foundation", () => {
     }
 
     expect(forbiddenCapabilityLinks()).toHaveLength(2);
+  });
+
+  it("renders only safe correlation identifiers", () => {
+    const { rerender } = render(
+      <ErrorState correlationId="safe-correlation:0001" />,
+    );
+    expect(screen.getByText("safe-correlation:0001")).toBeDefined();
+
+    rerender(<ErrorState correlationId="classified-body <secret>" />);
+    expect(screen.queryByText(/classified-body|secret/u)).toBeNull();
   });
 });

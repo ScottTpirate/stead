@@ -50,6 +50,16 @@ test("primary navigation preserves the canonical order and omits blocked capabil
       /outside the canonical primary routes/u,
     );
   }
+  assert.equal(Object.isFrozen(routes.primaryNavigation), true);
+  assert.equal(routes.primaryNavigation.every(Object.isFrozen), true);
+  assert.equal(
+    Reflect.set(routes.primaryNavigation[0], "href", "https://outside.invalid"),
+    false,
+  );
+  assert.throws(
+    () => routes.internalNavigationHref("https://outside.invalid"),
+    /outside the canonical primary routes/u,
+  );
 });
 
 test("shell includes keyboard, screen-reader, and stable-state hooks", async () => {
@@ -291,6 +301,8 @@ test("aliased call-through and encoded JSX resource sinks fail independently", a
     'const reflectedGet = Reflect.get; reflectedGet(globalThis, "fetch");\n',
     'Location.prototype.replace.call(location, "/outside");\n',
     'Element.prototype.setAttribute.call(document.body, "src", "/outside");\n',
+    'Object.assign(document.querySelector("img"), {src: location.search.slice(1)});\n',
+    'Object.create(globalThis)[location.hash.slice(1)](location.search.slice(1));\n',
     'export const Link = () => <a href="&#104;ttps://outside.invalid">go</a>;\n',
   ];
   try {
@@ -592,6 +604,8 @@ test("every built artifact is manifest-bound, content-scanned, and symlink-safe"
       'fetch.call(globalThis, "/api/v1");\n',
       'Location.prototype.replace.call(location, "/api/v1");\n',
       'Element.prototype.setAttribute.call(document.body, "src", "/api/v1");\n',
+      'Object.assign(document.querySelector("img"), {src: location.search.slice(1)});\n',
+      'Object.create(globalThis)[location.hash.slice(1)](location.search.slice(1));\n',
     ]) {
       await writeFile(join(fixtureRoot, "assets/index.js"), source);
       await assert.rejects(

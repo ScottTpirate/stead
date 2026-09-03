@@ -717,6 +717,68 @@ test("query state deduplicates reads and clears on authorization-context change"
   unsubscribe();
 });
 
+test("query loading reservation prevents synchronous subscriber re-entry", async () => {
+  const store = new QueryStore();
+  store.setAuthorizationContext({
+    principal: "principal-a",
+    session: "session-a",
+    securityDomain: "domain-a",
+  });
+  let calls = 0;
+  let resolveLoader;
+  const loader = () => {
+    calls += 1;
+    return new Promise((resolve) => {
+      resolveLoader = resolve;
+    });
+  };
+  let reentered;
+  const unsubscribe = store.subscribe("project-surface", () => {
+    if (store.getSnapshot("project-surface").status === "loading" && !reentered) {
+      reentered = store.load("project-surface", loader);
+    }
+  });
+
+  const initial = store.load("project-surface", loader);
+  assert.equal(calls, 1);
+  assert.ok(reentered);
+  resolveLoader({ ok: true });
+  assert.deepEqual(await initial, { ok: true });
+  assert.deepEqual(await reentered, { ok: true });
+  assert.equal(calls, 1);
+  unsubscribe();
+});
+
+test("authorization-context invalidation during loading notification cancels before I/O", async () => {
+  const store = new QueryStore();
+  store.setAuthorizationContext({
+    principal: "principal-a",
+    session: "session-a",
+    securityDomain: "domain-a",
+  });
+  let calls = 0;
+  const unsubscribe = store.subscribe("project-surface", () => {
+    if (store.getSnapshot("project-surface").status === "loading") {
+      store.setAuthorizationContext({
+        principal: "principal-b",
+        session: "session-b",
+        securityDomain: "domain-a",
+      });
+    }
+  });
+
+  await assert.rejects(
+    store.load("project-surface", async () => {
+      calls += 1;
+      return { mustNotLoad: true };
+    }),
+    (error) => error instanceof QueryCancellationError,
+  );
+  assert.equal(calls, 0);
+  assert.equal(store.getSnapshot("project-surface").status, "idle");
+  unsubscribe();
+});
+
 test("authorization context is an immutable closed snapshot", async () => {
   const store = new QueryStore();
   const context = {

@@ -209,13 +209,32 @@ export class QueryStore {
     if (entry.inflight) return entry.inflight;
     const controller = new AbortController();
     const revision = this.contextRevision;
+    let resolveInflight!: (data: TData) => void;
+    let rejectInflight!: (error: unknown) => void;
+    const inflight = new Promise<TData>((resolve, reject) => {
+      resolveInflight = resolve;
+      rejectInflight = reject;
+    });
     entry.controller = controller;
+    // Reserve the key before publishing loading state. A synchronous subscriber
+    // may re-enter load(); it must observe this exact logical request rather
+    // than invoke a second loader/BFF operation.
+    entry.inflight = inflight;
     entry.contextRevision = revision;
     this.replaceSnapshot(entry, {
       status: "loading",
       data: entry.snapshot.data,
     });
     this.notify(entry);
+
+    if (
+      entry.inflight !== inflight ||
+      revision !== this.contextRevision ||
+      controller.signal.aborted
+    ) {
+      rejectInflight(new QueryCancellationError());
+      return inflight;
+    }
 
     let loaderResult: Promise<TData>;
     try {
@@ -224,8 +243,7 @@ export class QueryStore {
       loaderResult = Promise.reject(error);
     }
 
-    let inflight: Promise<TData>;
-    inflight = loaderResult.then(
+    void loaderResult.then(
       (data) => {
         const isCurrentRequest = entry.inflight === inflight;
         if (revision !== this.contextRevision || controller.signal.aborted) {
@@ -269,8 +287,7 @@ export class QueryStore {
         }
         throw sanitizedError;
       },
-    );
-    entry.inflight = inflight;
+    ).then(resolveInflight, rejectInflight);
     return inflight;
   }
 
