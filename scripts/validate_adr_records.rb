@@ -199,9 +199,12 @@ ADR_0008_DELIVERY_CONTRACT = {
 # required positive fragments remain present.
 ADR_0008_CBI_030_SHA256 =
   "25b5d8e6e7c32b572635a02622e8c429b54de8bbfed876b220d16e05da851082".freeze
+ADR_0008_CBI_TABLE_HEADER =
+  "| ID | Path / surface | Bypass or leakage risk | Required preventive/detective controls | Automated test contract | Owner | Residual risk and status |\n".freeze
+ADR_0008_CBI_TABLE_DELIMITER = "|---|---|---|---|---|---|---|\n".freeze
 
 ADR_0008_EXPECTED_SECURITY_MUTATION_GROUPS = {
-  topology: 9,
+  topology: 14,
   authorization: 1,
   streams: 1,
   delivery: 2,
@@ -693,29 +696,129 @@ def adr_0008_decision_body(adr_source)
   [adr_source[start_match.end(0)...end_match.begin(0)], []]
 end
 
+def markdown_mask_nonrendered_security_contracts(source)
+  # Security-bearing Markdown must be present in rendered content. Preserve line
+  # boundaries while masking HTML comments and fenced code so their contents
+  # cannot satisfy the contract parser as if they were operative prose/tables.
+  without_comments = +""
+  cursor = 0
+  while (comment_start = source.index("<!--", cursor))
+    without_comments << source[cursor...comment_start]
+    comment_end = source.index("-->", comment_start + 4)
+    hidden_end = comment_end ? comment_end + 3 : source.length
+    without_comments << source[comment_start...hidden_end].gsub(/[^\r\n]/, " ")
+    cursor = hidden_end
+  end
+  without_comments << source[cursor..] if cursor < source.length
+
+  visible = +""
+  fence = nil
+  html_block = nil
+  block_html_tags = %w[
+    address article aside base basefont blockquote body caption center col colgroup
+    dd details dialog dir div dl dt fieldset figcaption figure footer form frame
+    frameset h1 h2 h3 h4 h5 h6 head header hr html iframe legend li link main menu
+    menuitem nav noframes ol optgroup option p param search section summary table
+    tbody td tfoot th thead title tr track ul
+  ].join("|")
+  without_comments.each_line do |line|
+    if fence
+      delimiter = Regexp.escape(fence.fetch(:character))
+      minimum_length = fence.fetch(:length)
+      fence = nil if line.match?(/\A {0,3}#{delimiter}{#{minimum_length},}[ \t]*(?:\r?\n)?\z/)
+      visible << line.gsub(/[^\r\n]/, " ")
+      next
+    end
+
+    if html_block
+      terminator = html_block.fetch(:terminator)
+      html_block = nil if terminator == :blank ? line.strip.empty? : line.include?(terminator)
+      visible << line.gsub(/[^\r\n]/, " ")
+      next
+    end
+
+    opening = line.match(/\A {0,3}(`{3,}|~{3,})([^\r\n]*)(?:\r?\n)?\z/)
+    if opening && !(opening[1].start_with?("`") && opening[2].include?("`"))
+      marker = opening[1]
+      fence = { character: marker[0], length: marker.length }
+      visible << line.gsub(/[^\r\n]/, " ")
+    elsif (raw_tag = line.match(/\A {0,3}<(script|pre|style|textarea)(?:[ \t>])/i))
+      terminator = "</#{raw_tag[1].downcase}>"
+      html_block = { terminator: terminator } unless line.downcase.include?(terminator)
+      visible << line.gsub(/[^\r\n]/, " ")
+    elsif line.match?(/\A {0,3}<\?/) || line.match?(/\A {0,3}<!\[CDATA\[/)
+      terminator = line.match?(/\A {0,3}<\?/) ? "?>" : "]]>"
+      html_block = { terminator: terminator } unless line.include?(terminator)
+      visible << line.gsub(/[^\r\n]/, " ")
+    elsif line.match?(/\A {0,3}<![A-Z]/) ||
+          line.match?(/\A {0,3}<\/?(?:#{block_html_tags})(?:[ \t\/>]|$)/i)
+      html_block = { terminator: :blank } unless line.strip.empty?
+      visible << line.gsub(/[^\r\n]/, " ")
+    else
+      visible << line
+    end
+  end
+  visible
+end
+
+def gfm_table_cell_count(line, delimiter: false)
+  body = line.sub(/\r?\n\z/, "")
+  return nil unless body.match?(/\A {0,3}\S/) && body.include?("|")
+
+  body = body.strip
+  body = body.delete_prefix("|").delete_suffix("|")
+  cells = body.split("|", -1)
+  return nil if cells.empty?
+  if delimiter
+    return nil unless cells.all? { |cell| cell.match?(/\A[ \t]*:?-+:?[ \t]*\z/) }
+  end
+  cells.length
+end
+
 def adr_0008_bypass_inventory_rows(source)
   failures = []
+  visible_source = markdown_mask_nonrendered_security_contracts(source)
   section_heading = "## Complete bypass inventory\n"
-  section_starts = source.enum_for(:scan, /^#{Regexp.escape(section_heading)}/).map { Regexp.last_match }
-  section_ends = source.enum_for(:scan, /^## Common test fixture and oracle\n/).map { Regexp.last_match }
+  section_end_heading = "## Common test fixture and oracle\n"
+  section_starts = visible_source.enum_for(:scan, /^#{Regexp.escape(section_heading)}/).map { Regexp.last_match }
+  section_ends = visible_source.enum_for(:scan, /^#{Regexp.escape(section_end_heading)}/).map { Regexp.last_match }
   unless section_starts.length == 1 && section_ends.length == 1 &&
          section_ends.first.begin(0) > section_starts.first.end(0)
-    return [[], ["classification bypass inventory must contain one bounded complete-inventory table"]]
+    return [[], ["classification bypass inventory must contain one bounded visible complete-inventory section"]]
   end
 
-  section = source[section_starts.first.end(0)...section_ends.first.begin(0)]
+  section = visible_source[section_starts.first.end(0)...section_ends.first.begin(0)]
   lines = section.lines
-  header_index = lines.index { |line| line.start_with?("| ID | Path / surface |") }
-  if header_index.nil? || lines[header_index + 1] != "|---|---|---|---|---|---|---|\n"
+  table_starts = (1...lines.length).select do |delimiter_index|
+    delimiter_cells = gfm_table_cell_count(lines[delimiter_index], delimiter: true)
+    header_cells = gfm_table_cell_count(lines[delimiter_index - 1])
+    delimiter_cells && header_cells == delimiter_cells
+  end
+  unless table_starts.length == 1
+    return [[], ["classification bypass inventory must contain exactly one operative GFM table"]]
+  end
+
+  delimiter_index = table_starts.first
+  header_index = delimiter_index - 1
+  unless lines[header_index] == ADR_0008_CBI_TABLE_HEADER &&
+         lines[delimiter_index] == ADR_0008_CBI_TABLE_DELIMITER
     return [[], ["classification bypass inventory must contain the canonical complete-inventory table header"]]
   end
 
-  rows = lines.drop(header_index + 2).take_while { |line| !line.strip.empty? }
+  rows = lines.drop(delimiter_index + 1).take_while { |line| !line.strip.empty? }
   failures << "classification bypass inventory complete-inventory table must not be empty" if rows.empty?
   rows.each_with_index do |row, index|
     next if row.match?(/\A\| CBI-[0-9]{3} \|.*\|\n?\z/)
 
     failures << "classification bypass inventory row #{index + 1} must use canonical CBI table-row syntax"
+  end
+
+  visible_cbi_030_lines = lines.filter_map do |line|
+    decoded, invalid = decode_numeric_character_references(line)
+    line if !invalid && decoded.include?("CBI-030")
+  end
+  unless visible_cbi_030_lines.length == 1 && visible_cbi_030_lines.first == rows.grep(/\A\| CBI-030 \|/).first
+    failures << "classification bypass inventory must render CBI-030 exactly once in the canonical table"
   end
   [rows, failures]
 end
@@ -1451,6 +1554,59 @@ adr_0008_security_mutations << {
 end
 
 canonical_bypass_row = classification_bypass_source.lines.grep(/\A\| CBI-030 \|/).first
+canonical_bypass_lines = classification_bypass_source.lines
+canonical_bypass_header_index = canonical_bypass_lines.index(ADR_0008_CBI_TABLE_HEADER)
+if canonical_bypass_header_index
+  canonical_bypass_end_index = canonical_bypass_lines.each_index.find do |index|
+    index > canonical_bypass_header_index + 1 && canonical_bypass_lines[index].strip.empty?
+  end || canonical_bypass_lines.length
+  canonical_bypass_table = canonical_bypass_lines[
+    canonical_bypass_header_index...canonical_bypass_end_index
+  ].join
+
+  {
+    "HTML-comment-hidden complete inventory table" => [
+      "<!--\n#{canonical_bypass_table}-->\n",
+      "exactly one operative GFM table"
+    ],
+    "fenced-code-hidden complete inventory table" => [
+      "```text\n#{canonical_bypass_table}```\n",
+      "exactly one operative GFM table"
+    ],
+    "raw-HTML-hidden complete inventory table" => [
+      "<div>\n#{canonical_bypass_table}</div>\n\n",
+      "exactly one operative GFM table"
+    ],
+    "second complete inventory table after a blank line" => [
+      "#{canonical_bypass_table}\n#{canonical_bypass_table}",
+      "exactly one operative GFM table"
+    ],
+    "security-control header meaning changed" => [
+      canonical_bypass_table.sub(
+        ADR_0008_CBI_TABLE_HEADER,
+        ADR_0008_CBI_TABLE_HEADER.sub(
+          "Required preventive/detective controls",
+          "Optional preventive/detective guidance"
+        )
+      ),
+      "canonical complete-inventory table header"
+    ]
+  }.each do |name, (replacement_table, expected_failure_fragment)|
+    mutated_rendered_bypass = classification_bypass_source.sub(
+      canonical_bypass_table,
+      replacement_table
+    )
+    adr_0008_security_mutations << {
+      group: :topology,
+      name: name,
+      adr: adr_0008_source,
+      asyncapi: deep_copy_asyncapi.call,
+      bypass: mutated_rendered_bypass,
+      expected_failure_fragment: expected_failure_fragment
+    }
+  end
+end
+
 if canonical_bypass_row
   {
     "space-indented duplicate CBI-030 row" => " #{canonical_bypass_row}",
