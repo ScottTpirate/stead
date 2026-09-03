@@ -330,6 +330,16 @@ ADR_0009_EXPECTED_SEMANTIC_MUTATIONS = {
   "full-reconciliation verification weakened" => :full_reconciliation_verification,
   "Decision hidden in HTML comment" => :visible_decision_structure,
   "Decision hidden in fenced code" => :visible_decision_structure,
+  "Decision hidden in type-one raw HTML" => :visible_decision_structure,
+  "Decision hidden in processing-instruction raw HTML" => :visible_decision_structure,
+  "Decision hidden in declaration raw HTML" => :visible_decision_structure,
+  "Decision hidden in CDATA raw HTML" => :visible_decision_structure,
+  "Decision heading hidden in type-six raw HTML" => :visible_decision_structure,
+  "Decision heading hidden in type-seven raw HTML" => :visible_decision_structure,
+  "Verification hidden in type-one raw HTML" => :verification_structure,
+  "Markdown byte bound exceeded" => :markdown_resource_bounds,
+  "Markdown line-count bound exceeded" => :markdown_resource_bounds,
+  "Markdown line-length bound exceeded" => :markdown_resource_bounds,
   "contradictory scope reuse appended" => :scope_nontransferable,
   "contradictory acting-principal omission appended" => :acting_principal,
   "contradictory initiating-principal omission appended" => :initiating_principal,
@@ -382,11 +392,27 @@ ADR_0009_EXPECTED_GOVERNANCE_MUTATIONS = {
   "misplaced project-owner review row" => :project_owner_row,
   "duplicate conflicting project-owner review row" => :review_duplicates_conflicts,
   "Reviews table hidden in HTML comment" => :review_layout,
-  "Reviews table hidden in fenced code" => :review_layout
+  "Reviews table hidden in fenced code" => :review_layout,
+  "Reviews section hidden in type-one raw HTML" => :review_layout,
+  "Reviews heading hidden in type-six raw HTML" => :review_layout,
+  "Reviews heading hidden in type-seven raw HTML" => :review_layout,
+  "Project-owner review row hidden in type-one raw HTML" => :project_owner_row
 }.freeze
 ADR_0009_EXPECTED_REVIEW_MUTATION_COUNT = 4
-ADR_0009_EXPECTED_SEMANTIC_MUTATION_COUNT = 79
-ADR_0009_EXPECTED_GOVERNANCE_MUTATION_COUNT = 29
+ADR_0009_EXPECTED_SEMANTIC_MUTATION_COUNT = 89
+ADR_0009_EXPECTED_GOVERNANCE_MUTATION_COUNT = 33
+ADR_0009_EXPECTED_MARKDOWN_CONTROLS = [
+  "closed type-one raw HTML after protected sections",
+  "closed type-six raw HTML after protected sections",
+  "closed type-seven raw HTML after protected sections",
+  "inline-code comment opener outside protected sections",
+  "fenced HTML-like example outside protected sections",
+  "closed HTML comment outside protected sections"
+].freeze
+ADR_0009_EXPECTED_MARKDOWN_CONTROL_COUNT = ADR_0009_EXPECTED_MARKDOWN_CONTROLS.length
+ADR_0009_MARKDOWN_MAX_BYTES = 1_048_576
+ADR_0009_MARKDOWN_MAX_LINES = 20_000
+ADR_0009_MARKDOWN_MAX_LINE_CHARACTERS = 262_144
 
 EXPECTED_P1_006_ADR_CANDIDATES = %w[
   ADR-CAND-002
@@ -669,66 +695,189 @@ def exact_adr_requirement_mapping_failures(requirements:, adr_number:, expected_
   failures
 end
 
-def markdown_visibility(source)
-  raw_lines = source.lines(chomp: true)
-  visible_lines = Array.new(raw_lines.length, "")
-  hidden_fragments = []
-  fence = nil
-  in_comment = false
+def adr_0009_markdown_mask_characters(source)
+  source.gsub(/[^\r\n]/, " ")
+end
 
-  raw_lines.each_with_index do |line, index|
-    stripped = line.lstrip
+def adr_0009_markdown_backtick_closers(source)
+  source = source.b
+  runs_by_length = Hash.new { |hash, length| hash[length] = [] }
+  cursor = 0
+  while cursor < source.length
+    if source[cursor] == "`"
+      run_end = cursor + 1
+      run_end += 1 while run_end < source.length && source[run_end] == "`"
+      runs_by_length[run_end - cursor] << cursor
+      cursor = run_end
+    else
+      cursor += 1
+    end
+  end
+  runs_by_length.each_value.each_with_object({}) do |positions, closers|
+    positions.each_cons(2) { |opening, closing| closers[opening] = closing }
+  end
+end
+
+def adr_0009_markdown_mask_inline_comments(source)
+  original_encoding = source.encoding
+  source = source.b
+  closers = adr_0009_markdown_backtick_closers(source)
+  masked = +""
+  hidden = []
+  cursor = 0
+  unclosed = false
+  while cursor < source.length
+    if source[cursor] == "`" && closers[cursor]
+      closing = closers.fetch(cursor)
+      run_end = cursor + 1
+      run_end += 1 while run_end < source.length && source[run_end] == "`"
+      end_offset = closing + run_end - cursor
+      masked << source[cursor...end_offset]
+      cursor = end_offset
+    elsif source[cursor, 4] == "<!--"
+      comment_end = source.index("-->", cursor + 4)
+      unless comment_end
+        hidden << source[cursor..].dup.force_encoding(original_encoding)
+        masked << adr_0009_markdown_mask_characters(source[cursor..])
+        unclosed = true
+        break
+      end
+      hidden_end = comment_end + 3
+      hidden << source[cursor...hidden_end].dup.force_encoding(original_encoding)
+      masked << adr_0009_markdown_mask_characters(source[cursor...hidden_end])
+      cursor = hidden_end
+    else
+      masked << source[cursor]
+      cursor += 1
+    end
+  end
+  [masked.force_encoding(original_encoding), hidden, unclosed]
+end
+
+def adr_0009_markdown_html_block_descriptor(line, previous_blank:)
+  body = line.delete_suffix("\n").delete_suffix("\r")
+  type_one = body.match(/\A {0,3}<(script|pre|style|textarea)(?=[\t >]|\z)/i)
+  if type_one
+    tag = type_one[1].downcase
+    return { terminator: %r{</#{Regexp.escape(tag)}[ \t\r\n]*>}i }
+  end
+  return { terminator: "-->" } if body.match?(/\A {0,3}<!--/)
+  return { terminator: "?>" } if body.match?(/\A {0,3}<\?/)
+  return { terminator: "]]>" } if body.match?(/\A {0,3}<!\[CDATA\[/)
+  return { terminator: ">" } if body.match?(/\A {0,3}<![A-Z]/)
+
+  block_html_tags = %w[
+    address article aside base basefont blockquote body caption center col colgroup
+    dd details dialog dir div dl dt fieldset figcaption figure footer form frame
+    frameset h1 h2 h3 h4 h5 h6 head header hr html iframe legend li link main menu
+    menuitem nav noframes ol optgroup option p param search section summary table
+    tbody td tfoot th thead title tr track ul
+  ].join("|")
+  return { terminator: :blank } if body.match?(/\A {0,3}<\/?(?:#{block_html_tags})(?:[ \t\/>]|\z)/i)
+
+  complete_tag = /\A {0,3}<\/?[A-Za-z][A-Za-z0-9-]*(?:[ \t]+[A-Za-z_:][A-Za-z0-9_.:-]*(?:[ \t]*=[ \t]*(?:"[^"]*"|'[^']*'|[^ \t\r\n"'=<>`]+))?)*[ \t]*\/?>[ \t]*\z/
+  return { terminator: :blank } if previous_blank && body.match?(complete_tag)
+
+  nil
+end
+
+def adr_0009_markdown_html_block_terminated?(source, descriptor)
+  terminator = descriptor.fetch(:terminator)
+  return false if terminator == :blank
+
+  terminator.is_a?(Regexp) ? source.match?(terminator) : source.include?(terminator)
+end
+
+def markdown_visibility(source)
+  empty = {
+    raw_lines: [],
+    visible_lines: [],
+    hidden_text: "",
+    unclosed_fence: false,
+    unclosed_comment: false,
+    resource_bounds_exceeded: true
+  }
+  return empty if source.bytesize > ADR_0009_MARKDOWN_MAX_BYTES
+
+  line_count = source.count("\n") + (source.end_with?("\n") ? 0 : 1)
+  return empty if line_count > ADR_0009_MARKDOWN_MAX_LINES
+  return empty if source.each_line.any? { |line| line.length > ADR_0009_MARKDOWN_MAX_LINE_CHARACTERS }
+
+  raw_lines = source.lines(chomp: true)
+  structural = +""
+  hidden_fragments = []
+  lines = source.lines
+  fence = nil
+  previous_blank = true
+  index = 0
+  while index < lines.length
+    line = lines[index]
     if fence
       hidden_fragments << line
-      closing_pattern = /\A#{Regexp.escape(fence.fetch(:character))}{#{fence.fetch(:length)},}\s*\z/
-      fence = nil if stripped.match?(closing_pattern)
+      structural << adr_0009_markdown_mask_characters(line)
+      delimiter = Regexp.escape(fence.fetch(:character))
+      minimum_length = fence.fetch(:length)
+      fence = nil if line.match?(/\A {0,3}#{delimiter}{#{minimum_length},}[ \t]*(?:\r?\n)?\z/)
+      previous_blank = false
+      index += 1
       next
     end
 
-    unless in_comment
-      fence_match = stripped.match(/\A(`{3,}|~{3,})/)
-      if fence_match
-        marker = fence_match[1]
-        fence = { character: marker[0], length: marker.length }
-        hidden_fragments << line
-        next
-      end
+    opening = line.match(/\A {0,3}(`{3,}|~{3,})([^\r\n]*)(?:\r?\n)?\z/)
+    if opening && !(opening[1].start_with?("`") && opening[2].include?("`"))
+      marker = opening[1]
+      fence = { character: marker[0], length: marker.length }
+      hidden_fragments << line
+      structural << adr_0009_markdown_mask_characters(line)
+      previous_blank = false
+      index += 1
+      next
     end
 
-    remaining = line
-    visible = +""
-    until remaining.empty?
-      if in_comment
-        closing_index = remaining.index("-->")
-        if closing_index
-          hidden_fragments << remaining.byteslice(0, closing_index + 3)
-          remaining = remaining.byteslice(closing_index + 3, remaining.bytesize) || ""
-          in_comment = false
-        else
-          hidden_fragments << remaining
-          remaining = ""
-        end
-      else
-        opening_index = remaining.index("<!--")
-        if opening_index
-          visible << remaining.byteslice(0, opening_index)
-          remaining = remaining.byteslice(opening_index, remaining.bytesize) || ""
-          in_comment = true
-        else
-          visible << remaining
-          remaining = ""
-        end
+    descriptor = adr_0009_markdown_html_block_descriptor(line, previous_blank: previous_blank)
+    if descriptor
+      raw = +""
+      while index < lines.length
+        candidate = lines[index]
+        break if descriptor.fetch(:terminator) == :blank && candidate.strip.empty?
+
+        raw << candidate
+        structural << adr_0009_markdown_mask_characters(candidate)
+        index += 1
+        break if adr_0009_markdown_html_block_terminated?(raw, descriptor)
       end
+      hidden_fragments << raw
+      previous_blank = false
+      next
     end
-    visible_lines[index] = visible
+
+    if line.start_with?("    ", "\t")
+      code = +""
+      while index < lines.length && (lines[index].strip.empty? || lines[index].start_with?("    ", "\t"))
+        candidate = lines[index]
+        code << candidate
+        structural << adr_0009_markdown_mask_characters(candidate)
+        index += 1
+      end
+      hidden_fragments << code
+      previous_blank = false
+      next
+    end
+
+    structural << line
+    previous_blank = line.strip.empty?
+    index += 1
   end
 
+  masked, hidden_comments, unclosed_comment = adr_0009_markdown_mask_inline_comments(structural)
+  hidden_fragments.concat(hidden_comments)
   {
     raw_lines: raw_lines,
-    visible_lines: visible_lines,
+    visible_lines: masked.lines(chomp: true),
     hidden_text: hidden_fragments.join("\n"),
     unclosed_fence: !fence.nil?,
-    unclosed_comment: in_comment
+    unclosed_comment: unclosed_comment,
+    resource_bounds_exceeded: false
   }
 end
 
@@ -767,6 +916,7 @@ def adr_0009_semantic_predicate_failures(source)
                         [:effect_permit_exhaustive, :visible_decision_structure]
   failed = adr_0009_verification_predicate_failures(source)
   visibility = markdown_visibility(source)
+  failed << :markdown_resource_bounds if visibility.fetch(:resource_bounds_exceeded)
   decision = visible_markdown_section(
     visibility: visibility,
     heading: "## Decision",
@@ -826,6 +976,7 @@ def adr_0009_verification_predicate_failures(source)
   visible_lines = visibility.fetch(:visible_lines)
   hidden_text = visibility.fetch(:hidden_text)
   failed = Set.new
+  failed << :markdown_resource_bounds if visibility.fetch(:resource_bounds_exceeded)
   verification = visible_markdown_section(
     visibility: visibility,
     heading: "## Verification",
@@ -884,6 +1035,7 @@ def adr_0009_document_governance_predicate_failures(source)
   visible_lines = visibility.fetch(:visible_lines)
   hidden_text = visibility.fetch(:hidden_text)
   failed = Set.new
+  failed << :markdown_resource_bounds if visibility.fetch(:resource_bounds_exceeded)
 
   unless source.valid_encoding? && source.end_with?("\n") &&
          !source.start_with?("\uFEFF") && !source.include?("\r") && !source.include?("\0")
@@ -1004,6 +1156,7 @@ end
 def adr_0009_review_structure_failures(source)
   review_predicates = Set[
     :canonical_markdown_bytes,
+    :markdown_resource_bounds,
     :markdown_visibility,
     :hidden_governance_substitution,
     :review_layout,
@@ -1372,6 +1525,8 @@ adr_0009_security_mutation_survivors = []
 adr_0009_security_mutation_count = 0
 adr_0009_governance_mutation_survivors = []
 adr_0009_governance_mutation_count = 0
+adr_0009_markdown_control_failures = []
+adr_0009_markdown_control_count = 0
 
 paths.each do |path|
   basename = path.basename.to_s
@@ -1443,6 +1598,9 @@ paths.each do |path|
       actual_review_inventory = review_mutations.transform_values { |mutation| mutation.fetch(:predicate) }
       unless actual_review_inventory == ADR_0009_EXPECTED_REVIEW_MUTATIONS
         failures << "ADR-0009 review-separation mutation inventory/mapping differs from the pinned inventory"
+      end
+      unless review_mutations.values.map { |mutation| mutation.fetch(:source) }.uniq.length == review_mutations.length
+        failures << "ADR-0009 review-separation mutations must have unique source payloads"
       end
       review_mutations.each do |label, mutation|
         adr_0009_review_mutation_count += 1
@@ -1532,6 +1690,49 @@ paths.each do |path|
       source: source.sub("## Decision\n", "```text\n## Decision\n").sub("## Consequences\n", "## Consequences\n```\n"),
       predicate: :visible_decision_structure
     }
+    security_mutations["Decision hidden in type-one raw HTML"] = {
+      source: source.sub("## Decision\n", "<pre\n>\n## Decision\n").sub("## Consequences\n", "## Consequences\n</pre>\n"),
+      predicate: :visible_decision_structure
+    }
+    security_mutations["Decision hidden in processing-instruction raw HTML"] = {
+      source: source.sub("## Decision\n", "<?stead\n## Decision\n").sub("## Consequences\n", "## Consequences\n?>\n"),
+      predicate: :visible_decision_structure
+    }
+    security_mutations["Decision hidden in declaration raw HTML"] = {
+      source: source.sub("## Decision\n", "<!STEAD\n## Decision\n").sub("## Consequences\n", "## Consequences\n>\n"),
+      predicate: :visible_decision_structure
+    }
+    security_mutations["Decision hidden in CDATA raw HTML"] = {
+      source: source.sub("## Decision\n", "<![CDATA[\n## Decision\n").sub("## Consequences\n", "## Consequences\n]]>\n"),
+      predicate: :visible_decision_structure
+    }
+    security_mutations["Decision heading hidden in type-six raw HTML"] = {
+      source: source.sub("## Decision\n", "<div>\n## Decision\n") + "</div>\n",
+      predicate: :visible_decision_structure
+    }
+    security_mutations["Decision heading hidden in type-seven raw HTML"] = {
+      source: source.sub("## Decision\n", "<stead-contract>\n## Decision\n") + "</stead-contract>\n",
+      predicate: :visible_decision_structure
+    }
+    security_mutations["Verification hidden in type-one raw HTML"] = {
+      source: source.sub("## Verification\n", "<pre\n>\n## Verification\n").sub(
+        "## Rollout and supersession\n",
+        "## Rollout and supersession\n</pre>\n"
+      ),
+      predicate: :verification_structure
+    }
+    security_mutations["Markdown byte bound exceeded"] = {
+      source: source + ("x" * (ADR_0009_MARKDOWN_MAX_BYTES - source.bytesize + 1)),
+      predicate: :markdown_resource_bounds
+    }
+    security_mutations["Markdown line-count bound exceeded"] = {
+      source: source + ("\n" * (ADR_0009_MARKDOWN_MAX_LINES + 1)),
+      predicate: :markdown_resource_bounds
+    }
+    security_mutations["Markdown line-length bound exceeded"] = {
+      source: source + ("x" * (ADR_0009_MARKDOWN_MAX_LINE_CHARACTERS + 1)) + "\n",
+      predicate: :markdown_resource_bounds
+    }
     ADR_0009_SEMANTIC_FORBIDDEN_FRAGMENTS.each do |predicate, fragments|
       label = {
         scope_nontransferable: "contradictory scope reuse appended",
@@ -1559,6 +1760,9 @@ paths.each do |path|
     actual_semantic_inventory = security_mutations.transform_values { |mutation| mutation.fetch(:predicate) }
     unless actual_semantic_inventory == ADR_0009_EXPECTED_SEMANTIC_MUTATIONS
       failures << "ADR-0009 semantic-security mutation inventory/mapping differs from the pinned inventory"
+    end
+    unless security_mutations.values.map { |mutation| mutation.fetch(:source) }.uniq.length == security_mutations.length
+      failures << "ADR-0009 semantic-security mutations must have unique source payloads"
     end
     security_mutations.each do |label, mutation|
       adr_0009_security_mutation_count += 1
@@ -1779,11 +1983,44 @@ paths.each do |path|
           gate: adr_0009_gate,
           gate_count: 1,
           predicate: :review_layout
+        },
+        "Reviews section hidden in type-one raw HTML" => {
+          source: source.sub("## Reviews and approvals\n", "<pre\n>\n## Reviews and approvals\n") + "</pre>\n",
+          gate: adr_0009_gate,
+          gate_count: 1,
+          predicate: :review_layout
+        },
+        "Reviews heading hidden in type-six raw HTML" => {
+          source: source.sub("## Reviews and approvals\n", "<div>\n## Reviews and approvals\n") + "</div>\n",
+          gate: adr_0009_gate,
+          gate_count: 1,
+          predicate: :review_layout
+        },
+        "Reviews heading hidden in type-seven raw HTML" => {
+          source: source.sub("## Reviews and approvals\n", "<stead-contract>\n## Reviews and approvals\n") + "</stead-contract>\n",
+          gate: adr_0009_gate,
+          gate_count: 1,
+          predicate: :review_layout
+        },
+        "Project-owner review row hidden in type-one raw HTML" => {
+          source: source.sub(
+            "#{ADR_0009_PROJECT_OWNER_REVIEW_LINE}\n",
+            "<pre\n>\n#{ADR_0009_PROJECT_OWNER_REVIEW_LINE}\n</pre>\n"
+          ),
+          gate: adr_0009_gate,
+          gate_count: 1,
+          predicate: :project_owner_row
         }
       }
       actual_governance_inventory = governance_mutations.transform_values { |mutation| mutation.fetch(:predicate) }
       unless actual_governance_inventory == ADR_0009_EXPECTED_GOVERNANCE_MUTATIONS
         failures << "ADR-0009 governance mutation inventory/mapping differs from the pinned inventory"
+      end
+      governance_payloads = governance_mutations.values.map do |mutation|
+        [mutation.fetch(:source), mutation.fetch(:gate), mutation.fetch(:gate_count)]
+      end
+      unless governance_payloads.uniq.length == governance_mutations.length
+        failures << "ADR-0009 governance mutations must have unique source/catalog payloads"
       end
       governance_mutations.each do |label, mutation|
         adr_0009_governance_mutation_count += 1
@@ -1799,6 +2036,43 @@ paths.each do |path|
         if unchanged || !mutation_failures.include?(expected_predicate)
           adr_0009_governance_mutation_survivors <<
             "#{label} (expected #{expected_predicate}; got #{mutation_failures.to_a.sort.join(', ')})"
+        end
+      end
+
+      markdown_controls = {
+        "closed type-one raw HTML after protected sections" =>
+          source + "\n<pre\n>\nBenign operator example.\n</pre>\n",
+        "closed type-six raw HTML after protected sections" =>
+          source + "\n<aside>\nBenign operator example.\n</aside>\n\n",
+        "closed type-seven raw HTML after protected sections" =>
+          source + "\n<stead-note>\nBenign operator example.\n</stead-note>\n\n",
+        "inline-code comment opener outside protected sections" =>
+          source + "\nBenign literal `<!--` remains inline code.\n",
+        "fenced HTML-like example outside protected sections" =>
+          source + "\n```text\n<!-- benign example without a closer\n## Example heading\n```\n",
+        "closed HTML comment outside protected sections" =>
+          source + "\n<!-- benign operator note -->\n"
+      }
+      unless markdown_controls.keys == ADR_0009_EXPECTED_MARKDOWN_CONTROLS
+        failures << "ADR-0009 benign Markdown control inventory differs from the pinned inventory"
+      end
+      unless markdown_controls.values.uniq.length == markdown_controls.length &&
+             markdown_controls.values.none? { |control_source| control_source == source }
+        failures << "ADR-0009 benign Markdown controls must be unique source-changing cases"
+      end
+      markdown_controls.each do |label, control_source|
+        adr_0009_markdown_control_count += 1
+        control_failures = adr_0009_decision_body_failures(control_source)
+        control_failures.concat(adr_0009_semantic_contract_failures(control_source))
+        control_failures.concat(
+          adr_0009_governance_gate_failures(
+            source: control_source,
+            gate: adr_0009_gate,
+            gate_count: 1
+          )
+        )
+        unless control_failures.empty?
+          adr_0009_markdown_control_failures << "#{label} (#{control_failures.join('; ')})"
         end
       end
     end
@@ -1987,6 +2261,12 @@ unless adr_0009_governance_mutation_count == ADR_0009_EXPECTED_GOVERNANCE_MUTATI
 end
 unless adr_0009_governance_mutation_survivors.empty?
   failures << "ADR-0009 supersession/owner-gate mutation survivors: #{adr_0009_governance_mutation_survivors.join(', ')}"
+end
+unless adr_0009_markdown_control_count == ADR_0009_EXPECTED_MARKDOWN_CONTROL_COUNT
+  failures << "ADR-0009 benign Markdown control inventory must contain exactly #{ADR_0009_EXPECTED_MARKDOWN_CONTROL_COUNT} cases, found #{adr_0009_markdown_control_count}"
+end
+unless adr_0009_markdown_control_failures.empty?
+  failures << "ADR-0009 benign Markdown control failures: #{adr_0009_markdown_control_failures.join(', ')}"
 end
 
 security_issue = issues["STEAD-P1-006"]
@@ -2888,6 +3168,7 @@ if failures.empty?
   puts "ADR-0009 review-separation mutation guard: PASS (#{adr_0009_review_mutation_count}/#{ADR_0009_EXPECTED_REVIEW_MUTATION_COUNT} mutations killed)"
   puts "ADR-0009 semantic-security mutation guard: PASS (#{adr_0009_security_mutation_count}/#{ADR_0009_EXPECTED_SEMANTIC_MUTATION_COUNT} mutations killed)"
   puts "ADR-0009 supersession/owner-gate mutation guard: PASS (#{adr_0009_governance_mutation_count}/#{ADR_0009_EXPECTED_GOVERNANCE_MUTATION_COUNT} mutations killed)"
+  puts "ADR-0009 benign Markdown controls: PASS (#{adr_0009_markdown_control_count}/#{ADR_0009_EXPECTED_MARKDOWN_CONTROL_COUNT})"
   puts "ADR traceability validation: PASS (records=#{paths.length}, requirements=#{known_requirement_ids.length}, tests=#{all_test_owners.length})"
 else
   warn "ADR traceability validation: FAIL (#{failures.length} issue#{failures.length == 1 ? '' : 's'})"
