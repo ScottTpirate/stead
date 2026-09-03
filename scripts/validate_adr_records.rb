@@ -110,7 +110,7 @@ EXPECTED_REQUIREMENT_TEST_LINKS = {
 # Close the complete ADR-0009 Decision body as a separate integrity guard.
 # Semantic mutation self-tests below never use this digest as their oracle.
 ADR_0009_DECISION_BODY_SHA256 =
-  "650bcd7eef3085f25ebcc023fceefee6a57e4f2240dcc0777d39b5980d048803".freeze
+  "59b7e4a73994a426f189680a33187a3d1a16b20f33195b2cb0eaa0bdaf03c678".freeze
 ADR_0009_OWNER_APPROVAL_LINE =
   "- **Project-owner approval required:** yes; this proposal narrowly changes locked per-provider-HTTP-call durable-permit clauses in the Master Build Directive's CLS-003/CLS-007 rules, constitution section 4.6, ADR-0005, and ADR-0007 for one closed bounded internal read plan".freeze
 ADR_0009_SUPERSESSION_LINE =
@@ -139,14 +139,14 @@ ADR_0009_SPEC_TOP_LEVEL_KEYS = %w[
 ADR_0009_SPEC_SECTION_DIGESTS = {
   "authority" => "947858adec5cddd08322e65e8f4ab4f3be623eadc5265166ed0edd2b571f8835",
   "field_classes" => "d7bd40843dca2b1a6f121285cdd0db34ea40b49a5978dd6f411d45b2bab94ea1",
-  "authorization_scope" => "1af06b5f1740edab53c05a53c8bb89dd47502a219be22b6e72e22e9618c7fbe6",
+  "authorization_scope" => "c3f6ab60891983798f828fd93cf73090e05960d47ef723f1663b9543108f0b55",
   "snapshot_and_change_proof" => "c672ab550b3daa59e083785fd0a1f514fa27931ec4966270729452672f443378",
   "webhook" => "689ea3cfbae79f23cccf842ed28ab11f757dad81f008824ec88fe956fbfded26",
   "reconciliation" => "b340a9ea20d0f7164ac97e1d5dfcdb35c1740649c0c7d0a6dffa80c0fc9fd5ae",
   "provider_mutation" => "04d003d64cbe5cc58f23e14d26e22a936d2a9f8c1ad1b089973b1f9fbb8d2e13",
   "compatibility_profile" => "dfd004f9311eba2574f0bc213ca1d31801c55fe1e8cb2d86294cbf3bb83a57f5",
-  "privacy_and_observability" => "7274c14173448396cb206582b1bdafdcccf358e4515ae538b1da955cfe6ad191",
-  "verification" => "07857252843154b8b41be0957356d73c3bd0a1f3af8a6ef83ac28fc6b1c9aff4"
+  "privacy_and_observability" => "c6c75030fc0ae3c9af8a012f26da04e341d9460aa211976600d0db9d25fe6fc7",
+  "verification" => "c01f888f62cd3e25ba8c24943b9af30e1cba2a8aa94ae0d89c63a3cfa840adff"
 }.freeze
 ADR_0009_SPEC_EXPECTATIONS = {
   "schema_version" => "1.0",
@@ -226,15 +226,23 @@ ADR_0009_SPEC_EXPECTATIONS = {
   ],
   "authorization_scope.persistence.start_transaction" => %w[
     immutable_scope_identity_and_bindings conservative_whole_plan_envelope
-    atomic_one_time_execution_claim_activation logical_audit_start
+    atomic_one_time_execution_claim_activation
+    logical_audit_intent_reference_only_not_append_only_audit_record
   ],
   "authorization_scope.persistence.per_eligible_read_writes" => 0,
   "authorization_scope.persistence.per_eligible_page_writes" => 0,
   "authorization_scope.persistence.accounting_during_execution" => "process_local_monotonic_counters",
   "authorization_scope.persistence.uncertain_dispatch" => "consumes_local_attempt_and_allowance",
+  "authorization_scope.persistence.terminalization" =>
+    "permanent_claim_transition_and_exactly_one_append_only_logical_audit_record",
+  "authorization_scope.persistence.logical_audit_record_cardinality" =>
+    "exactly_one_per_scope_written_only_by_terminalization_or_expiry_recovery",
   "authorization_scope.persistence.clean_completion" => "one_logical_audit_with_exact_attempt_call_page_item_byte_counts",
   "authorization_scope.persistence.interrupted_completion" => "one_logical_audit_with_reserved_upper_bounds_and_abandoned_or_crash_result",
-  "authorization_scope.persistence.page_count_growth" => "constant_postgresql_write_count",
+  "authorization_scope.persistence.page_count_growth" =>
+    "constant_scope_claim_accounting_and_logical_audit_control_write_count",
+  "authorization_scope.persistence.changed_resource_writes" =>
+    "measured_batched_set_oriented_and_may_scale_only_with_actual_projection_domain_outbox_or_quarantine_changes",
   "authorization_scope.before_local_outcome_commit.mode" => "read_only_validation_plus_owner_transaction_fence",
   "authorization_scope.before_local_outcome_commit.checks" => %w[
     all_before_call_checks final_execution_local_totals_within_whole_plan_envelope
@@ -266,29 +274,186 @@ ADR_0009_SPEC_EXPECTATIONS = {
     every_scope_binding_omitted_or_swapped call_plan_widen_or_reorder cross_scope_reuse
     atomic_one_time_execution_claim same_scope_fork stale_holder post_terminal_replay
     claim_deadline permanent_terminal_invalidation process_loss bounded_inventory
-    zero_per_page_writes exact_or_conservative_audit_counts constant_writes_as_pages_grow
+    zero_per_page_control_writes exactly_one_append_only_logical_audit_record
+    exact_or_conservative_audit_counts constant_control_writes_as_pages_grow
+    changed_resource_writes_measured_separately
   ],
   "privacy_and_observability.propagation_surfaces" => %w[
     logical_audit event outbox dlq log trace metric diagnostic support_evidence
   ],
-  "privacy_and_observability.logical_operation_audit.closed_schema" => true,
-  "privacy_and_observability.logical_operation_audit.allowed_fields" => %w[
-    schema_version logical_operation_id decision_id acting_service_principal_ref
-    initiating_principal_ref_when_relevant canonical_containing_scope_ref security_domain_id
-    operation_class outcome_code authorization_scope_id execution_claim_id activation_revision
+  "privacy_and_observability.canonical_composition.activation" =>
+    "all_named_versioned_schemas_registered_validated_and_consumer_readable_before_first_emission",
+  "privacy_and_observability.canonical_composition.rollback" =>
+    "stop_new_emission_preserve_old_and_new_readers_and_reconcile_forward_without_reinterpreting_committed_evidence",
+  "privacy_and_observability.canonical_composition.logical_audit.predecessor_contract" =>
+    "specs/work-graph-profile/owgp-v0.1.schema.json#/$defs/AuditRecord",
+  "privacy_and_observability.canonical_composition.logical_audit.predecessor_schema_version" =>
+    "1.0",
+  "privacy_and_observability.canonical_composition.logical_audit.resource_envelope_successor_contract" =>
+    "packages/domain-schemas/common/resource-envelope/resource-envelope-v1.1.schema.json",
+  "privacy_and_observability.canonical_composition.logical_audit.resource_envelope_successor_contract_id" =>
+    "https://stead.example/packages/domain-schemas/common/resource-envelope/resource-envelope-v1.1.schema.json",
+  "privacy_and_observability.canonical_composition.logical_audit.emission_contract" =>
+    "packages/domain-schemas/resources/audit-record/audit-record-v1.1.schema.json",
+  "privacy_and_observability.canonical_composition.logical_audit.emission_contract_id" =>
+    "https://stead.example/packages/domain-schemas/resources/audit-record/audit-record-v1.1.schema.json",
+  "privacy_and_observability.canonical_composition.logical_audit.schema_version" => "1.1",
+  "privacy_and_observability.canonical_composition.logical_audit.schema_owner" => "WS-01",
+  "privacy_and_observability.canonical_composition.logical_audit.composition" =>
+    "resource_envelope_v1_1_plus_all_predecessor_audit_fields_plus_closed_optional_provider_evidence",
+  "privacy_and_observability.canonical_composition.logical_audit.closure" =>
+    "unevaluated_properties_false_at_composed_record",
+  "privacy_and_observability.canonical_composition.logical_audit.predecessor_compatibility" =>
+    "every_resource_envelope_and_audit_required_field_and_constraint_preserved_except_schema_version_advances_from_1_0_to_1_1",
+  "privacy_and_observability.canonical_composition.logical_audit.provider_evidence_property" =>
+    "provider_reconciliation_evidence",
+  "privacy_and_observability.canonical_composition.logical_audit.provider_evidence_contract" =>
+    "logical_audit_provider_evidence",
+  "privacy_and_observability.canonical_composition.logical_audit.compatibility" =>
+    "preconsumer_minor_successor_with_v1_0_and_v1_1_dual_readers_consumer_first",
+  "privacy_and_observability.canonical_composition.canonical_event.predecessor_data_contract" =>
+    "packages/event-schemas/stead/stead-event-v0.1.schema.json",
+  "privacy_and_observability.canonical_composition.canonical_event.emission_data_contract" =>
+    "packages/event-schemas/stead/provider-reconciliation-event-v1.schema.json",
+  "privacy_and_observability.canonical_composition.canonical_event.emission_data_contract_id" =>
+    "https://stead.example/packages/event-schemas/stead/provider-reconciliation-event-v1.schema.json",
+  "privacy_and_observability.canonical_composition.canonical_event.schema_version" => "1.0",
+  "privacy_and_observability.canonical_composition.canonical_event.schema_owner" => "WS-07",
+  "privacy_and_observability.canonical_composition.canonical_event.predecessor_compatibility" =>
+    "every_stead_event_v0_1_required_field_and_constraint_preserved_except_schema_version_advances_from_0_1_to_1_0",
+  "privacy_and_observability.canonical_composition.canonical_event.provider_evidence_property" =>
+    "provider_reconciliation_evidence",
+  "privacy_and_observability.canonical_composition.canonical_event.provider_evidence_contract" =>
+    "canonical_event_provider_evidence",
+  "privacy_and_observability.canonical_composition.canonical_event.envelope_common_attributes_contract" =>
+    "specs/asyncapi/stead.yaml#/components/schemas/SteadCloudEventAttributesV1",
+  "privacy_and_observability.canonical_composition.canonical_event.envelope_contract" =>
+    "specs/asyncapi/stead.yaml#/components/schemas/ProviderReconciliationCloudEventEnvelope",
+  "privacy_and_observability.canonical_composition.canonical_event.message_contract" =>
+    "specs/asyncapi/stead.yaml#/components/messages/ProviderReconciliationCloudEvent",
+  "privacy_and_observability.canonical_composition.canonical_event.channel_binding" =>
+    "specs/asyncapi/stead.yaml#/channels/scmEvents/messages/ProviderReconciliationCloudEvent",
+  "privacy_and_observability.canonical_composition.canonical_event.source" =>
+    "urn:stead:producer:scm",
+  "privacy_and_observability.canonical_composition.canonical_event.type" =>
+    "stead.scm.reconciled.v1",
+  "privacy_and_observability.canonical_composition.canonical_event.dataschema" =>
+    "https://stead.example/packages/event-schemas/stead/provider-reconciliation-event-v1.schema.json",
+  "privacy_and_observability.canonical_composition.canonical_event.generic_v0_1_data_route_for_same_type" =>
+    "prohibited",
+  "privacy_and_observability.canonical_composition.canonical_event.compatibility" =>
+    "registered_consumer_first_closed_specialization_preserves_all_common_event_fields",
+  "privacy_and_observability.canonical_composition.canonical_outbox.owner" => "WS-02",
+  "privacy_and_observability.canonical_composition.canonical_outbox.representation" =>
+    "exact_serialized_bytes_and_digest_of_the_registered_canonical_event",
+  "privacy_and_observability.canonical_composition.canonical_outbox.additional_provider_metadata_or_reserialization" =>
+    "prohibited",
+  "privacy_and_observability.canonical_composition.minimized_dead_letter_event.predecessor_data_contract" =>
+    "packages/event-schemas/stead/stead-event-v0.1.schema.json",
+  "privacy_and_observability.canonical_composition.minimized_dead_letter_event.emission_data_contract" =>
+    "packages/event-schemas/stead/provider-reconciliation-dead-letter-v1.schema.json",
+  "privacy_and_observability.canonical_composition.minimized_dead_letter_event.emission_data_contract_id" =>
+    "https://stead.example/packages/event-schemas/stead/provider-reconciliation-dead-letter-v1.schema.json",
+  "privacy_and_observability.canonical_composition.minimized_dead_letter_event.schema_version" =>
+    "1.0",
+  "privacy_and_observability.canonical_composition.minimized_dead_letter_event.schema_owner" => "WS-07",
+  "privacy_and_observability.canonical_composition.minimized_dead_letter_event.predecessor_compatibility" =>
+    "every_stead_event_v0_1_required_field_and_constraint_preserved_except_schema_version_advances_from_0_1_to_1_0",
+  "privacy_and_observability.canonical_composition.minimized_dead_letter_event.provider_evidence_property" =>
+    "provider_reconciliation_evidence",
+  "privacy_and_observability.canonical_composition.minimized_dead_letter_event.provider_evidence_contract" =>
+    "dead_letter_provider_evidence",
+  "privacy_and_observability.canonical_composition.minimized_dead_letter_event.envelope_common_attributes_contract" =>
+    "specs/asyncapi/stead.yaml#/components/schemas/SteadCloudEventAttributesV1",
+  "privacy_and_observability.canonical_composition.minimized_dead_letter_event.envelope_contract" =>
+    "specs/asyncapi/stead.yaml#/components/schemas/ProviderReconciliationDeadLetterCloudEventEnvelope",
+  "privacy_and_observability.canonical_composition.minimized_dead_letter_event.message_contract" =>
+    "specs/asyncapi/stead.yaml#/components/messages/ProviderReconciliationDeadLetterCloudEvent",
+  "privacy_and_observability.canonical_composition.minimized_dead_letter_event.channel_binding" =>
+    "specs/asyncapi/stead.yaml#/channels/deadLetterEvents/messages/ProviderReconciliationDeadLetterCloudEvent",
+  "privacy_and_observability.canonical_composition.minimized_dead_letter_event.source" =>
+    "urn:stead:producer:dead_letter",
+  "privacy_and_observability.canonical_composition.minimized_dead_letter_event.type" =>
+    "stead.dead_letter.provider_reconciliation_recorded.v1",
+  "privacy_and_observability.canonical_composition.minimized_dead_letter_event.dataschema" =>
+    "https://stead.example/packages/event-schemas/stead/provider-reconciliation-dead-letter-v1.schema.json",
+  "privacy_and_observability.canonical_composition.minimized_dead_letter_event.generic_v0_1_data_route_for_same_type" =>
+    "prohibited",
+  "privacy_and_observability.canonical_composition.minimized_dead_letter_event.compatibility" =>
+    "registered_consumer_first_closed_specialization_preserves_all_common_event_fields",
+  "privacy_and_observability.canonical_composition.minimized_dead_letter_event.original_canonical_event_or_provider_payload_copy" =>
+    "prohibited",
+  "privacy_and_observability.canonical_composition.asyncapi_envelope_refactor.common_attributes_component" =>
+    "SteadCloudEventAttributesV1",
+  "privacy_and_observability.canonical_composition.asyncapi_envelope_refactor.standard_envelope_component" =>
+    "StandardSteadCloudEventEnvelope",
+  "privacy_and_observability.canonical_composition.asyncapi_envelope_refactor.union_component" =>
+    "SteadCloudEventEnvelope",
+  "privacy_and_observability.canonical_composition.asyncapi_envelope_refactor.specialized_components" => %w[
+    ProviderReconciliationCloudEventEnvelope
+    ProviderReconciliationDeadLetterCloudEventEnvelope
+  ],
+  "privacy_and_observability.canonical_composition.asyncapi_envelope_refactor.closure" =>
+    "each_standard_or_specialized_envelope_is_closed_after_common_attribute_and_data_composition",
+  "privacy_and_observability.canonical_composition.asyncapi_envelope_refactor.discrimination" =>
+    "exact_source_type_and_dataschema_tuple",
+  "privacy_and_observability.canonical_composition.asyncapi_envelope_refactor.standard_route_exclusion" =>
+    "both_provider_reconciliation_source_type_pairs_rejected_regardless_of_dataschema",
+  "privacy_and_observability.canonical_composition.asyncapi_envelope_refactor.no_data_schema_fallback" =>
+    "a_provider_reconciliation_type_cannot_validate_with_stead_event_v0_1_data",
+  "privacy_and_observability.logical_audit_provider_evidence.closed_schema" => true,
+  "privacy_and_observability.logical_audit_provider_evidence.allowed_fields" => %w[
+    schema_version logical_operation_id decision_id operation_class outcome_code
+    authorization_scope_id execution_claim_id disclosure_mode activation_revision
     authorization_revision provider_enforcement_revision resource_revision compatibility_profile_id
     compatibility_profile_schema_digest provider_binding_evidence_ref call_plan_class
-    call_plan_evidence_ref
+    call_plan_evidence_ref count_mode attempt_count provider_call_count page_count item_count
+    response_byte_count started_at finished_at
+  ],
+  "privacy_and_observability.canonical_event_provider_evidence.closed_schema" => true,
+  "privacy_and_observability.canonical_event_provider_evidence.allowed_fields" => %w[
+    schema_version logical_operation_id operation_class outcome_code activation_revision
+    authorization_revision provider_enforcement_revision resource_revision compatibility_profile_id
     count_mode attempt_count provider_call_count page_count item_count response_byte_count
-    correlation_id causation_id started_at finished_at
   ],
-  "privacy_and_observability.provider_reconciliation_event_outbox_dlq_payload.closed_schema" => true,
-  "privacy_and_observability.provider_reconciliation_event_outbox_dlq_payload.allowed_fields" => %w[
-    schema_version event_type event_id occurred_at organization_id security_domain_id
-    canonical_container_ref logical_operation_id operation_class outcome_code
-    compatibility_profile_id count_mode attempt_count provider_call_count page_count item_count
-    response_byte_count correlation_id causation_id
+  "privacy_and_observability.dead_letter_provider_evidence.closed_schema" => true,
+  "privacy_and_observability.dead_letter_provider_evidence.allowed_fields" => %w[
+    schema_version logical_operation_id source_event_id consumer_class_id operation_class
+    terminal_failure_code count_mode attempt_count deadline_at
   ],
+  "privacy_and_observability.operational_surface_evidence.base_contract" =>
+    "docs/architecture/observability-contract.md",
+  "privacy_and_observability.operational_surface_evidence.provider_attribute_namespace" =>
+    "stead.provider_reconciliation",
+  "privacy_and_observability.operational_surface_evidence.profiles.correlated_operation_v1.closed_schema" => true,
+  "privacy_and_observability.operational_surface_evidence.profiles.correlated_operation_v1.allowed_fields" => %w[
+    schema_version logical_operation_id operation_class outcome_code compatibility_profile_id
+    count_mode attempt_count provider_call_count page_count item_count response_byte_count
+    duration_ms correlation_id causation_id
+  ],
+  "privacy_and_observability.operational_surface_evidence.profiles.bounded_metric_v1.closed_schema" => true,
+  "privacy_and_observability.operational_surface_evidence.profiles.bounded_metric_v1.allowed_fields" => %w[
+    schema_version operation_class outcome_code compatibility_profile_id count_mode
+  ],
+  "privacy_and_observability.operational_surface_evidence.profiles.support_summary_v1.closed_schema" => true,
+  "privacy_and_observability.operational_surface_evidence.profiles.support_summary_v1.allowed_fields" => %w[
+    schema_version operation_class outcome_code compatibility_profile_id count_mode attempt_count
+    provider_call_count page_count item_count response_byte_count duration_ms correlation_id
+  ],
+  "privacy_and_observability.operational_surface_evidence.surface_bindings.log" =>
+    "correlated_operation_v1",
+  "privacy_and_observability.operational_surface_evidence.surface_bindings.trace" =>
+    "correlated_operation_v1",
+  "privacy_and_observability.operational_surface_evidence.surface_bindings.metric" =>
+    "bounded_metric_v1",
+  "privacy_and_observability.operational_surface_evidence.surface_bindings.diagnostic" =>
+    "support_summary_v1",
+  "privacy_and_observability.operational_surface_evidence.surface_bindings.support_evidence" =>
+    "support_summary_v1",
+  "privacy_and_observability.operational_surface_evidence.full_record_validation" =>
+    "scan_base_envelope_and_nested_provider_attributes_against_every_forbidden_value_canary",
+  "privacy_and_observability.operational_surface_evidence.provider_binding_or_call_plan_evidence_references" =>
+    "prohibited",
   "privacy_and_observability.audit_representation.provider_binding" =>
     "opaque_random_reference_to_ws03_protected_operation_record",
   "privacy_and_observability.audit_representation.bounded_call_plan" =>
@@ -322,17 +487,25 @@ ADR_0009_SPEC_EXPECTATIONS = {
     webhook_secrets webhook_signatures credentials protected_content
     work_titles comments document_bodies authorization_inputs policy_inputs exception_text stack_traces
   ],
-  "verification.T-ADR-0009-AUDIT-MINIMIZATION.owners" => %w[WS-03 WS-07],
+  "verification.T-ADR-0009-AUDIT-MINIMIZATION.owners" => %w[WS-01 WS-03 WS-07],
   "verification.T-ADR-0009-AUDIT-MINIMIZATION.cases" => %w[
-    closed_logical_audit_fields closed_event_outbox_dlq_fields provider_binding_opaque_reference_only
-    call_plan_opaque_reference_only low_entropy_offline_guessing_denied
+    canonical_audit_record_v1_0_to_v1_1_composition resource_envelope_v1_1_constraint_parity
+    audit_v1_0_and_v1_1_dual_read specialized_cloudevent_data_composition
+    event_data_schema_version_0_1_to_1_0
+    exact_source_type_dataschema_discrimination
+    generic_v0_1_route_rejects_provider_reconciliation_types exact_outbox_canonical_bytes
+    minimized_dead_letter_composition
+    named_versioned_schema_ownership consumer_first_schema_activation schema_rollback_coexistence
+    closed_operational_surface_profiles closed_nested_provider_evidence_fields
+    provider_binding_opaque_reference_only call_plan_opaque_reference_only
+    opaque_references_logical_audit_only low_entropy_offline_guessing_denied
     cross_event_provider_plan_reference_correlation_denied raw_body_canary parsed_body_canary
-    request_header_canary
-    query_string_canary raw_call_plan_canary provider_api_path_canary
+    request_header_canary query_string_canary raw_call_plan_canary provider_api_path_canary
     provider_resource_key_canary pagination_cursor_canary webhook_secret_canary
     webhook_signature_canary credential_canary protected_content_canary
     work_title_canary comment_canary document_body_canary authorization_input_canary policy_input_canary
-    exception_text_canary stack_trace_canary every_canary_across_every_propagation_surface
+    exception_text_canary stack_trace_canary
+    every_canary_across_every_base_envelope_nested_evidence_and_propagation_surface
   ]
 }.transform_values(&:freeze).freeze
 ADR_0009_SPEC_VERIFICATION_OWNERS = {
@@ -345,20 +518,103 @@ ADR_0009_SPEC_VERIFICATION_OWNERS = {
   "T-ADR-0009-PROVIDER-OUTAGE" => %w[WS-03 WS-12],
   "T-ADR-0009-AMBIGUOUS-MUTATION" => %w[WS-03 WS-06],
   "T-ADR-0009-FULL-RECONCILIATION" => %w[WS-03 WS-06 WS-12],
-  "T-ADR-0009-AUDIT-MINIMIZATION" => %w[WS-03 WS-07],
-  "T-ADR-0009-UPGRADE-ROLLBACK" => %w[WS-03 WS-12]
+  "T-ADR-0009-AUDIT-MINIMIZATION" => %w[WS-01 WS-03 WS-07],
+  "T-ADR-0009-UPGRADE-ROLLBACK" => %w[WS-01 WS-03 WS-07 WS-12]
 }.transform_values(&:freeze).freeze
 ADR_0009_REQUIRED_PROPAGATION_SURFACES = %w[
   logical_audit event outbox dlq log trace metric diagnostic support_evidence
 ].freeze
+ADR_0009_CANONICAL_COMPOSITION_KEYS = %w[
+  activation rollback logical_audit canonical_event canonical_outbox minimized_dead_letter_event
+  asyncapi_envelope_refactor
+].freeze
+ADR_0009_CANONICAL_COMPOSITION_RECORD_KEYS = {
+  "logical_audit" => %w[
+    predecessor_contract predecessor_schema_version resource_envelope_successor_contract
+    resource_envelope_successor_contract_id emission_contract emission_contract_id schema_version
+    schema_owner composition closure predecessor_compatibility provider_evidence_property
+    provider_evidence_contract compatibility
+  ],
+  "canonical_event" => %w[
+    predecessor_data_contract emission_data_contract emission_data_contract_id schema_version
+    schema_owner predecessor_compatibility provider_evidence_property provider_evidence_contract
+    envelope_common_attributes_contract envelope_contract message_contract channel_binding source
+    type dataschema generic_v0_1_data_route_for_same_type compatibility
+  ],
+  "canonical_outbox" => %w[
+    owner representation additional_provider_metadata_or_reserialization
+  ],
+  "minimized_dead_letter_event" => %w[
+    predecessor_data_contract emission_data_contract emission_data_contract_id schema_version
+    schema_owner predecessor_compatibility provider_evidence_property provider_evidence_contract
+    envelope_common_attributes_contract envelope_contract message_contract channel_binding source
+    type dataschema generic_v0_1_data_route_for_same_type compatibility
+    original_canonical_event_or_provider_payload_copy
+  ],
+  "asyncapi_envelope_refactor" => %w[
+    common_attributes_component standard_envelope_component union_component specialized_components
+    closure discrimination standard_route_exclusion no_data_schema_fallback
+  ]
+}.transform_values(&:freeze).freeze
+ADR_0009_NESTED_PROVIDER_EVIDENCE_CONTRACTS = %w[
+  logical_audit_provider_evidence canonical_event_provider_evidence
+  dead_letter_provider_evidence
+].freeze
+ADR_0009_OPERATIONAL_PROFILE_NAMES = %w[
+  correlated_operation_v1 bounded_metric_v1 support_summary_v1
+].freeze
+ADR_0009_OPERATIONAL_SURFACE_BINDINGS = {
+  "log" => "correlated_operation_v1",
+  "trace" => "correlated_operation_v1",
+  "metric" => "bounded_metric_v1",
+  "diagnostic" => "support_summary_v1",
+  "support_evidence" => "support_summary_v1"
+}.freeze
+ADR_0009_PROTECTED_OPERATION_REFERENCE_FIELDS = %w[
+  provider_binding_evidence_ref call_plan_evidence_ref
+].freeze
 ADR_0009_FORBIDDEN_PROPAGATED_FIELD_PATTERNS = {
-  raw_provider_data: /\A(?:raw|parsed)_provider/,
-  request_metadata: /\Arequest_(?:or_response_headers|query_strings)\z/,
-  raw_call_plan: /raw.*call_plan/,
+  raw_provider_bodies: /\Araw_provider_(?:body|bodies)\z/,
+  parsed_provider_bodies: /\Aparsed_provider_(?:body|bodies)\z/,
+  request_or_response_headers: /\A(?:request|response)(?:_or_response)?_headers?\z/,
+  request_query_strings: /\Arequest_query_strings?\z/,
+  raw_bounded_call_plans: /\Araw_(?:bounded_)?call_plans?\z/,
   guessable_provider_or_plan_digest: /\A(?:provider_binding|call_plan)_sha256\z/,
-  provider_path: /provider_(?:api_)?paths?\z/,
-  provider_resource: /provider_resource_(?:key|keys|locator|locators|keys_or_locators)\z/,
-  pagination_cursor: /pagination_cursors?\z/
+  provider_api_paths: /\Aprovider_(?:api_)?paths?\z/,
+  provider_resource_keys_or_locators: /\Aprovider_resource_(?:key|keys|locator|locators|keys_or_locators)\z/,
+  pagination_cursors: /\Apagination_cursors?\z/,
+  webhook_secrets: /\Awebhook_secrets?\z/,
+  webhook_signatures: /\Awebhook_signatures?\z/,
+  credentials: /\Acredentials?\z/,
+  protected_content: /\Aprotected_content\z/,
+  work_titles: /\Awork_titles?\z/,
+  comments: /\Acomments?\z/,
+  document_bodies: /\Adocument_(?:body|bodies)\z/,
+  authorization_inputs: /\Aauthorization_inputs?\z/,
+  policy_inputs: /\Apolicy_inputs?\z/,
+  exception_text: /\Aexception_text\z/,
+  stack_traces: /\Astack_traces?\z/
+}.freeze
+ADR_0009_FORBIDDEN_PROPAGATED_FIELD_MUTANTS = {
+  raw_provider_bodies: "raw_provider_body",
+  parsed_provider_bodies: "parsed_provider_body",
+  request_or_response_headers: "response_header",
+  request_query_strings: "request_query_string",
+  raw_bounded_call_plans: "raw_bounded_call_plan",
+  provider_api_paths: "provider_api_path",
+  provider_resource_keys_or_locators: "provider_resource_locator",
+  pagination_cursors: "pagination_cursor",
+  webhook_secrets: "webhook_secret",
+  webhook_signatures: "webhook_signature",
+  credentials: "credential",
+  protected_content: "protected_content",
+  work_titles: "work_title",
+  comments: "comment",
+  document_bodies: "document_body",
+  authorization_inputs: "authorization_input",
+  policy_inputs: "policy_input",
+  exception_text: "exception_text",
+  stack_traces: "stack_trace"
 }.freeze
 ADR_0009_REQUIRED_AUDIT_CANARY_CASES = %w[
   low_entropy_offline_guessing_denied cross_event_provider_plan_reference_correlation_denied
@@ -367,14 +623,19 @@ ADR_0009_REQUIRED_AUDIT_CANARY_CASES = %w[
   pagination_cursor_canary webhook_secret_canary webhook_signature_canary credential_canary
   protected_content_canary work_title_canary comment_canary document_body_canary
   authorization_input_canary policy_input_canary exception_text_canary stack_trace_canary
-  every_canary_across_every_propagation_surface
+  every_canary_across_every_base_envelope_nested_evidence_and_propagation_surface
 ].freeze
+ADR_0009_EXPECTED_SPEC_CUSTOM_MUTATIONS = 42
 ADR_0009_DECISION_FRAGMENT_PREDICATES = {
   process_bound_holder: "The holder binding covers replica boot identity, current PID/start identity, and a fresh process nonce; every dispatch rechecks the current process identity.",
   fork_rekeys_scope: "A keyed process-local single-flight guard prevents same-holder concurrency, while a fork or clone inherits an invalid parent binding and must rekey under a new scope.",
   scope_and_local_accounting: "Before every dispatch and local outcome commit, WS-03 proves that the claim remains active for that exact process-instance holder and fencing token and is before its deadline, then invokes the WS-06 read-only scope/fence validator and enforces execution-local monotonic counters.",
   terminal_no_handoff: "Claim handoff, takeover, renewal, and resume are prohibited; completion, abandonment, or expiry is a permanent compare-and-swap terminal transition, and recovery requires a new scope.",
-  zero_page_writes: "The operation performs one atomic start/claim transaction and one terminal logical-audit transaction, but zero durable reservation, permit, audit, claim-renewal, or accounting writes per eligible call or page.",
+  zero_page_control_writes: "The operation performs one atomic start/claim transaction and one terminal transaction that appends exactly one logical audit record, but zero durable reservation, permit, audit-record, claim-renewal, or accounting writes per eligible call or page.",
+  audit_intent_only: "The start transaction persists only an operation-state audit-intent reference; it does not create or mutate an append-only audit record.",
+  constant_control_write_accounting: "Scope, claim, accounting, and logical-audit control writes therefore remain constant as page count grows.",
+  changed_resource_write_accounting: "Batched projection, domain, outbox, and quarantine writes are measured separately and may grow only with actual changed resources.",
+  schema_ownership: "WS-01 owns the versioned canonical `AuditRecord` schema; WS-07 owns its audit-store consumption, the versioned event/dead-letter schemas, schema registration, AsyncAPI, and delivery.",
   process_loss_fresh_scope: "Recovery starts from the last trusted job cursor only after the old claim is terminal and a fresh decision creates a new scope.",
   excluded_effect_permits: "Each such effect retains its own fresh decision, durable one-use `AuthorizationEffectPermit`",
   effective_principal: "Before canonical state accepts provider-originated data, Stead performs a separate fresh central decision for the effective provider principal",
@@ -388,7 +649,9 @@ ADR_0009_CROSS_FILE_REQUIRED_FRAGMENTS = {
   "docs/architecture/contract-ownership-matrix.md" => [
     "`P-SCM-RECONCILIATION-GITEA-V1`",
     "`/specs/provider-reconciliation/gitea-v1.yaml`",
-    "scope issuance/validation remains WS-06-owned"
+    "scope issuance/validation remains WS-06-owned",
+    "common resource-envelope and canonical AuditRecord schemas remain WS-01-owned",
+    "event/DLQ/audit consumption remains WS-07-owned"
   ],
   "specs/provider-interfaces.yaml" => [
     "id: P-SCM-RECONCILIATION-GITEA-V1",
@@ -1139,52 +1402,64 @@ YAML_AST_MAX_DEPTH = 128
 
 class YamlAstValidationError < Psych::Exception; end
 class DuplicateYamlMappingKeyError < YamlAstValidationError; end
+class NonCanonicalYamlMappingKeyError < YamlAstValidationError; end
 class MultipleYamlDocumentsError < YamlAstValidationError; end
 class YamlAstResourceLimitError < YamlAstValidationError; end
 
-def yaml_scalar_key_identity(node, visitor)
-  value = visitor.accept(node)
-  [:scalar, value.class.name, Marshal.dump(value)]
+def yaml_mapping_key_identity!(node, filename:, scanner:)
+  line = node.respond_to?(:start_line) ? node.start_line + 1 : "unknown"
+  unless node.is_a?(Psych::Nodes::Scalar)
+    raise NonCanonicalYamlMappingKeyError,
+          "#{filename}: mapping key at line #{line} must be one scalar String"
+  end
+  unless node.tag.nil? && node.anchor.nil?
+    raise NonCanonicalYamlMappingKeyError,
+          "#{filename}: mapping key at line #{line} must be untagged and unanchored"
+  end
+
+  value = node.value
+  unless value.is_a?(String) && value.encoding == Encoding::UTF_8 && value.valid_encoding?
+    raise NonCanonicalYamlMappingKeyError,
+          "#{filename}: mapping key at line #{line} must be valid UTF-8"
+  end
+  if value == "<<"
+    raise NonCanonicalYamlMappingKeyError,
+          "#{filename}: YAML merge mapping key at line #{line} is prohibited"
+  end
+
+  semantic_value = node.plain ? scanner.tokenize(value) : value
+  unless semantic_value.is_a?(String) && semantic_value.encoding == Encoding::UTF_8 &&
+         semantic_value.valid_encoding?
+    raise NonCanonicalYamlMappingKeyError,
+          "#{filename}: mapping key at line #{line} must resolve to a String"
+  end
+  semantic_value
 end
 
-def validate_yaml_ast_node!(node, filename:, visitor:, state:, depth:, fingerprint:)
+def validate_yaml_ast_node!(node, filename:, scanner:, state:, depth:, mapping_key: false)
   state[:nodes] += 1
   if state[:nodes] > YAML_AST_MAX_NODES || depth > YAML_AST_MAX_DEPTH
     raise YamlAstResourceLimitError,
           "#{filename}: YAML AST exceeds #{YAML_AST_MAX_NODES} nodes or depth #{YAML_AST_MAX_DEPTH}"
   end
 
+  return yaml_mapping_key_identity!(node, filename: filename, scanner: scanner) if mapping_key
+
   case node
-  when Psych::Nodes::Scalar
-    fingerprint ? yaml_scalar_key_identity(node, visitor) : nil
-  when Psych::Nodes::Alias
-    fingerprint ? [:alias, node.anchor] : nil
-  when Psych::Nodes::Sequence
-    children = node.children.map do |child|
-      validate_yaml_ast_node!(
-        child,
-        filename: filename,
-        visitor: visitor,
-        state: state,
-        depth: depth + 1,
-        fingerprint: fingerprint
-      )
-    end
-    fingerprint ? [:sequence, children] : nil
   when Psych::Nodes::Mapping
     unless node.children.length.even?
       raise YamlAstValidationError, "#{filename}: malformed YAML mapping node"
     end
 
     seen_keys = {}
-    pairs = node.children.each_slice(2).map do |key_node, value_node|
+    node.children.each_slice(2) do |key_node, value_node|
       key_identity = validate_yaml_ast_node!(
         key_node,
         filename: filename,
-        visitor: visitor,
+        scanner: scanner,
         state: state,
         depth: depth + 1,
-        fingerprint: true
+        mapping_key: true
       )
       if seen_keys.key?(key_identity)
         line = key_node.respond_to?(:start_line) ? key_node.start_line + 1 : "unknown"
@@ -1192,33 +1467,32 @@ def validate_yaml_ast_node!(node, filename:, visitor:, state:, depth:, fingerpri
               "#{filename}: duplicate YAML mapping key at line #{line}"
       end
       seen_keys[key_identity] = true
-      value_identity = validate_yaml_ast_node!(
+      validate_yaml_ast_node!(
         value_node,
         filename: filename,
-        visitor: visitor,
+        scanner: scanner,
         state: state,
-        depth: depth + 1,
-        fingerprint: fingerprint
+        depth: depth + 1
       )
-      [key_identity, value_identity] if fingerprint
     end
-    fingerprint ? [:mapping, pairs.sort_by { |pair| Marshal.dump(pair) }] : nil
   else
-    children = node.children.map do |child|
+    Array(node.children).each do |child|
       validate_yaml_ast_node!(
         child,
         filename: filename,
-        visitor: visitor,
+        scanner: scanner,
         state: state,
-        depth: depth + 1,
-        fingerprint: fingerprint
+        depth: depth + 1
       )
     end
-    fingerprint ? [node.class.name, children] : nil
   end
 end
 
-def reject_duplicate_yaml_mapping_keys!(source, filename:)
+def validate_yaml_ast_mapping_keys!(source, filename:)
+  unless source.is_a?(String) && source.encoding == Encoding::UTF_8 && source.valid_encoding?
+    raise YamlAstValidationError, "#{filename}: YAML source must be valid UTF-8"
+  end
+
   ast = Psych.parse_stream(source, filename: filename)
   unless ast.children.length == 1
     raise MultipleYamlDocumentsError,
@@ -1226,24 +1500,17 @@ def reject_duplicate_yaml_mapping_keys!(source, filename:)
   end
   class_loader = Psych::ClassLoader::Restricted.new([], [])
   scanner = Psych::ScalarScanner.new(class_loader)
-  visitor = Psych::Visitors::ToRuby.new(
-    scanner,
-    class_loader,
-    symbolize_names: false,
-    freeze: false
-  )
   validate_yaml_ast_node!(
     ast,
     filename: filename,
-    visitor: visitor,
+    scanner: scanner,
     state: { nodes: 0 },
-    depth: 0,
-    fingerprint: false
+    depth: 0
   )
 end
 
 def parse_yaml(source, filename:)
-  reject_duplicate_yaml_mapping_keys!(source, filename: filename)
+  validate_yaml_ast_mapping_keys!(source, filename: filename)
   YAML.safe_load(
     source,
     permitted_classes: [],
@@ -1503,39 +1770,83 @@ def adr_0009_spec_failures(spec_source:, spec:)
       failures << "ADR-0009 provider evidence propagation surfaces must match the closed audit/event/outbox/DLQ/telemetry set"
     end
 
-    closed_field_sets = %w[
-      logical_operation_audit
-      provider_reconciliation_event_outbox_dlq_payload
-    ].filter_map do |name|
+    composition = privacy["canonical_composition"]
+    unless composition.is_a?(Hash) &&
+           composition.keys == ADR_0009_CANONICAL_COMPOSITION_KEYS
+      failures << "ADR-0009 canonical audit/event/outbox/dead-letter composition must use the closed contract set"
+    else
+      ADR_0009_CANONICAL_COMPOSITION_RECORD_KEYS.each do |name, expected_keys|
+        record = composition[name]
+        unless record.is_a?(Hash) && record.keys == expected_keys
+          failures << "ADR-0009 canonical composition #{name} must use its closed field set"
+        end
+      end
+    end
+
+    nested_field_sets = ADR_0009_NESTED_PROVIDER_EVIDENCE_CONTRACTS.to_h do |name|
       record = privacy[name]
       unless record.is_a?(Hash) && record.keys == %w[closed_schema allowed_fields] &&
              record["closed_schema"] == true && record["allowed_fields"].is_a?(Array) &&
              !record["allowed_fields"].empty? && record["allowed_fields"].uniq == record["allowed_fields"] &&
-             record["allowed_fields"].all? { |field| field.is_a?(String) }
-        failures << "ADR-0009 #{name} must be a closed schema with unique string fields"
-        next
+             record["allowed_fields"].all? { |field| field.is_a?(String) } &&
+             record["allowed_fields"].first == "schema_version"
+        failures << "ADR-0009 nested provider evidence #{name} must be a closed schema with unique string fields"
+        [name, []]
+      else
+        [name, record.fetch("allowed_fields")]
       end
-      record.fetch("allowed_fields")
     end
 
-    propagated_fields = closed_field_sets.flatten
+    operational_field_sets = {}
+    operational = privacy["operational_surface_evidence"]
+    expected_operational_keys = %w[
+      base_contract provider_attribute_namespace profiles surface_bindings full_record_validation
+      provider_binding_or_call_plan_evidence_references
+    ]
+    unless operational.is_a?(Hash) && operational.keys == expected_operational_keys
+      failures << "ADR-0009 operational-surface provider evidence must use the closed base/profile/binding contract"
+    else
+      profiles = operational["profiles"]
+      if profiles.is_a?(Hash) && profiles.keys == ADR_0009_OPERATIONAL_PROFILE_NAMES
+        ADR_0009_OPERATIONAL_PROFILE_NAMES.each do |name|
+          record = profiles[name]
+          unless record.is_a?(Hash) && record.keys == %w[closed_schema allowed_fields] &&
+                 record["closed_schema"] == true && record["allowed_fields"].is_a?(Array) &&
+                 !record["allowed_fields"].empty? &&
+                 record["allowed_fields"].uniq == record["allowed_fields"] &&
+                 record["allowed_fields"].all? { |field| field.is_a?(String) } &&
+                 record["allowed_fields"].first == "schema_version"
+            failures << "ADR-0009 operational provider-attribute profile #{name} must be a closed schema"
+            next
+          end
+          operational_field_sets[name] = record.fetch("allowed_fields")
+        end
+      else
+        failures << "ADR-0009 operational provider-attribute profiles must match the closed profile registry"
+      end
+      bindings = operational["surface_bindings"]
+      unless bindings.is_a?(Hash) && bindings.keys == ADR_0009_OPERATIONAL_SURFACE_BINDINGS.keys &&
+             bindings == ADR_0009_OPERATIONAL_SURFACE_BINDINGS
+        failures << "ADR-0009 operational propagation surfaces must bind exactly to closed provider-attribute profiles"
+      end
+    end
+
+    propagated_fields = nested_field_sets.values.flatten + operational_field_sets.values.flatten
     leaked_classes = ADR_0009_FORBIDDEN_PROPAGATED_FIELD_PATTERNS.filter_map do |name, pattern|
       name if propagated_fields.any? { |field| field.match?(pattern) }
     end
     unless leaked_classes.empty?
-      failures << "ADR-0009 closed propagation schemas expose forbidden provider evidence: #{leaked_classes.join(', ')}"
+      failures << "ADR-0009 closed nested or operational schemas expose forbidden provider evidence: #{leaked_classes.join(', ')}"
     end
 
-    event_fields = privacy.dig(
-      "provider_reconciliation_event_outbox_dlq_payload",
-      "allowed_fields"
-    )
-    forbidden_event_references = %w[
-      provider_binding_evidence_ref
-      call_plan_evidence_ref
-    ]
-    if event_fields.is_a?(Array) && !(event_fields & forbidden_event_references).empty?
-      failures << "ADR-0009 provider event/outbox/DLQ payload must omit protected operation-record references"
+    logical_audit_fields = nested_field_sets.fetch("logical_audit_provider_evidence", [])
+    non_audit_fields = nested_field_sets.reject do |name, _fields|
+      name == "logical_audit_provider_evidence"
+    end.values.flatten + operational_field_sets.values.flatten
+    unless (logical_audit_fields & ADR_0009_PROTECTED_OPERATION_REFERENCE_FIELDS) ==
+           ADR_0009_PROTECTED_OPERATION_REFERENCE_FIELDS &&
+           (non_audit_fields & ADR_0009_PROTECTED_OPERATION_REFERENCE_FIELDS).empty?
+      failures << "ADR-0009 opaque provider-binding and call-plan references must occur only in logical-audit evidence"
     end
 
     forbidden = privacy["forbidden_from_all_propagation_surfaces"]
@@ -1563,7 +1874,7 @@ def adr_0009_spec_failures(spec_source:, spec:)
     audit_cases = verification.dig("T-ADR-0009-AUDIT-MINIMIZATION", "cases")
     unless audit_cases.is_a?(Array) &&
            (ADR_0009_REQUIRED_AUDIT_CANARY_CASES - audit_cases).empty?
-      failures << "ADR-0009 audit minimization must cover every forbidden-value canary across every propagation surface"
+      failures << "ADR-0009 audit minimization must cover every forbidden-value canary across every base envelope, nested evidence object, and propagation surface"
     end
   end
   failures
@@ -3959,33 +4270,111 @@ if adr_0009_spec.is_a?(Hash)
     adr_0009_spec_mutation_survivors << "cross-class duplicate example"
   end
 
-  adr_0009_spec_mutation_count += 1
-  duplicate_key_source = adr_0009_spec_source.sub(
-    "  reusable: false\n",
-    "  reusable: true\n  reusable: false\n"
-  )
-  if duplicate_key_source == adr_0009_spec_source
-    adr_0009_spec_mutation_survivors << "duplicate YAML mapping key fixture unavailable"
-  else
-    last_wins_duplicate = YAML.safe_load(
-      duplicate_key_source,
-      permitted_classes: [],
-      permitted_symbols: [],
-      aliases: false,
-      filename: "#{ADR_0009_SPEC_PATH} (last-wins duplicate control)"
-    )
-    unless last_wins_duplicate == adr_0009_spec
-      adr_0009_spec_mutation_survivors << "duplicate YAML mapping key fixture does not preserve last-wins value"
+  record_yaml_source_rejection = lambda do |name:, source:, expected_error:, control_matches_original:|
+    adr_0009_spec_mutation_count += 1
+    if source == adr_0009_spec_source
+      adr_0009_spec_mutation_survivors << "#{name} fixture unavailable"
+      next
     end
+
+    if control_matches_original
+      begin
+        control = YAML.safe_load(
+          source,
+          permitted_classes: [],
+          permitted_symbols: [],
+          aliases: false,
+          filename: "#{ADR_0009_SPEC_PATH} (#{name} safe-load control)"
+        )
+        unless control == adr_0009_spec
+          adr_0009_spec_mutation_survivors << "#{name} fixture does not preserve safe-load result"
+        end
+      rescue Psych::Exception => error
+        adr_0009_spec_mutation_survivors << "#{name} safe-load control failed: #{error.class}"
+      end
+    end
+
     begin
-      parse_yaml(duplicate_key_source, filename: "#{ADR_0009_SPEC_PATH} (duplicate reusable fixture)")
-      adr_0009_spec_mutation_survivors << "duplicate YAML mapping key"
-    rescue DuplicateYamlMappingKeyError
-      # Expected: duplicate rejection happens before last-wins safe loading.
+      parse_yaml(source, filename: "#{ADR_0009_SPEC_PATH} (#{name} fixture)")
+      adr_0009_spec_mutation_survivors << name
     rescue Psych::Exception => error
-      adr_0009_spec_mutation_survivors << "duplicate YAML mapping key wrong failure: #{error.class}"
+      unless error.is_a?(expected_error)
+        adr_0009_spec_mutation_survivors << "#{name} wrong failure: #{error.class}"
+      end
     end
   end
+
+  yaml_key_marker = "  reusable: false\n"
+  {
+    "duplicate YAML mapping key" => [
+      "  reusable: true\n  reusable: false\n",
+      DuplicateYamlMappingKeyError,
+      true
+    ],
+    "escaped semantic duplicate YAML mapping key" => [
+      "  \"\\x72eusable\": true\n  reusable: false\n",
+      DuplicateYamlMappingKeyError,
+      true
+    ],
+    "plain inline YAML merge mapping key" => [
+      "  <<: {reusable: true}\n  reusable: false\n",
+      NonCanonicalYamlMappingKeyError,
+      true
+    ],
+    "explicit !!merge inline YAML mapping key" => [
+      "  !!merge <<: {reusable: true}\n  reusable: false\n",
+      NonCanonicalYamlMappingKeyError,
+      true
+    ],
+    "explicit !!binary semantic duplicate YAML mapping key" => [
+      "  !!binary cmV1c2FibGU=: true\n  reusable: false\n",
+      NonCanonicalYamlMappingKeyError,
+      true
+    ],
+    "explicit !!str YAML mapping key" => [
+      "  !!str reusable: true\n  reusable: false\n",
+      NonCanonicalYamlMappingKeyError,
+      true
+    ],
+    "anchored YAML mapping key" => [
+      "  &adversarial_key reusable: false\n",
+      NonCanonicalYamlMappingKeyError,
+      true
+    ],
+    "complex YAML mapping key" => [
+      "  ? [adversarial_complex_key]\n  : true\n  reusable: false\n",
+      NonCanonicalYamlMappingKeyError,
+      false
+    ],
+    "alias YAML mapping key" => [
+      "  adversarial_alias_source: &adversarial_key reusable\n  *adversarial_key: true\n  reusable: false\n",
+      NonCanonicalYamlMappingKeyError,
+      false
+    ],
+    "non-String YAML mapping key" => [
+      "  true: adversarial\n  reusable: false\n",
+      NonCanonicalYamlMappingKeyError,
+      false
+    ]
+  }.each do |name, (replacement, expected_error, control_matches_original)|
+    record_yaml_source_rejection.call(
+      name: name,
+      source: adr_0009_spec_source.sub(yaml_key_marker, replacement),
+      expected_error: expected_error,
+      control_matches_original: control_matches_original
+    )
+  end
+
+  invalid_utf8_key_source = adr_0009_spec_source.b.sub(
+    yaml_key_marker.b,
+    "  adversarial_\xFF: true\n  reusable: false\n".b
+  ).force_encoding(Encoding::UTF_8)
+  record_yaml_source_rejection.call(
+    name: "invalid UTF-8 YAML mapping key",
+    source: invalid_utf8_key_source,
+    expected_error: YamlAstValidationError,
+    control_matches_original: false
+  )
 
   adr_0009_spec_mutation_count += 1
   second_document_source = "#{adr_0009_spec_source}---\nreusable: true\n"
@@ -4008,52 +4397,112 @@ if adr_0009_spec.is_a?(Hash)
     adr_0009_spec_mutation_survivors << "trailing YAML document wrong failure: #{error.class}"
   end
 
-  adr_0009_spec_mutation_count += 1
-  leaked_provider_field_spec = Marshal.load(Marshal.dump(adr_0009_spec))
-  leaked_provider_field_spec
-    .fetch("privacy_and_observability")
-    .fetch("logical_operation_audit")
-    .fetch("allowed_fields") << "provider_api_path"
-  leaked_provider_field_failures = adr_0009_spec_failures(
-    spec_source: adr_0009_spec_source,
-    spec: leaked_provider_field_spec
-  )
-  unless leaked_provider_field_failures.any? do |failure|
-           failure.start_with?("ADR-0009 closed propagation schemas expose forbidden provider evidence:")
-         end
-    adr_0009_spec_mutation_survivors << "provider path in propagated audit evidence"
+  ADR_0009_FORBIDDEN_PROPAGATED_FIELD_MUTANTS.each do |category, field|
+    adr_0009_spec_mutation_count += 1
+    leaked_provider_field_spec = Marshal.load(Marshal.dump(adr_0009_spec))
+    leaked_provider_field_spec
+      .fetch("privacy_and_observability")
+      .fetch("logical_audit_provider_evidence")
+      .fetch("allowed_fields") << field
+    leaked_provider_field_failures = adr_0009_spec_failures(
+      spec_source: adr_0009_spec_source,
+      spec: leaked_provider_field_spec
+    )
+    unless leaked_provider_field_failures.any? do |failure|
+             failure.start_with?(
+               "ADR-0009 closed nested or operational schemas expose forbidden provider evidence:"
+             ) && failure.include?(category.to_s)
+           end
+      adr_0009_spec_mutation_survivors << "#{category} in nested logical-audit evidence"
+    end
   end
 
   adr_0009_spec_mutation_count += 1
   guessable_provider_digest_spec = Marshal.load(Marshal.dump(adr_0009_spec))
   guessable_provider_digest_spec
     .fetch("privacy_and_observability")
-    .fetch("logical_operation_audit")
+    .fetch("logical_audit_provider_evidence")
     .fetch("allowed_fields") << "provider_binding_sha256"
   guessable_provider_digest_failures = adr_0009_spec_failures(
     spec_source: adr_0009_spec_source,
     spec: guessable_provider_digest_spec
   )
   unless guessable_provider_digest_failures.any? do |failure|
-           failure.start_with?("ADR-0009 closed propagation schemas expose forbidden provider evidence:")
+           failure.start_with?("ADR-0009 closed nested or operational schemas expose forbidden provider evidence:")
          end
     adr_0009_spec_mutation_survivors << "guessable provider digest in propagated audit evidence"
   end
 
+  non_audit_reference_mutations = {
+    "canonical event provider evidence" => %w[
+      canonical_event_provider_evidence
+    ],
+    "dead-letter provider evidence" => %w[
+      dead_letter_provider_evidence
+    ],
+    "correlated-operation provider attributes" => %w[
+      operational_surface_evidence profiles correlated_operation_v1
+    ],
+    "bounded-metric provider attributes" => %w[
+      operational_surface_evidence profiles bounded_metric_v1
+    ],
+    "support-summary provider attributes" => %w[
+      operational_surface_evidence profiles support_summary_v1
+    ]
+  }
+  non_audit_reference_mutations.each do |name, components|
+    adr_0009_spec_mutation_count += 1
+    leaked_reference_spec = Marshal.load(Marshal.dump(adr_0009_spec))
+    record = components.reduce(leaked_reference_spec.fetch("privacy_and_observability")) do |value, component|
+      value.fetch(component)
+    end
+    record.fetch("allowed_fields") << "provider_binding_evidence_ref"
+    leaked_reference_failures = adr_0009_spec_failures(
+      spec_source: adr_0009_spec_source,
+      spec: leaked_reference_spec
+    )
+    unless leaked_reference_failures.include?(
+      "ADR-0009 opaque provider-binding and call-plan references must occur only in logical-audit evidence"
+    )
+      adr_0009_spec_mutation_survivors << "protected operation-record reference in #{name}"
+    end
+  end
+
   adr_0009_spec_mutation_count += 1
-  leaked_event_reference_spec = Marshal.load(Marshal.dump(adr_0009_spec))
-  leaked_event_reference_spec
+  missing_logical_audit_reference_spec = Marshal.load(Marshal.dump(adr_0009_spec))
+  missing_logical_audit_reference_spec
     .fetch("privacy_and_observability")
-    .fetch("provider_reconciliation_event_outbox_dlq_payload")
-    .fetch("allowed_fields") << "provider_binding_evidence_ref"
-  leaked_event_reference_failures = adr_0009_spec_failures(
+    .fetch("logical_audit_provider_evidence")
+    .fetch("allowed_fields")
+    .delete("call_plan_evidence_ref")
+  missing_logical_audit_reference_failures = adr_0009_spec_failures(
     spec_source: adr_0009_spec_source,
-    spec: leaked_event_reference_spec
+    spec: missing_logical_audit_reference_spec
   )
-  unless leaked_event_reference_failures.include?(
-    "ADR-0009 provider event/outbox/DLQ payload must omit protected operation-record references"
+  unless missing_logical_audit_reference_failures.include?(
+    "ADR-0009 opaque provider-binding and call-plan references must occur only in logical-audit evidence"
   )
-    adr_0009_spec_mutation_survivors << "protected operation-record reference in provider event evidence"
+    adr_0009_spec_mutation_survivors << "missing logical-audit protected operation-record reference"
+  end
+
+  adr_0009_spec_mutation_count += 1
+  reordered_surface_bindings_spec = Marshal.load(Marshal.dump(adr_0009_spec))
+  operational_evidence = reordered_surface_bindings_spec
+    .fetch("privacy_and_observability")
+    .fetch("operational_surface_evidence")
+  operational_evidence["surface_bindings"] = operational_evidence
+    .fetch("surface_bindings")
+    .to_a
+    .reverse
+    .to_h
+  reordered_surface_bindings_failures = adr_0009_spec_failures(
+    spec_source: adr_0009_spec_source,
+    spec: reordered_surface_bindings_spec
+  )
+  unless reordered_surface_bindings_failures.include?(
+    "ADR-0009 operational propagation surfaces must bind exactly to closed provider-attribute profiles"
+  )
+    adr_0009_spec_mutation_survivors << "reordered operational surface bindings"
   end
 
   adr_0009_spec_mutation_count += 1
@@ -4062,15 +4511,15 @@ if adr_0009_spec.is_a?(Hash)
     .fetch("verification")
     .fetch("T-ADR-0009-AUDIT-MINIMIZATION")
     .fetch("cases")
-    .delete("every_canary_across_every_propagation_surface")
+    .delete("every_canary_across_every_base_envelope_nested_evidence_and_propagation_surface")
   missing_cross_product_canary_failures = adr_0009_spec_failures(
     spec_source: adr_0009_spec_source,
     spec: missing_cross_product_canary_spec
   )
   unless missing_cross_product_canary_failures.include?(
-    "ADR-0009 audit minimization must cover every forbidden-value canary across every propagation surface"
+    "ADR-0009 audit minimization must cover every forbidden-value canary across every base envelope, nested evidence object, and propagation surface"
   )
-    adr_0009_spec_mutation_survivors << "missing propagation-surface canary cross-product"
+    adr_0009_spec_mutation_survivors << "missing base-envelope/nested-evidence/surface canary cross-product"
   end
 end
 
@@ -4091,20 +4540,55 @@ expected_reconciliation_record = {
   "provider" => "gitea",
   "authorization_scope_owner" => "WS-06",
   "execution_claim_owner" => "WS-03",
+  "audit_record_schema_owner" => "WS-01",
+  "audit_resource_envelope_contract" =>
+    "packages/domain-schemas/common/resource-envelope/resource-envelope-v1.1.schema.json",
+  "audit_record_contract" =>
+    "packages/domain-schemas/resources/audit-record/audit-record-v1.1.schema.json",
+  "audit_record_contract_id" =>
+    "https://stead.example/packages/domain-schemas/resources/audit-record/audit-record-v1.1.schema.json",
   "audit_event_contract_owner" => "WS-07",
+  "canonical_event_contract" =>
+    "packages/event-schemas/stead/provider-reconciliation-event-v1.schema.json",
+  "canonical_event_contract_id" =>
+    "https://stead.example/packages/event-schemas/stead/provider-reconciliation-event-v1.schema.json",
+  "dead_letter_event_contract" =>
+    "packages/event-schemas/stead/provider-reconciliation-dead-letter-v1.schema.json",
+  "dead_letter_event_contract_id" =>
+    "https://stead.example/packages/event-schemas/stead/provider-reconciliation-dead-letter-v1.schema.json",
+  "canonical_event_envelope" =>
+    "specs/asyncapi/stead.yaml#/components/schemas/ProviderReconciliationCloudEventEnvelope",
+  "canonical_event_message" =>
+    "specs/asyncapi/stead.yaml#/components/messages/ProviderReconciliationCloudEvent",
+  "canonical_event_channel_binding" =>
+    "specs/asyncapi/stead.yaml#/channels/scmEvents/messages/ProviderReconciliationCloudEvent",
+  "dead_letter_event_envelope" =>
+    "specs/asyncapi/stead.yaml#/components/schemas/ProviderReconciliationDeadLetterCloudEventEnvelope",
+  "dead_letter_event_message" =>
+    "specs/asyncapi/stead.yaml#/components/messages/ProviderReconciliationDeadLetterCloudEvent",
+  "dead_letter_event_channel_binding" =>
+    "specs/asyncapi/stead.yaml#/channels/deadLetterEvents/messages/ProviderReconciliationDeadLetterCloudEvent",
+  "evidence_emission_gate" => %w[
+    every_named_schema_id_registered_and_validated
+    audit_v1_0_and_v1_1_consumer_readiness
+    specialized_event_and_dead_letter_consumer_readiness
+    exact_asyncapi_envelope_message_and_channel_bindings_active
+    generic_v0_1_data_route_rejects_provider_reconciliation_types
+  ],
   "execution_scope" => "atomic_process_instance_single_holder",
   "propagated_evidence" =>
-    "closed_allowlists_with_opaque_random_ws03_audit_references_and_no_event_references",
+    "canonical_envelopes_with_closed_nested_provider_evidence_opaque_ws03_audit_references_only",
   "ordinary_ui_synchronous_provider_calls" => 0,
   "activation_gate" => "ADR-CAND-008_ACCEPTED_AT_EXACT_IMMUTABLE_SHA"
 }
 unless reconciliation_records == [expected_reconciliation_record]
-  failures << "specs/provider-interfaces.yaml: ADR-0009 reconciliation registry must match the exact owner/source/activation contract"
+  failures << "specs/provider-interfaces.yaml: ADR-0009 reconciliation registry must match the exact owner/source/schema/activation contract"
 end
 
 p1_003 = issues["STEAD-P1-003"]
 p1_006 = issues["STEAD-P1-006"]
-if p1_003 && p1_006
+p1_007 = issues["STEAD-P1-007"]
+if p1_003 && p1_006 && p1_007
   unless Array(p1_003["owned_directories"]).include?("specs/provider-reconciliation") &&
          Array(p1_003["dependencies"]).include?("STEAD-P1-006")
     failures << "STEAD-P1-003 must own the reconciliation spec and consume STEAD-P1-006"
@@ -4118,8 +4602,29 @@ if p1_003 && p1_006
   if Array(p1_006["owned_directories"]).include?("specs/provider-reconciliation")
     failures << "STEAD-P1-006 must not own the WS-03 provider-reconciliation specification"
   end
+
+  schema_contract_paths = %w[
+    packages/domain-schemas/common/resource-envelope/resource-envelope-v1.1.schema.json
+    packages/domain-schemas/resources/audit-record/audit-record-v1.1.schema.json
+    packages/event-schemas/stead/provider-reconciliation-event-v1.schema.json
+    packages/event-schemas/stead/provider-reconciliation-dead-letter-v1.schema.json
+  ]
+  p1_003_acceptance = Array(p1_003["acceptance_criteria"]).join("\n")
+  unless p1_003_acceptance.include?("Consume, but do not own or emit before readiness of")
+    failures << "STEAD-P1-003 must consume, but not own or prematurely emit, all named ADR-0009 evidence schemas"
+  end
+
+  p1_007_acceptance = Array(p1_007["acceptance_criteria"]).join("\n")
+  unless p1_007["owner"] == "WS-07" &&
+         p1_007["contributors"] == %w[WS-01 WS-02 WS-03 WS-06 WS-12 WS-13] &&
+         schema_contract_paths.all? { |path| p1_007_acceptance.include?(path) } &&
+         p1_007_acceptance.include?("Activate emission only after all named schemas are registered and validated") &&
+         p1_007_acceptance.include?("audit v1.0/v1.1 and both specialized events are consumer-readable") &&
+         p1_007_acceptance.include?("rollback stops new emission while old and new readers remain available")
+    failures << "STEAD-P1-007 must preserve exact ADR-0009 schema ownership, consumer-first activation, and compatible rollback"
+  end
 else
-  failures << "implementation issue catalog must contain STEAD-P1-003 and STEAD-P1-006"
+  failures << "implementation issue catalog must contain STEAD-P1-003, STEAD-P1-006, and STEAD-P1-007"
 end
 asyncapi = load_yaml("specs/asyncapi/stead.yaml")
 classification_bypass_path = ROOT.join("docs/security/classification-bypass-inventory.md")
@@ -4274,7 +4779,7 @@ paths.each do |path|
     adr_mutations = {
       decision_digest: [
         source.sub(
-          ADR_0009_DECISION_FRAGMENT_PREDICATES.fetch(:zero_page_writes),
+          ADR_0009_DECISION_FRAGMENT_PREDICATES.fetch(:zero_page_control_writes),
           "The operation permits one durable write per eligible page"
         ),
         ->(mutated) { adr_0009_decision_body_failures(mutated).any? }
@@ -5902,7 +6407,8 @@ end
 unless adr_0009_adr_mutation_survivors.empty?
   failures << "ADR-0009 bounded ADR mutation survivors: #{adr_0009_adr_mutation_survivors.join(', ')}"
 end
-unless adr_0009_spec_mutation_count == ADR_0009_SPEC_EXPECTATIONS.length + ADR_0009_SPEC_SECTION_DIGESTS.length + 8
+unless adr_0009_spec_mutation_count == ADR_0009_SPEC_EXPECTATIONS.length +
+       ADR_0009_SPEC_SECTION_DIGESTS.length + ADR_0009_EXPECTED_SPEC_CUSTOM_MUTATIONS
   failures << "ADR-0009 structured-spec mutation inventory count changed"
 end
 unless adr_0009_spec_mutation_survivors.empty?

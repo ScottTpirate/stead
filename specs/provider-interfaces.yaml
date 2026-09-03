@@ -40,9 +40,29 @@ reconciliation_contracts:
     provider: gitea
     authorization_scope_owner: WS-06
     execution_claim_owner: WS-03
+    audit_record_schema_owner: WS-01
+    audit_resource_envelope_contract: packages/domain-schemas/common/resource-envelope/resource-envelope-v1.1.schema.json
+    audit_record_contract: packages/domain-schemas/resources/audit-record/audit-record-v1.1.schema.json
+    audit_record_contract_id: https://stead.example/packages/domain-schemas/resources/audit-record/audit-record-v1.1.schema.json
     audit_event_contract_owner: WS-07
+    canonical_event_contract: packages/event-schemas/stead/provider-reconciliation-event-v1.schema.json
+    canonical_event_contract_id: https://stead.example/packages/event-schemas/stead/provider-reconciliation-event-v1.schema.json
+    dead_letter_event_contract: packages/event-schemas/stead/provider-reconciliation-dead-letter-v1.schema.json
+    dead_letter_event_contract_id: https://stead.example/packages/event-schemas/stead/provider-reconciliation-dead-letter-v1.schema.json
+    canonical_event_envelope: specs/asyncapi/stead.yaml#/components/schemas/ProviderReconciliationCloudEventEnvelope
+    canonical_event_message: specs/asyncapi/stead.yaml#/components/messages/ProviderReconciliationCloudEvent
+    canonical_event_channel_binding: specs/asyncapi/stead.yaml#/channels/scmEvents/messages/ProviderReconciliationCloudEvent
+    dead_letter_event_envelope: specs/asyncapi/stead.yaml#/components/schemas/ProviderReconciliationDeadLetterCloudEventEnvelope
+    dead_letter_event_message: specs/asyncapi/stead.yaml#/components/messages/ProviderReconciliationDeadLetterCloudEvent
+    dead_letter_event_channel_binding: specs/asyncapi/stead.yaml#/channels/deadLetterEvents/messages/ProviderReconciliationDeadLetterCloudEvent
+    evidence_emission_gate:
+      - every_named_schema_id_registered_and_validated
+      - audit_v1_0_and_v1_1_consumer_readiness
+      - specialized_event_and_dead_letter_consumer_readiness
+      - exact_asyncapi_envelope_message_and_channel_bindings_active
+      - generic_v0_1_data_route_rejects_provider_reconciliation_types
     execution_scope: atomic_process_instance_single_holder
-    propagated_evidence: closed_allowlists_with_opaque_random_ws03_audit_references_and_no_event_references
+    propagated_evidence: canonical_envelopes_with_closed_nested_provider_evidence_opaque_ws03_audit_references_only
     ordinary_ui_synchronous_provider_calls: 0
     activation_gate: ADR-CAND-008_ACCEPTED_AT_EXACT_IMMUTABLE_SHA
 interfaces:

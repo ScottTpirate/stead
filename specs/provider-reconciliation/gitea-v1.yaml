@@ -159,14 +159,17 @@ authorization_scope:
       - immutable_scope_identity_and_bindings
       - conservative_whole_plan_envelope
       - atomic_one_time_execution_claim_activation
-      - logical_audit_start
+      - logical_audit_intent_reference_only_not_append_only_audit_record
     per_eligible_read_writes: 0
     per_eligible_page_writes: 0
     accounting_during_execution: process_local_monotonic_counters
     uncertain_dispatch: consumes_local_attempt_and_allowance
+    terminalization: permanent_claim_transition_and_exactly_one_append_only_logical_audit_record
+    logical_audit_record_cardinality: exactly_one_per_scope_written_only_by_terminalization_or_expiry_recovery
     clean_completion: one_logical_audit_with_exact_attempt_call_page_item_byte_counts
     interrupted_completion: one_logical_audit_with_reserved_upper_bounds_and_abandoned_or_crash_result
-    page_count_growth: constant_postgresql_write_count
+    page_count_growth: constant_scope_claim_accounting_and_logical_audit_control_write_count
+    changed_resource_writes: measured_batched_set_oriented_and_may_scale_only_with_actual_projection_domain_outbox_or_quarantine_changes
   process_loss:
     old_scope: permanently_abandoned_or_expired_by_fenced_compare_and_swap
     remaining_envelope: conservatively_consumed
@@ -287,20 +290,85 @@ privacy_and_observability:
     timestamps: bounded_utc_rfc3339
     canonical_references: authorized_audit_or_partition_scope_only
     evidence_references: at_least_128_bits_csprng_opaque_non_content_derived_unique_per_logical_operation_and_authorized_resolution_only
-  logical_operation_audit:
+  canonical_composition:
+    activation: all_named_versioned_schemas_registered_validated_and_consumer_readable_before_first_emission
+    rollback: stop_new_emission_preserve_old_and_new_readers_and_reconcile_forward_without_reinterpreting_committed_evidence
+    logical_audit:
+      predecessor_contract: specs/work-graph-profile/owgp-v0.1.schema.json#/$defs/AuditRecord
+      predecessor_schema_version: '1.0'
+      resource_envelope_successor_contract: packages/domain-schemas/common/resource-envelope/resource-envelope-v1.1.schema.json
+      resource_envelope_successor_contract_id: https://stead.example/packages/domain-schemas/common/resource-envelope/resource-envelope-v1.1.schema.json
+      emission_contract: packages/domain-schemas/resources/audit-record/audit-record-v1.1.schema.json
+      emission_contract_id: https://stead.example/packages/domain-schemas/resources/audit-record/audit-record-v1.1.schema.json
+      schema_version: '1.1'
+      schema_owner: WS-01
+      composition: resource_envelope_v1_1_plus_all_predecessor_audit_fields_plus_closed_optional_provider_evidence
+      closure: unevaluated_properties_false_at_composed_record
+      predecessor_compatibility: every_resource_envelope_and_audit_required_field_and_constraint_preserved_except_schema_version_advances_from_1_0_to_1_1
+      provider_evidence_property: provider_reconciliation_evidence
+      provider_evidence_contract: logical_audit_provider_evidence
+      compatibility: preconsumer_minor_successor_with_v1_0_and_v1_1_dual_readers_consumer_first
+    canonical_event:
+      predecessor_data_contract: packages/event-schemas/stead/stead-event-v0.1.schema.json
+      emission_data_contract: packages/event-schemas/stead/provider-reconciliation-event-v1.schema.json
+      emission_data_contract_id: https://stead.example/packages/event-schemas/stead/provider-reconciliation-event-v1.schema.json
+      schema_version: '1.0'
+      schema_owner: WS-07
+      predecessor_compatibility: every_stead_event_v0_1_required_field_and_constraint_preserved_except_schema_version_advances_from_0_1_to_1_0
+      provider_evidence_property: provider_reconciliation_evidence
+      provider_evidence_contract: canonical_event_provider_evidence
+      envelope_common_attributes_contract: specs/asyncapi/stead.yaml#/components/schemas/SteadCloudEventAttributesV1
+      envelope_contract: specs/asyncapi/stead.yaml#/components/schemas/ProviderReconciliationCloudEventEnvelope
+      message_contract: specs/asyncapi/stead.yaml#/components/messages/ProviderReconciliationCloudEvent
+      channel_binding: specs/asyncapi/stead.yaml#/channels/scmEvents/messages/ProviderReconciliationCloudEvent
+      source: urn:stead:producer:scm
+      type: stead.scm.reconciled.v1
+      dataschema: https://stead.example/packages/event-schemas/stead/provider-reconciliation-event-v1.schema.json
+      generic_v0_1_data_route_for_same_type: prohibited
+      compatibility: registered_consumer_first_closed_specialization_preserves_all_common_event_fields
+    canonical_outbox:
+      owner: WS-02
+      representation: exact_serialized_bytes_and_digest_of_the_registered_canonical_event
+      additional_provider_metadata_or_reserialization: prohibited
+    minimized_dead_letter_event:
+      predecessor_data_contract: packages/event-schemas/stead/stead-event-v0.1.schema.json
+      emission_data_contract: packages/event-schemas/stead/provider-reconciliation-dead-letter-v1.schema.json
+      emission_data_contract_id: https://stead.example/packages/event-schemas/stead/provider-reconciliation-dead-letter-v1.schema.json
+      schema_version: '1.0'
+      schema_owner: WS-07
+      predecessor_compatibility: every_stead_event_v0_1_required_field_and_constraint_preserved_except_schema_version_advances_from_0_1_to_1_0
+      provider_evidence_property: provider_reconciliation_evidence
+      provider_evidence_contract: dead_letter_provider_evidence
+      envelope_common_attributes_contract: specs/asyncapi/stead.yaml#/components/schemas/SteadCloudEventAttributesV1
+      envelope_contract: specs/asyncapi/stead.yaml#/components/schemas/ProviderReconciliationDeadLetterCloudEventEnvelope
+      message_contract: specs/asyncapi/stead.yaml#/components/messages/ProviderReconciliationDeadLetterCloudEvent
+      channel_binding: specs/asyncapi/stead.yaml#/channels/deadLetterEvents/messages/ProviderReconciliationDeadLetterCloudEvent
+      source: urn:stead:producer:dead_letter
+      type: stead.dead_letter.provider_reconciliation_recorded.v1
+      dataschema: https://stead.example/packages/event-schemas/stead/provider-reconciliation-dead-letter-v1.schema.json
+      generic_v0_1_data_route_for_same_type: prohibited
+      compatibility: registered_consumer_first_closed_specialization_preserves_all_common_event_fields
+      original_canonical_event_or_provider_payload_copy: prohibited
+    asyncapi_envelope_refactor:
+      common_attributes_component: SteadCloudEventAttributesV1
+      standard_envelope_component: StandardSteadCloudEventEnvelope
+      union_component: SteadCloudEventEnvelope
+      specialized_components: [ProviderReconciliationCloudEventEnvelope, ProviderReconciliationDeadLetterCloudEventEnvelope]
+      closure: each_standard_or_specialized_envelope_is_closed_after_common_attribute_and_data_composition
+      discrimination: exact_source_type_and_dataschema_tuple
+      standard_route_exclusion: both_provider_reconciliation_source_type_pairs_rejected_regardless_of_dataschema
+      no_data_schema_fallback: a_provider_reconciliation_type_cannot_validate_with_stead_event_v0_1_data
+  logical_audit_provider_evidence:
     closed_schema: true
     allowed_fields:
       - schema_version
       - logical_operation_id
       - decision_id
-      - acting_service_principal_ref
-      - initiating_principal_ref_when_relevant
-      - canonical_containing_scope_ref
-      - security_domain_id
       - operation_class
       - outcome_code
       - authorization_scope_id
       - execution_claim_id
+      - disclosure_mode
       - activation_revision
       - authorization_revision
       - provider_enforcement_revision
@@ -316,23 +384,19 @@ privacy_and_observability:
       - page_count
       - item_count
       - response_byte_count
-      - correlation_id
-      - causation_id
       - started_at
       - finished_at
-  provider_reconciliation_event_outbox_dlq_payload:
+  canonical_event_provider_evidence:
     closed_schema: true
     allowed_fields:
       - schema_version
-      - event_type
-      - event_id
-      - occurred_at
-      - organization_id
-      - security_domain_id
-      - canonical_container_ref
       - logical_operation_id
       - operation_class
       - outcome_code
+      - activation_revision
+      - authorization_revision
+      - provider_enforcement_revision
+      - resource_revision
       - compatibility_profile_id
       - count_mode
       - attempt_count
@@ -340,8 +404,39 @@ privacy_and_observability:
       - page_count
       - item_count
       - response_byte_count
-      - correlation_id
-      - causation_id
+  dead_letter_provider_evidence:
+    closed_schema: true
+    allowed_fields:
+      - schema_version
+      - logical_operation_id
+      - source_event_id
+      - consumer_class_id
+      - operation_class
+      - terminal_failure_code
+      - count_mode
+      - attempt_count
+      - deadline_at
+  operational_surface_evidence:
+    base_contract: docs/architecture/observability-contract.md
+    provider_attribute_namespace: stead.provider_reconciliation
+    profiles:
+      correlated_operation_v1:
+        closed_schema: true
+        allowed_fields: [schema_version, logical_operation_id, operation_class, outcome_code, compatibility_profile_id, count_mode, attempt_count, provider_call_count, page_count, item_count, response_byte_count, duration_ms, correlation_id, causation_id]
+      bounded_metric_v1:
+        closed_schema: true
+        allowed_fields: [schema_version, operation_class, outcome_code, compatibility_profile_id, count_mode]
+      support_summary_v1:
+        closed_schema: true
+        allowed_fields: [schema_version, operation_class, outcome_code, compatibility_profile_id, count_mode, attempt_count, provider_call_count, page_count, item_count, response_byte_count, duration_ms, correlation_id]
+    surface_bindings:
+      log: correlated_operation_v1
+      trace: correlated_operation_v1
+      metric: bounded_metric_v1
+      diagnostic: support_summary_v1
+      support_evidence: support_summary_v1
+    full_record_validation: scan_base_envelope_and_nested_provider_attributes_against_every_forbidden_value_canary
+    provider_binding_or_call_plan_evidence_references: prohibited
   audit_representation:
     provider_binding: opaque_random_reference_to_ws03_protected_operation_record
     bounded_call_plan: closed_class_plus_opaque_random_reference_to_ws03_protected_operation_record
@@ -414,10 +509,10 @@ verification:
     cases: [lost_update_response, lost_delete_response, lost_create_response, apply_revert, delete_recreate, delayed_create, zero_one_many_candidates, excluded_effect_permits, no_blind_retry, no_false_terminal_state]
   T-ADR-0009-FULL-RECONCILIATION:
     owners: [WS-03, WS-06, WS-12]
-    cases: [every_scope_binding_omitted_or_swapped, call_plan_widen_or_reorder, cross_scope_reuse, atomic_one_time_execution_claim, same_scope_fork, stale_holder, post_terminal_replay, claim_deadline, permanent_terminal_invalidation, process_loss, bounded_inventory, zero_per_page_writes, exact_or_conservative_audit_counts, constant_writes_as_pages_grow]
+    cases: [every_scope_binding_omitted_or_swapped, call_plan_widen_or_reorder, cross_scope_reuse, atomic_one_time_execution_claim, same_scope_fork, stale_holder, post_terminal_replay, claim_deadline, permanent_terminal_invalidation, process_loss, bounded_inventory, zero_per_page_control_writes, exactly_one_append_only_logical_audit_record, exact_or_conservative_audit_counts, constant_control_writes_as_pages_grow, changed_resource_writes_measured_separately]
   T-ADR-0009-AUDIT-MINIMIZATION:
-    owners: [WS-03, WS-07]
-    cases: [closed_logical_audit_fields, closed_event_outbox_dlq_fields, provider_binding_opaque_reference_only, call_plan_opaque_reference_only, low_entropy_offline_guessing_denied, cross_event_provider_plan_reference_correlation_denied, raw_body_canary, parsed_body_canary, request_header_canary, query_string_canary, raw_call_plan_canary, provider_api_path_canary, provider_resource_key_canary, pagination_cursor_canary, webhook_secret_canary, webhook_signature_canary, credential_canary, protected_content_canary, work_title_canary, comment_canary, document_body_canary, authorization_input_canary, policy_input_canary, exception_text_canary, stack_trace_canary, every_canary_across_every_propagation_surface]
+    owners: [WS-01, WS-03, WS-07]
+    cases: [canonical_audit_record_v1_0_to_v1_1_composition, resource_envelope_v1_1_constraint_parity, audit_v1_0_and_v1_1_dual_read, specialized_cloudevent_data_composition, event_data_schema_version_0_1_to_1_0, exact_source_type_dataschema_discrimination, generic_v0_1_route_rejects_provider_reconciliation_types, exact_outbox_canonical_bytes, minimized_dead_letter_composition, named_versioned_schema_ownership, consumer_first_schema_activation, schema_rollback_coexistence, closed_operational_surface_profiles, closed_nested_provider_evidence_fields, provider_binding_opaque_reference_only, call_plan_opaque_reference_only, opaque_references_logical_audit_only, low_entropy_offline_guessing_denied, cross_event_provider_plan_reference_correlation_denied, raw_body_canary, parsed_body_canary, request_header_canary, query_string_canary, raw_call_plan_canary, provider_api_path_canary, provider_resource_key_canary, pagination_cursor_canary, webhook_secret_canary, webhook_signature_canary, credential_canary, protected_content_canary, work_title_canary, comment_canary, document_body_canary, authorization_input_canary, policy_input_canary, exception_text_canary, stack_trace_canary, every_canary_across_every_base_envelope_nested_evidence_and_propagation_surface]
   T-ADR-0009-UPGRADE-ROLLBACK:
-    owners: [WS-03, WS-12]
+    owners: [WS-01, WS-03, WS-07, WS-12]
     cases: [support_matrix, unknown_capability, preflight, shadow_read, full_scan, compatible_rollback, forward_recovery, nonterminal_operation_preservation]
