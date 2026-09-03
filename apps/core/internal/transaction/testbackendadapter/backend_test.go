@@ -9,13 +9,46 @@ import (
 	"github.com/ScottTpirate/stead/apps/core/internal/transaction"
 )
 
+func TestBeginReturnsOpaqueResultAndCreatesOnePrivateJournalEntry(t *testing.T) {
+	backend := &Backend{}
+	result, err := backend.Begin(context.Background())
+	if err != nil || result == (transaction.BeginResult{}) {
+		t.Fatalf("begin result=%#v err=%v", result, err)
+	}
+	backend.mu.Lock()
+	if len(backend.active) != 1 || len(backend.bindings) != 1 || len(backend.bound) != 1 {
+		backend.mu.Unlock()
+		t.Fatalf("begin journal active=%d bindings=%d bound=%d", len(backend.active), len(backend.bindings), len(backend.bound))
+	}
+	var value *session
+	for active := range backend.active {
+		value = active
+	}
+	binding, paired := backend.bound[value]
+	journaled := backend.bindings[binding]
+	backend.mu.Unlock()
+	if value == nil || !paired || journaled != value {
+		t.Fatalf("begin did not create an exact private journal: value=%p paired=%t journaled=%p", value, paired, journaled)
+	}
+	if err := value.Rollback(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	_, _, active, _ := backend.Snapshot()
+	backend.mu.Lock()
+	bindings, bound := len(backend.bindings), len(backend.bound)
+	backend.mu.Unlock()
+	if active != 0 || bindings != 0 || bound != 0 {
+		t.Fatalf("rollback retained begin journal active=%d identities=%d/%d", active, bindings, bound)
+	}
+}
+
 func TestBindingJournalRejectsUnknownForeignAndExpiredIdentities(t *testing.T) {
 	backend := &Backend{}
-	firstValue, firstBinding, err := backend.Begin(context.Background())
+	_, firstValue, firstBinding, err := backend.begin()
 	if err != nil {
 		t.Fatal(err)
 	}
-	secondValue, secondBinding, err := backend.Begin(context.Background())
+	_, secondValue, secondBinding, err := backend.begin()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -26,7 +59,7 @@ func TestBindingJournalRejectsUnknownForeignAndExpiredIdentities(t *testing.T) {
 		t.Fatalf("zero identity error = %v", err)
 	}
 	foreign := &Backend{}
-	foreignValue, foreignBinding, err := foreign.Begin(context.Background())
+	_, foreignValue, foreignBinding, err := foreign.begin()
 	if err != nil {
 		t.Fatal(err)
 	}

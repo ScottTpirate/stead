@@ -9,14 +9,14 @@ import (
 )
 
 // Backend and Session are WS-02 lifecycle contracts. Every successful Begin
-// returns a distinct independently live Session plus a distinct opaque executor
-// binding for the same transaction, including for overlapping requests. Only
-// the coordinator receives Session; registered operations receive the separate
-// non-lifecycle binding. The later driver-backed implementation must remain in
-// this trusted boundary and expose typed owner repositories rather than a raw
-// connection or query executor.
+// returns one package-minted opaque BeginResult containing a distinct live
+// Session/executor pair, including for overlapping requests. Only the
+// coordinator can consume the result and receive Session; registered operations
+// receive only its separate non-lifecycle binding. The later driver-backed
+// implementation must remain in this trusted boundary and expose typed owner
+// repositories rather than a raw connection or query executor.
 type Backend interface {
-	Begin(context.Context) (Session, ExecutorBinding, error)
+	Begin(context.Context) (BeginResult, error)
 }
 
 type Session interface {
@@ -168,6 +168,7 @@ type sessionState struct {
 	backend  *backendSeal
 	plan     *planState
 	session  Session
+	begin    *beginPairState
 	binding  ExecutorBinding
 	active   atomic.Bool
 }
@@ -185,7 +186,7 @@ type bindingCompletion struct {
 
 // SessionBinding is the opaque WS-02-owned lease used only to enlist the
 // predeclared core outbox append through the exact non-lifecycle executor
-// binding returned beside this execution's Session. Domain owner adapters
+// binding consumed from this execution's BeginResult. Domain owner adapters
 // receive OperationPort instead.
 type SessionBinding struct {
 	state *bindingState
@@ -296,7 +297,7 @@ func (binding SessionBinding) resolve(owner string) (ExecutorBinding, bool) {
 	if binding.state == nil || binding.state.session == nil || binding.state.session.registry == nil || binding.state.owner != owner ||
 		binding.state.state.Load() != bindingRunning || !binding.state.session.active.Load() ||
 		binding.state.session.plan == nil || binding.state.session.plan.state.Load() != planRunning ||
-		!binding.state.session.binding.validFor(binding.state.session.session) {
+		!binding.state.session.binding.validFor(binding.state.session.begin) {
 		return ExecutorBinding{}, false
 	}
 	return binding.state.session.binding, true
@@ -379,15 +380,16 @@ func (coordinator *Coordinator) run(ctx context.Context, specification execution
 	}
 
 	report.BeginCalls++
-	session, binding, err := safeBegin(ctx, coordinator.backend)
+	beginResult, err := safeBegin(ctx, coordinator.backend)
+	session, binding, begin, paired := beginResult.consume()
 	if isNil(session) {
 		return report, fail(CodeBeginFailed)
 	}
-	if err != nil || !binding.validFor(session) {
+	if err != nil || !paired {
 		return coordinator.rollback(ctx, session, report, fail(CodeBeginFailed))
 	}
 
-	operation := &sessionState{registry: specification.registry, backend: coordinator.backendContract.seal, plan: specification.plan, session: session, binding: binding}
+	operation := &sessionState{registry: specification.registry, backend: coordinator.backendContract.seal, plan: specification.plan, session: session, begin: begin, binding: binding}
 	operation.active.Store(true)
 	defer operation.active.Store(false)
 
@@ -481,11 +483,10 @@ func contextFailure(ctx context.Context) error {
 	return nil
 }
 
-func safeBegin(ctx context.Context, backend Backend) (session Session, binding ExecutorBinding, err error) {
+func safeBegin(ctx context.Context, backend Backend) (result BeginResult, err error) {
 	defer func() {
 		if recover() != nil {
-			session = nil
-			binding = ExecutorBinding{}
+			result = BeginResult{}
 			err = fail(CodeBeginFailed)
 		}
 	}()

@@ -20,6 +20,6 @@
     {"id": "executor_early_commit", "placement": "apps_core", "source": "executor_early_commit.go.txt", "expected": "binding.Commit undefined"},
     {"id": "executor_early_rollback", "placement": "apps_core", "source": "executor_early_rollback.go.txt", "expected": "binding.Rollback undefined"},
     {"id": "executor_binding_resolver", "placement": "apps_core", "source": "executor_binding_resolver.go.txt", "expected": "undefined: transaction.ResolveExecutorBinding"},
-    {"id": "executor_payload_constructor", "placement": "apps_core", "source": "executor_payload_constructor.go.txt", "expected": "too many arguments in call to transaction.NewExecutorBinding"}
+    {"id": "executor_payload_constructor", "placement": "apps_core", "source": "executor_payload_constructor.go.txt", "expected": "too many arguments in call to transaction.NewBeginResult"}
   ]
 }

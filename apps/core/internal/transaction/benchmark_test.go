@@ -10,10 +10,10 @@ import (
 type benchmarkBackend struct{}
 type benchmarkSession struct{}
 
-func (benchmarkBackend) Begin(context.Context) (Session, ExecutorBinding, error) {
+func (benchmarkBackend) Begin(context.Context) (BeginResult, error) {
 	session := &benchmarkSession{}
-	binding, err := NewExecutorBinding(session)
-	return session, binding, err
+	result, _, err := NewBeginResult(session)
+	return result, err
 }
 func (*benchmarkSession) Commit(context.Context) error   { return nil }
 func (*benchmarkSession) Rollback(context.Context) error { return nil }

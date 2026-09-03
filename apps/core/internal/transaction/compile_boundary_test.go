@@ -173,6 +173,7 @@ func TestOpaqueAndCoordinatorExportedSurfacesHaveNoBypassMethods(t *testing.T) {
 	bannedMethods := []string{"Add", "AddParticipant", "Allowed", "Begin", "Commit", "Exec", "Payload", "PrepareEffect", "Query", "Raw", "Resolve", "Retry", "Rollback", "Session", "SetMode", "SetRole", "Value"}
 	types := []reflect.Type{
 		reflect.TypeOf(transaction.OperationPort[struct{}]{}),
+		reflect.TypeOf(transaction.BeginResult{}),
 		reflect.TypeOf(transaction.ExecutorBinding{}),
 		reflect.TypeOf(transaction.BackendContract{}),
 		reflect.TypeOf(transaction.BackendOperation[struct{}]{}),
@@ -196,6 +197,7 @@ func TestOpaqueAndCoordinatorExportedSurfacesHaveNoBypassMethods(t *testing.T) {
 	}
 	for _, valueType := range []reflect.Type{
 		reflect.TypeOf(transaction.OperationPort[struct{}]{}),
+		reflect.TypeOf(transaction.BeginResult{}),
 		reflect.TypeOf(transaction.ExecutorBinding{}),
 		reflect.TypeOf(transaction.BackendContract{}),
 		reflect.TypeOf(transaction.BackendOperation[struct{}]{}),

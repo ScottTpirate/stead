@@ -69,7 +69,12 @@ func (backend *Backend) initializeLocked() {
 	}
 }
 
-func (backend *Backend) Begin(context.Context) (transaction.Session, transaction.ExecutorBinding, error) {
+func (backend *Backend) Begin(context.Context) (transaction.BeginResult, error) {
+	result, _, _, err := backend.begin()
+	return result, err
+}
+
+func (backend *Backend) begin() (transaction.BeginResult, *session, transaction.ExecutorBinding, error) {
 	backend.mu.Lock()
 	defer backend.mu.Unlock()
 	backend.initializeLocked()
@@ -77,13 +82,13 @@ func (backend *Backend) Begin(context.Context) (transaction.Session, transaction
 	backend.begins++
 	value := &session{backend: backend, id: backend.next}
 	backend.active[value] = struct{}{}
-	binding, err := transaction.NewExecutorBinding(value)
+	result, binding, err := transaction.NewBeginResult(value)
 	if err != nil {
-		return nil, transaction.ExecutorBinding{}, err
+		return transaction.BeginResult{}, nil, transaction.ExecutorBinding{}, err
 	}
 	backend.bindings[binding] = value
 	backend.bound[value] = binding
-	return value, binding, nil
+	return result, value, binding, nil
 }
 
 func (value *session) Commit(context.Context) error {

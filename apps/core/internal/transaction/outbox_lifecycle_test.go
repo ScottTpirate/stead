@@ -21,11 +21,15 @@ func TestSessionBindingCloseWaitsForActiveUseAndSuppressesLateReceipt(t *testing
 	plan := &planState{}
 	plan.state.Store(planRunning)
 	lifecycleSession := &fakeSession{}
-	executorBinding, err := NewExecutorBinding(lifecycleSession)
+	beginResult, _, err := NewBeginResult(lifecycleSession)
 	if err != nil {
 		t.Fatal(err)
 	}
-	session := &sessionState{registry: &registrySeal{}, backend: &backendSeal{}, plan: plan, session: lifecycleSession, binding: executorBinding}
+	returnedSession, executorBinding, begin, ok := beginResult.consume()
+	if !ok || returnedSession != lifecycleSession {
+		t.Fatal("valid begin pair was not consumed")
+	}
+	session := &sessionState{registry: &registrySeal{}, backend: &backendSeal{}, plan: plan, session: returnedSession, begin: begin, binding: executorBinding}
 	session.active.Store(true)
 	binding := newSessionBinding(session, "core_outbox")
 	copy := binding

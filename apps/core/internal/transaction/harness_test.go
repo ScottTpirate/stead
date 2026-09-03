@@ -64,7 +64,7 @@ func (backend *fakeBackend) initializeLocked() {
 	}
 }
 
-func (backend *fakeBackend) Begin(context.Context) (Session, ExecutorBinding, error) {
+func (backend *fakeBackend) Begin(context.Context) (BeginResult, error) {
 	backend.mu.Lock()
 	defer backend.mu.Unlock()
 	backend.initializeLocked()
@@ -74,22 +74,26 @@ func (backend *fakeBackend) Begin(context.Context) (Session, ExecutorBinding, er
 		panic("injected begin panic")
 	}
 	if backend.failBegin {
-		return nil, ExecutorBinding{}, errInjected
+		return BeginResult{}, errInjected
 	}
 	backend.nextSession++
 	session := &fakeSession{backend: backend, id: backend.nextSession}
 	backend.active[session] = struct{}{}
-	bindingSession := Session(session)
-	if backend.mismatchBinding {
-		bindingSession = &fakeSession{backend: backend, id: -session.id}
-	}
-	binding, err := NewExecutorBinding(bindingSession)
+	result, binding, err := NewBeginResult(session)
 	if err != nil {
-		return nil, ExecutorBinding{}, err
+		return BeginResult{}, err
+	}
+	if backend.mismatchBinding {
+		_, mismatched, mismatchErr := NewBeginResult(&fakeSession{backend: backend, id: -session.id})
+		if mismatchErr != nil {
+			return BeginResult{}, mismatchErr
+		}
+		result.binding = mismatched
+		binding = mismatched
 	}
 	backend.bindings[binding] = session
 	backend.boundSession[session] = binding
-	return session, binding, nil
+	return result, nil
 }
 
 func (session *fakeSession) Commit(context.Context) error {

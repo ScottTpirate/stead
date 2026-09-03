@@ -2,17 +2,36 @@ package transaction
 
 import (
 	"context"
-	"reflect"
 	"sync/atomic"
 )
 
+type beginPairSeal struct{ marker byte }
 type executorBindingSeal struct{ marker byte }
 
-const executorBindingMarker byte = 0xa7
+const (
+	beginPairMarker       byte = 0xb4
+	executorBindingMarker byte = 0xa7
+)
+
+type beginPairState struct {
+	session  Session
+	consumed atomic.Bool
+	seal     beginPairSeal
+	executor executorBindingState
+}
 
 type executorBindingState struct {
-	seal    executorBindingSeal
-	session Session
+	seal executorBindingSeal
+}
+
+// BeginResult is the opaque, single-use result returned by a trusted WS-02
+// Backend. It keeps the lifecycle Session and executor identity in separate
+// private halves joined by one package-minted pair identity. The coordinator
+// alone consumes it; it exposes no session, binding, resolver, or lifecycle
+// method.
+type BeginResult struct {
+	state   *beginPairState
+	binding ExecutorBinding
 }
 
 // ExecutorBinding is the opaque per-transaction storage binding delivered to
@@ -24,23 +43,52 @@ type ExecutorBinding struct {
 	state *executorBindingState
 }
 
-// NewExecutorBinding mints a distinct identity paired internally with the exact
-// lifecycle session returned beside it from Backend.Begin. The pairing is used
-// only by the coordinator to reject a missing or cross-session identity.
-func NewExecutorBinding(session Session) (ExecutorBinding, error) {
-	if isNil(session) || !reflect.TypeOf(session).Comparable() {
-		return ExecutorBinding{}, fail(CodeInvalidContract)
+// NewBeginResult mints one opaque result for a non-nil lifecycle Session and
+// returns the matching executor identity for the trusted backend's private
+// identity-to-session journal. The Session itself may have any dynamic shape;
+// it is retained behind a pointer and is never compared. Backend.Begin returns
+// the result while keeping only its already-owned Session and the identity.
+func NewBeginResult(session Session) (BeginResult, ExecutorBinding, error) {
+	if isNil(session) {
+		return BeginResult{}, ExecutorBinding{}, fail(CodeInvalidContract)
 	}
-	return ExecutorBinding{state: &executorBindingState{seal: executorBindingSeal{marker: executorBindingMarker}, session: session}}, nil
+	pair := &beginPairState{
+		session:  session,
+		seal:     beginPairSeal{marker: beginPairMarker},
+		executor: executorBindingState{seal: executorBindingSeal{marker: executorBindingMarker}},
+	}
+	binding := ExecutorBinding{state: &pair.executor}
+	return BeginResult{
+		state:   pair,
+		binding: binding,
+	}, binding, nil
+}
+
+// consume is the only transition from a backend result into coordinator-owned
+// execution state. It returns a valid lifecycle Session even when the binding
+// half is missing, mismatched, or already consumed so the coordinator can
+// perform exactly one fail-closed rollback. It never compares Session values.
+func (result BeginResult) consume() (Session, ExecutorBinding, *beginPairState, bool) {
+	pair := result.state
+	if pair == nil || pair.seal.marker != beginPairMarker || isNil(pair.session) {
+		return nil, ExecutorBinding{}, nil, false
+	}
+	if !result.binding.matches(pair) || !pair.consumed.CompareAndSwap(false, true) {
+		return pair.session, ExecutorBinding{}, nil, false
+	}
+	return pair.session, result.binding, pair, true
 }
 
 func (binding ExecutorBinding) valid() bool {
-	return binding.state != nil && binding.state.seal.marker == executorBindingMarker && !isNil(binding.state.session) &&
-		reflect.TypeOf(binding.state.session).Comparable()
+	return binding.state != nil && binding.state.seal.marker == executorBindingMarker
 }
 
-func (binding ExecutorBinding) validFor(session Session) bool {
-	return binding.valid() && !isNil(session) && reflect.TypeOf(session).Comparable() && binding.state.session == session
+func (binding ExecutorBinding) matches(pair *beginPairState) bool {
+	return binding.valid() && pair != nil && pair.seal.marker == beginPairMarker && binding.state == &pair.executor
+}
+
+func (binding ExecutorBinding) validFor(pair *beginPairState) bool {
+	return binding.matches(pair) && pair.consumed.Load()
 }
 
 // BackendContract is the opaque authority for one lifecycle backend. It is
@@ -79,8 +127,9 @@ type BackendOperation[T any] struct {
 
 // NewBackendOperation binds one typed repository operation to one backend and
 // owner. The executor belongs at the trusted storage integration boundary and
-// receives only the non-lifecycle binding returned beside Session by Begin.
-// Domain owner adapters consume RegisteredOperation instead.
+// receives only the non-lifecycle binding minted beside BeginResult for the
+// backend's private journal. Domain owner adapters consume RegisteredOperation
+// instead.
 func NewBackendOperation[T any](contract BackendContract, owner string, execute func(context.Context, ExecutorBinding, T) error) (BackendOperation[T], error) {
 	if contract.seal == nil || isNil(contract.backend) || !identifierPattern.MatchString(owner) || execute == nil || owner == "core_outbox" {
 		return BackendOperation[T]{}, fail(CodeInvalidContract)
@@ -167,7 +216,7 @@ func (port OperationPort[T]) Execute(ctx context.Context) error {
 		state.execute == nil || state.call == nil || state.context == nil || state.done == nil || ctx == nil ||
 		ctx != state.context || state.context.Err() != nil || state.context.Value(operationContextKey{}) != state.call ||
 		state.session.backend != state.backend ||
-		state.session.registry == nil || state.session.plan == nil || !state.session.binding.validFor(state.session.session) || !state.session.active.Load() ||
+		state.session.registry == nil || state.session.plan == nil || !state.session.binding.validFor(state.session.begin) || !state.session.active.Load() ||
 		state.session.plan.state.Load() != planRunning ||
 		!state.state.CompareAndSwap(operationFresh, operationRunning) {
 		return fail(CodeParticipantFailed)

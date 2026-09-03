@@ -8,24 +8,135 @@ import (
 	"time"
 )
 
+type adversarialSessionLifecycle struct {
+	commits   atomic.Int32
+	rollbacks atomic.Int32
+}
+
+// interfaceBearingSession is statically comparable, but comparing two
+// interface values containing it panics when payload contains a slice.
+type interfaceBearingSession struct {
+	payload   any
+	lifecycle *adversarialSessionLifecycle
+}
+
+func (session interfaceBearingSession) Commit(context.Context) error {
+	session.lifecycle.commits.Add(1)
+	return nil
+}
+
+func (session interfaceBearingSession) Rollback(context.Context) error {
+	session.lifecycle.rollbacks.Add(1)
+	return nil
+}
+
+// nonComparableSession is a valid Session whose dynamic type cannot be used in
+// interface equality at all.
+type nonComparableSession struct {
+	values    []string
+	lifecycle *adversarialSessionLifecycle
+}
+
+func (session nonComparableSession) Commit(context.Context) error {
+	session.lifecycle.commits.Add(1)
+	return nil
+}
+
+func (session nonComparableSession) Rollback(context.Context) error {
+	session.lifecycle.rollbacks.Add(1)
+	return nil
+}
+
+type fixedBeginResultBackend struct {
+	result BeginResult
+	err    error
+	begins atomic.Int32
+}
+
+func (backend *fixedBeginResultBackend) Begin(context.Context) (BeginResult, error) {
+	backend.begins.Add(1)
+	return backend.result, backend.err
+}
+
+func comparisonPanics(left, right Session) (panicked bool) {
+	defer func() {
+		panicked = recover() != nil
+	}()
+	_ = left == right
+	return false
+}
+
+func executeFixedBeginResult(t *testing.T, result BeginResult, participantCalls *atomic.Int32) (Report, error) {
+	t.Helper()
+	backend := &fixedBeginResultBackend{result: result}
+	contract, err := NewBackendContract(backend)
+	if err != nil {
+		t.Fatal(err)
+	}
+	backendOperation, err := NewBackendOperation(contract, "owner", func(context.Context, ExecutorBinding, struct{}) error {
+		participantCalls.Add(1)
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	operation, err := NewRegisteredOperation(backendOperation, func(ctx context.Context, port OperationPort[struct{}], _ struct{}) error {
+		return port.Execute(ctx)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	template, planContract, err := NewPlanContract(ContractVersionV1, "adversarial_begin_pair", []TypedParticipant[struct{}]{{
+		Key: "write", DeclaresWrite: true, Operation: operation,
+	}}, OutboxOptional)
+	if err != nil {
+		t.Fatal(err)
+	}
+	registry, err := NewRegistry([]PlanTemplate{template})
+	if err != nil {
+		t.Fatal(err)
+	}
+	coordinator, err := NewCoordinator(Configuration{
+		Backend: contract, Registry: registry, Outbox: &fakeAppender{backend: &fakeBackend{}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan, err := planContract.Bind(registry, struct{}{}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return coordinator.Execute(context.Background(), plan)
+}
+
 func TestExecutorBindingExcludesLifecycleAuthorityAtConstructionAndExecution(t *testing.T) {
 	anchor := &fakeSession{}
 	if bindingType := reflect.TypeOf(ExecutorBinding{}); !bindingType.Comparable() || bindingType.NumField() != 1 || bindingType.Field(0).IsExported() {
 		t.Fatalf("executor binding is not a comparable opaque identity: %v", bindingType)
 	}
-	constructorType := reflect.TypeOf(NewExecutorBinding)
-	if constructorType.NumIn() != 1 || constructorType.In(0) != reflect.TypeOf((*Session)(nil)).Elem() || constructorType.NumOut() != 2 {
-		t.Fatalf("executor binding constructor accepts more than the lifecycle association: %v", constructorType)
+	if resultType := reflect.TypeOf(BeginResult{}); !resultType.Comparable() || resultType.NumField() != 2 {
+		t.Fatalf("begin result is not an opaque comparable pair: %v", resultType)
 	}
-	if binding, err := NewExecutorBinding(nil); ErrorCodeOf(err) != CodeInvalidContract || binding.valid() {
-		t.Fatalf("binding without lifecycle association accepted: binding=%#v err=%v", binding, err)
+	constructorType := reflect.TypeOf(NewBeginResult)
+	if constructorType.NumIn() != 1 || constructorType.In(0) != reflect.TypeOf((*Session)(nil)).Elem() || constructorType.NumOut() != 3 {
+		t.Fatalf("begin-result constructor accepts more than the lifecycle association: %v", constructorType)
 	}
-	if forged := (ExecutorBinding{state: &executorBindingState{session: anchor}}); forged.valid() {
+	if result, binding, err := NewBeginResult(nil); ErrorCodeOf(err) != CodeInvalidContract || binding.valid() || result.state != nil {
+		t.Fatalf("pair without lifecycle association accepted: result=%#v binding=%#v err=%v", result, binding, err)
+	}
+	if forged := (ExecutorBinding{state: &executorBindingState{}}); forged.valid() {
 		t.Fatal("executor identity without the package seal was accepted")
 	}
-	bound, err := NewExecutorBinding(anchor)
-	if err != nil || !bound.validFor(anchor) || bound.validFor(&fakeSession{}) {
-		t.Fatalf("executor binding was not sealed to one lifecycle session: binding=%#v err=%v", bound, err)
+	result, bound, err := NewBeginResult(anchor)
+	if err != nil || !bound.valid() || result.binding != bound {
+		t.Fatalf("executor binding was not sealed into one begin result: result=%#v binding=%#v err=%v", result, bound, err)
+	}
+	returned, consumed, pair, ok := result.consume()
+	if !ok || returned != anchor || consumed != bound || !bound.validFor(pair) {
+		t.Fatalf("begin pair was not consumed exactly: session=%T binding=%#v pair=%p ok=%t", returned, consumed, pair, ok)
+	}
+	if reused, reusedBinding, reusedPair, reusedOK := result.consume(); reused != anchor || reusedBinding.valid() || reusedPair != nil || reusedOK {
+		t.Fatalf("begin pair was reusable: session=%T binding=%#v pair=%p ok=%t", reused, reusedBinding, reusedPair, reusedOK)
 	}
 	if copy := bound; copy != bound || copy.state != bound.state {
 		t.Fatal("executor binding copy changed opaque identity")
@@ -72,6 +183,109 @@ func TestExecutorBindingExcludesLifecycleAuthorityAtConstructionAndExecution(t *
 	}
 }
 
+func TestBeginPairSupportsEveryNonNilSessionShapeWithoutInterfaceEquality(t *testing.T) {
+	interfaceLifecycle := &adversarialSessionLifecycle{}
+	interfaceBearing := interfaceBearingSession{payload: []string{"would", "panic", "under", "equality"}, lifecycle: interfaceLifecycle}
+	if !reflect.TypeOf(interfaceBearing).Comparable() || !comparisonPanics(interfaceBearing, interfaceBearing) {
+		t.Fatal("interface-bearing regression shape no longer demonstrates the equality panic")
+	}
+	nonComparableLifecycle := &adversarialSessionLifecycle{}
+	nonComparable := nonComparableSession{values: []string{"not", "comparable"}, lifecycle: nonComparableLifecycle}
+	if reflect.TypeOf(nonComparable).Comparable() {
+		t.Fatal("non-comparable regression shape unexpectedly became comparable")
+	}
+
+	for _, testCase := range []struct {
+		name      string
+		session   Session
+		lifecycle *adversarialSessionLifecycle
+	}{
+		{name: "comparable static type with interface-held slice", session: interfaceBearing, lifecycle: interfaceLifecycle},
+		{name: "genuinely non-comparable dynamic type", session: nonComparable, lifecycle: nonComparableLifecycle},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			result, binding, err := NewBeginResult(testCase.session)
+			if err != nil || !binding.valid() {
+				t.Fatalf("valid session shape rejected: binding=%#v err=%v", binding, err)
+			}
+			var participants atomic.Int32
+			report, err := executeFixedBeginResult(t, result, &participants)
+			if err != nil {
+				t.Fatalf("valid session shape failed: %v", err)
+			}
+			if participants.Load() != 1 || testCase.lifecycle.commits.Load() != 1 || testCase.lifecycle.rollbacks.Load() != 0 ||
+				report.BeginCalls != 1 || report.ParticipantCalls != 1 || report.CommitCalls != 1 || report.RollbackCalls != 0 {
+				t.Fatalf("valid session lifecycle participants=%d commit=%d rollback=%d report=%+v",
+					participants.Load(), testCase.lifecycle.commits.Load(), testCase.lifecycle.rollbacks.Load(), report)
+			}
+		})
+	}
+}
+
+func TestCoordinatorRejectsMissingMismatchedAndReusedBeginPairsWithoutPanic(t *testing.T) {
+	for _, testCase := range []struct {
+		name  string
+		build func(*adversarialSessionLifecycle, *adversarialSessionLifecycle) BeginResult
+	}{
+		{
+			name: "missing binding half with interface-bearing session",
+			build: func(primary, _ *adversarialSessionLifecycle) BeginResult {
+				result, _, err := NewBeginResult(interfaceBearingSession{payload: []int{1, 2, 3}, lifecycle: primary})
+				if err != nil {
+					panic(err)
+				}
+				result.binding = ExecutorBinding{}
+				return result
+			},
+		},
+		{
+			name: "mismatched binding half with non-comparable session",
+			build: func(primary, other *adversarialSessionLifecycle) BeginResult {
+				result, _, err := NewBeginResult(nonComparableSession{values: []string{"primary"}, lifecycle: primary})
+				if err != nil {
+					panic(err)
+				}
+				_, foreignBinding, err := NewBeginResult(nonComparableSession{values: []string{"foreign"}, lifecycle: other})
+				if err != nil {
+					panic(err)
+				}
+				result.binding = foreignBinding
+				return result
+			},
+		},
+		{
+			name: "reused consumed pair",
+			build: func(primary, _ *adversarialSessionLifecycle) BeginResult {
+				result, _, err := NewBeginResult(interfaceBearingSession{payload: []byte("reused"), lifecycle: primary})
+				if err != nil {
+					panic(err)
+				}
+				if _, _, _, ok := result.consume(); !ok {
+					panic("fresh pair did not consume")
+				}
+				return result
+			},
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			primary := &adversarialSessionLifecycle{}
+			other := &adversarialSessionLifecycle{}
+			result := testCase.build(primary, other)
+			var participants atomic.Int32
+			report, err := executeFixedBeginResult(t, result, &participants)
+			if ErrorCodeOf(err) != CodeBeginFailed {
+				t.Fatalf("invalid begin pair error=%v", err)
+			}
+			if participants.Load() != 0 || primary.commits.Load() != 0 || primary.rollbacks.Load() != 1 ||
+				other.commits.Load() != 0 || other.rollbacks.Load() != 0 || report.BeginCalls != 1 ||
+				report.ParticipantCalls != 0 || report.CommitCalls != 0 || report.RollbackCalls != 1 {
+				t.Fatalf("invalid pair escaped participants=%d primary=%d/%d other=%d/%d report=%+v",
+					participants.Load(), primary.commits.Load(), primary.rollbacks.Load(), other.commits.Load(), other.rollbacks.Load(), report)
+			}
+		})
+	}
+}
+
 func TestCoordinatorRejectsCrossSessionExecutorBindingBeforeOperation(t *testing.T) {
 	backend := &fakeBackend{mismatchBinding: true}
 	var callbackCalls atomic.Int32
@@ -109,27 +323,39 @@ func TestCoordinatorRejectsCrossSessionExecutorBindingBeforeOperation(t *testing
 
 func TestBackendBindingJournalRejectsUnknownForeignCrossSessionAndExpiredIdentities(t *testing.T) {
 	backend := &fakeBackend{}
-	firstSessionValue, firstBinding, err := backend.Begin(context.Background())
+	firstResult, err := backend.Begin(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	secondSessionValue, secondBinding, err := backend.Begin(context.Background())
+	firstSessionValue, firstBinding, firstPair, ok := firstResult.consume()
+	if !ok {
+		t.Fatal("first begin result was not consumable")
+	}
+	secondResult, err := backend.Begin(context.Background())
 	if err != nil {
 		t.Fatal(err)
+	}
+	secondSessionValue, secondBinding, secondPair, ok := secondResult.consume()
+	if !ok {
+		t.Fatal("second begin result was not consumable")
 	}
 	firstSession := firstSessionValue.(*fakeSession)
 	secondSession := secondSessionValue.(*fakeSession)
-	if firstBinding == secondBinding || !firstBinding.validFor(firstSession) || !secondBinding.validFor(secondSession) ||
-		firstBinding.validFor(secondSession) || secondBinding.validFor(firstSession) {
+	if firstBinding == secondBinding || firstPair == secondPair || !firstBinding.validFor(firstPair) || !secondBinding.validFor(secondPair) ||
+		firstBinding.validFor(secondPair) || secondBinding.validFor(firstPair) {
 		t.Fatal("executor identities were not distinct and exact-session bound")
 	}
 	if err := backend.stage(context.Background(), ExecutorBinding{}, "owner", "zero"); err == nil {
 		t.Fatal("zero executor identity reached storage")
 	}
 	foreign := &fakeBackend{}
-	foreignSession, foreignBinding, err := foreign.Begin(context.Background())
+	foreignResult, err := foreign.Begin(context.Background())
 	if err != nil {
 		t.Fatal(err)
+	}
+	foreignSession, foreignBinding, _, ok := foreignResult.consume()
+	if !ok {
+		t.Fatal("foreign begin result was not consumable")
 	}
 	if err := backend.stage(context.Background(), foreignBinding, "owner", "foreign"); err == nil {
 		t.Fatal("foreign-backend executor identity reached storage")
