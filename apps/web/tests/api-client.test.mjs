@@ -17,6 +17,16 @@ import {
 } from "../../../packages/test-fixtures/frontend/src/index.ts";
 
 const VALID_UUID = "018f0f4e-7d65-7c25-8ca5-23f96ae107aa";
+const SCHEMA_STRING_CANDIDATES = [
+  VALID_UUID,
+  `urn:uuid:${VALID_UUID}`,
+  `https://stead.invalid/r/project/${VALID_UUID}`,
+  "2026-09-03T00:00:00Z",
+  "1.0.0",
+  "AB-1",
+  "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "value",
+];
 
 const validOperationOptions = {
   getOrganization: { path: { organization_id: VALID_UUID } },
@@ -52,12 +62,111 @@ const validOperationOptions = {
   },
 };
 
-function successfulResponse(operationId, body = { contract_fixture: true }) {
+function schemaFixture(schema) {
+  const constraints = flattenAllOf(schema);
+  const constValues = constraints
+    .filter((candidate) => Object.hasOwn(candidate, "const"))
+    .map((candidate) => candidate.const);
+  if (constValues.length) {
+    const value = constValues[0];
+    if (!constraints.every((candidate) => fixtureSatisfies(value, candidate))) {
+      throw new Error(`incompatible const fixture schema ${JSON.stringify(schema)}`);
+    }
+    return structuredClone(value);
+  }
+  const enumValues = constraints.flatMap((candidate) => candidate.enum ?? []);
+  if (enumValues.length) {
+    const value = enumValues.find((candidate) =>
+      constraints.every((constraint) => fixtureSatisfies(candidate, constraint)),
+    );
+    if (value === undefined) {
+      throw new Error(`incompatible enum fixture schema ${JSON.stringify(schema)}`);
+    }
+    return structuredClone(value);
+  }
+  if (schema.oneOf?.length) return schemaFixture(schema.oneOf[0]);
+
+  if (constraints.some((candidate) =>
+    candidate.type === "object" || candidate.properties || candidate.required
+  )) {
+    const result = {};
+    const required = new Set(constraints.flatMap((candidate) => candidate.required ?? []));
+    for (const name of required) {
+      const propertySchemas = constraints
+        .map((candidate) => candidate.properties?.[name])
+        .filter(Boolean);
+      result[name] = schemaFixture(
+        propertySchemas.length === 1
+          ? propertySchemas[0]
+          : { allOf: propertySchemas },
+      );
+    }
+    return result;
+  }
+  if (constraints.some((candidate) => candidate.type === "array")) {
+    const minItems = Math.max(...constraints.map((candidate) => candidate.minItems ?? 0));
+    const itemSchemas = constraints.map((candidate) => candidate.items).filter(Boolean);
+    return Array.from({ length: minItems }, () =>
+      schemaFixture(itemSchemas.length === 1 ? itemSchemas[0] : { allOf: itemSchemas }),
+    );
+  }
+  if (constraints.some((candidate) =>
+    candidate.type === "integer" || candidate.type === "number"
+  )) {
+    return Math.max(...constraints.map((candidate) => candidate.minimum ?? 0));
+  }
+  if (constraints.some((candidate) => candidate.type === "boolean")) return true;
+  if (constraints.some((candidate) => candidate.type === "null")) return null;
+  if (constraints.some((candidate) =>
+    candidate.type === "string" || candidate.pattern || candidate.format
+  )) {
+    const candidate = SCHEMA_STRING_CANDIDATES.find(
+      (value) => constraints.every((constraint) => fixtureSatisfies(value, constraint)),
+    );
+    if (!candidate) throw new Error(`no test fixture for schema ${JSON.stringify(schema)}`);
+    return candidate;
+  }
+  throw new Error(`unsupported test fixture schema ${JSON.stringify(schema)}`);
+}
+
+function flattenAllOf(schema) {
+  const own = { ...schema };
+  delete own.allOf;
+  return [own, ...(schema.allOf ?? []).flatMap(flattenAllOf)];
+}
+
+function fixtureSatisfies(value, schema) {
+  if (schema.allOf?.some((candidate) => !fixtureSatisfies(value, candidate))) return false;
+  if (Object.hasOwn(schema, "const") && !Object.is(value, schema.const)) return false;
+  if (schema.enum && !schema.enum.some((candidate) => Object.is(value, candidate))) {
+    return false;
+  }
+  if (schema.type === "string" && typeof value !== "string") return false;
+  if (typeof value === "string") {
+    if (schema.pattern && !new RegExp(schema.pattern, "u").test(value)) return false;
+    if (schema.minLength !== undefined && value.length < schema.minLength) return false;
+    if (schema.format === "date-time" && value !== "2026-09-03T00:00:00Z") return false;
+    if (schema.format === "uri" && !/^(?:https:|urn:)/u.test(value)) return false;
+  }
+  return true;
+}
+
+function validResponseBody(operationId) {
+  const definition = operationDefinitions[operationId].response;
+  const status = String(definition.successStatuses[0]);
+  const mediaType = definition.successMediaTypes[0];
+  return schemaFixture(definition.successSchemas[status][mediaType]);
+}
+
+function successfulResponse(operationId, body = validResponseBody(operationId)) {
   const headers = { "content-type": "application/json" };
   if (operationDefinitions[operationId].response.schemaVersion) {
     headers["stead-schema-version"] = "1.0";
   }
-  return new Response(JSON.stringify(body), { status: 200, headers });
+  return new Response(JSON.stringify(body), {
+    status: operationDefinitions[operationId].response.successStatuses[0],
+    headers,
+  });
 }
 
 test("generated operation registry is reproducible from the current OpenAPI contract", async () => {
@@ -73,10 +182,11 @@ test("generated operation registry is reproducible from the current OpenAPI cont
 });
 
 test("browser transport calls one generated same-origin Platform operation", async () => {
+  const expectedBody = validResponseBody("getProject");
   const mocks = createContractMockFetch({
     getProject: {
       status: 200,
-      body: { contract_fixture: true },
+      body: expectedBody,
       headers: { "stead-schema-version": "1.0", etag: '"1"' },
     },
   });
@@ -84,7 +194,7 @@ test("browser transport calls one generated same-origin Platform operation", asy
   const response = await client.request("getProject", {
     path: { project_id: "018f0f4e-7d65-7c25-8ca5-23f96ae107aa" },
   });
-  assert.deepEqual(response.data, { contract_fixture: true });
+  assert.deepEqual(response.data, expectedBody);
   assert.equal(response.schemaVersion, "1.0");
   assert.equal(mocks.requestCount(), 1);
   assert.equal(mocks.operationCount("getProject"), 1);
@@ -92,6 +202,20 @@ test("browser transport calls one generated same-origin Platform operation", asy
     () => createPlatformClient({ basePath: "https://provider.invalid/api/v1" }),
     /same-origin Stead/u,
   );
+  for (const basePath of [
+    "//provider.invalid/api/v1",
+    "/\\\\provider.invalid/api/v1",
+    "/%5cevil.invalid/api/v1",
+    "/../api/v1",
+    "/api/./v1",
+    "/api/v1?redirect=//provider.invalid",
+    "/api/v1#provider.invalid",
+  ]) {
+    assert.throws(
+      () => createPlatformClient({ basePath }),
+      /same-origin Stead/u,
+    );
+  }
 });
 
 test("all generated operations enforce their allowed and required request shape", async () => {
@@ -140,7 +264,7 @@ test("all generated operations enforce their allowed and required request shape"
 
   const expectPreflightRejection = async (operationId, options) => {
     const before = fetches;
-    await assert.rejects(client.request(operationId, options), /generated Platform contract|missing|unexpected|strong ETag/u);
+    await assert.rejects(client.request(operationId, options), /generated Platform contract|missing|unexpected|strong ETag|canonically encoded/u);
     assert.equal(fetches, before);
   };
 
@@ -210,6 +334,10 @@ test("all generated operations enforce their allowed and required request shape"
   });
   await expectPreflightRejection("createWorkItem", {
     ...structuredClone(validOperationOptions.createWorkItem),
+    idempotencyKey: "       x",
+  });
+  await expectPreflightRejection("createWorkItem", {
+    ...structuredClone(validOperationOptions.createWorkItem),
     body: { title: "missing required fields" },
   });
   await expectPreflightRejection("updateWorkItem", {
@@ -219,6 +347,22 @@ test("all generated operations enforce their allowed and required request shape"
   await expectPreflightRejection("updateWorkItem", {
     ...structuredClone(validOperationOptions.updateWorkItem),
     body: {},
+  });
+
+  await expectPreflightRejection("getProject", {
+    ...structuredClone(validOperationOptions.getProject),
+    query: { constructor: "protected-secret" },
+  });
+  const prototypeNamedBody = structuredClone(
+    validOperationOptions.createWorkItem.body,
+  );
+  Object.defineProperty(prototypeNamedBody, "__proto__", {
+    value: { polluted: true },
+    enumerable: true,
+  });
+  await expectPreflightRejection("createWorkItem", {
+    ...structuredClone(validOperationOptions.createWorkItem),
+    body: prototypeNamedBody,
   });
 });
 
@@ -541,6 +685,117 @@ test("query state deduplicates reads and clears on authorization-context change"
   assert.equal(store.getSnapshot("project-surface").status, "idle");
   assert.equal(notifications, 1);
   unsubscribe();
+});
+
+test("authorization context is an immutable closed snapshot", async () => {
+  const store = new QueryStore();
+  const context = {
+    principal: "principal-a",
+    session: "session-a",
+    securityDomain: "domain-a",
+  };
+  store.setAuthorizationContext(context);
+  store.optimisticallySet("protected", { principal: "principal-a-secret" });
+
+  context.principal = "principal-b";
+  context.session = "session-b";
+  store.setAuthorizationContext(context);
+  assert.equal(store.getSnapshot("protected").status, "idle");
+
+  const accessorContext = {};
+  let accessorReads = 0;
+  Object.defineProperty(accessorContext, "principal", {
+    enumerable: true,
+    get() {
+      accessorReads += 1;
+      return "principal-c";
+    },
+  });
+  Object.defineProperties(accessorContext, {
+    session: { enumerable: true, value: "session-c" },
+    securityDomain: { enumerable: true, value: "domain-a" },
+  });
+  assert.throws(
+    () => store.setAuthorizationContext(accessorContext),
+    /closed plain own-data object/u,
+  );
+  assert.equal(accessorReads, 0);
+  assert.throws(
+    () =>
+      store.setAuthorizationContext({
+        principal: "principal-c",
+        session: "session-c",
+        securityDomain: "domain-a",
+        constructor: "unexpected",
+      }),
+    /closed plain own-data object/u,
+  );
+});
+
+test("authorization context clearing survives hostile subscribers", () => {
+  const store = new QueryStore();
+  store.setAuthorizationContext({
+    principal: "principal-a",
+    session: "session-a",
+    securityDomain: "domain-a",
+  });
+  store.optimisticallySet("first", { title: "first-secret" });
+  store.optimisticallySet("second", { title: "second-secret" });
+  store.subscribe("first", () => {
+    throw new Error("hostile subscriber");
+  });
+
+  assert.doesNotThrow(() =>
+    store.setAuthorizationContext({
+      principal: "principal-b",
+      session: "session-b",
+      securityDomain: "domain-a",
+    }),
+  );
+  assert.equal(store.getSnapshot("first").status, "idle");
+  assert.equal(store.getSnapshot("second").status, "idle");
+});
+
+test("success responses must use the operation declared status", async () => {
+  const cases = [
+    ["getProject", 201, validOperationOptions.getProject],
+    ["createWorkItem", 200, validOperationOptions.createWorkItem],
+  ];
+  for (const [operationId, status, requestOptions] of cases) {
+    const client = createPlatformClient({
+      fetchImplementation: async () =>
+        new Response(JSON.stringify({ contract_fixture: true }), {
+          status,
+          headers: {
+            "content-type": "application/json",
+            "stead-schema-version": "1.0",
+            etag: '"1"',
+          },
+        }),
+    });
+    await assert.rejects(
+      client.request(operationId, requestOptions),
+      (error) => error instanceof PlatformApiError && error.status === 502,
+    );
+  }
+});
+
+test("success payloads must satisfy the exact generated response schema", async () => {
+  const client = createPlatformClient({
+    fetchImplementation: async () =>
+      new Response(JSON.stringify({ contract_fixture: true }), {
+        status: 200,
+        headers: {
+          "content-type": "application/json",
+          "stead-schema-version": "1.0",
+          etag: '"1"',
+        },
+      }),
+  });
+  await assert.rejects(
+    client.request("getProject", validOperationOptions.getProject),
+    (error) => error instanceof PlatformApiError && error.status === 502,
+  );
 });
 
 test("query snapshots and public promises sanitize loader errors", async () => {

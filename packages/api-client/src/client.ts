@@ -69,13 +69,17 @@ interface JsonSchema {
   readonly const?: unknown;
   readonly enum?: readonly unknown[];
   readonly pattern?: string;
+  readonly format?: string;
   readonly minLength?: number;
   readonly minimum?: number;
   readonly maximum?: number;
+  readonly minItems?: number;
   readonly minProperties?: number;
   readonly required?: readonly string[];
   readonly properties?: Readonly<Record<string, JsonSchema>>;
+  readonly propertyNames?: JsonSchema;
   readonly additionalProperties?: boolean;
+  readonly unevaluatedProperties?: boolean;
   readonly items?: JsonSchema;
   readonly uniqueItems?: boolean;
   readonly oneOf?: readonly JsonSchema[];
@@ -104,8 +108,15 @@ interface RequestDefinition {
 }
 
 interface ResponseDefinition {
+  readonly successStatuses: readonly number[];
   readonly successMediaTypes: readonly string[];
   readonly errorMediaTypes: readonly string[];
+  readonly successSchemas: Readonly<
+    Record<string, Readonly<Record<string, JsonSchema>>>
+  >;
+  readonly errorSchemas: Readonly<
+    Record<string, Readonly<Record<string, JsonSchema>>>
+  >;
   readonly compatibleSchemaMajor: number;
   readonly schemaVersion: {
     readonly required: boolean;
@@ -141,12 +152,20 @@ const REQUEST_OPTION_KEYS = new Set([
 ]);
 
 function assertCanonicalBasePath(basePath: string): void {
-  if (
-    !basePath.startsWith("/") ||
-    basePath.startsWith("//") ||
-    basePath.includes("://") ||
-    !basePath.endsWith("/api/v1")
-  ) {
+  const segments = basePath.split("/");
+  const canonicalSegments =
+    segments.length >= 3 &&
+    segments[0] === "" &&
+    segments.at(-2) === "api" &&
+    segments.at(-1) === "v1" &&
+    segments.slice(1).every(
+      (segment) =>
+        segment.length > 0 &&
+        segment !== "." &&
+        segment !== ".." &&
+        /^[A-Za-z0-9._~-]+$/u.test(segment),
+    );
+  if (!canonicalSegments) {
     throw new Error(
       "The browser client may call only the same-origin Stead /api/v1 boundary.",
     );
@@ -154,8 +173,12 @@ function assertCanonicalBasePath(basePath: string): void {
 }
 
 function schemaMatches(value: unknown, schema: JsonSchema): boolean {
+  let matchingOneOf: readonly JsonSchema[] = [];
   if (schema.oneOf) {
-    if (schema.oneOf.filter((candidate) => schemaMatches(value, candidate)).length !== 1) {
+    matchingOneOf = schema.oneOf.filter((candidate) =>
+      schemaMatches(value, candidate),
+    );
+    if (matchingOneOf.length !== 1) {
       return false;
     }
   }
@@ -183,12 +206,14 @@ function schemaMatches(value: unknown, schema: JsonSchema): boolean {
   if (typeof value === "string") {
     if (schema.minLength !== undefined && value.length < schema.minLength) return false;
     if (schema.pattern && !new RegExp(schema.pattern, "u").test(value)) return false;
+    if (schema.format && !formatMatches(value, schema.format)) return false;
   }
   if (typeof value === "number") {
     if (schema.minimum !== undefined && value < schema.minimum) return false;
     if (schema.maximum !== undefined && value > schema.maximum) return false;
   }
   if (Array.isArray(value)) {
+    if (schema.minItems !== undefined && value.length < schema.minItems) return false;
     if (schema.items && value.some((item) => !schemaMatches(item, schema.items!))) {
       return false;
     }
@@ -206,10 +231,16 @@ function schemaMatches(value: unknown, schema: JsonSchema): boolean {
     if (schema.minProperties !== undefined && keys.length < schema.minProperties) {
       return false;
     }
-    if (schema.required?.some((name) => !(name in record))) return false;
+    if (
+      schema.propertyNames &&
+      keys.some((name) => !schemaMatches(name, schema.propertyNames!))
+    ) {
+      return false;
+    }
+    if (schema.required?.some((name) => !Object.hasOwn(record, name))) return false;
     if (
       schema.additionalProperties === false &&
-      keys.some((name) => !(name in (schema.properties ?? {})))
+      keys.some((name) => !Object.hasOwn(schema.properties ?? {}, name))
     ) {
       return false;
     }
@@ -217,13 +248,87 @@ function schemaMatches(value: unknown, schema: JsonSchema): boolean {
       schema.properties &&
       Object.entries(schema.properties).some(
         ([name, propertySchema]) =>
-          name in record && !schemaMatches(record[name], propertySchema),
+          Object.hasOwn(record, name) && !schemaMatches(record[name], propertySchema),
       )
     ) {
       return false;
     }
+    if (schema.unevaluatedProperties === false) {
+      const evaluated = evaluatedPropertyNames(schema, record, matchingOneOf);
+      if (keys.some((name) => !evaluated.has(name))) return false;
+    }
   }
   return true;
+}
+
+function formatMatches(value: string, format: string): boolean {
+  if (format === "date-time") {
+    const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(?:Z|([+-])(\d{2}):(\d{2}))$/u.exec(
+      value,
+    );
+    if (!match) return false;
+    const [, year, month, day, hour, minute, second, , offsetHour, offsetMinute] =
+      match;
+    const yearValue = Number(year);
+    const monthValue = Number(month);
+    const dayValue = Number(day);
+    return (
+      monthValue >= 1 &&
+      monthValue <= 12 &&
+      dayValue >= 1 &&
+      dayValue <= new Date(Date.UTC(yearValue, monthValue, 0)).getUTCDate() &&
+      Number(hour) <= 23 &&
+      Number(minute) <= 59 &&
+      Number(second) <= 59 &&
+      (offsetHour === undefined || Number(offsetHour) <= 23) &&
+      (offsetMinute === undefined || Number(offsetMinute) <= 59)
+    );
+  }
+  if (format === "uri") {
+    try {
+      const parsed = new URL(value);
+      return (
+        parsed.protocol.length > 1 &&
+        !/[\s\\]/u.test(value) &&
+        hasValidPercentEncoding(value)
+      );
+    } catch {
+      return false;
+    }
+  }
+  if (format === "uri-reference") {
+    try {
+      new URL(value, "https://stead.invalid");
+      return !/[\s\\]/u.test(value) && hasValidPercentEncoding(value);
+    } catch {
+      return false;
+    }
+  }
+  return false;
+}
+
+function hasValidPercentEncoding(value: string): boolean {
+  return !/%(?![0-9A-Fa-f]{2})/u.test(value);
+}
+
+function evaluatedPropertyNames(
+  schema: JsonSchema,
+  value: Readonly<Record<string, unknown>>,
+  matchingOneOf: readonly JsonSchema[] = [],
+): Set<string> {
+  const names = new Set(Object.keys(schema.properties ?? {}));
+  if (schema.additionalProperties === true) {
+    for (const name of Object.keys(value)) names.add(name);
+  }
+  for (const nested of [...(schema.allOf ?? []), ...matchingOneOf]) {
+    const nestedMatches = nested.oneOf?.filter((candidate) =>
+      schemaMatches(value, candidate),
+    );
+    for (const name of evaluatedPropertyNames(nested, value, nestedMatches)) {
+      names.add(name);
+    }
+  }
+  return names;
 }
 
 function assertSchema(value: unknown, schema: JsonSchema, field: string): void {
@@ -402,7 +507,9 @@ function validateParameters(
 ): Readonly<Record<string, unknown>> {
   const values = snapshotParameterRecord(rawValues, location);
   for (const name of Object.keys(values)) {
-    if (!(name in definitions)) throw new Error(`unexpected ${location} parameter ${name}`);
+    if (!Object.hasOwn(definitions, name)) {
+      throw new Error(`unexpected ${location} parameter ${name}`);
+    }
   }
   for (const [name, definition] of Object.entries(definitions)) {
     const value = values[name];
@@ -503,7 +610,7 @@ function validateRequest(
     idempotencyKey,
   };
   for (const [name, value] of Object.entries(headerValues)) {
-    if (value !== undefined && !(name in definition.request.headers)) {
+    if (value !== undefined && !Object.hasOwn(definition.request.headers, name)) {
       throw new Error(`unexpected request header option ${name}`);
     }
   }
@@ -519,6 +626,9 @@ function validateRequest(
       throw new Error(`request header ${header.wireName} must be a strong ETag`);
     }
     headers.set(header.wireName, value);
+    if (headers.get(header.wireName) !== value) {
+      throw new Error(`request header ${header.wireName} is not canonically encoded`);
+    }
   }
 
   if (!definition.request.body) {
@@ -642,10 +752,11 @@ function bodyCorrelationId(body: unknown): string | undefined {
   if (
     typeof body === "object" &&
     body !== null &&
-    "correlation_id" in body
+    Object.hasOwn(body, "correlation_id")
   ) {
-    if (typeof body.correlation_id !== "string") throw new PlatformApiError(502);
-    return validatedCorrelationId(body.correlation_id);
+    const value = (body as Record<string, unknown>).correlation_id;
+    if (typeof value !== "string") throw new PlatformApiError(502);
+    return validatedCorrelationId(value);
   }
   return undefined;
 }
@@ -682,12 +793,19 @@ export function createPlatformClient(
         signal: validated.signal,
       });
 
-      const allowedMediaTypes = response.ok
+      const declaredSuccess = definition.response.successStatuses.includes(
+        response.status,
+      );
+      if (response.ok !== declaredSuccess) {
+        throw new PlatformApiError(502);
+      }
+      const allowedMediaTypes = declaredSuccess
         ? definition.response.successMediaTypes
         : definition.response.errorMediaTypes;
       if (!allowedMediaTypes.includes(responseMediaType(response))) {
         throw new PlatformApiError(502);
       }
+      const mediaType = responseMediaType(response);
       const schemaVersion = validatedSchemaVersion(response, definition.response);
       const etag = validatedEtag(response, definition.response);
       const headerCorrelationId = validatedCorrelationId(
@@ -695,6 +813,13 @@ export function createPlatformClient(
       );
       const bytes = await readBoundedBody(response);
       const body = parseJson(bytes);
+      const responseSchema = declaredSuccess
+        ? definition.response.successSchemas[String(response.status)]?.[mediaType]
+        : (definition.response.errorSchemas[String(response.status)]?.[mediaType] ??
+          definition.response.errorSchemas.default?.[mediaType]);
+      if (!responseSchema || !schemaMatches(body, responseSchema)) {
+        throw new PlatformApiError(502);
+      }
       const embeddedCorrelationId = bodyCorrelationId(body);
       const correlationId = headerCorrelationId ?? embeddedCorrelationId;
 
@@ -704,7 +829,7 @@ export function createPlatformClient(
         responseBytes: bytes.byteLength,
         status: response.status,
       });
-      if (!response.ok) throw new PlatformApiError(response.status, correlationId);
+      if (!declaredSuccess) throw new PlatformApiError(response.status, correlationId);
 
       return {
         data: body as TData,

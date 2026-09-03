@@ -50,6 +50,58 @@ interface QueryEntry<TData> {
 
 const IDLE_SNAPSHOT: QuerySnapshot<never> = { status: "idle" };
 const SAFE_CORRELATION_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u;
+const AUTHORIZATION_CONTEXT_KEYS = new Set([
+  "principal",
+  "session",
+  "securityDomain",
+]);
+const MAX_AUTHORIZATION_CONTEXT_VALUE_LENGTH = 512;
+
+function snapshotAuthorizationContext(rawContext: unknown): AuthorizationContext {
+  try {
+    if (
+      rawContext === null ||
+      typeof rawContext !== "object" ||
+      Array.isArray(rawContext)
+    ) {
+      throw new Error("authorization context is not an object");
+    }
+    const prototype = Reflect.getPrototypeOf(rawContext);
+    if (prototype !== Object.prototype && prototype !== null) {
+      throw new Error("authorization context is not plain");
+    }
+
+    const snapshot = Object.create(null) as Record<string, string>;
+    for (const key of Reflect.ownKeys(rawContext)) {
+      if (typeof key !== "string" || !AUTHORIZATION_CONTEXT_KEYS.has(key)) {
+        throw new Error("unexpected authorization context field");
+      }
+      const descriptor = Reflect.getOwnPropertyDescriptor(rawContext, key);
+      if (!descriptor || !("value" in descriptor) || !descriptor.enumerable) {
+        throw new Error("authorization context field is not own enumerable data");
+      }
+      if (
+        typeof descriptor.value !== "string" ||
+        descriptor.value.length === 0 ||
+        descriptor.value.length > MAX_AUTHORIZATION_CONTEXT_VALUE_LENGTH
+      ) {
+        throw new Error("invalid authorization context value");
+      }
+      Object.defineProperty(snapshot, key, {
+        value: descriptor.value,
+        enumerable: true,
+        configurable: false,
+        writable: false,
+      });
+    }
+    if ([...AUTHORIZATION_CONTEXT_KEYS].some((key) => !Object.hasOwn(snapshot, key))) {
+      throw new Error("missing authorization context field");
+    }
+    return Object.freeze(snapshot) as unknown as AuthorizationContext;
+  } catch {
+    throw new Error("authorization context must be a closed plain own-data object");
+  }
+}
 
 function presentationError(error: unknown): QueryPresentationError {
   try {
@@ -99,8 +151,9 @@ export class QueryStore {
   private contextRevision = 0;
 
   setAuthorizationContext(context: AuthorizationContext): void {
-    if (sameContext(this.context, context)) return;
-    this.context = context;
+    const snapshot = snapshotAuthorizationContext(context);
+    if (sameContext(this.context, snapshot)) return;
+    this.context = snapshot;
     this.contextRevision += 1;
     this.clear();
   }
@@ -112,12 +165,15 @@ export class QueryStore {
   }
 
   clear(): void {
-    for (const entry of this.entries.values()) {
+    const entries = [...this.entries.values()];
+    for (const entry of entries) {
       entry.controller?.abort();
       entry.inflight = undefined;
       entry.controller = undefined;
       entry.contextRevision = this.contextRevision;
       this.replaceSnapshot(entry, IDLE_SNAPSHOT);
+    }
+    for (const entry of entries) {
       this.notify(entry);
     }
   }
@@ -133,7 +189,11 @@ export class QueryStore {
   }
 
   getSnapshot<TData>(key: string): QuerySnapshot<TData> {
-    return (this.entries.get(key)?.snapshot ?? IDLE_SNAPSHOT) as QuerySnapshot<TData>;
+    const entry = this.entries.get(key);
+    if (!entry || entry.contextRevision !== this.contextRevision) {
+      return IDLE_SNAPSHOT as QuerySnapshot<TData>;
+    }
+    return entry.snapshot as QuerySnapshot<TData>;
   }
 
   subscribe(key: string, listener: () => void): () => void {
@@ -281,7 +341,15 @@ export class QueryStore {
 
   private ensureEntry<TData = unknown>(key: string): QueryEntry<TData> {
     const existing = this.entries.get(key);
-    if (existing) return existing as QueryEntry<TData>;
+    if (existing) {
+      if (existing.contextRevision !== this.contextRevision) {
+        existing.inflight = undefined;
+        existing.controller = undefined;
+        existing.contextRevision = this.contextRevision;
+        this.replaceSnapshot(existing, IDLE_SNAPSHOT);
+      }
+      return existing as QueryEntry<TData>;
+    }
     const entry: QueryEntry<TData> = {
       snapshot: IDLE_SNAPSHOT,
       baseSnapshot: IDLE_SNAPSHOT,
@@ -294,7 +362,13 @@ export class QueryStore {
   }
 
   private notify(entry: QueryEntry<unknown>): void {
-    for (const listener of entry.listeners) listener();
+    for (const listener of entry.listeners) {
+      try {
+        listener();
+      } catch {
+        // Presentation observers cannot interrupt authorization-state invalidation.
+      }
+    }
   }
 
   private replaceSnapshot<TData>(

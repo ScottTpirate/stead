@@ -94,17 +94,27 @@ const SUPPORTED_REQUEST_SCHEMA_KEYWORDS = new Set([
   "const",
   "enum",
   "pattern",
+  "format",
   "minLength",
   "minimum",
   "maximum",
+  "minItems",
   "minProperties",
   "required",
   "properties",
+  "propertyNames",
   "additionalProperties",
+  "unevaluatedProperties",
   "items",
   "uniqueItems",
   "oneOf",
   "allOf",
+  "description",
+]);
+const SUPPORTED_SCHEMA_FORMATS = new Set([
+  "date-time",
+  "uri",
+  "uri-reference",
 ]);
 
 function assertSupportedRequestSchema(schema, location) {
@@ -125,8 +135,20 @@ function assertSupportedRequestSchema(schema, location) {
   ) {
     throw new Error(`${location} uses an unsupported additionalProperties schema`);
   }
+  if (
+    schema.unevaluatedProperties !== undefined &&
+    typeof schema.unevaluatedProperties !== "boolean"
+  ) {
+    throw new Error(`${location} uses an unsupported unevaluatedProperties schema`);
+  }
+  if (schema.format && !SUPPORTED_SCHEMA_FORMATS.has(schema.format)) {
+    throw new Error(`${location} uses unsupported format ${schema.format}`);
+  }
   for (const [name, nested] of Object.entries(schema.properties ?? {})) {
     assertSupportedRequestSchema(nested, `${location}.properties.${name}`);
+  }
+  if (schema.propertyNames) {
+    assertSupportedRequestSchema(schema.propertyNames, `${location}.propertyNames`);
   }
   if (schema.items) assertSupportedRequestSchema(schema.items, `${location}.items`);
   for (const [index, nested] of (schema.oneOf ?? []).entries()) {
@@ -201,24 +223,30 @@ async function responseDefinition(operation) {
   const errors = [];
   for (const [status, rawResponse] of Object.entries(operation.responses ?? {})) {
     const response = await dereference(rawResponse);
-    if (/^2[0-9][0-9]$/u.test(status)) successes.push(response);
-    else errors.push(response);
+    if (/^2[0-9][0-9]$/u.test(status)) {
+      successes.push({ status: Number(status), response });
+    }
+    else errors.push({ status, response });
   }
   if (successes.length === 0) {
     throw new Error(`operation ${operation.operationId} has no success response`);
   }
   const successMediaTypes = [
-    ...new Set(successes.flatMap((response) => Object.keys(response.content ?? {}))),
+    ...new Set(
+      successes.flatMap(({ response }) => Object.keys(response.content ?? {})),
+    ),
   ].sort();
   const errorMediaTypes = [
-    ...new Set(errors.flatMap((response) => Object.keys(response.content ?? {}))),
+    ...new Set(
+      errors.flatMap(({ response }) => Object.keys(response.content ?? {})),
+    ),
   ].sort();
   if (successMediaTypes.length === 0 || errorMediaTypes.length === 0) {
     throw new Error(`operation ${operation.operationId} has an untyped response`);
   }
 
   const schemaHeaders = successes.map(
-    (response) => response.headers?.["Stead-Schema-Version"],
+    ({ response }) => response.headers?.["Stead-Schema-Version"],
   );
   const declaresSchemaVersion = schemaHeaders.every(Boolean);
   if (!declaresSchemaVersion && schemaHeaders.some(Boolean)) {
@@ -238,7 +266,7 @@ async function responseDefinition(operation) {
       `${operation.operationId}.response.Stead-Schema-Version`,
     );
   }
-  const etagHeaders = successes.map((response) => response.headers?.ETag);
+  const etagHeaders = successes.map(({ response }) => response.headers?.ETag);
   const declaresEtag = etagHeaders.every(Boolean);
   if (!declaresEtag && etagHeaders.some(Boolean)) {
     throw new Error(`operation ${operation.operationId} inconsistently declares ETag`);
@@ -255,14 +283,37 @@ async function responseDefinition(operation) {
       `${operation.operationId}.response.ETag`,
     );
   }
+  const responseSchemas = async (entries) =>
+    Object.fromEntries(
+      await Promise.all(
+        entries.map(async ({ status, response }) => {
+          const schemas = await Promise.all(
+            Object.entries(response.content ?? {}).map(
+              async ([mediaType, media]) => {
+                const schema = await dereference(media.schema);
+                assertSupportedRequestSchema(
+                  schema,
+                  `${operation.operationId}.response.${status}.${mediaType}`,
+                );
+                return [mediaType, schema];
+              },
+            ),
+          );
+          return [String(status), Object.fromEntries(schemas)];
+        }),
+      ),
+    );
   const compatibleSchemaMajor =
     contract["x-stead-versioning"]?.compatible_schema_major;
   if (!Number.isInteger(compatibleSchemaMajor)) {
     throw new Error("x-stead-versioning.compatible_schema_major must be an integer");
   }
   return {
+    successStatuses: successes.map(({ status }) => status).sort((left, right) => left - right),
     successMediaTypes,
     errorMediaTypes,
+    successSchemas: await responseSchemas(successes),
+    errorSchemas: await responseSchemas(errors),
     schemaVersion,
     etag,
     compatibleSchemaMajor,
