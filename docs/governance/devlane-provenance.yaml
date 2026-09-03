@@ -40,6 +40,21 @@ import:
   pending_build_graph:
     state: CLOSED_UNTIL_APPROVED_IMPORT
     frontend_root: apps/web
+    root_build_control_patterns:
+      - .env
+      - .env.*
+      - .postcssrc
+      - .postcssrc.*
+      - postcss.config.*
+      - .browserslistrc
+      - browserslist
+      - browserslist.config.*
+      - .babelrc
+      - .babelrc.*
+      - babel.config.*
+      - tailwind.config.*
+      - vite.config.*
+      - vitest.config.*
     generated_roots:
       - apps/web/node_modules
     verified_optional_output:
@@ -63,7 +78,7 @@ import:
         sha256: a0dcd9578d43df879467e9de60dfb9b469ed9674a3729e288e57291f6b35f6c4
       - path: Makefile
         type: regular_file
-        sha256: 1f51fc6bc6a0ee2b557be94180a00063325539e59f9b0ed9feb539f08c864007
+        sha256: 622f14f450eb1bf39d5da33d0f7c5d0157aa1e72cef7289ef946863732b10614
       - path: package.json
         type: regular_file
         sha256: 5c19ea5409af83c54752ad926e39c47dda86403af8e0bd8de12edc76313f196c
@@ -103,10 +118,10 @@ import:
     rule: >-
       While source distribution or import remains unapproved, every frontend source,
       test, configuration, package, and build-control input must remain a regular in-tree
-      file at the recorded digest; no additional frontend entry or symlink may enter the
-      build graph. When dist exists it must match the exact clean-build output manifest;
-      node_modules must be recreated from the exact locked package graph and may not carry
-      authored source.
+      file with one link at the recorded digest; no additional frontend entry, root-level
+      auto-discovered build control, or symlink may enter the build graph. When dist exists
+      it must match the exact clean-build output files and directory ancestors; node_modules
+      must be recreated from the exact locked package graph and may not carry authored source.
   rule: >-
     No Devlane code or asset may be copied until this exact source candidate receives
     independent dependency approval. Each later import must record source paths,
@@ -195,6 +210,7 @@ proposed_import:
   approved_source_distribution: false
   approvers: []
   approved_at: null
+  approval_record: null
 update:
   trigger: a proposed source commit, tree, license blob, import scope, or distribution change
   procedure: >-

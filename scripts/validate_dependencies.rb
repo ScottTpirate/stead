@@ -5,6 +5,7 @@ require "digest"
 require "find"
 require "fileutils"
 require "json"
+require "open3"
 require "set"
 require "time"
 require "tmpdir"
@@ -34,7 +35,7 @@ PROHIBITED_DIRECT_PACKAGES = Set.new(["@asyncapi/cli", "ajv-cli"]).freeze
 PROHIBITED_SETUP_ACTIONS = Set.new(["actions/setup-node", "actions/setup-go", "ruby/setup-ruby"]).freeze
 FOUNDATION_ROLLBACK_TARGET = "git:e24a4d9d05ad6df19c5bcaa9c385ee74fd5d8c31"
 DEVLANE_CANDIDATE_NAME = "devlane-stead-primitives"
-DEVLANE_PROVENANCE_SURFACE_SHA256 = "4b0b3d6d91263db16b6c59c59c606775fa92924543fd51cc88ae9a808aafc44e"
+DEVLANE_PROVENANCE_SURFACE_SHA256 = "914caeaae9b4106b057e021bb2192ab2c7732089c8ef158b239060b12e768d84"
 DEVLANE_REGISTRY_SURFACE_SHA256 = "bfe1046598dc8a4a400967a4848ed75d2aca98996a22aa91a1d4790c42704cc0"
 DEVLANE_LICENSE_BLOB_SHA1 = "b39a03349aaf17ccb61bef17f9f0e88d86a746ca"
 DEVLANE_LICENSE_CONTENT_SHA256 = "854e83f31c0027ba9ea80691fcc111c5cccc7ee75378462b1e4d2af99c2d269f"
@@ -67,7 +68,7 @@ DEVLANE_PENDING_BUILD_GRAPH_FILES = [
   {
     "path" => "Makefile",
     "type" => "regular_file",
-    "sha256" => "1f51fc6bc6a0ee2b557be94180a00063325539e59f9b0ed9feb539f08c864007"
+    "sha256" => "622f14f450eb1bf39d5da33d0f7c5d0157aa1e72cef7289ef946863732b10614"
   },
   {
     "path" => "package.json",
@@ -130,6 +131,22 @@ DEVLANE_PENDING_BUILD_GRAPH_FILES = [
     "sha256" => "5ced421fe16d22804cbd5bb2722f9ec98acec73bd544d2b342b2fa25cee3db12"
   }
 ].freeze
+DEVLANE_PENDING_ROOT_BUILD_CONTROL_PATTERNS = [
+  ".env",
+  ".env.*",
+  ".postcssrc",
+  ".postcssrc.*",
+  "postcss.config.*",
+  ".browserslistrc",
+  "browserslist",
+  "browserslist.config.*",
+  ".babelrc",
+  ".babelrc.*",
+  "babel.config.*",
+  "tailwind.config.*",
+  "vite.config.*",
+  "vitest.config.*"
+].freeze
 DEVLANE_PENDING_VERIFIED_OUTPUT_FILES = [
   {
     "path" => "apps/web/dist/.vite/manifest.json",
@@ -155,6 +172,7 @@ DEVLANE_PENDING_VERIFIED_OUTPUT_FILES = [
 DEVLANE_PENDING_BUILD_GRAPH = {
   "state" => "CLOSED_UNTIL_APPROVED_IMPORT",
   "frontend_root" => "apps/web",
+  "root_build_control_patterns" => DEVLANE_PENDING_ROOT_BUILD_CONTROL_PATTERNS,
   "generated_roots" => [
     "apps/web/node_modules"
   ],
@@ -166,10 +184,10 @@ DEVLANE_PENDING_BUILD_GRAPH = {
   "rule" => (
     "While source distribution or import remains unapproved, every frontend source, " \
     "test, configuration, package, and build-control input must remain a regular in-tree " \
-    "file at the recorded digest; no additional frontend entry or symlink may enter the " \
-    "build graph. When dist exists it must match the exact clean-build output manifest; " \
-    "node_modules must be recreated from the exact locked package graph and may not carry " \
-    "authored source."
+    "file with one link at the recorded digest; no additional frontend entry, root-level " \
+    "auto-discovered build control, or symlink may enter the build graph. When dist exists " \
+    "it must match the exact clean-build output files and directory ancestors; node_modules " \
+    "must be recreated from the exact locked package graph and may not carry authored source."
   )
 }.freeze
 DEVLANE_PENDING_FRONTEND_FILES = DEVLANE_PENDING_BUILD_GRAPH_FILES
@@ -180,6 +198,23 @@ DEVLANE_PENDING_OUTPUT_FILES = DEVLANE_PENDING_VERIFIED_OUTPUT_FILES
   .map { |entry| entry["path"] }
   .to_set
   .freeze
+DEVLANE_PENDING_OUTPUT_DIRECTORIES = DEVLANE_PENDING_OUTPUT_FILES.each_with_object(Set.new) do |relative, directories|
+  cursor = File.dirname(relative)
+  output_root = DEVLANE_PENDING_BUILD_GRAPH.dig("verified_optional_output", "root")
+  while cursor.start_with?("#{output_root}/")
+    directories << cursor
+    cursor = File.dirname(cursor)
+  end
+end.freeze
+DEVLANE_APPROVAL_MUTABLE_PROVENANCE_FIELDS = %w[
+  status approved_source_distribution approvers approved_at approval_record
+].freeze
+DEVLANE_APPROVAL_MUTABLE_REGISTRY_FIELDS = %w[status approvers approved_at].freeze
+DEVLANE_APPROVAL_REVIEW_ROLES = %w[integrated_qa_provenance independent_security].freeze
+DEVLANE_APPROVAL_RECORD_PATHS = %w[
+  docs/governance/dependency-approvals.yaml
+  docs/governance/devlane-provenance.yaml
+].freeze
 DEVLANE_LICENSE_TEXT = <<~'LICENSE'.freeze
   MIT License
 
@@ -230,7 +265,8 @@ EXPECTED_DEVLANE_PENDING_PROVENANCE_APPROVAL = {
   "status" => "REVIEWED_PENDING_INDEPENDENT_APPROVAL",
   "approved_source_distribution" => false,
   "approvers" => [],
-  "approved_at" => nil
+  "approved_at" => nil,
+  "approval_record" => nil
 }.freeze
 EXACT_GO_VERSION = /\Av\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?\z/
 GO_H1_DIGEST = /\Ah1:[A-Za-z0-9+\/]{43}=\z/
@@ -1018,6 +1054,9 @@ def devlane_pending_build_graph_file_errors(root, entry)
   unless stat.file? && !stat.symlink?
     return ["BUILD_GRAPH_FILE_TYPE #{relative}: #{stat.ftype}, expected regular_file"]
   end
+  if stat.nlink != 1
+    errors << "BUILD_GRAPH_LINK_COUNT #{relative}: expected 1, got #{stat.nlink}"
+  end
 
   actual_sha256 = Digest::SHA256.file(absolute).hexdigest
   unless actual_sha256 == expected_sha256
@@ -1051,7 +1090,13 @@ def devlane_pending_verified_output_errors(root)
     relative = path.delete_prefix("#{expanded_root}/")
     begin
       entry_stat = File.lstat(path)
-      next if entry_stat.directory? && !entry_stat.symlink?
+      if entry_stat.directory? && !entry_stat.symlink?
+        next if DEVLANE_PENDING_OUTPUT_DIRECTORIES.include?(relative)
+
+        errors << "BUILD_GRAPH_OUTPUT_UNEXPECTED #{relative}: directory"
+        Find.prune
+        next
+      end
       next if entry_stat.file? && DEVLANE_PENDING_OUTPUT_FILES.include?(relative)
 
       errors << "BUILD_GRAPH_OUTPUT_UNEXPECTED #{relative}: #{entry_stat.ftype}"
@@ -1064,11 +1109,37 @@ rescue SystemCallError => e
   ["BUILD_GRAPH_OUTPUT_SCAN #{relative_root}: #{e.class}"]
 end
 
+def devlane_pending_root_build_control_errors(root)
+  expected_paths = DEVLANE_PENDING_BUILD_GRAPH_FILES.map { |entry| entry.fetch("path") }.to_set
+  DEVLANE_PENDING_ROOT_BUILD_CONTROL_PATTERNS.flat_map do |pattern|
+    Dir.glob(File.join(root, pattern), File::FNM_DOTMATCH).filter_map do |path|
+      relative = path.delete_prefix("#{File.expand_path(root)}/")
+      next if expected_paths.include?(relative)
+
+      type = File.lstat(path).ftype
+      "BUILD_GRAPH_ROOT_CONTROL_UNEXPECTED #{relative}: #{type}"
+    rescue SystemCallError => e
+      "BUILD_GRAPH_ROOT_CONTROL_SCAN #{relative}: #{e.class}"
+    end
+  end.uniq
+end
+
+def foundation_final_release_scan_errors(source)
+  match = source.match(/^foundation-check:[^\n]*\n((?:\t[^\n]*\n)+)/)
+  return ["Makefile: foundation-check recipe is missing"] unless match
+
+  commands = match[1].lines.map(&:strip).reject(&:empty?)
+  return [] if commands.last == "ruby scripts/validate_dependencies.rb --release"
+
+  ["Makefile: release dependency validation must be the final foundation-check command"]
+end
+
 def devlane_pending_build_graph_errors(root = ROOT)
   errors = DEVLANE_PENDING_BUILD_GRAPH_FILES.flat_map do |entry|
     devlane_pending_build_graph_file_errors(root, entry)
   end
   errors.concat(devlane_pending_verified_output_errors(root))
+  errors.concat(devlane_pending_root_build_control_errors(root))
   expanded_root = File.expand_path(root)
   frontend_relative = DEVLANE_PENDING_BUILD_GRAPH.fetch("frontend_root")
   frontend_root = File.join(expanded_root, frontend_relative)
@@ -1244,7 +1315,152 @@ def devlane_security_gate_errors(provenance, components, notices, material_state
   ).uniq
 end
 
-def devlane_candidate_errors(provenance, components)
+def devlane_git_capture(root, *arguments)
+  stdout, stderr, status = Open3.capture3("git", "-C", root, *arguments)
+  return [stdout, nil] if status.success?
+
+  [nil, stderr.strip.empty? ? "git #{arguments.join(' ')} failed" : stderr.strip]
+end
+
+def devlane_yaml_from_git(root, revision, relative)
+  source, error = devlane_git_capture(root, "show", "#{revision}:#{relative}")
+  return [nil, ["#{relative}@#{revision}: #{error}"]] if error
+
+  structure_errors = strict_yaml_structure_errors(source, filename: "#{relative}@#{revision}")
+  return [nil, structure_errors] unless structure_errors.empty?
+
+  [YAML.safe_load(source, permitted_classes: [], permitted_symbols: [], aliases: false), []]
+rescue Psych::Exception => e
+  [nil, ["#{relative}@#{revision}: YAML error: #{e.message}"]]
+end
+
+def devlane_approval_record_errors(import, decision)
+  errors = []
+  record = import["approval_record"]
+  unless record.is_a?(Hash) && record.keys.sort == %w[decision_revision decision_tree reviews]
+    return ["devlane-provenance.yaml: approved import requires only decision_revision, decision_tree, and reviews in approval_record"]
+  end
+
+  revision = record["decision_revision"]
+  tree = record["decision_tree"]
+  errors << "devlane-provenance.yaml: approval decision_revision must be a full Git SHA" unless revision.is_a?(String) && revision.match?(/\A[0-9a-f]{40}\z/)
+  errors << "devlane-provenance.yaml: approval decision_tree must be a full Git tree SHA" unless tree.is_a?(String) && tree.match?(/\A[0-9a-f]{40}\z/)
+
+  reviews = record["reviews"]
+  unless reviews.is_a?(Array) && reviews.length == DEVLANE_APPROVAL_REVIEW_ROLES.length
+    errors << "devlane-provenance.yaml: approval requires exactly integrated QA/provenance and independent security reviews"
+    return errors
+  end
+
+  expected_review_keys = %w[disposition evidence identity revision role tree]
+  reviews.each_with_index do |review, index|
+    unless review.is_a?(Hash) && review.keys.sort == expected_review_keys
+      errors << "devlane-provenance.yaml: approval review #{index} has an unexpected shape"
+      next
+    end
+    errors << "devlane-provenance.yaml: approval review #{index} must ACCEPT" unless review["disposition"] == "ACCEPT"
+    errors << "devlane-provenance.yaml: approval review #{index} must bind the decision revision" unless review["revision"] == revision
+    errors << "devlane-provenance.yaml: approval review #{index} must bind the decision tree" unless review["tree"] == tree
+    unless review["identity"].is_a?(String) && !review["identity"].empty? && review["identity"] != "/root"
+      errors << "devlane-provenance.yaml: approval review #{index} requires a non-integrator identity"
+    end
+    unless review["evidence"].is_a?(String) && review["evidence"].match?(/\Agithub-pr-31-comment-[0-9]+\z/)
+      errors << "devlane-provenance.yaml: approval review #{index} requires an immutable PR review reference"
+    end
+  end
+
+  roles = reviews.filter_map { |review| review["role"] if review.is_a?(Hash) }
+  identities = reviews.filter_map { |review| review["identity"] if review.is_a?(Hash) }
+  errors << "devlane-provenance.yaml: approval review roles must be exact and canonical" unless roles == DEVLANE_APPROVAL_REVIEW_ROLES
+  errors << "devlane-provenance.yaml: approval reviewer identities must be distinct" unless identities.length == identities.uniq.length
+  errors << "devlane-provenance.yaml: approvers must exactly match the recorded reviewers" unless decision["approvers"] == identities && import["approvers"] == identities
+  errors
+end
+
+def devlane_approval_lineage_errors(provenance, registry_record, root: ROOT)
+  errors = []
+  import = provenance.fetch("proposed_import")
+  approval = import.fetch("approval_record")
+  decision_revision = approval.fetch("decision_revision")
+  decision_tree = approval.fetch("decision_tree")
+  return ["devlane approval lineage: invalid decision revision or tree"] unless [decision_revision, decision_tree].all? { |value| value.is_a?(String) && value.match?(/\A[0-9a-f]{40}\z/) }
+
+  actual_tree, tree_error = devlane_git_capture(root, "show", "-s", "--format=%T", decision_revision)
+  if tree_error
+    errors << "devlane approval lineage: decision revision is unavailable: #{tree_error}"
+    return errors
+  end
+  errors << "devlane approval lineage: decision tree does not match #{decision_revision}" unless actual_tree.strip == decision_tree
+
+  ancestry, ancestry_error = devlane_git_capture(root, "rev-list", "--parents", "HEAD")
+  if ancestry_error
+    errors << "devlane approval lineage: cannot inspect current ancestry: #{ancestry_error}"
+    return errors
+  end
+  approval_children = ancestry.lines.filter_map do |line|
+    fields = line.split
+    fields.first if fields.length == 2 && fields.last == decision_revision
+  end
+  unless approval_children.length == 1
+    errors << "devlane approval lineage: expected one single-parent approval successor directly after #{decision_revision}"
+    return errors
+  end
+  approval_commit = approval_children.first
+
+  changed, changed_error = devlane_git_capture(root, "diff-tree", "--no-commit-id", "--name-only", "--no-renames", "-r", approval_commit)
+  if changed_error
+    errors << "devlane approval lineage: cannot inspect approval successor: #{changed_error}"
+    return errors
+  end
+  changed_paths = changed.lines.map(&:strip).reject(&:empty?).sort
+  unless changed_paths == DEVLANE_APPROVAL_RECORD_PATHS.sort
+    errors << "devlane approval lineage: approval successor must change only the two coupled approval records"
+  end
+
+  parent_provenance, parent_provenance_errors = devlane_yaml_from_git(root, decision_revision, "docs/governance/devlane-provenance.yaml")
+  child_provenance, child_provenance_errors = devlane_yaml_from_git(root, approval_commit, "docs/governance/devlane-provenance.yaml")
+  parent_registry, parent_registry_errors = devlane_yaml_from_git(root, decision_revision, "docs/governance/dependency-approvals.yaml")
+  child_registry, child_registry_errors = devlane_yaml_from_git(root, approval_commit, "docs/governance/dependency-approvals.yaml")
+  errors.concat(parent_provenance_errors + child_provenance_errors + parent_registry_errors + child_registry_errors)
+  return errors unless errors.empty?
+
+  parent_components = parent_registry.fetch("records", []).to_h { |entry| [entry.dig("component", "name"), entry] }
+  child_components = child_registry.fetch("records", []).to_h { |entry| [entry.dig("component", "name"), entry] }
+  errors.concat(devlane_candidate_errors(parent_provenance, parent_components, root: root, skip_lineage: true))
+
+  parent_provenance_surface = Marshal.load(Marshal.dump(parent_provenance))
+  child_provenance_surface = Marshal.load(Marshal.dump(child_provenance))
+  DEVLANE_APPROVAL_MUTABLE_PROVENANCE_FIELDS.each do |field|
+    parent_provenance_surface.fetch("proposed_import", {}).delete(field)
+    child_provenance_surface.fetch("proposed_import", {}).delete(field)
+  end
+  errors << "devlane approval lineage: provenance successor changed substantive content" unless parent_provenance_surface == child_provenance_surface
+
+  parent_registry_surface = Marshal.load(Marshal.dump(parent_registry))
+  child_registry_surface = Marshal.load(Marshal.dump(child_registry))
+  [parent_registry_surface, child_registry_surface].each do |registry|
+    candidate = registry.fetch("records", []).find { |entry| entry.dig("component", "name") == DEVLANE_CANDIDATE_NAME }
+    DEVLANE_APPROVAL_MUTABLE_REGISTRY_FIELDS.each { |field| candidate&.fetch("decision", {})&.delete(field) }
+  end
+  errors << "devlane approval lineage: registry successor changed substantive content" unless parent_registry_surface == child_registry_surface
+
+  child_import = child_provenance.fetch("proposed_import", {})
+  current_import = provenance.fetch("proposed_import", {})
+  unless DEVLANE_APPROVAL_MUTABLE_PROVENANCE_FIELDS.to_h { |field| [field, child_import[field]] } ==
+         DEVLANE_APPROVAL_MUTABLE_PROVENANCE_FIELDS.to_h { |field| [field, current_import[field]] }
+    errors << "devlane approval lineage: current approval fields differ from the direct successor"
+  end
+  child_record = child_components[DEVLANE_CANDIDATE_NAME]
+  unless child_record && DEVLANE_APPROVAL_MUTABLE_REGISTRY_FIELDS.to_h { |field| [field, child_record.dig("decision", field)] } ==
+                         DEVLANE_APPROVAL_MUTABLE_REGISTRY_FIELDS.to_h { |field| [field, registry_record.dig("decision", field)] }
+    errors << "devlane approval lineage: current registry decision differs from the direct successor"
+  end
+  errors
+rescue KeyError, TypeError => e
+  ["devlane approval lineage: malformed record (#{e.class})"]
+end
+
+def devlane_candidate_errors(provenance, components, root: ROOT, skip_lineage: false)
   errors = []
   unless provenance.is_a?(Hash)
     return ["devlane-provenance.yaml: document must be a mapping"]
@@ -1260,15 +1476,33 @@ def devlane_candidate_errors(provenance, components)
     return ["dependency registry: missing Devlane primitive import candidate"]
   end
 
-  approval_state = EXPECTED_DEVLANE_PENDING_PROVENANCE_APPROVAL.keys.to_h do |field|
+  approval_state = DEVLANE_APPROVAL_MUTABLE_PROVENANCE_FIELDS.to_h do |field|
     [field, import[field]]
   end
-  unless approval_state == EXPECTED_DEVLANE_PENDING_PROVENANCE_APPROVAL
-    errors << "devlane-provenance.yaml: proposed import must remain at the exact pending approval state until a reviewed successor revision is recorded"
-  end
-
-  unless record["decision"] == EXPECTED_DEVLANE_PENDING_DECISION
-    errors << "#{DEVLANE_CANDIDATE_NAME}: decision must remain at the exact pending state until a reviewed successor revision is recorded"
+  decision = record.fetch("decision", {})
+  if approval_state == EXPECTED_DEVLANE_PENDING_PROVENANCE_APPROVAL && decision == EXPECTED_DEVLANE_PENDING_DECISION
+    # The immutable candidate remains fail closed until a separately reviewed successor.
+  elsif import["status"] == "APPROVED" && import["approved_source_distribution"] == true &&
+        decision["status"] == "APPROVED"
+    expected_decision_surface = EXPECTED_DEVLANE_PENDING_DECISION.reject do |field, _value|
+      DEVLANE_APPROVAL_MUTABLE_REGISTRY_FIELDS.include?(field)
+    end
+    actual_decision_surface = decision.reject do |field, _value|
+      DEVLANE_APPROVAL_MUTABLE_REGISTRY_FIELDS.include?(field)
+    end
+    errors << "#{DEVLANE_CANDIDATE_NAME}: approved successor changed the reviewed decision surface" unless actual_decision_surface == expected_decision_surface
+    errors << "devlane-provenance.yaml: approved status must match the dependency decision" unless import["status"] == decision["status"]
+    errors << "devlane-provenance.yaml: approved identities must match the dependency decision" unless import["approvers"] == decision["approvers"]
+    errors << "devlane-provenance.yaml: approved timestamp must match the dependency decision" unless import["approved_at"] == decision["approved_at"]
+    begin
+      Time.iso8601(import["approved_at"])
+    rescue ArgumentError, TypeError
+      errors << "devlane-provenance.yaml: approved_at must be RFC3339"
+    end
+    errors.concat(devlane_approval_record_errors(import, decision))
+    errors.concat(devlane_approval_lineage_errors(provenance, record, root: root)) unless skip_lineage || errors.any?
+  else
+    errors << "devlane approval state: expected the exact pending candidate or a validated records-only approved successor"
   end
 
   unless provenance.dig("import", "governed_source_location_allowlist") == DEVLANE_SOURCE_LOCATION_ALLOWLIST
@@ -1287,7 +1521,7 @@ def devlane_candidate_errors(provenance, components)
   end
 
   provenance_surface = Marshal.load(Marshal.dump(provenance))
-  EXPECTED_DEVLANE_PENDING_PROVENANCE_APPROVAL.each_key do |field|
+  DEVLANE_APPROVAL_MUTABLE_PROVENANCE_FIELDS.each do |field|
     provenance_surface.fetch("proposed_import").delete(field)
   end
   unless canonical_sha256(provenance_surface) == DEVLANE_PROVENANCE_SURFACE_SHA256
@@ -1295,7 +1529,7 @@ def devlane_candidate_errors(provenance, components)
   end
 
   registry_surface = Marshal.load(Marshal.dump(record))
-  %w[status approvers approved_at].each { |field| registry_surface.fetch("decision", {}).delete(field) }
+  DEVLANE_APPROVAL_MUTABLE_REGISTRY_FIELDS.each { |field| registry_surface.fetch("decision", {}).delete(field) }
   unless canonical_sha256(registry_surface) == DEVLANE_REGISTRY_SURFACE_SHA256
     errors << "#{DEVLANE_CANDIDATE_NAME}: immutable registry surface differs from the reviewed proposal"
   end
@@ -1480,6 +1714,102 @@ def run_validator_self_tests
   unless baseline_devlane_errors.empty?
     failures << "Devlane self-test fixture does not match the exact pending candidate: #{baseline_devlane_errors.join('; ')}"
   end
+
+  makefile_source = File.read(File.join(ROOT, "Makefile"))
+  unless foundation_final_release_scan_errors(makefile_source).empty?
+    failures << "foundation-check does not end with the release dependency scan"
+  end
+  reordered_makefile = makefile_source.sub(
+    "\truby tests/contract/architecture/foundation_contract_test.rb\n\truby scripts/validate_dependencies.rb --release\n",
+    "\truby scripts/validate_dependencies.rb --release\n\truby tests/contract/architecture/foundation_contract_test.rb\n"
+  )
+  if foundation_final_release_scan_errors(reordered_makefile).empty?
+    failures << "post-release repository execution mutation was accepted"
+  end
+  guard_count += 2
+
+  approval_transition_probe = lambda do |extra_path: nil|
+    transition_errors = []
+    Dir.mktmpdir("stead-devlane-approval-transition-") do |fixture_root|
+      DEVLANE_APPROVAL_RECORD_PATHS.each do |relative|
+        destination = File.join(fixture_root, relative)
+        FileUtils.mkdir_p(File.dirname(destination))
+        FileUtils.cp(File.join(ROOT, relative), destination)
+      end
+      %w[init config config add commit].each_with_index do |operation, index|
+        arguments = case index
+                    when 0 then ["init", "-q"]
+                    when 1 then ["config", "user.name", "Stead transition fixture"]
+                    when 2 then ["config", "user.email", "fixture@stead.invalid"]
+                    when 3 then ["add", "."]
+                    else ["commit", "-q", "-m", "immutable decision"]
+                    end
+        _stdout, error = devlane_git_capture(fixture_root, *arguments)
+        transition_errors << error if error
+      end
+      next transition_errors unless transition_errors.empty?
+
+      revision, revision_error = devlane_git_capture(fixture_root, "rev-parse", "HEAD")
+      tree, tree_error = devlane_git_capture(fixture_root, "rev-parse", "HEAD^{tree}")
+      transition_errors.concat([revision_error, tree_error].compact)
+      next transition_errors unless transition_errors.empty?
+      revision = revision.strip
+      tree = tree.strip
+
+      approved_provenance = Marshal.load(Marshal.dump(provenance_fixture))
+      approved_registry = Marshal.load(Marshal.dump(registry_fixture))
+      approved_components = approved_registry.fetch("records").to_h { |entry| [entry.dig("component", "name"), entry] }
+      identities = %w[/root/devlane_integrated_review_fixture /root/devlane_security_review_fixture]
+      approved_at = "2026-08-31T02:00:00-04:00"
+      approved_import = approved_provenance.fetch("proposed_import")
+      approved_import["status"] = "APPROVED"
+      approved_import["approved_source_distribution"] = true
+      approved_import["approvers"] = identities
+      approved_import["approved_at"] = approved_at
+      approved_import["approval_record"] = {
+        "decision_revision" => revision,
+        "decision_tree" => tree,
+        "reviews" => DEVLANE_APPROVAL_REVIEW_ROLES.each_with_index.map do |role, index|
+          {
+            "role" => role,
+            "identity" => identities.fetch(index),
+            "disposition" => "ACCEPT",
+            "evidence" => "github-pr-31-comment-#{9000 + index}",
+            "revision" => revision,
+            "tree" => tree
+          }
+        end
+      }
+      approved_decision = approved_components.fetch(DEVLANE_CANDIDATE_NAME).fetch("decision")
+      approved_decision["status"] = "APPROVED"
+      approved_decision["approvers"] = identities
+      approved_decision["approved_at"] = approved_at
+
+      File.binwrite(File.join(fixture_root, "docs/governance/devlane-provenance.yaml"), YAML.dump(approved_provenance))
+      File.binwrite(File.join(fixture_root, "docs/governance/dependency-approvals.yaml"), YAML.dump(approved_registry))
+      if extra_path
+        FileUtils.mkdir_p(File.dirname(File.join(fixture_root, extra_path)))
+        File.binwrite(File.join(fixture_root, extra_path), "substantive change\n")
+      end
+      _stdout, add_error = devlane_git_capture(fixture_root, "add", ".")
+      _stdout, commit_error = devlane_git_capture(fixture_root, "commit", "-q", "-m", "approval record")
+      transition_errors.concat([add_error, commit_error].compact)
+      next transition_errors unless transition_errors.empty?
+
+      transition_errors.concat(devlane_candidate_errors(approved_provenance, approved_components, root: fixture_root))
+    end
+    transition_errors
+  end
+
+  valid_transition_errors = approval_transition_probe.call
+  unless valid_transition_errors.empty?
+    failures << "valid records-only Devlane approval transition failed: #{valid_transition_errors.join('; ')}"
+  end
+  widened_transition_errors = approval_transition_probe.call(extra_path: "apps/web/src/unreviewed.tsx")
+  unless widened_transition_errors.any? { |error| error.include?("must change only the two coupled approval records") }
+    failures << "substantive Devlane approval successor mutation was accepted"
+  end
+  guard_count += 2
 
   devlane_mutations = {
     "fabricated approval metadata" => lambda do |provenance_copy, components_copy|
@@ -1702,6 +2032,12 @@ def run_validator_self_tests
         File.binwrite(File.join(fixture_root, "apps/web/vite.config.ts"), "export default {};\n")
       end
     },
+    "unreviewed root PostCSS control" => {
+      expected: ["BUILD_GRAPH_ROOT_CONTROL_UNEXPECTED postcss.config.mjs"],
+      mutate: lambda do |fixture_root|
+        File.binwrite(File.join(fixture_root, "postcss.config.mjs"), "export default {};\n")
+      end
+    },
     "unreviewed public asset" => {
       expected: ["BUILD_GRAPH_UNEXPECTED apps/web/public/devlane.svg"],
       mutate: lambda do |fixture_root|
@@ -1721,6 +2057,15 @@ def run_validator_self_tests
         File.link(
           File.join(fixture_root, "apps/web/src/Foundation.tsx"),
           File.join(fixture_root, "apps/web/src/HiddenFoundation.tsx")
+        )
+      end
+    },
+    "approved input gains another hard link" => {
+      expected: ["BUILD_GRAPH_LINK_COUNT apps/web/src/Foundation.tsx"],
+      mutate: lambda do |fixture_root|
+        File.link(
+          File.join(fixture_root, "apps/web/src/Foundation.tsx"),
+          File.join(fixture_root, "foundation-hardlink.tsx")
         )
       end
     },
@@ -1745,6 +2090,12 @@ def run_validator_self_tests
         output = File.join(fixture_root, "apps/web/dist/assets/hidden.js")
         FileUtils.mkdir_p(File.dirname(output))
         File.binwrite(output, "unreviewed output\n")
+      end
+    },
+    "unreviewed empty build output directory" => {
+      expected: ["BUILD_GRAPH_OUTPUT_UNEXPECTED apps/web/dist/unreviewed-empty: directory"],
+      mutate: lambda do |fixture_root|
+        FileUtils.mkdir_p(File.join(fixture_root, "apps/web/dist/unreviewed-empty"))
       end
     },
     "verified output root replaced by symlink" => {
@@ -2320,6 +2671,9 @@ errors << "scripts/run_pinned_node.sh: official Node archive digest is missing" 
 errors << "scripts/run_pinned_node.sh: extracted Node binary digest is missing" unless node_runner.include?("19235a9b678f84729464c52623f92de130a165452747c6826d3fdc13df3abcc3")
 errors << "scripts/run_pinned_node.sh: host Node fast path is prohibited" if node_runner.include?("command -v node")
 
+makefile_source = File.read(File.join(ROOT, "Makefile"))
+errors.concat(foundation_final_release_scan_errors(makefile_source))
+
 openfga_runner = File.read(File.join(ROOT, "scripts/validate_openfga.sh"))
 errors << "scripts/validate_openfga.sh: repository-owned model evaluator is missing" unless openfga_runner.include?("validate_openfga_model.mjs")
 errors << "scripts/validate_openfga.sh: external OpenFGA CLI execution is prohibited until a vulnerability-clean exact release is approved" if openfga_runner.match?(/\bfga\s+model\s+test\b|openfga\/cli\/releases/)
@@ -2339,7 +2693,6 @@ end
 if release_mode
   workflow_source = workflow_paths.map { |path| File.read(path) }.join("\n")
   active_record_names << "node-v26.8.1-linux-x64.tar.xz" if workflow_source.include?("node-version: 26.8.1")
-  makefile_source = File.read(File.join(ROOT, "Makefile"))
   if makefile_source.include?("scripts/run_pinned_go.sh")
     active_record_names << "go1.27.0.linux-amd64.tar.gz"
   end

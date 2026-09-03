@@ -11,8 +11,8 @@ foundation-check: foundation-preflight
 	scripts/run_pinned_node.sh npm run validate:asyncapi
 	scripts/run_pinned_node.sh npm run validate:openapi
 	scripts/run_pinned_node.sh npm audit --audit-level=high
-	ruby scripts/validate_dependencies.rb --release
 	ruby tests/contract/architecture/foundation_contract_test.rb
+	ruby scripts/validate_dependencies.rb --release
 
 foundation-preflight:
 	ruby scripts/validate_dependencies.rb --release
