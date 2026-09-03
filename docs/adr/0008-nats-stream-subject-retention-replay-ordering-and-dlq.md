@@ -1,13 +1,13 @@
 # ADR-0008: NATS stream, subject, retention, replay, ordering, and dead-letter contract
 
-- **Status:** Proposed
+- **Status:** Accepted at immutable decision revision `87bd96041234415847d8a4f96ac7c13f3923fe6c` on 2026-09-03
 - **Date:** 2026-09-02
 - **Decision owners:** WS-07, with WS-01 architecture, WS-02 outbox/core, WS-06 security, WS-08 projection, and WS-12 operations review
 - **Project-owner approval required:** no; this selects the JetStream mechanics deliberately left open by `ADR-CAND-006` without changing the locked NATS, transactional-outbox, authorization, classification, or deployment-domain decisions
 - **Requirement IDs:** `EVT-001`, `EVT-002`, `EVT-003`, `EVT-004`, `ACT-001`, `NOTIF-001`, `AUD-001`, `AUD-002`, `CLS-006`, `TEST-005`, `PERF-002`, `PERF-003`, `PERF-004`, `DEP-001`, `DEP-005`, `OPS-003`, `OPS-004`, `SEC-003`
 - **Affected contracts/modules/directories:** `/specs/asyncapi/`, `/packages/event-schemas/`, `/apps/worker/`, `/modules/audit/`, `/modules/notification/`, consumer-owned projections, NATS deployment configuration, event/replay/security/performance tests, and the provider-neutral `core_outbox` contribution owned by `STEAD-P1-015` under `/apps/core/internal/outbox/`, `/tests/integration/core/`, `/packages/test-fixtures/core/`, and `/docs/architecture/core/`
 - **Implementation predecessor:** acceptance is required before the `STEAD-P1-015` outbox-recovery-port sub-slice; that WS-02 contribution is a predecessor of `STEAD-P1-007` and does not retroactively block already reviewed dependency-free transaction-seam work
-- **Resolves on acceptance:** `ADR-CAND-006`
+- **Resolves:** `ADR-CAND-006`
 - **Supersedes / superseded by:** supersedes no accepted decision; a different broker, subject grammar, cross-domain transfer, or NATS-authoritative business state requires a superseding ADR
 
 ## Context and decision scope
@@ -132,15 +132,13 @@ Rollback stops publishers and consumers, restores the last compatible declarativ
 
 | Role | Identity | Decision revision | Disposition | Evidence |
 |---|---|---|---|---|
-| Decision author (WS-07) | `/root/adr_cand_006` | `pending exact immutable revision` | PROPOSED | Authored decision candidate; author cannot approve |
-| Architecture and standards (WS-01) | `pending non-author reviewer` | `pending exact immutable revision` | PENDING | Topology, portability, compatibility, and supersession review required |
-| Core/outbox integration (WS-02) | `pending non-author reviewer` | `pending exact immutable revision` | PENDING | Atomic outbox and failure-boundary review required |
-| Authorization/classification/security (WS-06) | `pending non-author reviewer` | `pending exact immutable revision` | PENDING | Domain isolation, credential, replay, and nondisclosure review required |
-| Events/worker consumer (WS-07, non-author) | `pending non-author reviewer` | `pending exact immutable revision` | PENDING | Delivery, retry, replay, DLQ, and audit review required |
-| Projection consumer (WS-08) | `pending non-author reviewer` | `pending exact immutable revision` | PENDING | Ordering, rebuild, lag, and visibility review required |
-| Deployment operations (WS-12) | `pending non-author reviewer` | `pending exact immutable revision` | PENDING | Local startup, production transport, capacity, recovery, and rollback review required |
-| Independent QA (WS-13) | `pending non-author reviewer` | `pending exact immutable revision` | PENDING | Traceability, compatibility, performance, and recovery review required |
-| Independent security (WS-13) | `pending non-author reviewer` | `pending exact immutable revision` | PENDING | Fail-closed credential, payload, replay, and DLQ review required |
-| Project owner | `not required for this conforming selection` | `pending exact immutable revision` | NOT_REQUIRED | Required only if review changes a locked or owner-controlled decision |
-
-Until all required non-author dispositions accept one exact immutable revision and the acceptance-only descendant is recorded, this ADR remains proposed and `STEAD-P1-007` remains blocked.
+| Decision author (WS-07) | `/root/adr_cand_006` | `87bd96041234415847d8a4f96ac7c13f3923fe6c` | AUTHOR — NOT APPROVAL | Authored decision; author cannot approve |
+| Architecture and standards (WS-01) | `/root/p1_015_exact_review` | `87bd96041234415847d8a4f96ac7c13f3923fe6c` | APPROVED | Topology, portability, compatibility, and supersession review accepted |
+| Core/outbox integration (WS-02) | `/root/p1_015_exact_review` | `87bd96041234415847d8a4f96ac7c13f3923fe6c` | APPROVED | Atomic outbox and failure-boundary review accepted |
+| Authorization/classification/security (WS-06) | `/root/p1_015_exact_review` | `87bd96041234415847d8a4f96ac7c13f3923fe6c` | APPROVED | Domain isolation, credential, replay, and nondisclosure review accepted |
+| Events/worker consumer (WS-07, non-author) | `/root/p1_015_exact_review` | `87bd96041234415847d8a4f96ac7c13f3923fe6c` | APPROVED | Delivery, retry, replay, DLQ, and audit review accepted |
+| Projection consumer (WS-08) | `/root/p1_015_exact_review` | `87bd96041234415847d8a4f96ac7c13f3923fe6c` | APPROVED | Ordering, rebuild, lag, and visibility review accepted |
+| Deployment operations (WS-12) | `/root/p1_015_exact_review` | `87bd96041234415847d8a4f96ac7c13f3923fe6c` | APPROVED | Local startup, production transport, capacity, recovery, and rollback review accepted |
+| Independent QA (WS-13) | `/root/p1_015_exact_review` | `87bd96041234415847d8a4f96ac7c13f3923fe6c` | APPROVED | Traceability, compatibility, performance, and recovery review accepted |
+| Independent security (WS-13) | `/root/frontend_5d74_security/adr8_acceptance_gap_design` | `87bd96041234415847d8a4f96ac7c13f3923fe6c` | APPROVED | Fail-closed credential, payload, replay, and DLQ review accepted |
+| Project owner | `not required for this conforming selection` | `87bd96041234415847d8a4f96ac7c13f3923fe6c` | NOT_REQUIRED | Conforming selection; project-owner approval not required |

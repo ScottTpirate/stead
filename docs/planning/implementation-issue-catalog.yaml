@@ -86,7 +86,20 @@ adr_decision_gates:
     decide_before_issue: STEAD-P1-006
     dependent_issues: [STEAD-P1-006, STEAD-P2-004, STEAD-P2-006]
   - adr_id: ADR-CAND-006
-    state: PROPOSED
+    state: ACCEPTED
+    immutable_revision: "87bd96041234415847d8a4f96ac7c13f3923fe6c"
+    accepted_at: "2026-09-03"
+    approval_record: "docs/governance/adr-0008-approval-record.md"
+    approval_records:
+      - {role: "WS-01-architecture", identity: "/root/p1_015_exact_review", disposition: "APPROVED"}
+      - {role: "WS-02-core-outbox", identity: "/root/p1_015_exact_review", disposition: "APPROVED"}
+      - {role: "WS-06-security-contract", identity: "/root/p1_015_exact_review", disposition: "APPROVED"}
+      - {role: "WS-07-events-worker", identity: "/root/p1_015_exact_review", disposition: "APPROVED"}
+      - {role: "WS-08-projection", identity: "/root/p1_015_exact_review", disposition: "APPROVED"}
+      - {role: "WS-12-deployment-operations", identity: "/root/p1_015_exact_review", disposition: "APPROVED"}
+      - {role: "WS-13-independent-qa", identity: "/root/p1_015_exact_review", disposition: "APPROVED"}
+      - {role: "WS-13-independent-security", identity: "/root/frontend_5d74_security/adr8_acceptance_gap_design", disposition: "APPROVED"}
+      - {role: "project-owner", identity: "not required for this conforming selection", disposition: "NOT_REQUIRED"}
     decision_record: docs/adr/0008-nats-stream-subject-retention-replay-ordering-and-dlq.md
     project_owner_approval_required: false
     decide_before_issue: STEAD-P1-015
