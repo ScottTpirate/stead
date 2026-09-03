@@ -1,0 +1,11 @@
+package compilecontract
+
+import (
+	"context"
+
+	transaction "github.com/ScottTpirate/stead/apps/core/internal/transaction"
+)
+
+func rejected(binding transaction.ExecutorBinding) {
+	_ = binding.Rollback(context.Background())
+}

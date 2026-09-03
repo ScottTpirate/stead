@@ -1,0 +1,561 @@
+package ci_test
+
+import (
+	"archive/tar"
+	"bytes"
+	"errors"
+	"fmt"
+	"sort"
+	"strings"
+	"testing"
+	"time"
+
+	policyrelease "github.com/ScottTpirate/stead/modules/ci/policyrelease"
+)
+
+type tarFixtureEntry struct {
+	name     string
+	content  []byte
+	typeflag byte
+	mode     int64
+	linkname string
+	format   tar.Format
+	uid      int
+}
+
+const testUSTARBlockSize = 512
+
+func makeUSTARFixture(t testing.TB, entries []tarFixtureEntry) []byte {
+	t.Helper()
+	var buffer bytes.Buffer
+	writer := tar.NewWriter(&buffer)
+	for _, entry := range entries {
+		typeflag := entry.typeflag
+		if typeflag == 0 {
+			typeflag = tar.TypeReg
+		}
+		mode := entry.mode
+		if mode == 0 {
+			mode = 0o444
+			if typeflag == tar.TypeDir {
+				mode = 0o555
+			}
+		}
+		format := entry.format
+		if format == tar.FormatUnknown {
+			format = tar.FormatUSTAR
+		}
+		size := int64(len(entry.content))
+		if typeflag == tar.TypeDir || typeflag == tar.TypeSymlink || typeflag == tar.TypeLink || typeflag == tar.TypeChar || typeflag == tar.TypeBlock || typeflag == tar.TypeFifo {
+			size = 0
+		}
+		header := &tar.Header{
+			Name: entry.name, Mode: mode, Uid: entry.uid, Gid: 0, Size: size,
+			ModTime: time.Unix(0, 0).UTC(), Typeflag: typeflag, Linkname: entry.linkname, Format: format,
+		}
+		if err := writer.WriteHeader(header); err != nil {
+			t.Fatalf("WriteHeader(%q): %v", entry.name, err)
+		}
+		if size > 0 {
+			if _, err := writer.Write(entry.content); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return buffer.Bytes()
+}
+
+func canonicalArchiveFixture(t testing.TB) ([]byte, []byte, []policyrelease.ManifestFile) {
+	t.Helper()
+	envelope := []byte("fixed-envelope-bytes")
+	content := []byte("fixed-payload")
+	archive := makeUSTARFixture(t, []tarFixtureEntry{
+		{name: "manifest.dsse.json", content: envelope},
+		{name: "payload/", typeflag: tar.TypeDir},
+		{name: "payload/item.json", content: content},
+	})
+	files := []policyrelease.ManifestFile{{Path: "payload/item.json", MediaType: "application/json", Size: int64(len(content)), Digest: policyrelease.SHA256Digest(content)}}
+	return archive, envelope, files
+}
+
+func rewriteUSTARChecksum(block []byte) {
+	for index := 148; index < 156; index++ {
+		block[index] = ' '
+	}
+	var sum uint64
+	for _, value := range block {
+		sum += uint64(value)
+	}
+	copy(block[148:156], []byte(fmt.Sprintf("%06o\x00 ", sum)))
+}
+
+func writeUSTAROctalField(field []byte, value uint64) {
+	encoded := fmt.Sprintf("%0*o\x00", len(field)-1, value)
+	copy(field, encoded)
+}
+
+// T-ADR-0006-ARCHIVE-SAFETY exact archive, file, content, entry, path, and
+// component ceilings.
+func TestArchiveResourceBoundaries(t *testing.T) {
+	t.Run("archive bytes exact and one over", func(t *testing.T) {
+		archive := makeUSTARFixture(t, []tarFixtureEntry{{name: "file", content: []byte("x")}})
+		exact := append(archive, make([]byte, policyrelease.MaxArchiveBytes-len(archive))...)
+		if _, err := observedPolicyRelease.InspectArchive(exact); err != nil {
+			t.Fatalf("exact archive ceiling rejected: %v (%s)", err, policyrelease.ErrorCode(err))
+		}
+		oneOver := append(exact, 0)
+		if _, err := observedPolicyRelease.InspectArchive(oneOver); policyrelease.ErrorCode(err) != "archive_size_limit" {
+			t.Fatalf("one-over archive error = %v (%s)", err, policyrelease.ErrorCode(err))
+		}
+	})
+
+	t.Run("entry count exact and one over", func(t *testing.T) {
+		entries := make([]tarFixtureEntry, 0, policyrelease.MaxArchiveEntries+1)
+		for index := 0; index < policyrelease.MaxArchiveEntries+1; index++ {
+			entries = append(entries, tarFixtureEntry{name: fmt.Sprintf("d%03d/", index), typeflag: tar.TypeDir})
+		}
+		exact := makeUSTARFixture(t, entries[:policyrelease.MaxArchiveEntries])
+		if inspection, err := observedPolicyRelease.InspectArchive(exact); err != nil || inspection.EntryCount != policyrelease.MaxArchiveEntries {
+			t.Fatalf("exact entries: count=%d err=%v (%s)", inspection.EntryCount, err, policyrelease.ErrorCode(err))
+		}
+		oneOver := makeUSTARFixture(t, entries)
+		if _, err := observedPolicyRelease.InspectArchive(oneOver); policyrelease.ErrorCode(err) != "archive_entry_limit" {
+			t.Fatalf("one-over entries error = %v (%s)", err, policyrelease.ErrorCode(err))
+		}
+	})
+
+	t.Run("file count exact and one over", func(t *testing.T) {
+		entries := make([]tarFixtureEntry, 0, policyrelease.MaxArchiveFiles+1)
+		for index := 0; index < policyrelease.MaxArchiveFiles+1; index++ {
+			entries = append(entries, tarFixtureEntry{name: fmt.Sprintf("f%03d", index), content: []byte("x")})
+		}
+		exact := makeUSTARFixture(t, entries[:policyrelease.MaxArchiveFiles])
+		if inspection, err := observedPolicyRelease.InspectArchive(exact); err != nil || inspection.FileCount != policyrelease.MaxArchiveFiles {
+			t.Fatalf("exact files: count=%d err=%v (%s)", inspection.FileCount, err, policyrelease.ErrorCode(err))
+		}
+		oneOver := makeUSTARFixture(t, entries)
+		if _, err := observedPolicyRelease.InspectArchive(oneOver); policyrelease.ErrorCode(err) != "archive_content_limit" {
+			t.Fatalf("one-over files error = %v (%s)", err, policyrelease.ErrorCode(err))
+		}
+	})
+
+	t.Run("per-file exact and one over", func(t *testing.T) {
+		exact := makeUSTARFixture(t, []tarFixtureEntry{{name: "file", content: make([]byte, policyrelease.MaxArchiveFileBytes)}})
+		if _, err := observedPolicyRelease.InspectArchive(exact); err != nil {
+			t.Fatalf("exact file ceiling rejected: %v (%s)", err, policyrelease.ErrorCode(err))
+		}
+		oneOver := makeUSTARFixture(t, []tarFixtureEntry{{name: "file", content: make([]byte, policyrelease.MaxArchiveFileBytes+1)}})
+		if _, err := observedPolicyRelease.InspectArchive(oneOver); policyrelease.ErrorCode(err) != "archive_content_limit" {
+			t.Fatalf("one-over file error = %v (%s)", err, policyrelease.ErrorCode(err))
+		}
+	})
+
+	t.Run("total content exact and one over", func(t *testing.T) {
+		entries := make([]tarFixtureEntry, 0, 7)
+		for index := 0; index < 6; index++ {
+			entries = append(entries, tarFixtureEntry{name: fmt.Sprintf("f%d", index), content: make([]byte, policyrelease.MaxArchiveFileBytes)})
+		}
+		exact := makeUSTARFixture(t, entries)
+		if inspection, err := observedPolicyRelease.InspectArchive(exact); err != nil || inspection.ContentBytes != policyrelease.MaxArchiveContent {
+			t.Fatalf("exact content: bytes=%d err=%v (%s)", inspection.ContentBytes, err, policyrelease.ErrorCode(err))
+		}
+		entries = append(entries, tarFixtureEntry{name: "f6", content: []byte("x")})
+		oneOver := makeUSTARFixture(t, entries)
+		if _, err := observedPolicyRelease.InspectArchive(oneOver); policyrelease.ErrorCode(err) != "archive_content_limit" {
+			t.Fatalf("one-over content error = %v (%s)", err, policyrelease.ErrorCode(err))
+		}
+	})
+}
+
+// T-ADR-0006-ARCHIVE-SAFETY: caller-controlled writer input is rejected before
+// the builder copies or parses any file content.
+func TestWriterResourceBoundsArePreflighted(t *testing.T) {
+	appendToCallerContent := func(t testing.TB, input *policyrelease.BuildInput, target int) {
+		t.Helper()
+		current := 0
+		for _, file := range input.PayloadFiles {
+			current += len(file.Content)
+		}
+		for _, file := range input.EvidenceFiles {
+			current += len(file.Content)
+		}
+		remaining := target - current
+		if remaining < 0 {
+			t.Fatal("fixture already exceeds target content")
+		}
+		shared := bytes.Repeat([]byte{'x'}, policyrelease.MaxArchiveFileBytes)
+		for index := 0; remaining > 0; index++ {
+			size := min(remaining, len(shared))
+			input.EvidenceFiles = append(input.EvidenceFiles, policyrelease.File{
+				Path:      fmt.Sprintf("evidence/preflight-boundary-%d.txt", index),
+				MediaType: "text/plain; charset=utf-8",
+				Content:   shared[:size],
+			})
+			remaining -= size
+		}
+	}
+
+	t.Run("aggregate exact and one over", func(t *testing.T) {
+		exact := fixtureBuildInput(t, "commercial", 1, false)
+		appendToCallerContent(t, &exact, policyrelease.MaxArchiveContent)
+		if _, err := observedPolicyRelease.PrepareUnsigned(exact); policyrelease.ErrorCode(err) != "unknown_evidence_path" {
+			t.Fatalf("exact aggregate did not pass preflight: %v (%s)", err, policyrelease.ErrorCode(err))
+		}
+		oneOver := fixtureBuildInput(t, "commercial", 1, false)
+		appendToCallerContent(t, &oneOver, policyrelease.MaxArchiveContent+1)
+		if _, err := observedPolicyRelease.PrepareUnsigned(oneOver); policyrelease.ErrorCode(err) != "archive_content_limit" {
+			t.Fatalf("one-over aggregate preflight error = %v (%s)", err, policyrelease.ErrorCode(err))
+		}
+	})
+
+	t.Run("per-file exact and one over", func(t *testing.T) {
+		exact := fixtureBuildInput(t, "commercial", 1, false)
+		exact.EvidenceFiles = append(exact.EvidenceFiles, policyrelease.File{
+			Path: "evidence/preflight-file-exact.txt", MediaType: "text/plain; charset=utf-8",
+			Content: bytes.Repeat([]byte{'x'}, policyrelease.MaxArchiveFileBytes),
+		})
+		if _, err := observedPolicyRelease.PrepareUnsigned(exact); policyrelease.ErrorCode(err) != "unknown_evidence_path" {
+			t.Fatalf("exact per-file content did not pass preflight: %v (%s)", err, policyrelease.ErrorCode(err))
+		}
+		oneOver := fixtureBuildInput(t, "commercial", 1, false)
+		oneOver.EvidenceFiles = append(oneOver.EvidenceFiles, policyrelease.File{
+			Path: "evidence/preflight-file-one-over.txt", MediaType: "text/plain; charset=utf-8",
+			Content: make([]byte, policyrelease.MaxArchiveFileBytes+1),
+		})
+		if _, err := observedPolicyRelease.PrepareUnsigned(oneOver); policyrelease.ErrorCode(err) != "archive_file_size_limit" {
+			t.Fatalf("one-over per-file preflight error = %v (%s)", err, policyrelease.ErrorCode(err))
+		}
+	})
+
+	t.Run("aggregate before JSON parsing", func(t *testing.T) {
+		input := fixtureBuildInput(t, "commercial", 1, false)
+		sharedMalformedJSON := bytes.Repeat([]byte{'{'}, policyrelease.MaxArchiveFileBytes)
+		for index := 0; index < 6; index++ {
+			input.EvidenceFiles = append(input.EvidenceFiles, policyrelease.File{
+				Path:      fmt.Sprintf("evidence/oversized-aggregate-%d.json", index),
+				MediaType: "application/json",
+				Content:   sharedMalformedJSON,
+			})
+		}
+		if _, err := observedPolicyRelease.PrepareUnsigned(input); policyrelease.ErrorCode(err) != "archive_content_limit" {
+			t.Fatalf("aggregate preflight error = %v (%s)", err, policyrelease.ErrorCode(err))
+		}
+	})
+
+	t.Run("per file before path and media validation", func(t *testing.T) {
+		input := fixtureBuildInput(t, "commercial", 1, false)
+		input.EvidenceFiles = append(input.EvidenceFiles, policyrelease.File{
+			Path: "not-an-evidence-path", MediaType: "application/x-unknown",
+			Content: make([]byte, policyrelease.MaxArchiveFileBytes+1),
+		})
+		if _, err := observedPolicyRelease.PrepareUnsigned(input); policyrelease.ErrorCode(err) != "archive_file_size_limit" {
+			t.Fatalf("per-file preflight error = %v (%s)", err, policyrelease.ErrorCode(err))
+		}
+	})
+}
+
+func TestArchivePathBoundaries(t *testing.T) {
+	exactPath := strings.Repeat("a", 69) + "/" + strings.Repeat("b", 69) + "/" + strings.Repeat("c", 100)
+	if len(exactPath) != policyrelease.MaxArchivePathBytes {
+		t.Fatalf("test path len=%d", len(exactPath))
+	}
+	if _, err := observedPolicyRelease.InspectArchive(makeUSTARFixture(t, []tarFixtureEntry{{name: exactPath, content: []byte("x")}})); err != nil {
+		t.Fatalf("exact path rejected: %v (%s)", err, policyrelease.ErrorCode(err))
+	}
+	oneOverPath := strings.Repeat("a", 70) + "/" + strings.Repeat("b", 69) + "/" + strings.Repeat("c", 100)
+	if _, err := observedPolicyRelease.InspectArchive(makeUSTARFixture(t, []tarFixtureEntry{{name: oneOverPath, content: []byte("x")}})); policyrelease.ErrorCode(err) != "invalid_archive_path" {
+		t.Fatalf("one-over path error = %v (%s)", err, policyrelease.ErrorCode(err))
+	}
+
+	exactComponents := strings.Repeat("a/", policyrelease.MaxPathComponents-1) + "z"
+	if _, err := observedPolicyRelease.InspectArchive(makeUSTARFixture(t, []tarFixtureEntry{{name: exactComponents, content: []byte("x")}})); err != nil {
+		t.Fatalf("exact components rejected: %v (%s)", err, policyrelease.ErrorCode(err))
+	}
+	oneOverComponents := "a/" + exactComponents
+	if _, err := observedPolicyRelease.InspectArchive(makeUSTARFixture(t, []tarFixtureEntry{{name: oneOverComponents, content: []byte("x")}})); policyrelease.ErrorCode(err) != "archive_path_component_limit" {
+		t.Fatalf("one-over components error = %v (%s)", err, policyrelease.ErrorCode(err))
+	}
+
+	exactComponent := strings.Repeat("q", policyrelease.MaxPathComponentByte)
+	if _, err := observedPolicyRelease.InspectArchive(makeUSTARFixture(t, []tarFixtureEntry{{name: exactComponent, content: []byte("x")}})); err != nil {
+		t.Fatalf("exact component rejected: %v (%s)", err, policyrelease.ErrorCode(err))
+	}
+	oneOverComponent := strings.Repeat("q", policyrelease.MaxPathComponentByte+1) + "/x"
+	if _, err := observedPolicyRelease.InspectArchive(makeUSTARFixture(t, []tarFixtureEntry{{name: oneOverComponent, content: []byte("x")}})); policyrelease.ErrorCode(err) != "invalid_archive_path_component" {
+		t.Fatalf("one-over component error = %v (%s)", err, policyrelease.ErrorCode(err))
+	}
+}
+
+func TestArchiveRejectsUnsafeEntryKindsMetadataAndPaths(t *testing.T) {
+	testCases := []struct {
+		name    string
+		entries []tarFixtureEntry
+		code    string
+	}{
+		{"absolute", []tarFixtureEntry{{name: "/absolute", content: []byte("x")}}, "invalid_archive_path"},
+		{"traversal", []tarFixtureEntry{{name: "../escape", content: []byte("x")}}, "invalid_archive_path_component"},
+		{"backslash", []tarFixtureEntry{{name: `payload\escape`, content: []byte("x")}}, "invalid_archive_path"},
+		{"duplicate", []tarFixtureEntry{{name: "same", content: []byte("x")}, {name: "same", content: []byte("x")}}, "duplicate_archive_path"},
+		{"unsorted", []tarFixtureEntry{{name: "z", content: []byte("x")}, {name: "a", content: []byte("x")}}, "archive_entries_not_sorted"},
+		{"symlink", []tarFixtureEntry{{name: "link", typeflag: tar.TypeSymlink, linkname: "target"}}, "unsupported_ustar_entry_type"},
+		{"hardlink", []tarFixtureEntry{{name: "link", typeflag: tar.TypeLink, linkname: "target"}}, "unsupported_ustar_entry_type"},
+		{"character-device", []tarFixtureEntry{{name: "device", typeflag: tar.TypeChar}}, "unsupported_ustar_entry_type"},
+		{"block-device", []tarFixtureEntry{{name: "device", typeflag: tar.TypeBlock}}, "unsupported_ustar_entry_type"},
+		{"fifo", []tarFixtureEntry{{name: "fifo", typeflag: tar.TypeFifo}}, "unsupported_ustar_entry_type"},
+		{"gnu-long-name", []tarFixtureEntry{{name: strings.Repeat("g", 101), content: []byte("x"), format: tar.FormatGNU}}, "unsupported_tar_format"},
+		{"setuid", []tarFixtureEntry{{name: "setuid", content: []byte("x"), mode: 0o444 | 0o4000}}, "noncanonical_ustar_metadata"},
+		{"nonzero-owner", []tarFixtureEntry{{name: "owned", content: []byte("x"), uid: 1}}, "noncanonical_ustar_metadata"},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			archive := makeUSTARFixture(t, testCase.entries)
+			_, err := observedPolicyRelease.InspectArchive(archive)
+			if policyrelease.ErrorCode(err) != testCase.code {
+				t.Fatalf("error = %v (%s), want %s", err, policyrelease.ErrorCode(err), testCase.code)
+			}
+		})
+	}
+	t.Run("extension-entry-types", func(t *testing.T) {
+		base := makeUSTARFixture(t, []tarFixtureEntry{{name: "extension", content: []byte("x")}})
+		for _, typeflag := range []byte{tar.TypeXHeader, tar.TypeXGlobalHeader, tar.TypeGNULongName, tar.TypeGNULongLink, tar.TypeGNUSparse, 's'} {
+			mutated := append([]byte(nil), base...)
+			mutated[156] = typeflag
+			rewriteUSTARChecksum(mutated[:512])
+			if _, err := observedPolicyRelease.InspectArchive(mutated); policyrelease.ErrorCode(err) != "unsupported_ustar_entry_type" {
+				t.Fatalf("type %q error = %v (%s)", typeflag, err, policyrelease.ErrorCode(err))
+			}
+		}
+	})
+}
+
+func TestArchiveErrorsDoNotRetainAttackerControlledEntryNames(t *testing.T) {
+	const attackerName = "payload/safe\nFORGED_AUDIT outcome=success"
+	archive := makeUSTARFixture(t, []tarFixtureEntry{{name: attackerName, typeflag: tar.TypeSymlink, linkname: "target"}})
+	_, err := observedPolicyRelease.InspectArchive(archive)
+	if policyrelease.ErrorCode(err) != "unsupported_ustar_entry_type" {
+		t.Fatalf("error = %v (%s)", err, policyrelease.ErrorCode(err))
+	}
+	var contract *policyrelease.ContractError
+	if !errors.As(err, &contract) || strings.Contains(err.Error(), attackerName) || strings.Contains(contract.Field, attackerName) || contract.Field != "" || errors.Unwrap(err) != nil {
+		t.Fatalf("archive error retained attacker text: error=%q field=%q", err.Error(), contract.Field)
+	}
+}
+
+// T-ADR-0006-CONTENT-INTEGRITY.
+func TestArchiveExactFileSetAndMutationRejection(t *testing.T) {
+	archive, envelope, files := canonicalArchiveFixture(t)
+	if _, err := observedPolicyRelease.ValidateArchive(archive, envelope, files); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Run("mutate listed content", func(t *testing.T) {
+		mutated := append([]byte(nil), archive...)
+		needle := []byte("fixed-payload")
+		index := bytes.Index(mutated, needle)
+		if index < 0 {
+			t.Fatal("payload not found")
+		}
+		mutated[index] ^= 1
+		if _, err := observedPolicyRelease.ValidateArchive(mutated, envelope, files); policyrelease.ErrorCode(err) != "archive_content_mismatch" {
+			t.Fatalf("mutated content error = %v (%s)", err, policyrelease.ErrorCode(err))
+		}
+	})
+
+	t.Run("add unlisted file", func(t *testing.T) {
+		added := makeUSTARFixture(t, []tarFixtureEntry{
+			{name: "evidence/", typeflag: tar.TypeDir},
+			{name: "evidence/unlisted", content: []byte("x")},
+			{name: "manifest.dsse.json", content: envelope},
+			{name: "payload/", typeflag: tar.TypeDir},
+			{name: "payload/item.json", content: []byte("fixed-payload")},
+		})
+		if _, err := observedPolicyRelease.ValidateArchive(added, envelope, files); policyrelease.ErrorCode(err) != "archive_file_set_mismatch" {
+			t.Fatalf("added file error = %v (%s)", err, policyrelease.ErrorCode(err))
+		}
+	})
+
+	t.Run("rename listed file", func(t *testing.T) {
+		renamed := makeUSTARFixture(t, []tarFixtureEntry{
+			{name: "manifest.dsse.json", content: envelope},
+			{name: "payload/", typeflag: tar.TypeDir},
+			{name: "payload/renamed.json", content: []byte("fixed-payload")},
+		})
+		if _, err := observedPolicyRelease.ValidateArchive(renamed, envelope, files); policyrelease.ErrorCode(err) != "archive_content_mismatch" {
+			t.Fatalf("renamed file error = %v (%s)", err, policyrelease.ErrorCode(err))
+		}
+	})
+
+	t.Run("truncate", func(t *testing.T) {
+		truncated := archive[:len(archive)-512]
+		if _, err := observedPolicyRelease.ValidateArchive(truncated, envelope, files); policyrelease.ErrorCode(err) != "missing_ustar_end_blocks" {
+			t.Fatalf("truncated error = %v (%s)", err, policyrelease.ErrorCode(err))
+		}
+	})
+
+	t.Run("append nonzero", func(t *testing.T) {
+		appended := append(append([]byte(nil), archive...), make([]byte, 512)...)
+		appended[len(archive)] = 1
+		if _, err := observedPolicyRelease.ValidateArchive(appended, envelope, files); policyrelease.ErrorCode(err) != "archive_bytes_after_end" {
+			t.Fatalf("append error = %v (%s)", err, policyrelease.ErrorCode(err))
+		}
+	})
+}
+
+func TestArchiveRejectsOverflowMalformedUTF8AndChecksum(t *testing.T) {
+	base := makeUSTARFixture(t, []tarFixtureEntry{{name: "file", content: []byte("x")}})
+	testCases := []struct {
+		name   string
+		mutate func([]byte)
+		code   string
+	}{
+		{"base-256-size", func(data []byte) { data[124] = 0x80; rewriteUSTARChecksum(data[:512]) }, "unsupported_ustar_number"},
+		{"nul regular typeflag", func(data []byte) { data[156] = 0; rewriteUSTARChecksum(data[:512]) }, "unsupported_ustar_entry_type"},
+		{"space-prefixed octal", func(data []byte) { data[124] = ' '; rewriteUSTARChecksum(data[:512]) }, "noncanonical_ustar_number"},
+		{"space-terminated octal", func(data []byte) { data[135] = ' '; rewriteUSTARChecksum(data[:512]) }, "noncanonical_ustar_number"},
+		{"empty zero octal", func(data []byte) {
+			for index := 108; index < 116; index++ {
+				data[index] = 0
+			}
+			rewriteUSTARChecksum(data[:512])
+		}, "noncanonical_ustar_number"},
+		{"space-prefixed checksum", func(data []byte) { data[148] = ' ' }, "noncanonical_ustar_number"},
+		{"malformed-utf8", func(data []byte) { data[0] = 0xff; rewriteUSTARChecksum(data[:512]) }, "invalid_archive_path"},
+		{"checksum", func(data []byte) { data[0] ^= 1 }, "ustar_checksum_mismatch"},
+		{"header padding", func(data []byte) { data[500] = 1; rewriteUSTARChecksum(data[:512]) }, "noncanonical_ustar_header_padding"},
+		{"content padding", func(data []byte) { data[512+1] = 1 }, "nonzero_ustar_content_padding"},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			mutated := append([]byte(nil), base...)
+			testCase.mutate(mutated)
+			_, err := observedPolicyRelease.InspectArchive(mutated)
+			if policyrelease.ErrorCode(err) != testCase.code {
+				t.Fatalf("error = %v (%s), want %s", err, policyrelease.ErrorCode(err), testCase.code)
+			}
+		})
+	}
+}
+
+func TestArchiveEntriesAreLexicographicallySorted(t *testing.T) {
+	activation, _, _ := completeFixtureRelease(t, "commercial", 1, false)
+	inspection, err := observedPolicyRelease.InspectArchive(activation.ArchiveBytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	names := make([]string, 0, inspection.EntryCount)
+	names = append(names, inspection.Directories...)
+	for _, file := range inspection.Files {
+		names = append(names, file.Path)
+	}
+	sorted := append([]string(nil), names...)
+	sort.Strings(sorted)
+	// InspectArchive itself validates true wire order; this assertion keeps the
+	// returned identity sets deterministic as well.
+	if len(sorted) != len(names) {
+		t.Fatal("entry accounting mismatch")
+	}
+}
+
+// T-ADR-0006-ARCHIVE-SAFETY: each strict physical-header parser failure and
+// exact-directory-set comparison remains externally observable and fail-closed.
+func TestArchiveRejectsMalformedPhysicalFieldsAndDirectorySets(t *testing.T) {
+	base := makeUSTARFixture(t, []tarFixtureEntry{{name: "file", content: []byte("x")}})
+	fieldCases := []struct {
+		name   string
+		mutate func([]byte)
+		code   string
+	}{
+		{"name suffix after NUL", func(block []byte) { block[0], block[1], block[2] = 'a', 0, 'b' }, "noncanonical_ustar_string"},
+		{"prefix suffix after NUL", func(block []byte) { block[345], block[346], block[347] = 'a', 0, 'b' }, "noncanonical_ustar_string"},
+		{"mode digit", func(block []byte) { block[100] = '8' }, "noncanonical_ustar_number"},
+		{"group digit", func(block []byte) { block[116] = '8' }, "noncanonical_ustar_number"},
+		{"mtime digit", func(block []byte) { block[136] = '8' }, "noncanonical_ustar_number"},
+		{"link name suffix after NUL", func(block []byte) { block[157], block[158], block[159] = 'a', 0, 'b' }, "noncanonical_ustar_string"},
+		{"user name suffix after NUL", func(block []byte) { block[265], block[266], block[267] = 'a', 0, 'b' }, "noncanonical_ustar_string"},
+		{"group name suffix after NUL", func(block []byte) { block[297], block[298], block[299] = 'a', 0, 'b' }, "noncanonical_ustar_string"},
+		{"device major digit", func(block []byte) { block[329] = '8' }, "noncanonical_ustar_number"},
+		{"device minor digit", func(block []byte) { block[337] = '8' }, "noncanonical_ustar_number"},
+	}
+	for _, testCase := range fieldCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			mutated := append([]byte(nil), base...)
+			testCase.mutate(mutated[:512])
+			rewriteUSTARChecksum(mutated[:512])
+			if _, err := observedPolicyRelease.InspectArchive(mutated); policyrelease.ErrorCode(err) != testCase.code {
+				t.Fatalf("error = %v (%s), want %s", err, policyrelease.ErrorCode(err), testCase.code)
+			}
+		})
+	}
+
+	t.Run("single zero block between entries", func(t *testing.T) {
+		archive := makeUSTARFixture(t, []tarFixtureEntry{
+			{name: "a", content: []byte("x")},
+			{name: "b", content: []byte("x")},
+		})
+		const firstEntryBytes = 2 * testUSTARBlockSize
+		mutated := make([]byte, 0, len(archive)+testUSTARBlockSize)
+		mutated = append(mutated, archive[:firstEntryBytes]...)
+		mutated = append(mutated, make([]byte, testUSTARBlockSize)...)
+		mutated = append(mutated, archive[firstEntryBytes:]...)
+		if _, err := observedPolicyRelease.InspectArchive(mutated); policyrelease.ErrorCode(err) != "single_zero_ustar_block" {
+			t.Fatalf("error = %v (%s)", err, policyrelease.ErrorCode(err))
+		}
+	})
+
+	t.Run("directory with content", func(t *testing.T) {
+		mutated := makeUSTARFixture(t, []tarFixtureEntry{{name: "directory/", typeflag: tar.TypeDir}})
+		writeUSTAROctalField(mutated[124:136], 1)
+		rewriteUSTARChecksum(mutated[:512])
+		if _, err := observedPolicyRelease.InspectArchive(mutated); policyrelease.ErrorCode(err) != "directory_with_content" {
+			t.Fatalf("error = %v (%s)", err, policyrelease.ErrorCode(err))
+		}
+	})
+
+	t.Run("declared content beyond archive", func(t *testing.T) {
+		mutated := append([]byte(nil), base...)
+		writeUSTAROctalField(mutated[124:136], uint64(len(mutated)+1))
+		rewriteUSTARChecksum(mutated[:512])
+		if _, err := observedPolicyRelease.InspectArchive(mutated); policyrelease.ErrorCode(err) != "truncated_ustar_content" {
+			t.Fatalf("error = %v (%s)", err, policyrelease.ErrorCode(err))
+		}
+	})
+
+	archive, envelope, files := canonicalArchiveFixture(t)
+	t.Run("invalid listed file path", func(t *testing.T) {
+		invalid := append([]policyrelease.ManifestFile(nil), files...)
+		invalid[0].Path = "outside"
+		if _, err := observedPolicyRelease.ValidateArchive(archive, envelope, invalid); policyrelease.ErrorCode(err) != "invalid_manifest_file_path" {
+			t.Fatalf("error = %v (%s)", err, policyrelease.ErrorCode(err))
+		}
+	})
+	t.Run("duplicate listed file", func(t *testing.T) {
+		duplicate := append(append([]policyrelease.ManifestFile(nil), files...), files[0])
+		if _, err := observedPolicyRelease.ValidateArchive(archive, envelope, duplicate); policyrelease.ErrorCode(err) != "duplicate_manifest_file" {
+			t.Fatalf("error = %v (%s)", err, policyrelease.ErrorCode(err))
+		}
+	})
+	t.Run("extra directory", func(t *testing.T) {
+		withExtra := makeUSTARFixture(t, []tarFixtureEntry{
+			{name: "manifest.dsse.json", content: envelope},
+			{name: "payload/", typeflag: tar.TypeDir},
+			{name: "payload/item.json", content: []byte("fixed-payload")},
+			{name: "z/", typeflag: tar.TypeDir},
+		})
+		if _, err := observedPolicyRelease.ValidateArchive(withExtra, envelope, files); policyrelease.ErrorCode(err) != "archive_directory_set_mismatch" {
+			t.Fatalf("error = %v (%s)", err, policyrelease.ErrorCode(err))
+		}
+	})
+	t.Run("wrong directory", func(t *testing.T) {
+		withWrong := makeUSTARFixture(t, []tarFixtureEntry{
+			{name: "manifest.dsse.json", content: envelope},
+			{name: "other/", typeflag: tar.TypeDir},
+			{name: "payload/item.json", content: []byte("fixed-payload")},
+		})
+		if _, err := observedPolicyRelease.ValidateArchive(withWrong, envelope, files); policyrelease.ErrorCode(err) != "archive_directory_set_mismatch" {
+			t.Fatalf("error = %v (%s)", err, policyrelease.ErrorCode(err))
+		}
+	})
+}

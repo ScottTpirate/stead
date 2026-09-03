@@ -1,0 +1,356 @@
+# Stead policy activation release builder v1
+
+This package implements the WS-09 construction side of ADR-0006. It creates
+deterministic unsigned activation content, external DSSE signing requests,
+strict ustar archives for exact returned activation envelopes, post-signing
+release-attestation requests, and an immutable archive-plus-attestation handoff.
+
+It deliberately does not contain a signing function, private-key input, trust
+store, OpenFGA or policy evaluator, database port, activation pointer, or
+runtime authorization decision. WS-06 independently verifies cryptography,
+trust, compatibility, conformance, and activation prerequisites before these
+bytes can gain authority.
+
+## Construction order
+
+The sole public lifecycle boundary is an `ObservedWorkflow`; its methods make
+the non-circular order explicit while the deterministic builders remain
+unexported:
+
+1. `ObservedWorkflow.PrepareUnsigned(BuildInput)` validates bounded inputs, creates
+   `evidence/pre-signing-evidence-manifest.json`, emits canonical manifest bytes,
+   computes the policy/evidence/activation identities, and emits an activation
+   `SigningRequestV1`.
+2. A signing service or offline ceremony operating under separately owned
+   custody signs the exact request payload. It returns exact DSSE envelope
+   bytes and digest-bound, caller-presented receipts canonicalized with
+   `NewPresentedSigningResult`; the builder never receives a key. These
+   receipts remain `unverified_presented_material` and do not establish signer
+   identity, custody, trust, threshold satisfaction, or authority.
+3. `ObservedWorkflow.FinalizeActivationArchive` checks only bounded DSSE syntax, exact payload,
+   canonical DER/low-S shape, exact signature-byte receipt binding, and that
+   enough distinct key-ID/custodian claims were presented for the deployment
+   policy's requested counts. It does not verify ECDSA or trust. It writes and
+   re-inspects one deterministic ustar archive for those exact envelope bytes.
+4. A network-disabled workflow may present a digest-addressed check receipt for
+   that exact archive. Its claimed outcome is labeled unverified and is not
+   activation authority.
+5. `ObservedWorkflow.PrepareReleaseAttestation` binds the final activation-set, envelope,
+   archive, embedded evidence, policy/model/trust/deployment-policy, exact
+   disclosure mode, presented assurance, signature/custodian claims, source,
+   digest-addressed review and waiver receipts, builder/workflow, and offline
+   check identities. Every caller assertion remains explicitly presented and
+   unverified. Its payload contains neither its own ID nor its future envelope
+   digest and declares `authority: none`.
+6. The separate release ceremony signs that exact attestation request.
+   `ObservedWorkflow.FinalizeReleaseHandoff` repeats the syntax, binding, and presented-count
+   checks and returns exact archive and attestation-envelope bytes plus every
+   immutable identity needed by WS-06. The handoff declares `authority: none`
+   and a typed `required_not_performed_by_ws09` WS-06 verification checklist.
+
+ECDSA ceremonies are not assumed deterministic. Unsigned bytes are
+reproducible; an archive is reproducible once one exact returned activation
+envelope is fixed; every new signing ceremony gets new envelope/archive and
+attestation identities.
+
+## Deterministic content and embedded evidence
+
+Typed structs and Go `encoding/json` emit UTF-8 JSON in fixed field order with
+no insignificant whitespace. Arrays without semantic order are sorted. Times
+must be second-precision UTC RFC 3339. JSON member admission is exact-case:
+case-folded aliases, including an exact member plus an alias, reject. Unknown
+v1 versions, media types, deployment modes, malformed/duplicate-key JSON,
+floating-point numbers in signed payloads, unbound payload files, and digest
+mismatches fail closed. Package-produced failures expose only a stable code;
+their compatibility `Field` and `Err` members remain empty, so
+attacker-controlled member/path/parser text is neither rendered nor retained.
+
+The four v1 contract roles are closed and mandatory: `decision_table`,
+`input_schema`, `output_schema`, and `registries`. The canonical v1
+policy-content index has its fixed media type and contains one sorted
+role/path/media-type/SHA-256 entry for every semantic `payload/` file other
+than itself. That includes contract files, every profile and authoritative
+snapshot, the OpenFGA source, deployment policy, presented assurance result,
+trust set, and trust-set envelope. Missing, extra, stale, reordered, duplicate,
+or noncanonical index material rejects. Because `policy_bundle_id` hashes these
+exact index bytes, any semantic payload update creates a new bundle identity
+and invalidates review/provenance subjects bound to the predecessor. At least
+one digest-bound profile and both immutable OpenFGA compatibility/migration
+identifiers are required.
+
+Every `payload/` and `evidence/` regular file is listed once by path, media type,
+integer length, and SHA-256 digest. `manifest.dsse.json` is the only outer-file
+exception. Evidence admission is a closed typed contract rather than a text
+denylist: v1 accepts the SBOM, provenance, conformance, license, and
+vulnerability paths, their exact media types, and their strict JSON field
+schemas. SLSA provenance additionally binds the exact manifest source
+revision, dependency-lock digest, and sole `stead-policy-content-index`
+subject digest equal to `policy_bundle_id`; well-formed but unrelated evidence
+rejects. Security-profile mapping coverage must reuse a path explicitly marked
+for that purpose in this same typed evidence registry; v1 registers the exact
+synthetic mapping-test fixture with the policy-test-result media type, strict
+`test_id`/`assertions` schema, profile-bound test ID, and SHA-256 digest.
+Authoritative snapshots are likewise required at
+`payload/<declared payload_path>`. An `external_regime_mapping` profile admits
+only authoritative-snapshot source objects, requires at least one mapping, and
+binds every snapshot and mapping evidence file into the signed manifest.
+Unknown paths, wrong media, schema extensions (including post-signing identity
+fields), private or credential fields, missing files, and digest mismatches all
+reject. Free-form or protected evidence belongs in a separate authorized
+evidence system and cannot enter this archive writer.
+
+The digest-listed conformance report must claim 100% decision-row coverage, at
+least 90% critical mutation score, and pass outcomes for deterministic replay,
+label-lattice, explicit-deny, Agent-intersection, and provider bypass. The
+embedded summary is labeled `unverified_presented_material`; WS-09 does not
+authenticate the report producer or self-certify those claims. Runtime staging
+must verify the immutable evidence and rerun deployable fixtures; it must not
+claim to rerun source mutation analysis.
+
+## DSSE profile and parser limits
+
+The package implements DSSE v1.0.0 PAE and accepts the three non-interchangeable
+ADR-0006 payload types. Writers use canonically padded standard RFC 4648 Base64;
+bounded readers also accept canonically padded URL-safe Base64, but reject mixed
+alphabets, absent/excess padding, duplicate JSON keys, case-folded known-member
+aliases, duplicate key IDs, non-minimal DER, high-S, and cross-type
+substitution. Genuine bounded unknown DSSE envelope extensions remain
+ignorable. A streaming pass enforces the signature and unknown-extension
+collection ceilings before reflective shape decoding can allocate maps or
+slices. Activation-manifest, trust-set, and release-attestation payloads all use
+exact-case, exact-member admission.
+
+| Limit | V1 maximum |
+|---|---:|
+| Envelope bytes | 4 MiB |
+| Decoded payload | 2 MiB |
+| JSON nesting | 32 |
+| Signatures | 16 |
+| Members/items in one unknown extension collection | 256 |
+| Encoded signature | 256 bytes |
+| Decoded signature | 128 bytes |
+| UTF-8 key ID | 80 bytes |
+| Presented signing receipts | 16 |
+| One metadata collection | 256 entries |
+| Review receipts | 256 |
+| Waiver receipts | 256 |
+
+Caller-controlled file, manifest-metadata, review, waiver, and signing-receipt
+cardinalities are checked before package allocation, copying, sorting, or map
+construction. Both activation-manifest and release-attestation payloads must
+fit the same 2 MiB decoded ceiling before any signing request is emitted.
+
+`keyid` remains an unauthenticated selection hint. The builder checks exact
+signature-byte receipt binding and counts distinct presented key-ID and
+custodian claims. A canonical DER `r=1,s=1` plus arbitrary matching receipts is
+therefore deliberately represented only as unverified syntax; the contract
+regression proves it can never produce a verified/satisfied/authorizing WS-09
+result. Only WS-06 may recompute SPKI identity, establish trust, verify
+P-256/SHA-256 signatures, key purpose/status/validity/revocation, evaluate the
+real threshold/custody rule, and grant activation authority.
+
+## Strict ustar profile
+
+Archive entries are lexical, owner/group zero and unnamed, timestamp zero, and
+mode `0444` for files or `0555` for directories. The raw inspector accepts only
+POSIX ustar `0` regular-file and `5` directory typeflags; the historical NUL
+regular-file alias rejects. Every numeric field must use the writer's fixed
+zero-padded octal plus canonical terminator, including the checksum's distinct
+terminator. It rejects alternate space-padded or blank octal forms,
+PAX/global-PAX, GNU long-name or long-link, sparse and other extensions;
+absolute, traversal, backslash,
+duplicate or unsorted paths; links, devices, FIFO/socket entries; setuid/setgid;
+base-256 or overflowed sizes; malformed UTF-8; noncanonical metadata; bad
+checksums; missing end blocks; and non-zero bytes after the end marker. It never
+extracts to disk.
+
+| Limit | V1 maximum |
+|---|---:|
+| Exact tar bytes | 64 MiB |
+| Entries | 512 |
+| Regular files, including the envelope | 256 |
+| One regular file | 8 MiB |
+| Total regular-file content | 48 MiB |
+| UTF-8 path | 240 bytes |
+| Path components | 16 |
+| One component | 100 UTF-8 bytes |
+
+All count/size arithmetic is checked before content slicing or allocation.
+Zero-block record padding is allowed within the exact 64 MiB raw limit and is
+therefore part of the archive digest; the deterministic writer emits its one
+canonical representation.
+
+## Assurance, custody, transport, and recovery
+
+Signature/recovery/lowering thresholds, custodian separation, approved
+cryptographic boundary, validated-module requirement, evidence profile, and
+`request_boundary` or `commit_boundary` mode arrive only through the exact
+typed deployment-policy binding. Profile IDs cannot select these values. The
+starter threshold-one, threshold-two, and synthetic non-government
+threshold-three fixtures prove the data-driven path.
+
+The signed fixture/materialization inputs are strict JSON instances of the
+repository's exact v0.1 contracts. Security profiles name
+`https://stead.example/policies/security-label-profiles/profile-v0.1.schema.json`;
+deployment policies name
+`https://stead.example/policies/deployment-domains/domain-profile-v0.1.schema.json`.
+Closed typed validators enforce required and unknown fields, nested shapes,
+IDs, supported versions, semantic constants, profile-version ceilings, empty
+v0.1 bridges, and exact assurance binding. The digest-bound
+`PresentedAssuranceEvaluationV1` is also labeled unverified; its claimed result
+does not replace downstream WS-06/WS-12 authentication or activation checks.
+
+`ObservedWorkflow.BuildTransportDescriptor` names only exact archive and attestation-envelope
+digests and always states `non_authorizing_transport_only`. TUF metadata, OCI
+descriptors/tags, filenames, HTTPS, repository membership, and filesystem
+ownership cannot replace either DSSE envelope or the deployment assurance
+result. The golden vector verifies wholly from checked-in bytes with no network,
+TUF, public PKI, transparency service, registry, KMS, or proprietary dependency.
+
+## WS-09 lifecycle observation seam
+
+`ObservedWorkflow` is the compile-time-mandatory boundary for unsigned
+preparation, activation finalization, archive inspection and exact validation,
+release-attestation preparation, release-handoff finalization, and
+transport-descriptor construction. The deterministic primitives are
+unexported, and contract tests type-check the package surface to reject any
+public package-level bypass. Each admitted call attempts exactly one terminal
+`LifecycleEvent` on success or failure. Events declare `authority: none`, name
+WS-09 as producer and WS-07 as the durable-audit owner, and contain only stable
+workflow/stage/outcome/error codes; bounded operation, correlation, and
+causation identifiers; safe builder/build/release/signing workflow identities;
+closed source revision, lock, recipe, evidence, archive, attestation, signing
+request/result and threshold facts; and presented review/approval and waiver
+counts. Signing, threshold, approval, and waiver facts are explicitly
+`unverified_presented_material`; WS-09 does not turn them into verified facts.
+Facts are populated only when the typed stage input already carries them:
+prepare/finalize activation and prepare/finalize release retain the complete
+builder, source/lock/recipe, signing, threshold, review, and waiver facts;
+archive inspect/validate expose only archive identity and bounded entry/file
+counts; transport exposes source plus the archive/attestation/policy and release
+signing/threshold facts retained by `ImmutableReleaseHandoff`. The observer
+never reparses protected bodies or invents facts absent from a stage boundary.
+
+Lifecycle operation, correlation, causation, and generic workflow identities
+are limited to 128 ASCII identifier bytes and are copied when the wrapper is
+created. The separately typed build-recipe fact preserves the producer's full
+1-to-256-byte opaque-ID domain. Trust-recovery and lowering approval thresholds
+preserve every positive producer `int` exactly; signature thresholds remain
+separately constrained to the producer's 1-to-16 signature contract. These
+observation values are never passed into canonical encoders,
+signing requests, DSSE envelopes, archives, attestations, handoffs, or transport
+descriptors. Events expose no payload, envelope, archive, signature, key,
+credential, protected body, source content, filesystem path, parser text,
+arbitrary attributes, or metric-label map. The callback receives a value-only
+event with no slices,
+maps, pointers, or interfaces. Different lifecycle identifiers therefore leave
+all typed and byte outputs identical.
+
+Observation is fail closed. The transactional port contract requires a WS-07
+adapter to atomically retain one terminal event and return its exact typed
+`LifecycleAcknowledgement`; the package validates that receipt but cannot
+enforce persistence behavior inside an adapter. Under this contract an error,
+panic, or mismatched receipt means no event was accepted, returns only
+`lifecycle_observer_failed`, and discards otherwise valid output. A conforming
+adapter therefore cannot retain a success event when the public operation
+returns observer failure. One `ObservedWorkflow` represents one serialized flow and acquires its
+guard before any underlying computation. Concurrent entry and callback
+reentry are admission failures: the nested call returns zero output with
+`lifecycle_operation_in_progress`, performs no computation or recursive
+observation, and leaves the one already-admitted call to produce its one
+acknowledged terminal event. The observer interface itself performs no I/O and
+grants no database, network, provider, filesystem, signing, policy, or
+authorization capability. Implementations may pass the bounded event to a
+separately authorized WS-07 adapter, but atomic durable audit/outbox commit,
+retry, retention, metric projection, and delivery remain outside this package
+and under WS-07 ownership.
+
+Build/sign/archive/attestation interruption leaves no runtime state because this
+module owns none. Retry from pinned source/lock/recipe and declared metadata;
+reuse returned bytes only when their exact digests still match. Rollback is a
+new forward release under current or stronger trust, never reuse of revoked or
+stale signing evidence. Runtime stage/activate, monotonic anchors, failure
+recovery, backup/restore, and audit/outbox transactions remain WS-06/WS-02/WS-07
+owned.
+
+## Fixtures and tests
+
+`packages/test-fixtures/ci/policy-release/v1` contains synthetic source/evidence,
+a full exact golden archive/attestation vector, WS-09 negative cases, and a
+closed machine-readable WS-06 consumer-verifier mutation inventory whose exact
+case set, operations, outcomes, and expected codes are contract-tested. Every
+target/replacement is checked in, verification time is pinned, and the suite
+mechanically resolves and applies every mutation. This execution contract is
+mutation materialization only: it does not implement or simulate WS-06's
+runtime verifier and does not assert the consumer codes. The inventory is
+nonauthorizing handoff material, not evidence that WS-09 executed WS-06
+verification. The vector uses a public,
+non-secret, nonproduction P-256 scalar solely to make independent verification
+repeatable. No private material exists in the fixture and its key has no Stead
+trust authority.
+
+`observation/lifecycle-contract.json` closes the allowed observation schema,
+ownership, identifier ceiling, terminal outcomes, stage inventory, and exact
+safe event/fact fields. It is a test contract only and is never included in a
+release archive or signed payload.
+
+### RG-03 control-flow branch-arm gate
+
+`TestPolicyReleaseControlFlowBranchCoverage` is the executable branch gate for
+the active, non-test Go sources returned for this package by the pinned
+toolchain's `go list`. It is not a statement-region or coverprofile percentage
+renamed as branch coverage. The denominator contains these control-flow arms:
+
+- the true and false outcome of every `if`, including a synthesized false arm
+  when the source omits `else`; every condition in an `else if` chain remains a
+  separate two-outcome decision;
+- every clause and the default outcome of expression and type switches, with a
+  synthesized default arm when the source omits one;
+- every communication and explicit default clause of a `select`; and
+- body entry and normal exit for every potentially exiting `for` and every
+  `range`. The exit marker after the loop executes on condition/range
+  exhaustion or `break`, but not when a return, panic, or jump bypasses the
+  continuation. A conditionless or compile-time-constant `for` fails analysis
+  instead of adding a statically impossible body or exit arm to the denominator.
+
+The test creates an isolated temporary repository copy, parses those package
+sources with `go/ast`, and inserts a semantic no-op marker at the start of each
+arm and immediately after each loop. It then runs the complete CI contract
+package in an explicitly identified child process with `-count=1`,
+`-covermode=count`, and `-coverpkg` restricted to `policyrelease`. Each marker
+must map to exactly one compiler counter block. An arm is covered only when its
+counter is nonzero; the test fails unless `covered * 100 >= total * 80` and
+prints the exact numerator, denominator, percentage, and every uncovered source
+position. Instrumented files and the profile exist only in the temporary copy.
+Source containing `fallthrough` also fails analysis because count coverage
+cannot distinguish case selection from fallthrough entry with this marker
+contract.
+
+Short-circuit operand edges within `&&` and `||` expressions are explicitly
+outside this denominator. The approved Go compiler's count profile exposes
+source-region counters, not operand-edge counters. Recovering those edges would
+require semantic expression rewriting, which can change evaluation order,
+side effects, panic behavior, and typed expression context; this gate does not
+make that unsound claim. Analyzer self-tests prove that 100% ordinary statement
+coverage cannot hide an unexecuted implicit-false arm, that synthetic
+else/default markers do not execute on a taken explicit arm, and that switch,
+type-switch, select, and loop body/exit outcomes lower or raise the metric while
+the denominator remains stable.
+
+Run:
+
+```sh
+scripts/run_pinned_go.sh go test ./tests/contract/ci -count=1
+scripts/run_pinned_go.sh go test ./tests/contract/ci -run '^TestPolicyReleaseControlFlowBranchCoverage$' -count=1 -v
+scripts/run_pinned_go.sh go test ./tests/contract/ci -run '^TestGoldenOfflineVector$' -count=1
+scripts/run_pinned_go.sh go test ./tests/contract/ci -bench . -benchmem -count=5
+```
+
+`STEAD_PRINT_POLICY_GOLDEN=1` prints a candidate vector for review.
+`STEAD_UPDATE_POLICY_GOLDEN=1` rewrites both checked-in golden vectors through
+the deterministic fixture generator. A changed hash is a contract/release
+review event; never regenerate merely to make a test pass.
+
+The implementation uses only the Go standard library and the local module. It
+adds no runtime, signing, archive, canonicalization, TUF, OCI, or cryptographic
+dependency.

@@ -8,81 +8,102 @@ servers:
   nats:
     host: nats:4222
     protocol: nats
+    x-production-transport: verified-mutual-tls
+    x-tls-handshake-first: required-no-fallback
 channels:
   organizationEvents:
     address: stead.organization.changed.v1
+    x-logical-producer-source: urn:stead:producer:organization
     x-event-types: [stead.organization.created.v1, stead.organization.updated.v1, stead.team.created.v1, stead.team.updated.v1, stead.team.reparented.v1, stead.team.membership_changed.v1]
     messages: {OrganizationCloudEvent: {$ref: '#/components/messages/OrganizationCloudEvent'}}
   identityEvents:
     address: stead.identity.changed.v1
+    x-logical-producer-source: urn:stead:producer:identity
     x-event-types: [stead.identity.provisioned.v1, stead.identity.updated.v1, stead.identity.suspended.v1, stead.agent.registered.v1, stead.agent.revoked.v1]
     messages: {IdentityCloudEvent: {$ref: '#/components/messages/IdentityCloudEvent'}}
   authorizationEvents:
     address: stead.authorization.changed.v1
+    x-logical-producer-source: urn:stead:producer:authorization
     x-event-types: [stead.authorization.model_activated.v1, stead.authorization.tuple_changed.v1, stead.authorization.delegation_revoked.v1, stead.authorization.policy_activated.v1]
     messages: {AuthorizationCloudEvent: {$ref: '#/components/messages/AuthorizationCloudEvent'}}
   classificationEvents:
     address: stead.classification.changed.v1
+    x-logical-producer-source: urn:stead:producer:classification
     x-event-types: [stead.classification.label_raised.v1, stead.classification.label_lowered.v1, stead.classification.profile_activated.v1, stead.classification.ceiling_changed.v1, stead.classification.attribute_changed.v1]
     messages: {ClassificationCloudEvent: {$ref: '#/components/messages/ClassificationCloudEvent'}}
   projectEvents:
     address: stead.project.changed.v1
+    x-logical-producer-source: urn:stead:producer:project
     x-event-types: [stead.project.created.v1, stead.project.updated.v1, stead.project.capability_changed.v1, stead.initiative.changed.v1, stead.cycle.changed.v1]
     messages: {ProjectCloudEvent: {$ref: '#/components/messages/ProjectCloudEvent'}}
   workEvents:
     address: stead.workitem.changed.v1
+    x-logical-producer-source: urn:stead:producer:workitem
     x-event-types: [stead.workitem.created.v1, stead.workitem.updated.v1, stead.workitem.assigned.v1, stead.workitem.related.v1]
     messages: {WorkCloudEvent: {$ref: '#/components/messages/WorkCloudEvent'}}
   commentEvents:
     address: stead.comment.changed.v1
+    x-logical-producer-source: urn:stead:producer:comment
     x-event-types: [stead.comment.created.v1, stead.comment.updated.v1, stead.comment.deleted.v1]
     messages: {CommentCloudEvent: {$ref: '#/components/messages/CommentCloudEvent'}}
   knowledgeEvents:
     address: stead.document.changed.v1
+    x-logical-producer-source: urn:stead:producer:document
     x-event-types: [stead.document.created.v1, stead.document.updated.v1, stead.document.review_requested.v1, stead.document.approved.v1, stead.document.superseded.v1]
     messages: {KnowledgeCloudEvent: {$ref: '#/components/messages/KnowledgeCloudEvent'}}
   scmEvents:
     address: stead.scm.changed.v1
+    x-logical-producer-source: urn:stead:producer:scm
     x-event-types: [stead.scm.repository_changed.v1, stead.scm.branch_changed.v1, stead.scm.commit_recorded.v1, stead.scm.pull_request_changed.v1, stead.scm.reconciled.v1]
     messages: {ScmCloudEvent: {$ref: '#/components/messages/ScmCloudEvent'}}
   ciEvents:
     address: stead.ci.changed.v1
+    x-logical-producer-source: urn:stead:producer:ci
     x-event-types: [stead.ci.build_changed.v1, stead.ci.deployment_changed.v1, stead.ci.runner_changed.v1, stead.ci.action_changed.v1]
     messages: {CiCloudEvent: {$ref: '#/components/messages/CiCloudEvent'}}
   artifactEvents:
     address: stead.artifact.changed.v1
+    x-logical-producer-source: urn:stead:producer:artifact
     x-event-types: [stead.artifact.artifact_changed.v1, stead.artifact.package_changed.v1, stead.artifact.release_changed.v1]
     messages: {ArtifactCloudEvent: {$ref: '#/components/messages/ArtifactCloudEvent'}}
   attachmentEvents:
     address: stead.attachment.changed.v1
+    x-logical-producer-source: urn:stead:producer:attachment
     x-event-types: [stead.attachment.created.v1, stead.attachment.scanned.v1, stead.attachment.deleted.v1]
     messages: {AttachmentCloudEvent: {$ref: '#/components/messages/AttachmentCloudEvent'}}
   storageEvents:
     address: stead.storage.changed.v1
+    x-logical-producer-source: urn:stead:producer:storage
     x-event-types: [stead.storage.scan_changed.v1, stead.storage.retention_changed.v1, stead.storage.provider_operation_changed.v1]
     messages: {StorageCloudEvent: {$ref: '#/components/messages/StorageCloudEvent'}}
   searchGraphEvents:
     address: stead.search_graph.changed.v1
+    x-logical-producer-source: urn:stead:producer:search_graph
     x-event-types: [stead.search_graph.rebuild_started.v1, stead.search_graph.rebuild_completed.v1, stead.search_graph.rebuild_failed.v1]
     messages: {SearchGraphCloudEvent: {$ref: '#/components/messages/SearchGraphCloudEvent'}}
   notificationEvents:
     address: stead.notification.changed.v1
+    x-logical-producer-source: urn:stead:producer:notification
     x-event-types: [stead.notification.created.v1, stead.notification.read.v1, stead.notification.delivery_changed.v1, stead.notification.suppressed.v1]
     messages: {NotificationCloudEvent: {$ref: '#/components/messages/NotificationCloudEvent'}}
   auditEvents:
     address: stead.audit.changed.v1
+    x-logical-producer-source: urn:stead:producer:audit
     x-event-types: [stead.audit.checkpoint_created.v1, stead.audit.export_changed.v1]
     messages: {AuditCloudEvent: {$ref: '#/components/messages/AuditCloudEvent'}}
   migrationEvents:
     address: stead.migration.changed.v1
+    x-logical-producer-source: urn:stead:producer:migration
     x-event-types: [stead.migration.stage_changed.v1, stead.migration.reconciled.v1, stead.migration.cutover_changed.v1]
     messages: {MigrationCloudEvent: {$ref: '#/components/messages/MigrationCloudEvent'}}
   operationsEvents:
     address: stead.operations.changed.v1
+    x-logical-producer-source: urn:stead:producer:operations
     x-event-types: [stead.operations.install_changed.v1, stead.operations.upgrade_changed.v1, stead.operations.backup_changed.v1, stead.operations.restore_changed.v1, stead.operations.doctor_changed.v1]
     messages: {OperationsCloudEvent: {$ref: '#/components/messages/OperationsCloudEvent'}}
   deadLetterEvents:
     address: stead.dead_letter.recorded.v1
+    x-logical-producer-source: urn:stead:producer:dead_letter
     x-event-types: [stead.dead_letter.recorded.v1, stead.dead_letter.replayed.v1]
     messages: {DeadLetterCloudEvent: {$ref: '#/components/messages/DeadLetterCloudEvent'}}
 operations:
@@ -228,7 +249,10 @@ components:
       properties:
         specversion: {const: '1.0'}
         id: {type: string}
-        source: {type: string, format: uri-reference}
+        source:
+          type: string
+          format: uri
+          pattern: '^urn:stead:producer:(organization|identity|authorization|classification|project|workitem|comment|document|scm|ci|artifact|attachment|storage|search_graph|notification|audit|migration|operations|dead_letter)$'
         type: {type: string, pattern: '^stead\.[a-z0-9_]+\.[a-z0-9_]+\.v[1-9][0-9]*$'}
         subject: {type: string}
         time: {type: string, format: date-time}
@@ -239,79 +263,79 @@ components:
     OrganizationCloudEventEnvelope:
       allOf:
         - {$ref: '#/components/schemas/SteadCloudEventEnvelope'}
-        - {type: object, properties: {type: {enum: [stead.organization.created.v1, stead.organization.updated.v1, stead.team.created.v1, stead.team.updated.v1, stead.team.reparented.v1, stead.team.membership_changed.v1]}}}
+        - {type: object, properties: {source: {const: urn:stead:producer:organization}, type: {enum: [stead.organization.created.v1, stead.organization.updated.v1, stead.team.created.v1, stead.team.updated.v1, stead.team.reparented.v1, stead.team.membership_changed.v1]}}}
     IdentityCloudEventEnvelope:
       allOf:
         - {$ref: '#/components/schemas/SteadCloudEventEnvelope'}
-        - {type: object, properties: {type: {enum: [stead.identity.provisioned.v1, stead.identity.updated.v1, stead.identity.suspended.v1, stead.agent.registered.v1, stead.agent.revoked.v1]}}}
+        - {type: object, properties: {source: {const: urn:stead:producer:identity}, type: {enum: [stead.identity.provisioned.v1, stead.identity.updated.v1, stead.identity.suspended.v1, stead.agent.registered.v1, stead.agent.revoked.v1]}}}
     AuthorizationCloudEventEnvelope:
       allOf:
         - {$ref: '#/components/schemas/SteadCloudEventEnvelope'}
-        - {type: object, properties: {type: {enum: [stead.authorization.model_activated.v1, stead.authorization.tuple_changed.v1, stead.authorization.delegation_revoked.v1, stead.authorization.policy_activated.v1]}}}
+        - {type: object, properties: {source: {const: urn:stead:producer:authorization}, type: {enum: [stead.authorization.model_activated.v1, stead.authorization.tuple_changed.v1, stead.authorization.delegation_revoked.v1, stead.authorization.policy_activated.v1]}}}
     ClassificationCloudEventEnvelope:
       allOf:
         - {$ref: '#/components/schemas/SteadCloudEventEnvelope'}
-        - {type: object, properties: {type: {enum: [stead.classification.label_raised.v1, stead.classification.label_lowered.v1, stead.classification.profile_activated.v1, stead.classification.ceiling_changed.v1, stead.classification.attribute_changed.v1]}}}
+        - {type: object, properties: {source: {const: urn:stead:producer:classification}, type: {enum: [stead.classification.label_raised.v1, stead.classification.label_lowered.v1, stead.classification.profile_activated.v1, stead.classification.ceiling_changed.v1, stead.classification.attribute_changed.v1]}}}
     ProjectCloudEventEnvelope:
       allOf:
         - {$ref: '#/components/schemas/SteadCloudEventEnvelope'}
-        - {type: object, properties: {type: {enum: [stead.project.created.v1, stead.project.updated.v1, stead.project.capability_changed.v1, stead.initiative.changed.v1, stead.cycle.changed.v1]}}}
+        - {type: object, properties: {source: {const: urn:stead:producer:project}, type: {enum: [stead.project.created.v1, stead.project.updated.v1, stead.project.capability_changed.v1, stead.initiative.changed.v1, stead.cycle.changed.v1]}}}
     WorkCloudEventEnvelope:
       allOf:
         - {$ref: '#/components/schemas/SteadCloudEventEnvelope'}
-        - {type: object, properties: {type: {enum: [stead.workitem.created.v1, stead.workitem.updated.v1, stead.workitem.assigned.v1, stead.workitem.related.v1]}}}
+        - {type: object, properties: {source: {const: urn:stead:producer:workitem}, type: {enum: [stead.workitem.created.v1, stead.workitem.updated.v1, stead.workitem.assigned.v1, stead.workitem.related.v1]}}}
     CommentCloudEventEnvelope:
       allOf:
         - {$ref: '#/components/schemas/SteadCloudEventEnvelope'}
-        - {type: object, properties: {type: {enum: [stead.comment.created.v1, stead.comment.updated.v1, stead.comment.deleted.v1]}}}
+        - {type: object, properties: {source: {const: urn:stead:producer:comment}, type: {enum: [stead.comment.created.v1, stead.comment.updated.v1, stead.comment.deleted.v1]}}}
     KnowledgeCloudEventEnvelope:
       allOf:
         - {$ref: '#/components/schemas/SteadCloudEventEnvelope'}
-        - {type: object, properties: {type: {enum: [stead.document.created.v1, stead.document.updated.v1, stead.document.review_requested.v1, stead.document.approved.v1, stead.document.superseded.v1]}}}
+        - {type: object, properties: {source: {const: urn:stead:producer:document}, type: {enum: [stead.document.created.v1, stead.document.updated.v1, stead.document.review_requested.v1, stead.document.approved.v1, stead.document.superseded.v1]}}}
     ScmCloudEventEnvelope:
       allOf:
         - {$ref: '#/components/schemas/SteadCloudEventEnvelope'}
-        - {type: object, properties: {type: {enum: [stead.scm.repository_changed.v1, stead.scm.branch_changed.v1, stead.scm.commit_recorded.v1, stead.scm.pull_request_changed.v1, stead.scm.reconciled.v1]}}}
+        - {type: object, properties: {source: {const: urn:stead:producer:scm}, type: {enum: [stead.scm.repository_changed.v1, stead.scm.branch_changed.v1, stead.scm.commit_recorded.v1, stead.scm.pull_request_changed.v1, stead.scm.reconciled.v1]}}}
     CiCloudEventEnvelope:
       allOf:
         - {$ref: '#/components/schemas/SteadCloudEventEnvelope'}
-        - {type: object, properties: {type: {enum: [stead.ci.build_changed.v1, stead.ci.deployment_changed.v1, stead.ci.runner_changed.v1, stead.ci.action_changed.v1]}}}
+        - {type: object, properties: {source: {const: urn:stead:producer:ci}, type: {enum: [stead.ci.build_changed.v1, stead.ci.deployment_changed.v1, stead.ci.runner_changed.v1, stead.ci.action_changed.v1]}}}
     ArtifactCloudEventEnvelope:
       allOf:
         - {$ref: '#/components/schemas/SteadCloudEventEnvelope'}
-        - {type: object, properties: {type: {enum: [stead.artifact.artifact_changed.v1, stead.artifact.package_changed.v1, stead.artifact.release_changed.v1]}}}
+        - {type: object, properties: {source: {const: urn:stead:producer:artifact}, type: {enum: [stead.artifact.artifact_changed.v1, stead.artifact.package_changed.v1, stead.artifact.release_changed.v1]}}}
     AttachmentCloudEventEnvelope:
       allOf:
         - {$ref: '#/components/schemas/SteadCloudEventEnvelope'}
-        - {type: object, properties: {type: {enum: [stead.attachment.created.v1, stead.attachment.scanned.v1, stead.attachment.deleted.v1]}}}
+        - {type: object, properties: {source: {const: urn:stead:producer:attachment}, type: {enum: [stead.attachment.created.v1, stead.attachment.scanned.v1, stead.attachment.deleted.v1]}}}
     StorageCloudEventEnvelope:
       allOf:
         - {$ref: '#/components/schemas/SteadCloudEventEnvelope'}
-        - {type: object, properties: {type: {enum: [stead.storage.scan_changed.v1, stead.storage.retention_changed.v1, stead.storage.provider_operation_changed.v1]}}}
+        - {type: object, properties: {source: {const: urn:stead:producer:storage}, type: {enum: [stead.storage.scan_changed.v1, stead.storage.retention_changed.v1, stead.storage.provider_operation_changed.v1]}}}
     SearchGraphCloudEventEnvelope:
       allOf:
         - {$ref: '#/components/schemas/SteadCloudEventEnvelope'}
-        - {type: object, properties: {type: {enum: [stead.search_graph.rebuild_started.v1, stead.search_graph.rebuild_completed.v1, stead.search_graph.rebuild_failed.v1]}}}
+        - {type: object, properties: {source: {const: urn:stead:producer:search_graph}, type: {enum: [stead.search_graph.rebuild_started.v1, stead.search_graph.rebuild_completed.v1, stead.search_graph.rebuild_failed.v1]}}}
     NotificationCloudEventEnvelope:
       allOf:
         - {$ref: '#/components/schemas/SteadCloudEventEnvelope'}
-        - {type: object, properties: {type: {enum: [stead.notification.created.v1, stead.notification.read.v1, stead.notification.delivery_changed.v1, stead.notification.suppressed.v1]}}}
+        - {type: object, properties: {source: {const: urn:stead:producer:notification}, type: {enum: [stead.notification.created.v1, stead.notification.read.v1, stead.notification.delivery_changed.v1, stead.notification.suppressed.v1]}}}
     AuditCloudEventEnvelope:
       allOf:
         - {$ref: '#/components/schemas/SteadCloudEventEnvelope'}
-        - {type: object, properties: {type: {enum: [stead.audit.checkpoint_created.v1, stead.audit.export_changed.v1]}}}
+        - {type: object, properties: {source: {const: urn:stead:producer:audit}, type: {enum: [stead.audit.checkpoint_created.v1, stead.audit.export_changed.v1]}}}
     MigrationCloudEventEnvelope:
       allOf:
         - {$ref: '#/components/schemas/SteadCloudEventEnvelope'}
-        - {type: object, properties: {type: {enum: [stead.migration.stage_changed.v1, stead.migration.reconciled.v1, stead.migration.cutover_changed.v1]}}}
+        - {type: object, properties: {source: {const: urn:stead:producer:migration}, type: {enum: [stead.migration.stage_changed.v1, stead.migration.reconciled.v1, stead.migration.cutover_changed.v1]}}}
     OperationsCloudEventEnvelope:
       allOf:
         - {$ref: '#/components/schemas/SteadCloudEventEnvelope'}
-        - {type: object, properties: {type: {enum: [stead.operations.install_changed.v1, stead.operations.upgrade_changed.v1, stead.operations.backup_changed.v1, stead.operations.restore_changed.v1, stead.operations.doctor_changed.v1]}}}
+        - {type: object, properties: {source: {const: urn:stead:producer:operations}, type: {enum: [stead.operations.install_changed.v1, stead.operations.upgrade_changed.v1, stead.operations.backup_changed.v1, stead.operations.restore_changed.v1, stead.operations.doctor_changed.v1]}}}
     DeadLetterCloudEventEnvelope:
       allOf:
         - {$ref: '#/components/schemas/SteadCloudEventEnvelope'}
-        - {type: object, properties: {type: {enum: [stead.dead_letter.recorded.v1, stead.dead_letter.replayed.v1]}}}
+        - {type: object, properties: {source: {const: urn:stead:producer:dead_letter}, type: {enum: [stead.dead_letter.recorded.v1, stead.dead_letter.replayed.v1]}}}
 x-delivery-contract:
   delivery: at-least-once
   producer: transactional-outbox
@@ -320,3 +344,34 @@ x-delivery-contract:
   replay: authorized-and-audited
   dlq: required
   protected-body-payloads: prohibited
+  logical-producer-source: closed-asyncapi-channel-registry
+  account-topology: one-application-account-per-deployment-security-domain
+  organization-broker-provisioning: forbidden
+  stream-topology: two-fixed-streams-per-deployment-security-domain
+  credential-topology: service-role-only-no-browser-or-end-user
+  publish-ack-authority: transport-publication-only
+  canonical-event: exact-stored-bytes-stable-identity-semantic-key-and-digest
+  required-consumers: ws-07-closed-versioned-registry-frozen-in-authoritative-outbox
+  core-outbox-owner: ws-02-provider-neutral-typed-port
+  consumer-completion-owner: each-consumer-module
+  publication-generation: provider-neutral-monotonic-fenced-cas
+  nats-message-id: versioned-stable-per-canonical-event-digest-and-generation
+  ambiguous-publish-retry: same-generation-same-message-id-across-retry-restart-and-restore
+  recovery-publication: next-generation-new-message-id-same-canonical-event
+  duplicate-false: sufficient-transport-publication-evidence
+  duplicate-true: insufficient-until-regular-leader-stream-get-exact-match
+  duplicate-readback-match: sequence-subject-message-id-canonical-identity-semantic-key-and-digest
+  missing-readback: fenced-generation-advance-and-unchanged-canonical-republish
+  mismatched-readback: quarantine-and-no-retirement
+  direct-read: forbidden-allow-direct-false
+  duplicate-window: positive-and-strictly-less-than-maxage-minus-positive-safety-margin
+  recovery-source: postgresql-outbox-until-all-required-consumers-durable
+  broker-expiry: bounded-republish-same-canonical-identity
+  source-retirement: all-required-success-or-minimized-terminal-dlq-audit
+  broker-max-deliver: unlimited-until-durable-terminal-outcome
+  terminal-attempt-authority: consumer-owner-postgresql
+  production-transport: verified-mutual-tls-no-fallback
+  jetstream-at-rest-encryption: required-secretprovider-reference
+  broker-manifest: closed-version-pinned-complete-readback
+  manifest-owner: ws-12-renders-pins-validates-ws-07-registry
+  failure-evidence: closed-minimized-postgresql-and-backup

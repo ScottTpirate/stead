@@ -1,0 +1,7 @@
+package compilecontract
+
+import transaction "github.com/ScottTpirate/stead/apps/core/internal/transaction"
+
+func invalid(contract transaction.PlanContract[[]byte], registry transaction.Registry) {
+	contract.BindWithSnapshot(registry, []byte("request"), func(value []byte) []byte { return value })
+}
