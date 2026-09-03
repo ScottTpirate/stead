@@ -31,6 +31,7 @@ ADR_0008_REQUIREMENT_TEST_MAPPING = {
     T-ADR-0008-SUBJECT-PARTITION
     T-ADR-0008-RETENTION
     T-ADR-0008-IDEMPOTENCY
+    T-ADR-0008-OUTBOX-RECOVERY-PORT
   ],
   "EVT-003" => %w[
     T-ADR-0008-SUBJECT-PARTITION
@@ -100,6 +101,21 @@ ADR_0008_REQUIREMENT_TEST_MAPPING = {
     ],
     "PERF-004" => %w[
       T-ADR-0008-ASYNC-PERFORMANCE
+    ],
+    "DEP-001" => %w[
+      T-ADR-0008-SUBJECT-PARTITION
+    ],
+    "DEP-005" => %w[
+      T-ADR-0008-RETENTION
+    ],
+    "OPS-003" => %w[
+      T-ADR-0008-PROJECTION-REBUILD
+    ],
+    "OPS-004" => %w[
+      T-ADR-0008-PROJECTION-REBUILD
+    ],
+    "SEC-003" => %w[
+      T-ADR-0008-SUBSCRIBER-ISOLATION
     ]
 }.freeze
 
@@ -135,7 +151,21 @@ ADR_0008_DELIVERY_CONTRACT = {
   "stream-topology" => "two-fixed-streams-per-deployment-security-domain",
   "credential-topology" => "service-role-only-no-browser-or-end-user",
   "publish-ack-authority" => "transport-publication-only",
-  "required-consumers" => "closed-versioned-registry-frozen-in-authoritative-outbox",
+  "canonical-event" => "exact-stored-bytes-stable-identity-semantic-key-and-digest",
+  "required-consumers" => "ws-07-closed-versioned-registry-frozen-in-authoritative-outbox",
+  "core-outbox-owner" => "ws-02-provider-neutral-typed-port",
+  "consumer-completion-owner" => "each-consumer-module",
+  "publication-generation" => "provider-neutral-monotonic-fenced-cas",
+  "nats-message-id" => "versioned-stable-per-canonical-event-digest-and-generation",
+  "ambiguous-publish-retry" => "same-generation-same-message-id-across-retry-restart-and-restore",
+  "recovery-publication" => "next-generation-new-message-id-same-canonical-event",
+  "duplicate-false" => "sufficient-transport-publication-evidence",
+  "duplicate-true" => "insufficient-until-regular-leader-stream-get-exact-match",
+  "duplicate-readback-match" => "sequence-subject-message-id-canonical-identity-semantic-key-and-digest",
+  "missing-readback" => "fenced-generation-advance-and-unchanged-canonical-republish",
+  "mismatched-readback" => "quarantine-and-no-retirement",
+  "direct-read" => "forbidden-allow-direct-false",
+  "duplicate-window" => "positive-and-strictly-less-than-maxage-minus-positive-safety-margin",
   "recovery-source" => "postgresql-outbox-until-all-required-consumers-durable",
   "broker-expiry" => "bounded-republish-same-canonical-identity",
   "source-retirement" => "all-required-success-or-minimized-terminal-dlq-audit",
@@ -143,6 +173,7 @@ ADR_0008_DELIVERY_CONTRACT = {
   "terminal-attempt-authority" => "consumer-owner-postgresql",
   "production-transport" => "verified-mutual-tls-no-fallback",
   "broker-manifest" => "closed-version-pinned-complete-readback",
+  "manifest-owner" => "ws-12-renders-pins-validates-ws-07-registry",
   "failure-evidence" => "closed-minimized-postgresql-and-backup"
 }.freeze
 
@@ -165,19 +196,26 @@ ADR_0008_REQUIRED_DECISION_CLAUSES = {
   ],
   delivery: [
     "API responses never wait for publication, a consumer, replay, or NATS availability",
-    "active registry revision is frozen into each outbox record in the authoritative transaction",
-    "A matching JetStream publish acknowledgement records transport publication only",
+    "active registry revision and closed required-consumer set are frozen into each outbox record in the authoritative transaction",
+    "A successful JetStream acknowledgement with `duplicate:false` is sufficient transport-publication evidence for its generation",
+    "An acknowledgement with `duplicate:true` is not sufficient by itself",
+    "ordinary leader-served stream-message get path",
+    "allow_direct: false",
     "every required consumer in the event's frozen registry has durably recorded success or a minimized terminal outcome with its dead-letter and logical audit intents"
   ],
   retention_recovery: [
-    "Broker age or retention expiry is a transport event, not a delivery terminal",
-    "republishes the retained canonical event under the same CloudEvent source, id, semantic idempotency key, and payload digest",
+    "provider-neutral monotonically increasing `publication_generation`",
+    "stable across an ambiguous acknowledgement, safe retry, process restart, or restore of that generation",
+    "A definitive missing result advances `publication_generation`",
+    "A mismatch quarantines the attempt and leaves the PostgreSQL source unretired",
+    "Broker age, administrative removal, stream replacement, or retention expiry is a transport event, not a delivery terminal",
+    "republishes the retained canonical event under the same CloudEvent source, id, semantic idempotency key, canonical bytes, and payload digest",
     "Only durable success or that complete terminal transaction satisfies the frozen consumer registry and permits recovery-source retirement"
   ],
   replay_recovery: [
     "Replay is requested through a centrally authorized Stead operation",
     "JetStream is reconstructible transport, not backup authority",
-    "expiry or loss of all streams must still permit incomplete events to be republished, terminal outcomes and their DLQ/audit intents to complete, and projections to rebuild"
+    "expiry or loss of all streams must still permit incomplete events to advance generation when required, republish unchanged canonical events, complete terminal outcomes and their DLQ/audit intents, and rebuild projections"
   ],
   credentials: [
     "Production NATS client and cluster links use authenticated encrypted transport with peer verification and no plaintext fallback",
@@ -207,7 +245,7 @@ ADR_0008_NORMALIZED_REVIEWS_SECTION =
 ADR_0008_DECISION_HEADING = "Decision".freeze
 ADR_0008_DECISION_NEXT_HEADING = "Considered options".freeze
 ADR_0008_SUBSTANTIVE_SOURCE_SHA256 =
-  "a5b6741039308adcbd79bfab3664185696591cf175e29a6503e8cf12f0de18a4".freeze
+  "f40b18cff7cddfffadcd359335e72f95a255233de01c57b2c7fc66982f1ead34".freeze
 
 EXPECTED_P1_006_ADR_CANDIDATES = %w[
   ADR-CAND-002
@@ -683,8 +721,12 @@ def adr_0008_security_contract_failures(adr_source:, asyncapi:, bypass_source:)
       topology: "One Stead application account per deployment security domain",
       lifecycle: "Organization creation creates no broker resource",
       credentials: "service-role credentials with no browser or end-user NATS credentials",
+      fenced_recovery: "fenced claim and monotonic generation CAS",
+      duplicate_readback: "`duplicate:true` accepted only after regular leader-served sequence/subject/message-ID/canonical-identity/semantic-key/digest verification",
+      missing_copy: "definitive missing read-back advances generation and republishes unchanged canonical bytes",
+      mismatch: "mismatch quarantines",
       retention_recovery: "PostgreSQL canonical recovery source that cannot retire before every consumer durably succeeds or records minimized terminal/DLQ/audit state",
-      failure_evidence: "protected canaries are absent from event, PostgreSQL, DLQ, telemetry and backup/restore evidence"
+      failure_evidence: "protected canaries remain absent from evidence"
     }.each do |group, fragment|
       failures << "CBI-030 omits ADR-0008 #{group} bypass coverage" unless bypass_row.include?(fragment)
     end
@@ -1106,8 +1148,8 @@ if adr_0008_source
       "ADR-0008 delivery decision clause"
     ],
     retention_recovery: [
-      "Broker age or retention expiry is a transport event, not a delivery terminal",
-      "Broker age or retention expiry completes delivery",
+      "Broker age, administrative removal, stream replacement, or retention expiry is a transport event, not a delivery terminal",
+      "Broker age, administrative removal, stream replacement, or retention expiry completes delivery",
       "ADR-0008 retention_recovery decision clause"
     ],
     replay_recovery: [
@@ -1203,6 +1245,30 @@ adr_0008_security_mutations << {
   bypass: classification_bypass_source,
   expected_failure_fragment: "x-delivery-contract required-consumers"
 }
+
+{
+  "canonical-event" => "reserialized-on-retry",
+  "publication-generation" => "unfenced-worker-counter",
+  "nats-message-id" => "random-per-publish-call",
+  "ambiguous-publish-retry" => "new-message-id-on-every-retry",
+  "recovery-publication" => "new-canonical-event-on-generation-advance",
+  "duplicate-true" => "sufficient-from-puback-alone",
+  "missing-readback" => "retry-same-message-id-forever",
+  "mismatched-readback" => "accept-and-retire",
+  "direct-read" => "allow-direct-enabled",
+  "duplicate-window" => "equal-to-maxage"
+}.each do |field, unsafe_value|
+  mutated_delivery_asyncapi = deep_copy_asyncapi.call
+  mutated_delivery_asyncapi.fetch("x-delivery-contract")[field] = unsafe_value
+  adr_0008_security_mutations << {
+    group: :retention_recovery,
+    name: "unsafe #{field} contract",
+    adr: adr_0008_source,
+    asyncapi: mutated_delivery_asyncapi,
+    bypass: classification_bypass_source,
+    expected_failure_fragment: "x-delivery-contract #{field}"
+  }
+end
 
 mutated_bypass = classification_bypass_source.sub(
   "Organization creation creates no broker resource",
@@ -1307,8 +1373,8 @@ adr_0008_traceability_failures = adr_requirement_traceability_failures(
 failures.concat(adr_0008_traceability_failures)
 
 adr_0008_expected_edges = expected_adr_requirement_test_edges(ADR_0008_REQUIREMENT_TEST_MAPPING).freeze
-unless adr_0008_expected_edges.length == 54
-  failures << "ADR-0008 closed requirement mapping must contain exactly 54 edges, found #{adr_0008_expected_edges.length}"
+unless adr_0008_expected_edges.length == 60
+  failures << "ADR-0008 closed requirement mapping must contain exactly 60 edges, found #{adr_0008_expected_edges.length}"
 end
 failures.concat(
   exact_adr_requirement_mapping_failures(
@@ -1830,6 +1896,7 @@ end
 
 adr_0008_gate = adr_gates["ADR-CAND-006"]
 adr_0008_expected_dependents = %w[
+  STEAD-P1-015
   STEAD-P1-007
   STEAD-P1-008
   STEAD-P1-011
@@ -1840,6 +1907,22 @@ adr_0008_actual_dependents = Array(adr_0008_gate&.fetch("dependent_issues", nil)
 unless adr_0008_actual_dependents == adr_0008_expected_dependents
   failures << "implementation issue catalog: ADR-CAND-006 exact dependent issues must be #{adr_0008_expected_dependents.to_a.sort.join(', ')}, found #{adr_0008_actual_dependents.to_a.sort.join(', ')}"
 end
+unless adr_0008_gate&.fetch("decide_before_issue", nil) == "STEAD-P1-015"
+  failures << "implementation issue catalog: ADR-CAND-006 must precede the STEAD-P1-015 recovery-port sub-slice"
+end
+
+outbox_issue = issues["STEAD-P1-015"]
+outbox_acceptance = Array(outbox_issue&.fetch("acceptance_criteria", nil)).join(" ")
+unless outbox_acceptance.include?("exact canonical event bytes/digest") &&
+       outbox_acceptance.include?("monotonic publication-generation expected-value CAS") &&
+       outbox_acceptance.include?("opaque publication receipt") &&
+       outbox_acceptance.include?("provider-neutral")
+  failures << "STEAD-P1-015 acceptance must own the provider-neutral ADR-0008 outbox recovery port"
+end
+outbox_boundaries = Array(outbox_issue&.fetch("prohibited_boundaries", nil)).join(" ")
+unless %w[NATS PubAck broker-client].all? { |fragment| outbox_boundaries.include?(fragment) }
+  failures << "STEAD-P1-015 boundaries must exclude NATS/PubAck/broker semantics from the core port"
+end
 
 event_issue = issues["STEAD-P1-007"]
 unless Array(event_issue&.fetch("dependencies", nil)).include?("STEAD-P1-015")
@@ -1849,9 +1932,11 @@ if Array(event_issue&.fetch("dependencies", nil)).include?("STEAD-P1-011")
   failures << "STEAD-P1-007 must consume the early WS-12 config/preflight child, not depend on downstream STEAD-P1-011 completion"
 end
 event_acceptance = Array(event_issue&.fetch("acceptance_criteria", nil)).join(" ")
-unless event_acceptance.include?("deployment-domain account, two-stream, service-credential, and local-startup contract") &&
+unless event_acceptance.include?("deployment-domain account, two-stream, service-credential, registry-pinning/rendering, and local-startup contract") &&
        event_acceptance.include?("Organization lifecycle creates no broker resource") &&
-       event_acceptance.include?("not completion of STEAD-P1-011")
+       event_acceptance.include?("not completion of STEAD-P1-011") &&
+       event_acceptance.include?("leader-served stream get") &&
+       event_acceptance.include?("fenced WS-02 generation CAS")
   failures << "STEAD-P1-007 acceptance must consume the early domain-account/local-stack contract without Organization broker provisioning"
 end
 
@@ -1868,6 +1953,7 @@ unless operations_acceptance.include?("early dependency-ready WS-12 child under 
 end
 
 adr_0008_owned_path_requirements = {
+  "STEAD-P1-015" => %w[apps/core/internal/outbox tests/integration/core packages/test-fixtures/core docs/architecture/core],
   "STEAD-P1-007" => %w[apps/worker packages/event-schemas specs/asyncapi tests/contract/events packages/test-fixtures/events],
   "STEAD-P1-011" => %w[apps/steadctl deploy/compose packages/domain-schemas/config docs/operator tests/contract/operations tests/performance/datasets tests/backup-restore packages/test-fixtures/operations]
 }.freeze
@@ -2105,7 +2191,10 @@ implementation_assignments = {
     ]
   },
   "0008" => {
-    "STEAD-P1-007" => tests_by_number.fetch("0008", []),
+    "STEAD-P1-015" => %w[
+      T-ADR-0008-OUTBOX-RECOVERY-PORT
+    ],
+    "STEAD-P1-007" => tests_by_number.fetch("0008", []).reject { |test_id| test_id == "T-ADR-0008-OUTBOX-RECOVERY-PORT" },
     "STEAD-P1-008" => %w[
       T-ADR-0008-RESOURCE-ORDERING
       T-ADR-0008-IDEMPOTENCY
@@ -2115,6 +2204,7 @@ implementation_assignments = {
     ],
     "STEAD-P1-011" => %w[
       T-ADR-0008-SUBJECT-PARTITION
+      T-ADR-0008-SUBSCRIBER-ISOLATION
       T-ADR-0008-RETENTION
       T-ADR-0008-IDEMPOTENCY
       T-ADR-0008-PAYLOAD-MINIMIZATION

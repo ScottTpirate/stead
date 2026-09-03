@@ -350,7 +350,21 @@ x-delivery-contract:
   stream-topology: two-fixed-streams-per-deployment-security-domain
   credential-topology: service-role-only-no-browser-or-end-user
   publish-ack-authority: transport-publication-only
-  required-consumers: closed-versioned-registry-frozen-in-authoritative-outbox
+  canonical-event: exact-stored-bytes-stable-identity-semantic-key-and-digest
+  required-consumers: ws-07-closed-versioned-registry-frozen-in-authoritative-outbox
+  core-outbox-owner: ws-02-provider-neutral-typed-port
+  consumer-completion-owner: each-consumer-module
+  publication-generation: provider-neutral-monotonic-fenced-cas
+  nats-message-id: versioned-stable-per-canonical-event-digest-and-generation
+  ambiguous-publish-retry: same-generation-same-message-id-across-retry-restart-and-restore
+  recovery-publication: next-generation-new-message-id-same-canonical-event
+  duplicate-false: sufficient-transport-publication-evidence
+  duplicate-true: insufficient-until-regular-leader-stream-get-exact-match
+  duplicate-readback-match: sequence-subject-message-id-canonical-identity-semantic-key-and-digest
+  missing-readback: fenced-generation-advance-and-unchanged-canonical-republish
+  mismatched-readback: quarantine-and-no-retirement
+  direct-read: forbidden-allow-direct-false
+  duplicate-window: positive-and-strictly-less-than-maxage-minus-positive-safety-margin
   recovery-source: postgresql-outbox-until-all-required-consumers-durable
   broker-expiry: bounded-republish-same-canonical-identity
   source-retirement: all-required-success-or-minimized-terminal-dlq-audit
@@ -359,4 +373,5 @@ x-delivery-contract:
   production-transport: verified-mutual-tls-no-fallback
   jetstream-at-rest-encryption: required-secretprovider-reference
   broker-manifest: closed-version-pinned-complete-readback
+  manifest-owner: ws-12-renders-pins-validates-ws-07-registry
   failure-evidence: closed-minimized-postgresql-and-backup

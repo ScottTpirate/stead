@@ -567,7 +567,7 @@ requirements:
     title: "Transactional outbox"
     implementation_modules: ["apps/core", "apps/worker", "packages/event-schemas"]
     issue_ids: ["STEAD-P0-003", "STEAD-P1-002", "STEAD-P1-007", "STEAD-P1-015"]
-    test_ids: ["T-EVT-002-ACCEPTANCE", "T-STEAD-P1-015-CONTRACT", "T-ADR-0007-OUTBOX-ATOMICITY", "T-ADR-0007-FAILURE-INJECTION", "T-ADR-0008-SUBJECT-PARTITION", "T-ADR-0008-RETENTION", "T-ADR-0008-IDEMPOTENCY"]
+    test_ids: ["T-EVT-002-ACCEPTANCE", "T-STEAD-P1-015-CONTRACT", "T-ADR-0007-OUTBOX-ATOMICITY", "T-ADR-0007-FAILURE-INJECTION", "T-ADR-0008-SUBJECT-PARTITION", "T-ADR-0008-RETENTION", "T-ADR-0008-IDEMPOTENCY", "T-ADR-0008-OUTBOX-RECOVERY-PORT"]
     documentation: ["docs/architecture/event-contract.md", "specs/asyncapi/stead.yaml"]
     status: DEPENDENCY_BLOCKED_PHASE_1
     release: "phase-1"
@@ -783,7 +783,7 @@ requirements:
     title: "Supported installation profiles"
     implementation_modules: ["apps/steadctl", "deploy/compose", "deploy/helm", "deploy/airgap"]
     issue_ids: ["STEAD-P0-013", "STEAD-P1-011", "STEAD-P2-010", "STEAD-P3-007"]
-    test_ids: ["T-DEP-001-ACCEPTANCE"]
+    test_ids: ["T-DEP-001-ACCEPTANCE", "T-ADR-0008-SUBJECT-PARTITION"]
     documentation: ["docs/architecture/deployment-profiles.md", "docs/operator/install-upgrade-rollback.md"]
     status: PHASE_GATED
     release: "phase-3"
@@ -815,7 +815,7 @@ requirements:
     title: "Upgrade behavior"
     implementation_modules: ["apps/steadctl", "deploy/compose", "deploy/helm", "deploy/airgap"]
     issue_ids: ["STEAD-P0-013", "STEAD-P1-011", "STEAD-P1-017", "STEAD-P2-010", "STEAD-P3-007"]
-    test_ids: ["T-DEP-005-ACCEPTANCE", "T-STEAD-P1-011-CONTRACT", "T-STEAD-P1-017-CONTRACT", "T-ADR-0007-MIGRATION-ORDERING", "T-ADR-0007-UPGRADE-ROLLBACK", "T-ADR-0007-BACKUP-RESTORE", "T-ADR-0007-FAILURE-INJECTION"]
+    test_ids: ["T-DEP-005-ACCEPTANCE", "T-STEAD-P1-011-CONTRACT", "T-STEAD-P1-017-CONTRACT", "T-ADR-0007-MIGRATION-ORDERING", "T-ADR-0007-UPGRADE-ROLLBACK", "T-ADR-0007-BACKUP-RESTORE", "T-ADR-0007-FAILURE-INJECTION", "T-ADR-0008-RETENTION"]
     documentation: ["docs/architecture/deployment-profiles.md", "docs/operator/install-upgrade-rollback.md"]
     status: PHASE_GATED
     release: "phase-2"
@@ -839,7 +839,7 @@ requirements:
     title: "Backup"
     implementation_modules: ["apps/steadctl", "apps/core", "apps/worker", "deploy"]
     issue_ids: ["STEAD-P0-013", "STEAD-P1-011", "STEAD-P1-017", "STEAD-P2-010"]
-    test_ids: ["T-OPS-003-ACCEPTANCE", "T-STEAD-P1-011-CONTRACT", "T-STEAD-P1-017-CONTRACT", "T-ADR-0007-BACKUP-RESTORE"]
+    test_ids: ["T-OPS-003-ACCEPTANCE", "T-STEAD-P1-011-CONTRACT", "T-STEAD-P1-017-CONTRACT", "T-ADR-0007-BACKUP-RESTORE", "T-ADR-0008-PROJECTION-REBUILD"]
     documentation: ["docs/architecture/observability-contract.md", "docs/operator/backup-restore.md", "docs/operator/reliability.md"]
     status: PHASE_GATED
     release: "phase-2"
@@ -847,7 +847,7 @@ requirements:
     title: "Restore testing"
     implementation_modules: ["apps/steadctl", "apps/core", "apps/worker", "deploy"]
     issue_ids: ["STEAD-P0-013", "STEAD-P1-011", "STEAD-P1-017", "STEAD-P2-010"]
-    test_ids: ["T-OPS-004-ACCEPTANCE", "T-STEAD-P1-011-CONTRACT", "T-STEAD-P1-017-CONTRACT", "T-ADR-0007-BACKUP-RESTORE", "T-ADR-0007-FAILURE-INJECTION"]
+    test_ids: ["T-OPS-004-ACCEPTANCE", "T-STEAD-P1-011-CONTRACT", "T-STEAD-P1-017-CONTRACT", "T-ADR-0007-BACKUP-RESTORE", "T-ADR-0007-FAILURE-INJECTION", "T-ADR-0008-PROJECTION-REBUILD"]
     documentation: ["docs/architecture/observability-contract.md", "docs/operator/backup-restore.md", "docs/operator/reliability.md"]
     status: PHASE_GATED
     release: "phase-2"
@@ -927,7 +927,7 @@ requirements:
     title: "Cryptography"
     implementation_modules: ["cross-cutting", "policies", "deploy", "tests/security"]
     issue_ids: ["STEAD-P0-014", "STEAD-P1-016", "STEAD-P2-010", "STEAD-P3-002"]
-    test_ids: ["T-SEC-003-ACCEPTANCE", "T-STEAD-P1-016-CONTRACT"]
+    test_ids: ["T-SEC-003-ACCEPTANCE", "T-STEAD-P1-016-CONTRACT", "T-ADR-0008-SUBSCRIBER-ISOLATION"]
     documentation: ["docs/security/threat-model.md", "docs/governance/license-and-dependency-approval.md", "specs/oscal"]
     status: PHASE_GATED
     release: "phase-3"
