@@ -1,0 +1,7 @@
+package compilecontract
+
+import transaction "github.com/ScottTpirate/stead/apps/core/internal/transaction"
+
+func rejected(session transaction.Session) {
+	_, _, _ = transaction.NewBeginResult(session, struct{}{})
+}

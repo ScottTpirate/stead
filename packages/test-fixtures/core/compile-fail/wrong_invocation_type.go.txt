@@ -1,0 +1,11 @@
+package compilecontract
+
+import transaction "github.com/ScottTpirate/stead/apps/core/internal/transaction"
+
+type expectedInvocation struct {
+	Value string
+}
+
+func rejected(contract transaction.PlanContract[expectedInvocation], registry transaction.Registry) {
+	contract.Bind(registry, "wrong invocation type", nil)
+}
