@@ -181,6 +181,29 @@ test("generated operation registry is reproducible from the current OpenAPI cont
   assert.equal(Object.keys(operationDefinitions).length, 11);
 });
 
+test("generated operation definitions are deeply immutable at runtime", () => {
+  const assertDeepFrozen = (value) => {
+    if (value === null || typeof value !== "object") return;
+    assert.equal(Object.isFrozen(value), true);
+    for (const child of Object.values(value)) assertDeepFrozen(child);
+  };
+  assertDeepFrozen(operationDefinitions);
+
+  const originalPath = operationDefinitions.getProject.path;
+  const originalStatus = operationDefinitions.getProject.response.successStatuses[0];
+  assert.throws(() => {
+    operationDefinitions.getProject.path = "/provider/repos/{project_id}";
+  }, TypeError);
+  assert.throws(() => {
+    operationDefinitions.getProject.response.successStatuses[0] = 299;
+  }, TypeError);
+  assert.equal(operationDefinitions.getProject.path, originalPath);
+  assert.equal(
+    operationDefinitions.getProject.response.successStatuses[0],
+    originalStatus,
+  );
+});
+
 test("browser transport calls one generated same-origin Platform operation", async () => {
   const expectedBody = validResponseBody("getProject");
   const mocks = createContractMockFetch({

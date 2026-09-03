@@ -1,9 +1,9 @@
 {
-  "schema_version": "1.2",
+  "schema_version": "1.3",
   "issue": "P1-005-FE-FOUNDATION",
   "contract": "PERF-005",
   "generated_by": "apps/web/scripts/measure-bundle.mjs",
-  "measurement_method": "Exact inventory and SHA-256 binding for every browser artifact plus uncompressed file bytes and Node zlib level 9 over closed Vite manifest JavaScript graphs with stable shared-chunk attribution",
+  "measurement_method": "Exact inventory, SHA-256 binding, bounded reads, and executable capability classification for every transformed browser artifact plus uncompressed file bytes and Node zlib level 9 over closed Vite manifest JavaScript graphs with stable shared-chunk attribution",
   "scope": "Wave 0 original non-import foundation",
   "mature_interface_perf005_complete": false,
   "lazy_boundaries_are_placeholders": true,
@@ -17,10 +17,17 @@
     "src/capabilities/docs-editor.ts",
     "src/capabilities/migration.ts"
   ],
+  "distribution_limits": {
+    "maxAggregateBytes": 33554432,
+    "maxDepth": 16,
+    "maxEntries": 1024,
+    "maxFileBytes": 8388608
+  },
+  "maximum_distribution_network_call_sites": 1,
   "distribution_artifacts": [
     {
       "file": ".vite/manifest.json",
-      "sha256": "4a2e353f2476263e4551f643ff1b666b1b5d7a1af1939535d55cec5fe4f1feb5",
+      "sha256": "e4d2a3e195c3577fdc7b45519dba12cdd5352bddcfad5ca5b7b1dc5cdcaff806",
       "uncompressed_bytes": 1546
     },
     {
@@ -49,9 +56,9 @@
       "uncompressed_bytes": 59
     },
     {
-      "file": "assets/index-CaS7455-.js",
-      "sha256": "860de0904da9ef16aba7b81a4e835202dffac270752ea7c7a6eb5ec974480a7b",
-      "uncompressed_bytes": 331792
+      "file": "assets/index-CpGtB8sm.js",
+      "sha256": "422b771b1da44673240ef054703ac61b7ee69b9f47e1d587ae9711a62dfdc32a",
+      "uncompressed_bytes": 331935
     },
     {
       "file": "assets/index-flqa-JJY.css",
@@ -65,21 +72,118 @@
     },
     {
       "file": "index.html",
-      "sha256": "7f68f017cd1a57a6aefcb756f3fbea13f4dea3ababa3f82f17749a3d6efa4abe",
+      "sha256": "376666d2962cedae02546907951eb90162f763f408ebf500b236e56a95f7b9e3",
       "uncompressed_bytes": 444
     }
   ],
+  "browser_javascript_capabilities": [
+    {
+      "file": "assets/administration-DUBAxT-J.js",
+      "dynamicResourceTargets": 0,
+      "dynamicNetworkCalls": 0,
+      "externalDestinations": [],
+      "networkCalls": 0,
+      "resourceMethodCalls": 0,
+      "staticResourceTargets": [],
+      "staticNetworkTargets": [],
+      "unsafeExternalDestinations": [],
+      "unsafeStaticResourceTargets": [],
+      "unsafeStaticNetworkTargets": []
+    },
+    {
+      "file": "assets/analytics-sfWqm0Iz.js",
+      "dynamicResourceTargets": 0,
+      "dynamicNetworkCalls": 0,
+      "externalDestinations": [],
+      "networkCalls": 0,
+      "resourceMethodCalls": 0,
+      "staticResourceTargets": [],
+      "staticNetworkTargets": [],
+      "unsafeExternalDestinations": [],
+      "unsafeStaticResourceTargets": [],
+      "unsafeStaticNetworkTargets": []
+    },
+    {
+      "file": "assets/code-B89Khe_K.js",
+      "dynamicResourceTargets": 0,
+      "dynamicNetworkCalls": 0,
+      "externalDestinations": [],
+      "networkCalls": 0,
+      "resourceMethodCalls": 0,
+      "staticResourceTargets": [],
+      "staticNetworkTargets": [],
+      "unsafeExternalDestinations": [],
+      "unsafeStaticResourceTargets": [],
+      "unsafeStaticNetworkTargets": []
+    },
+    {
+      "file": "assets/delivery-CyvOSHoh.js",
+      "dynamicResourceTargets": 0,
+      "dynamicNetworkCalls": 0,
+      "externalDestinations": [],
+      "networkCalls": 0,
+      "resourceMethodCalls": 0,
+      "staticResourceTargets": [],
+      "staticNetworkTargets": [],
+      "unsafeExternalDestinations": [],
+      "unsafeStaticResourceTargets": [],
+      "unsafeStaticNetworkTargets": []
+    },
+    {
+      "file": "assets/docs-editor-MzfoGaDr.js",
+      "dynamicResourceTargets": 0,
+      "dynamicNetworkCalls": 0,
+      "externalDestinations": [],
+      "networkCalls": 0,
+      "resourceMethodCalls": 0,
+      "staticResourceTargets": [],
+      "staticNetworkTargets": [],
+      "unsafeExternalDestinations": [],
+      "unsafeStaticResourceTargets": [],
+      "unsafeStaticNetworkTargets": []
+    },
+    {
+      "file": "assets/index-CpGtB8sm.js",
+      "dynamicResourceTargets": 19,
+      "dynamicNetworkCalls": 1,
+      "externalDestinations": [],
+      "networkCalls": 1,
+      "resourceMethodCalls": 66,
+      "staticResourceTargets": [
+        " at new ",
+        "<anonymous>",
+        "<script></script>"
+      ],
+      "staticNetworkTargets": [],
+      "unsafeExternalDestinations": [],
+      "unsafeStaticResourceTargets": [],
+      "unsafeStaticNetworkTargets": []
+    },
+    {
+      "file": "assets/migration-BtQwf3v_.js",
+      "dynamicResourceTargets": 0,
+      "dynamicNetworkCalls": 0,
+      "externalDestinations": [],
+      "networkCalls": 0,
+      "resourceMethodCalls": 0,
+      "staticResourceTargets": [],
+      "staticNetworkTargets": [],
+      "unsafeExternalDestinations": [],
+      "unsafeStaticResourceTargets": [],
+      "unsafeStaticNetworkTargets": []
+    }
+  ],
   "eager_javascript": {
-    "uncompressed_bytes": 331792,
-    "gzip_bytes": 72797,
-    "delta_bytes_gzip": 11989,
+    "uncompressed_bytes": 331935,
+    "gzip_bytes": 72847,
+    "delta_bytes_gzip": 12039,
     "files": [
       {
         "source": "index.html",
-        "file": "assets/index-CaS7455-.js",
-        "sha256": "860de0904da9ef16aba7b81a4e835202dffac270752ea7c7a6eb5ec974480a7b",
-        "uncompressed_bytes": 331792,
-        "gzip_bytes": 72797
+        "file": "assets/index-CpGtB8sm.js",
+        "sha256": "422b771b1da44673240ef054703ac61b7ee69b9f47e1d587ae9711a62dfdc32a",
+        "uncompressed_bytes": 331935,
+        "gzip_bytes": 72847
       }
     ]
   },

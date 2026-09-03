@@ -365,9 +365,19 @@ export const PLATFORM_API_BASE_PATH = "/api/v1" as const;
 export const PLATFORM_OPENAPI_VERSION = ${JSON.stringify(contract.info.version)} as const;
 export const PLATFORM_OPENAPI_SOURCE_SHA256 = ${JSON.stringify(sourceSha256)} as const;
 
-export const operationDefinitions = {
+function deepFreezeGeneratedContract<T>(value: T): T {
+  if (value !== null && typeof value === "object" && !Object.isFrozen(value)) {
+    for (const child of Object.values(value as Record<string, unknown>)) {
+      deepFreezeGeneratedContract(child);
+    }
+    Object.freeze(value as object);
+  }
+  return value;
+}
+
+export const operationDefinitions = deepFreezeGeneratedContract({
 ${renderedOperations}
-} as const;
+} as const);
 
 export type PlatformOperationId = keyof typeof operationDefinitions;
 export type PlatformOperationDefinition =

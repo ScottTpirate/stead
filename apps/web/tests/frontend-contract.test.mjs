@@ -179,7 +179,7 @@ test("lazy bundle graphs include transitive and shared chunks exactly once", () 
   );
 });
 
-test("the complete browser module graph closes network, provider, ontology, and dependency boundaries", async () => {
+test("the application browser graph closes owned boundaries and enumerates external packages", async () => {
   const repositoryRoot = resolve(new URL("../../..", import.meta.url).pathname);
   const manifest = JSON.parse(
     await readFile(new URL("../package.json", import.meta.url), "utf8"),
@@ -202,6 +202,7 @@ test("the complete browser module graph closes network, provider, ontology, and 
   assert.ok(relativePaths.includes("apps/web/src/capabilities/docs-editor.ts"));
   assert.ok(relativePaths.includes("packages/api-client/src/client.ts"));
   assert.ok(relativePaths.includes("packages/design-system/src/primitives.tsx"));
+  assert.deepEqual(graph.externalPackages, ["react", "react-dom"]);
   assert.deepEqual(findBrowserBoundaryViolations(graph), []);
   assert.deepEqual(findBrowserBoundaryViolations(configGraph), []);
   assert.deepEqual(undeclaredRuntimePackages(graph, manifest), []);
@@ -276,6 +277,35 @@ test("computed and runtime-composed browser boundaries cannot evade the graph ga
         "provider-or-infrastructure",
       ],
     );
+  } finally {
+    await rm(fixtureRoot, { recursive: true, force: true });
+  }
+});
+
+test("aliased call-through and encoded JSX resource sinks fail independently", async () => {
+  const fixtureParent =
+    process.env.STEAD_TEST_TMPDIR ?? join(homedir(), ".cache", "stead-test-tmp");
+  await mkdir(fixtureParent, { recursive: true });
+  const fixtureRoot = await mkdtemp(join(fixtureParent, "stead-call-through-"));
+  const cases = [
+    'const reflectedGet = Reflect.get; reflectedGet(globalThis, "fetch");\n',
+    'Location.prototype.replace.call(location, "/outside");\n',
+    'Element.prototype.setAttribute.call(document.body, "src", "/outside");\n',
+    'export const Link = () => <a href="&#104;ttps://outside.invalid">go</a>;\n',
+  ];
+  try {
+    for (const fixture of cases) {
+      await writeFile(join(fixtureRoot, "entry.tsx"), fixture, "utf8");
+      const graph = await collectBrowserSourceGraph({
+        entryPath: join(fixtureRoot, "entry.tsx"),
+        repositoryRoot: fixtureRoot,
+      });
+      assert.deepEqual(
+        findBrowserBoundaryViolations(graph).map(({ rule }) => rule),
+        ["direct-browser-network"],
+        fixture,
+      );
+    }
   } finally {
     await rm(fixtureRoot, { recursive: true, force: true });
   }
@@ -423,6 +453,22 @@ test("every built artifact is manifest-bound, content-scanned, and symlink-safe"
       manifest,
     });
     assert.ok(result.files.includes("assets/index.js"));
+    assert.deepEqual(
+      result.javascriptCapabilities.find(({ file }) => file === "assets/index.js"),
+      {
+        file: "assets/index.js",
+        dynamicNetworkCalls: 0,
+        dynamicResourceTargets: 0,
+        externalDestinations: [],
+        networkCalls: 0,
+        resourceMethodCalls: 0,
+        staticNetworkTargets: [],
+        staticResourceTargets: [],
+        unsafeExternalDestinations: [],
+        unsafeStaticNetworkTargets: [],
+        unsafeStaticResourceTargets: [],
+      },
+    );
 
     await writeFile(join(fixtureRoot, "assets/ungoverned.mjs"), "export {};\n");
     await assert.rejects(
@@ -460,6 +506,22 @@ test("every built artifact is manifest-bound, content-scanned, and symlink-safe"
           file === "assets/runtime-config.json" && /^[a-f0-9]{64}$/u.test(sha256),
       ),
     );
+
+    for (const [limits, expected] of [
+      [{ maxAggregateBytes: 1 }, /aggregate-byte ceiling/u],
+      [{ maxDepth: 1 }, /directory-depth ceiling/u],
+      [{ maxEntries: 1 }, /entry-count ceiling/u],
+      [{ maxFileBytes: 1 }, /file-size ceiling/u],
+    ]) {
+      await assert.rejects(
+        validateDistributionArtifacts({
+          distributionRoot: fixtureRoot,
+          manifest,
+          limits,
+        }),
+        expected,
+      );
+    }
 
     await writeFile(
       join(fixtureRoot, "assets/runtime-config.json"),
@@ -515,6 +577,33 @@ test("every built artifact is manifest-bound, content-scanned, and symlink-safe"
       /JavaScript source-map loading is not governed.*code\.js/u,
     );
     await writeFile(join(fixtureRoot, "assets/code.js"), "export {};\n");
+
+    for (const source of [
+      'fetch("https://gitea.invalid/api/v1/repos");\n',
+      'fetch("/unapproved-data-route");\n',
+      'const image = {}; image.src = "https://outside.invalid/pixel";\n',
+      'document.createElement("img").setAttribute("src", "//outside.invalid/pixel");\n',
+    ]) {
+      await writeFile(join(fixtureRoot, "assets/index.js"), source);
+      await assert.rejects(
+        validateDistributionArtifacts({ distributionRoot: fixtureRoot, manifest }),
+        /browser artifact violates boundary rules.*index\.js/u,
+      );
+    }
+    await writeFile(
+      join(fixtureRoot, "assets/index.js"),
+      "const route = globalThis.location.pathname; fetch(route); fetch(route);\n",
+    );
+    await assert.rejects(
+      validateDistributionArtifacts({ distributionRoot: fixtureRoot, manifest }),
+      /network call sites; maximum is 1/u,
+    );
+    await writeFile(
+      join(fixtureRoot, "assets/index.js"),
+      'const diagnostic = { data: " at new " }; void diagnostic;\n',
+    );
+    await validateDistributionArtifacts({ distributionRoot: fixtureRoot, manifest });
+    await writeFile(join(fixtureRoot, "assets/index.js"), "export {};\n");
 
     await writeFile(
       join(fixtureRoot, "unreviewed.html"),
@@ -685,6 +774,78 @@ test("browser source paths reject symlinks, realpath escapes, and special compon
     await rm(linkedRoot, { force: true });
     await rm(fixtureRoot, { recursive: true, force: true });
     await rm(outsideRoot, { recursive: true, force: true });
+  }
+});
+
+test("browser source graph enforces independently tighten-able resource ceilings", async () => {
+  const fixtureParent =
+    process.env.STEAD_TEST_TMPDIR ?? join(homedir(), ".cache", "stead-test-tmp");
+  await mkdir(fixtureParent, { recursive: true });
+  const fixtureRoot = await mkdtemp(join(fixtureParent, "stead-browser-limits-"));
+  const collect = (directory, limits) =>
+    collectBrowserSourceGraph({
+      entryPath: join(fixtureRoot, directory, "entry.ts"),
+      repositoryRoot: join(fixtureRoot, directory),
+      limits,
+    });
+  try {
+    await mkdir(join(fixtureRoot, "file"));
+    await writeFile(
+      join(fixtureRoot, "file/entry.ts"),
+      `export const value = "${"x".repeat(64)}";\n`,
+    );
+    await assert.rejects(
+      collect("file", { maxFileBytes: 32 }),
+      /file-size ceiling/u,
+    );
+
+    await mkdir(join(fixtureRoot, "aggregate"));
+    await writeFile(
+      join(fixtureRoot, "aggregate/entry.ts"),
+      'import "./dependency";\nexport const entry = true;\n',
+    );
+    await writeFile(
+      join(fixtureRoot, "aggregate/dependency.ts"),
+      "export const dependency = true;\n",
+    );
+    await assert.rejects(
+      collect("aggregate", { maxAggregateBytes: 64 }),
+      /aggregate-byte ceiling/u,
+    );
+
+    await mkdir(join(fixtureRoot, "depth"));
+    await writeFile(join(fixtureRoot, "depth/entry.ts"), 'import "./a";\n');
+    await writeFile(join(fixtureRoot, "depth/a.ts"), 'import "./b";\n');
+    await writeFile(join(fixtureRoot, "depth/b.ts"), "export {};\n");
+    await assert.rejects(
+      collect("depth", { maxDepth: 1 }),
+      /depth ceiling/u,
+    );
+
+    await mkdir(join(fixtureRoot, "imports"));
+    await writeFile(
+      join(fixtureRoot, "imports/entry.ts"),
+      'import "./dependency";\nimport "./dependency";\n',
+    );
+    await writeFile(join(fixtureRoot, "imports/dependency.ts"), "export {};\n");
+    await assert.rejects(
+      collect("imports", { maxImportsPerModule: 1 }),
+      /import-count ceiling/u,
+    );
+
+    await mkdir(join(fixtureRoot, "modules"));
+    await writeFile(
+      join(fixtureRoot, "modules/entry.ts"),
+      'import "./a";\nimport "./b";\n',
+    );
+    await writeFile(join(fixtureRoot, "modules/a.ts"), "export {};\n");
+    await writeFile(join(fixtureRoot, "modules/b.ts"), "export {};\n");
+    await assert.rejects(
+      collect("modules", { maxModules: 2 }),
+      /module-count ceiling/u,
+    );
+  } finally {
+    await rm(fixtureRoot, { recursive: true, force: true });
   }
 });
 

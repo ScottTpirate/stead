@@ -113,6 +113,15 @@ const FORBIDDEN_HTML_ELEMENTS = new Set([
   "style",
 ]);
 const MAX_STATIC_STRING_LENGTH = 16_384;
+const CALL_THROUGH_METHODS = new Set(["apply", "bind", "call"]);
+const LOCATION_METHOD_NAMES = new Set(["assign", "reload", "replace"]);
+const DEFAULT_SOURCE_LIMITS = Object.freeze({
+  maxAggregateBytes: 8 * 1024 * 1024,
+  maxDepth: 64,
+  maxFileBytes: 512 * 1024,
+  maxImportsPerModule: 256,
+  maxModules: 512,
+});
 
 function containsExternalDestination(value) {
   return /(?:^|[\s=(:,;'"])(?:(?:https?|wss?|ftp):|\/\/|data:|blob:|file:|javascript:|mailto:|tel:|vbscript:)/iu.test(
@@ -123,6 +132,37 @@ function containsExternalDestination(value) {
 function insideRoot(path, root) {
   const relation = relative(root, path);
   return relation === "" || (!relation.startsWith(`..${sep}`) && relation !== "..");
+}
+
+function sourceLimits(requested = {}) {
+  if (!requested || typeof requested !== "object" || Array.isArray(requested)) {
+    throw new Error("browser source limits must be a tightening object");
+  }
+  const unknown = Object.keys(requested).filter(
+    (name) => !Object.hasOwn(DEFAULT_SOURCE_LIMITS, name),
+  );
+  if (unknown.length > 0) {
+    throw new Error(`unknown browser source limits: ${unknown.join(", ")}`);
+  }
+  return Object.fromEntries(
+    Object.entries(DEFAULT_SOURCE_LIMITS).map(([name, ceiling]) => {
+      const value = requested[name] ?? ceiling;
+      if (!Number.isSafeInteger(value) || value < 1 || value > ceiling) {
+        throw new Error(`${name} must be a positive integer no greater than ${ceiling}`);
+      }
+      return [name, value];
+    }),
+  );
+}
+
+function sameFileSnapshot(left, right) {
+  return (
+    left.dev === right.dev &&
+    left.ino === right.ino &&
+    left.size === right.size &&
+    left.mtimeMs === right.mtimeMs &&
+    left.ctimeMs === right.ctimeMs
+  );
 }
 
 async function canonicalRepositoryRoot(repositoryRoot) {
@@ -191,27 +231,34 @@ async function existingGovernedFile(path, root) {
   try {
     handle = await open(absolutePath, constants.O_RDONLY | constants.O_NOFOLLOW);
     const openedStat = await handle.stat();
-    if (
-      !openedStat.isFile() ||
-      openedStat.dev !== finalStat.dev ||
-      openedStat.ino !== finalStat.ino
-    ) {
+    if (!openedStat.isFile() || !sameFileSnapshot(openedStat, finalStat)) {
       throw new Error(`browser module changed during governed read: ${absolutePath}`);
     }
-    const source = await handle.readFile({ encoding: "utf8" });
+    if (openedStat.size > DEFAULT_SOURCE_LIMITS.maxFileBytes) {
+      throw new Error(`browser module exceeds the file-size ceiling: ${absolutePath}`);
+    }
+    const bytes = await handle.readFile();
+    const afterReadStat = await handle.stat();
     const postReadStat = await lstat(absolutePath);
     if (
       !postReadStat.isFile() ||
-      postReadStat.dev !== openedStat.dev ||
-      postReadStat.ino !== openedStat.ino
+      !sameFileSnapshot(openedStat, afterReadStat) ||
+      !sameFileSnapshot(openedStat, postReadStat) ||
+      bytes.byteLength !== openedStat.size
     ) {
-      throw new Error(`browser module path changed during governed read: ${absolutePath}`);
+      throw new Error(`browser module changed during governed read: ${absolutePath}`);
     }
     const postReadPath = await realpath(absolutePath);
     if (postReadPath !== canonicalPath) {
       throw new Error(`browser module path changed during governed read: ${absolutePath}`);
     }
-    return { path: canonicalPath, source };
+    let source;
+    try {
+      source = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    } catch {
+      throw new Error(`browser module is not valid UTF-8: ${absolutePath}`);
+    }
+    return { path: canonicalPath, source, bytes: bytes.byteLength };
   } catch (error) {
     if (error?.code === "ELOOP") {
       throw new Error(`browser module became a symbolic link: ${absolutePath}`);
@@ -296,6 +343,7 @@ function jsonStrings(value, values = []) {
 export function findBrowserArtifactBoundaryViolations(path, source) {
   const extension = extname(path).toLowerCase();
   let analyzedValues;
+  let javascriptCapabilities;
   if (extension === ".css") {
     const imports = cssImports(path, source);
     if (imports.length > 0) {
@@ -313,6 +361,9 @@ export function findBrowserArtifactBoundaryViolations(path, source) {
       throw new Error(`browser JSON is invalid in ${path}`);
     }
     analyzedValues = jsonStrings(parsed);
+  } else if ([".js", ".mjs", ".cjs"].includes(extension)) {
+    javascriptCapabilities = classifyBrowserJavaScriptCapabilities(path, source);
+    analyzedValues = [source, ...javascriptCapabilities.externalDestinations];
   } else {
     throw new Error(`browser artifact type is not governed: ${path}`);
   }
@@ -323,8 +374,11 @@ export function findBrowserArtifactBoundaryViolations(path, source) {
     rules.add("provider-or-infrastructure");
   }
   if (
-    DIRECT_BROWSER_NETWORK.test(analyzedText) ||
-    analyzedValues.some(containsExternalDestination)
+    (!javascriptCapabilities && DIRECT_BROWSER_NETWORK.test(analyzedText)) ||
+    javascriptCapabilities?.unsafeExternalDestinations.length > 0 ||
+    javascriptCapabilities?.unsafeStaticResourceTargets.length > 0 ||
+    javascriptCapabilities?.unsafeStaticNetworkTargets.length > 0 ||
+    (!javascriptCapabilities && analyzedValues.some(containsExternalDestination))
   ) {
     rules.add("direct-browser-network");
   }
@@ -540,6 +594,7 @@ export function parseGovernedHtmlEdges(path, source) {
 }
 
 function staticString(node, bindings = new Map(), seen = new Set()) {
+  if (!node) return undefined;
   if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) {
     return node.text;
   }
@@ -964,7 +1019,32 @@ function isAssignmentOperator(kind) {
 
 function jsxAttributeValue(attribute, bindings) {
   if (!attribute.initializer) return "";
-  if (ts.isStringLiteral(attribute.initializer)) return attribute.initializer.text;
+  if (ts.isStringLiteral(attribute.initializer)) {
+    let invalid = false;
+    const decoded = attribute.initializer.text.replace(
+      /&#(?:x([0-9A-Fa-f]+)|([0-9]+));?/gu,
+      (reference, hexadecimal, decimal) => {
+        const codePoint = Number.parseInt(
+          hexadecimal ?? decimal,
+          hexadecimal ? 16 : 10,
+        );
+        if (
+          !Number.isSafeInteger(codePoint) ||
+          codePoint === 0 ||
+          codePoint > 0x10ffff ||
+          (codePoint >= 0xd800 && codePoint <= 0xdfff)
+        ) {
+          invalid = true;
+          return reference;
+        }
+        return String.fromCodePoint(codePoint);
+      },
+    );
+    if (invalid || /&(?:#|[A-Za-z][A-Za-z0-9]+);/u.test(decoded)) {
+      return undefined;
+    }
+    return decoded;
+  }
   if (
     ts.isJsxExpression(attribute.initializer) &&
     attribute.initializer.expression
@@ -1133,7 +1213,7 @@ function scriptBoundaryRules(path, source) {
       }
     }
     if (ts.isCallExpression(node) || ts.isNewExpression(node)) {
-      const expression = node.expression;
+      const expression = unwrappedExpression(node.expression, bindings);
       const calledName = memberName(expression, bindings);
       if (
         (ts.isIdentifier(expression) &&
@@ -1152,6 +1232,15 @@ function scriptBoundaryRules(path, source) {
           ts.isElementAccessExpression(expression))
       ) {
         const receiver = expression.expression;
+        const callThroughTarget = CALL_THROUGH_METHODS.has(calledName ?? "")
+          ? unwrappedExpression(receiver, bindings)
+          : undefined;
+        const callThroughName = callThroughTarget
+          ? memberName(callThroughTarget, bindings) ??
+            (ts.isIdentifier(callThroughTarget)
+              ? callThroughTarget.text
+              : undefined)
+          : undefined;
         if (
           ((calledName === "get" || calledName === "set") &&
             isReflectExpression(receiver, bindings)) ||
@@ -1178,9 +1267,14 @@ function scriptBoundaryRules(path, source) {
             receiver.text === "Object" &&
             node.arguments[0] &&
             isBrowserGlobalExpression(node.arguments[0], bindings)) ||
-          (["assign", "replace", "reload"].includes(calledName ?? "") &&
+          (LOCATION_METHOD_NAMES.has(calledName ?? "") &&
             (isBrowserGlobalExpression(receiver, bindings) ||
               memberName(receiver, bindings) === "location")) ||
+          (callThroughName !== undefined &&
+            (DIRECT_NETWORK_IDENTIFIERS.has(callThroughName) ||
+              RESOURCE_METHOD_NAMES.has(callThroughName) ||
+              RESOURCE_PROPERTY_NAMES.has(callThroughName) ||
+              LOCATION_METHOD_NAMES.has(callThroughName))) ||
           (["write", "writeln"].includes(calledName ?? "") &&
             isBrowserGlobalExpression(receiver, bindings))
         ) {
@@ -1248,31 +1342,172 @@ function scriptBoundaryRules(path, source) {
   return rules;
 }
 
+function approvedBuiltNetworkTarget(value) {
+  return value === "/api/v1" || value.startsWith("/api/v1/");
+}
+
+function approvedBuiltResourceTarget(value) {
+  return (
+    value === "" ||
+    value.startsWith("#") ||
+    (value.startsWith("/") && !value.startsWith("//")) ||
+    value.startsWith("./") ||
+    value.startsWith("../")
+  );
+}
+
+function staticResourceCallTarget(node, calledName, bindings) {
+  if (LOCATION_METHOD_NAMES.has(calledName)) {
+    return { isSink: true, value: staticString(node.arguments?.[0], bindings) };
+  }
+  if (calledName === "setAttribute") {
+    const attribute = staticString(node.arguments?.[0], bindings)?.toLowerCase();
+    return HTML_RESOURCE_ATTRIBUTES.has(attribute)
+      ? { isSink: true, value: staticString(node.arguments?.[1], bindings) }
+      : { isSink: false };
+  }
+  if (calledName === "setAttributeNS") {
+    const attribute = staticString(node.arguments?.[1], bindings)?.toLowerCase();
+    return HTML_RESOURCE_ATTRIBUTES.has(attribute)
+      ? { isSink: true, value: staticString(node.arguments?.[2], bindings) }
+      : { isSink: false };
+  }
+  return { isSink: false };
+}
+
+export function classifyBrowserJavaScriptCapabilities(path, source) {
+  const sourceFile = scriptSourceFile(path, source);
+  const bindings = staticConstBindings(sourceFile);
+  let dynamicResourceTargets = 0;
+  const staticResourceTargets = new Set();
+  const staticNetworkTargets = new Set();
+  let dynamicNetworkCalls = 0;
+  let networkCalls = 0;
+  let resourceMethodCalls = 0;
+
+  const visit = (node) => {
+    if (
+      ts.isBinaryExpression(node) &&
+      isAssignmentOperator(node.operatorToken.kind)
+    ) {
+      const property = memberName(node.left, bindings)?.toLowerCase();
+      if (
+        (ts.isIdentifier(node.left) && node.left.text === "location") ||
+        property === "location" ||
+        (property !== undefined &&
+          [...RESOURCE_PROPERTY_NAMES].some(
+            (candidate) => candidate.toLowerCase() === property,
+          ))
+      ) {
+        const target = staticString(node.right, bindings);
+        if (target === undefined) dynamicResourceTargets += 1;
+        else staticResourceTargets.add(target);
+      }
+    }
+    if (ts.isCallExpression(node) || ts.isNewExpression(node)) {
+      const expression = unwrappedExpression(node.expression, bindings);
+      const calledName = memberName(expression, bindings) ??
+        (ts.isIdentifier(expression) ? expression.text : undefined);
+      if (calledName && DIRECT_NETWORK_IDENTIFIERS.has(calledName)) {
+        networkCalls += 1;
+        const target = node.arguments?.[0]
+          ? staticString(node.arguments[0], bindings)
+          : undefined;
+        if (target === undefined) dynamicNetworkCalls += 1;
+        else staticNetworkTargets.add(target);
+      }
+      if (
+        calledName &&
+        (RESOURCE_METHOD_NAMES.has(calledName) ||
+          LOCATION_METHOD_NAMES.has(calledName))
+      ) {
+        resourceMethodCalls += 1;
+        const target = staticResourceCallTarget(node, calledName, bindings);
+        if (target.isSink) {
+          if (target.value === undefined) dynamicResourceTargets += 1;
+          else staticResourceTargets.add(target.value);
+        }
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+
+  const sortedStaticResourceTargets = [...staticResourceTargets].sort();
+  const sortedStaticNetworkTargets = [...staticNetworkTargets].sort();
+  const externalDestinations = [
+    ...new Set(
+      [...sortedStaticNetworkTargets, ...sortedStaticResourceTargets].filter(
+        containsExternalDestination,
+      ),
+    ),
+  ].sort();
+  return {
+    dynamicResourceTargets,
+    dynamicNetworkCalls,
+    externalDestinations,
+    networkCalls,
+    resourceMethodCalls,
+    staticResourceTargets: sortedStaticResourceTargets,
+    staticNetworkTargets: sortedStaticNetworkTargets,
+    unsafeExternalDestinations: externalDestinations,
+    unsafeStaticResourceTargets: sortedStaticResourceTargets.filter(
+      (value) =>
+        containsExternalDestination(value) && !approvedBuiltResourceTarget(value),
+    ),
+    unsafeStaticNetworkTargets: sortedStaticNetworkTargets.filter(
+      (value) => !approvedBuiltNetworkTarget(value),
+    ),
+  };
+}
+
 function packageName(specifier) {
   if (specifier.startsWith("@")) return specifier.split("/", 2).join("/");
   return specifier.split("/", 1)[0];
 }
 
-export async function collectBrowserSourceGraph({ entryPath, repositoryRoot }) {
+export async function collectBrowserSourceGraph({
+  entryPath,
+  repositoryRoot,
+  limits: requestedLimits,
+}) {
   const root = await canonicalRepositoryRoot(repositoryRoot);
-  const pending = [resolve(entryPath)];
+  const limits = sourceLimits(requestedLimits);
+  const pending = [{ path: resolve(entryPath), depth: 0 }];
   const modules = new Map();
   const externalPackages = new Set();
+  let aggregateBytes = 0;
 
   while (pending.length > 0) {
-    const path = pending.pop();
+    const { path, depth } = pending.pop();
     if (modules.has(path)) continue;
+    if (depth > limits.maxDepth) {
+      throw new Error(`browser module graph exceeds the depth ceiling at ${path}`);
+    }
+    if (modules.size >= limits.maxModules) {
+      throw new Error(`browser module graph exceeds the module-count ceiling`);
+    }
     if (!insideRoot(path, root)) {
       throw new Error(`browser module escapes the repository: ${path}`);
     }
     const found = await existingGovernedFile(path, root);
     if (!found) throw new Error(`browser entry/module does not exist: ${path}`);
+    if (found.bytes > limits.maxFileBytes) {
+      throw new Error(`browser module exceeds the file-size ceiling: ${path}`);
+    }
+    aggregateBytes += found.bytes;
+    if (aggregateBytes > limits.maxAggregateBytes) {
+      throw new Error(`browser module graph exceeds the aggregate-byte ceiling`);
+    }
     const imports = moduleImports(path, found.source);
-    modules.set(path, { path, source: found.source, imports });
+    if (imports.length > limits.maxImportsPerModule) {
+      throw new Error(`browser module exceeds the import-count ceiling: ${path}`);
+    }
+    modules.set(path, { path, source: found.source, imports, bytes: found.bytes, depth });
     for (const specifier of imports) {
       if (specifier.startsWith(".")) {
         const imported = await resolveLocalImport(path, specifier, root);
-        pending.push(imported.path);
+        pending.push({ path: imported.path, depth: depth + 1 });
       } else if (specifier.startsWith("/")) {
         throw new Error(`absolute browser module import is not governed: ${specifier}`);
       } else {
@@ -1286,6 +1521,8 @@ export async function collectBrowserSourceGraph({ entryPath, repositoryRoot }) {
       left.path.localeCompare(right.path),
     ),
     externalPackages: [...externalPackages].sort(),
+    aggregateBytes,
+    limits,
   };
 }
 

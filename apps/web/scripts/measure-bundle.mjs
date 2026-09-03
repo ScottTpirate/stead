@@ -15,6 +15,7 @@ import { isDeepStrictEqual } from "node:util";
 import { gzipSync } from "node:zlib";
 
 import {
+  classifyBrowserJavaScriptCapabilities,
   findBrowserArtifactBoundaryViolations,
   parseGovernedHtmlEdges,
 } from "./browser-source-graph.mjs";
@@ -29,9 +30,47 @@ export const REQUIRED_LAZY_BOUNDARIES = {
 };
 
 const EXECUTABLE_JAVASCRIPT = /\.(?:c|m)?js$/iu;
+const DEFAULT_DISTRIBUTION_LIMITS = Object.freeze({
+  maxAggregateBytes: 32 * 1024 * 1024,
+  maxDepth: 16,
+  maxEntries: 1_024,
+  maxFileBytes: 8 * 1024 * 1024,
+});
+const MAX_DISTRIBUTION_NETWORK_CALL_SITES = 1;
 
 function isExecutableJavaScript(file) {
   return typeof file === "string" && EXECUTABLE_JAVASCRIPT.test(file);
+}
+
+function distributionLimits(requested = {}) {
+  if (!requested || typeof requested !== "object" || Array.isArray(requested)) {
+    throw new Error("browser distribution limits must be a tightening object");
+  }
+  const unknown = Object.keys(requested).filter(
+    (name) => !Object.hasOwn(DEFAULT_DISTRIBUTION_LIMITS, name),
+  );
+  if (unknown.length > 0) {
+    throw new Error(`unknown browser distribution limits: ${unknown.join(", ")}`);
+  }
+  return Object.fromEntries(
+    Object.entries(DEFAULT_DISTRIBUTION_LIMITS).map(([name, ceiling]) => {
+      const value = requested[name] ?? ceiling;
+      if (!Number.isSafeInteger(value) || value < 1 || value > ceiling) {
+        throw new Error(`${name} must be a positive integer no greater than ${ceiling}`);
+      }
+      return [name, value];
+    }),
+  );
+}
+
+function sameFileSnapshot(left, right) {
+  return (
+    left.dev === right.dev &&
+    left.ino === right.ino &&
+    left.size === right.size &&
+    left.mtimeMs === right.mtimeMs &&
+    left.ctimeMs === right.ctimeMs
+  );
 }
 
 function governedDistributionPath(file, label = "distribution file") {
@@ -222,7 +261,11 @@ async function canonicalDistributionRoot(distributionRoot) {
   return canonicalRoot;
 }
 
-async function readGovernedDistributionFile(distributionRoot, file) {
+async function readGovernedDistributionFile(
+  distributionRoot,
+  file,
+  limits = DEFAULT_DISTRIBUTION_LIMITS,
+) {
   const governedFile = governedDistributionPath(file);
   const absolutePath = resolve(distributionRoot, ...governedFile.split("/"));
   const relation = relative(distributionRoot, absolutePath);
@@ -254,6 +297,9 @@ async function readGovernedDistributionFile(distributionRoot, file) {
   if (!finalStat?.isFile()) {
     throw new Error(`distribution path is not a regular file: ${file}`);
   }
+  if (finalStat.size > limits.maxFileBytes) {
+    throw new Error(`distribution file exceeds the file-size ceiling: ${file}`);
+  }
 
   let handle;
   try {
@@ -261,17 +307,18 @@ async function readGovernedDistributionFile(distributionRoot, file) {
     const openedStat = await handle.stat();
     if (
       !openedStat.isFile() ||
-      openedStat.dev !== finalStat.dev ||
-      openedStat.ino !== finalStat.ino
+      !sameFileSnapshot(openedStat, finalStat)
     ) {
       throw new Error(`distribution file changed during governed read: ${file}`);
     }
     const bytes = await handle.readFile();
+    const afterReadStat = await handle.stat();
     const postReadStat = await lstat(absolutePath);
     if (
       !postReadStat.isFile() ||
-      postReadStat.dev !== openedStat.dev ||
-      postReadStat.ino !== openedStat.ino
+      bytes.byteLength !== openedStat.size ||
+      !sameFileSnapshot(openedStat, afterReadStat) ||
+      !sameFileSnapshot(openedStat, postReadStat)
     ) {
       throw new Error(`distribution file changed during governed read: ${file}`);
     }
@@ -290,21 +337,37 @@ async function readGovernedDistributionFile(distributionRoot, file) {
   }
 }
 
-async function distributionInventory(distributionRoot, directory = "") {
+async function distributionInventory(
+  distributionRoot,
+  directory = "",
+  limits = DEFAULT_DISTRIBUTION_LIMITS,
+  state = { entries: 0 },
+) {
+  const depth = directory === "" ? 0 : directory.split("/").length;
+  if (depth > limits.maxDepth) {
+    throw new Error(`browser distribution exceeds the directory-depth ceiling: ${directory}`);
+  }
   const absoluteDirectory = directory
     ? resolve(distributionRoot, ...directory.split("/"))
     : distributionRoot;
   const entries = await readdir(absoluteDirectory);
   const files = [];
   for (const name of entries.sort()) {
+    state.entries += 1;
+    if (state.entries > limits.maxEntries) {
+      throw new Error("browser distribution exceeds the entry-count ceiling");
+    }
     const file = directory ? `${directory}/${name}` : name;
     governedDistributionPath(file);
+    if (file.split("/").length > limits.maxDepth) {
+      throw new Error(`browser distribution exceeds the directory-depth ceiling: ${file}`);
+    }
     const pathStat = await lstat(resolve(distributionRoot, ...file.split("/")));
     if (pathStat.isSymbolicLink()) {
       throw new Error(`distribution path contains a symbolic link: ${file}`);
     }
     if (pathStat.isDirectory()) {
-      files.push(...(await distributionInventory(distributionRoot, file)));
+      files.push(...(await distributionInventory(distributionRoot, file, limits, state)));
     } else if (pathStat.isFile()) {
       files.push(file);
     } else {
@@ -339,7 +402,9 @@ export async function validateDistributionArtifacts({
   distributionRoot,
   manifest,
   membership: suppliedMembership,
+  limits: requestedLimits,
 }) {
+  const limits = distributionLimits(requestedLimits);
   const membership = buildBundleMembership(manifest);
   if (
     suppliedMembership !== undefined &&
@@ -349,7 +414,7 @@ export async function validateDistributionArtifacts({
   }
   const root = await canonicalDistributionRoot(distributionRoot);
   validateManifest(manifest);
-  const inventory = await distributionInventory(root);
+  const inventory = await distributionInventory(root, "", limits);
   const inventorySet = new Set(inventory);
   const htmlFiles = inventory.filter(
     (file) => extname(file).toLowerCase() === ".html",
@@ -380,11 +445,17 @@ export async function validateDistributionArtifacts({
     );
   }
   const artifactBytes = new Map();
+  let aggregateBytes = 0;
   for (const file of [...expectedFiles].sort()) {
     if (!inventorySet.has(file)) {
       throw new Error(`governed output is absent from the distribution: ${file}`);
     }
-    artifactBytes.set(file, await readGovernedDistributionFile(root, file));
+    const bytes = await readGovernedDistributionFile(root, file, limits);
+    aggregateBytes += bytes.byteLength;
+    if (aggregateBytes > limits.maxAggregateBytes) {
+      throw new Error("browser distribution exceeds the aggregate-byte ceiling");
+    }
+    artifactBytes.set(file, bytes);
   }
 
   const onDiskManifestSource = decodeUtf8Artifact(
@@ -401,6 +472,7 @@ export async function validateDistributionArtifacts({
     throw new Error("distribution Vite manifest differs from the validated manifest");
   }
 
+  const javascriptCapabilities = [];
   for (const [file, bytes] of artifactBytes) {
     const extension = extname(file).toLowerCase();
     if (isExecutableJavaScript(file)) {
@@ -408,6 +480,16 @@ export async function validateDistributionArtifacts({
       if (/sourceMappingURL\s*=/iu.test(source)) {
         throw new Error(`browser JavaScript source-map loading is not governed: ${file}`);
       }
+      const violations = findBrowserArtifactBoundaryViolations(file, source);
+      if (violations.length > 0) {
+        throw new Error(
+          `browser artifact violates boundary rules (${violations.join(", ")}): ${file}`,
+        );
+      }
+      javascriptCapabilities.push({
+        file,
+        ...classifyBrowserJavaScriptCapabilities(file, source),
+      });
       continue;
     }
     if (![".css", ".html", ".json"].includes(extension)) {
@@ -420,6 +502,15 @@ export async function validateDistributionArtifacts({
         `browser artifact violates boundary rules (${violations.join(", ")}): ${file}`,
       );
     }
+  }
+  const networkCallSites = javascriptCapabilities.reduce(
+    (total, capability) => total + capability.networkCalls,
+    0,
+  );
+  if (networkCallSites > MAX_DISTRIBUTION_NETWORK_CALL_SITES) {
+    throw new Error(
+      `browser distribution has ${networkCallSites} network call sites; maximum is ${MAX_DISTRIBUTION_NETWORK_CALL_SITES}`,
+    );
   }
 
   const html = decodeUtf8Artifact("index.html", artifactBytes.get("index.html"));
@@ -473,6 +564,10 @@ export async function validateDistributionArtifacts({
       .sort((left, right) => left.file.localeCompare(right.file)),
     files: inventory,
     htmlEdges: edges,
+    javascriptCapabilities: javascriptCapabilities.sort((left, right) =>
+      left.file.localeCompare(right.file),
+    ),
+    limits,
   };
 }
 
@@ -550,19 +645,23 @@ async function main() {
   const baseline = 60_808;
   const budget = 250 * 1024;
   const evidence = {
-    schema_version: "1.2",
+    schema_version: "1.3",
     issue: "P1-005-FE-FOUNDATION",
     contract: "PERF-005",
     generated_by: "apps/web/scripts/measure-bundle.mjs",
     measurement_method:
-      "Exact inventory and SHA-256 binding for every browser artifact plus uncompressed file bytes and Node zlib level 9 over closed Vite manifest JavaScript graphs with stable shared-chunk attribution",
+      "Exact inventory, SHA-256 binding, bounded reads, and executable capability classification for every transformed browser artifact plus uncompressed file bytes and Node zlib level 9 over closed Vite manifest JavaScript graphs with stable shared-chunk attribution",
     scope: "Wave 0 original non-import foundation",
     mature_interface_perf005_complete: false,
     lazy_boundaries_are_placeholders: true,
     minimal_foundation_baseline_bytes_gzip: baseline,
     budget_bytes_gzip: budget,
     eager_dynamic_frontier: membership.dynamicFrontierKeys,
+    distribution_limits: distribution.limits,
+    maximum_distribution_network_call_sites:
+      MAX_DISTRIBUTION_NETWORK_CALL_SITES,
     distribution_artifacts: distribution.artifacts,
+    browser_javascript_capabilities: distribution.javascriptCapabilities,
     eager_javascript: {
       uncompressed_bytes: eagerUncompressedBytes,
       gzip_bytes: eagerBytes,
