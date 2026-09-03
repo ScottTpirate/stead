@@ -1334,6 +1334,62 @@ rescue Psych::Exception => e
   [nil, ["#{relative}@#{revision}: YAML error: #{e.message}"]]
 end
 
+def devlane_pending_review_fixture(root: ROOT)
+  provenance_relative = "docs/governance/devlane-provenance.yaml"
+  registry_relative = "docs/governance/dependency-approvals.yaml"
+  provenance_source = File.binread(File.join(root, provenance_relative))
+  registry_source = File.binread(File.join(root, registry_relative))
+
+  parse_source = lambda do |source, relative|
+    structure_errors = strict_yaml_structure_errors(source, filename: relative)
+    raise "#{relative}: #{structure_errors.join('; ')}" unless structure_errors.empty?
+
+    YAML.safe_load(source, permitted_classes: [], permitted_symbols: [], aliases: false)
+  end
+  provenance = parse_source.call(provenance_source, provenance_relative)
+  registry = parse_source.call(registry_source, registry_relative)
+  components = registry.fetch("records", []).to_h { |entry| [entry.dig("component", "name"), entry] }
+  decision = components.dig(DEVLANE_CANDIDATE_NAME, "decision")
+  approval_state = DEVLANE_APPROVAL_MUTABLE_PROVENANCE_FIELDS.to_h do |field|
+    [field, provenance.dig("proposed_import", field)]
+  end
+  if approval_state == EXPECTED_DEVLANE_PENDING_PROVENANCE_APPROVAL &&
+     decision == EXPECTED_DEVLANE_PENDING_DECISION
+    return [provenance, registry, provenance_source, registry_source]
+  end
+
+  revision = provenance.dig("proposed_import", "approval_record", "decision_revision")
+  unless revision.is_a?(String) && revision.match?(/\A[0-9a-f]{40}\z/)
+    raise "approved repository state does not identify an immutable pending Devlane decision revision"
+  end
+  provenance_source, provenance_error = devlane_git_capture(
+    root,
+    "show",
+    "#{revision}:#{provenance_relative}"
+  )
+  registry_source, registry_error = devlane_git_capture(
+    root,
+    "show",
+    "#{revision}:#{registry_relative}"
+  )
+  raise provenance_error if provenance_error
+  raise registry_error if registry_error
+
+  provenance = parse_source.call(provenance_source, "#{provenance_relative}@#{revision}")
+  registry = parse_source.call(registry_source, "#{registry_relative}@#{revision}")
+  components = registry.fetch("records", []).to_h { |entry| [entry.dig("component", "name"), entry] }
+  fixture_errors = devlane_candidate_errors(
+    provenance,
+    components,
+    root: root,
+    skip_lineage: true
+  )
+  unless fixture_errors.empty?
+    raise "immutable Devlane decision fixture is not the exact pending candidate: #{fixture_errors.join('; ')}"
+  end
+  [provenance, registry, provenance_source, registry_source]
+end
+
 def devlane_approval_record_errors(import, decision)
   errors = []
   record = import["approval_record"]
@@ -1653,11 +1709,9 @@ def run_validator_self_tests
   end
   guard_count += 1
 
-  registry_fixture = load_yaml(REGISTRY_PATH)
+  provenance_fixture, registry_fixture, provenance_source, registry_source =
+    devlane_pending_review_fixture
   registry_components = registry_fixture.fetch("records").to_h { |record| [record.dig("component", "name"), record] }
-  provenance_fixture = load_yaml(PROVENANCE_PATH)
-  provenance_source = File.read(PROVENANCE_PATH)
-  registry_source = File.read(REGISTRY_PATH)
   provenance_inline_merge = provenance_source.sub(
     "proposed_import:\n",
     "proposed_import:\n  <<: {status: APPROVED, approved_source_distribution: true, approvers: [attacker-one, attacker-two], approved_at: \"2026-08-30T23:59:59Z\", scope_version: attacker-expanded}\n"
@@ -1671,35 +1725,40 @@ def run_validator_self_tests
     "    decision:\n      <<: {status: APPROVED, approvers: [attacker-one, attacker-two], approved_at: \"2026-08-30T23:59:59Z\"}\n      category: ALLOW-PERMISSIVE\n      status: REVIEWED_PENDING_INDEPENDENT_APPROVAL\n      independent_approval_required: true\n      approvers: []\n      approved_at: null\n"
   )
   raw_yaml_mutations = {
-    "provenance duplicate approval status" => provenance_source.sub(
+    "provenance duplicate approval status" => [provenance_source, provenance_source.sub(
       "  status: REVIEWED_PENDING_INDEPENDENT_APPROVAL\n",
       "  status: APPROVED\n  status: REVIEWED_PENDING_INDEPENDENT_APPROVAL\n"
-    ),
-    "provenance duplicate scope" => provenance_source.sub(
+    )],
+    "provenance duplicate scope" => [provenance_source, provenance_source.sub(
       "  scope_version: stead-primitives-v1\n",
       "  scope_version: expanded-scope\n  scope_version: stead-primitives-v1\n"
-    ),
-    "registry duplicate approval ID" => registry_source.sub(
+    )],
+    "registry duplicate approval ID" => [registry_source, registry_source.sub(
       "  - approval_id: DEP-APP-DEVLANE-STEAD-PRIMITIVES-7719DCAD\n",
       "  - approval_id: DEP-APP-MALICIOUS\n    approval_id: DEP-APP-DEVLANE-STEAD-PRIMITIVES-7719DCAD\n"
-    ),
-    "provenance trailing document" => "#{provenance_source}\n---\nstatus: APPROVED\napproved_source_distribution: true\n",
-    "registry trailing document" => "#{registry_source}\n---\ndecision:\n  status: APPROVED\n  approvers: [arbitrary-one, arbitrary-two]\n",
-    "provenance inline mapping merge" => provenance_inline_merge,
-    "provenance inline sequence merge" => provenance_sequence_merge,
-    "registry inline mapping merge" => registry_inline_merge
+    )],
+    "provenance trailing document" => [provenance_source, "#{provenance_source}\n---\nstatus: APPROVED\napproved_source_distribution: true\n"],
+    "registry trailing document" => [registry_source, "#{registry_source}\n---\ndecision:\n  status: APPROVED\n  approvers: [arbitrary-one, arbitrary-two]\n"],
+    "provenance inline mapping merge" => [provenance_source, provenance_inline_merge],
+    "provenance inline sequence merge" => [provenance_source, provenance_sequence_merge],
+    "registry inline mapping merge" => [registry_source, registry_inline_merge]
   }
-  raw_yaml_mutation_survivors = raw_yaml_mutations.filter_map do |label, mutated_source|
+  raw_yaml_mutation_survivors = raw_yaml_mutations.filter_map do |label, (original_source, mutated_source)|
     guard_count += 1
-    label if strict_yaml_structure_errors(mutated_source, filename: "#{label}.yaml").empty?
+    if mutated_source == original_source
+      "#{label} (fixture did not mutate)"
+    elsif strict_yaml_structure_errors(mutated_source, filename: "#{label}.yaml").empty?
+      label
+    end
   end
   unless raw_yaml_mutation_survivors.empty?
     failures << "strict YAML parser mutation survivors: #{raw_yaml_mutation_survivors.join(', ')}"
   end
 
   coupled_merge_survives =
-    strict_yaml_structure_errors(provenance_inline_merge, filename: "coupled provenance merge.yaml").empty? &&
-    strict_yaml_structure_errors(registry_inline_merge, filename: "coupled registry merge.yaml").empty?
+    (provenance_inline_merge == provenance_source || registry_inline_merge == registry_source) ||
+    (strict_yaml_structure_errors(provenance_inline_merge, filename: "coupled provenance merge.yaml").empty? &&
+     strict_yaml_structure_errors(registry_inline_merge, filename: "coupled registry merge.yaml").empty?)
   failures << "coupled provenance and registry YAML merge-key mutation survived" if coupled_merge_survives
   guard_count += 1
 
@@ -1731,10 +1790,10 @@ def run_validator_self_tests
   approval_transition_probe = lambda do |extra_path: nil|
     transition_errors = []
     Dir.mktmpdir("stead-devlane-approval-transition-") do |fixture_root|
-      DEVLANE_APPROVAL_RECORD_PATHS.each do |relative|
+      DEVLANE_APPROVAL_RECORD_PATHS.zip([registry_source, provenance_source]).each do |relative, source|
         destination = File.join(fixture_root, relative)
         FileUtils.mkdir_p(File.dirname(destination))
-        FileUtils.cp(File.join(ROOT, relative), destination)
+        File.binwrite(destination, source)
       end
       %w[init config config add commit].each_with_index do |operation, index|
         arguments = case index
@@ -1883,8 +1942,12 @@ def run_validator_self_tests
   devlane_mutations.each do |label, mutation|
     mutated_provenance = Marshal.load(Marshal.dump(provenance_fixture))
     mutated_components = Marshal.load(Marshal.dump(registry_components))
+    before_digest = canonical_sha256([mutated_provenance, mutated_components])
     mutation.call(mutated_provenance, mutated_components)
-    if devlane_candidate_errors(mutated_provenance, mutated_components).empty?
+    after_digest = canonical_sha256([mutated_provenance, mutated_components])
+    if before_digest == after_digest
+      devlane_mutation_survivors << "#{label} (fixture did not mutate)"
+    elsif devlane_candidate_errors(mutated_provenance, mutated_components).empty?
       devlane_mutation_survivors << label
     end
     guard_count += 1
