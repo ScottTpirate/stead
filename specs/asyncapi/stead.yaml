@@ -349,6 +349,11 @@ x-delivery-contract:
   organization-broker-provisioning: forbidden
   stream-topology: two-fixed-streams-per-deployment-security-domain
   credential-topology: service-role-only-no-browser-or-end-user
+  publish-ack-authority: transport-publication-only
+  required-consumers: closed-versioned-registry-frozen-in-authoritative-outbox
+  recovery-source: postgresql-outbox-until-all-required-consumers-durable
+  broker-expiry: bounded-republish-same-canonical-identity
+  source-retirement: all-required-success-or-minimized-terminal-dlq-audit
   broker-max-deliver: unlimited-until-durable-terminal-outcome
   terminal-attempt-authority: consumer-owner-postgresql
   production-transport: verified-mutual-tls-no-fallback

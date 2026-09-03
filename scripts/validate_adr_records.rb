@@ -134,6 +134,11 @@ ADR_0008_DELIVERY_CONTRACT = {
   "organization-broker-provisioning" => "forbidden",
   "stream-topology" => "two-fixed-streams-per-deployment-security-domain",
   "credential-topology" => "service-role-only-no-browser-or-end-user",
+  "publish-ack-authority" => "transport-publication-only",
+  "required-consumers" => "closed-versioned-registry-frozen-in-authoritative-outbox",
+  "recovery-source" => "postgresql-outbox-until-all-required-consumers-durable",
+  "broker-expiry" => "bounded-republish-same-canonical-identity",
+  "source-retirement" => "all-required-success-or-minimized-terminal-dlq-audit",
   "broker-max-deliver" => "unlimited-until-durable-terminal-outcome",
   "terminal-attempt-authority" => "consumer-owner-postgresql",
   "production-transport" => "verified-mutual-tls-no-fallback",
@@ -160,13 +165,19 @@ ADR_0008_REQUIRED_DECISION_CLAUSES = {
   ],
   delivery: [
     "API responses never wait for publication, a consumer, replay, or NATS availability",
-    "marks the outbox record delivered only after a matching JetStream publish acknowledgement",
-    "Broker delivery remains eligible until the handler has atomically recorded either success or a minimized terminal outcome in PostgreSQL"
+    "active registry revision is frozen into each outbox record in the authoritative transaction",
+    "A matching JetStream publish acknowledgement records transport publication only",
+    "every required consumer in the event's frozen registry has durably recorded success or a minimized terminal outcome with its dead-letter and logical audit intents"
+  ],
+  retention_recovery: [
+    "Broker age or retention expiry is a transport event, not a delivery terminal",
+    "republishes the retained canonical event under the same CloudEvent source, id, semantic idempotency key, and payload digest",
+    "Only durable success or that complete terminal transaction satisfies the frozen consumer registry and permits recovery-source retirement"
   ],
   replay_recovery: [
     "Replay is requested through a centrally authorized Stead operation",
     "JetStream is reconstructible transport, not backup authority",
-    "loss of all streams must still permit outbox drain and projection rebuild"
+    "expiry or loss of all streams must still permit incomplete events to be republished, terminal outcomes and their DLQ/audit intents to complete, and projections to rebuild"
   ],
   credentials: [
     "Production NATS client and cluster links use authenticated encrypted transport with peer verification and no plaintext fallback",
@@ -196,7 +207,7 @@ ADR_0008_NORMALIZED_REVIEWS_SECTION =
 ADR_0008_DECISION_HEADING = "Decision".freeze
 ADR_0008_DECISION_NEXT_HEADING = "Considered options".freeze
 ADR_0008_SUBSTANTIVE_SOURCE_SHA256 =
-  "0aa601913f0d58e45e0f215dae84cff6960bf0cebf5ef4036a2330624932a44d".freeze
+  "a5b6741039308adcbd79bfab3664185696591cf175e29a6503e8cf12f0de18a4".freeze
 
 EXPECTED_P1_006_ADR_CANDIDATES = %w[
   ADR-CAND-002
@@ -672,7 +683,7 @@ def adr_0008_security_contract_failures(adr_source:, asyncapi:, bypass_source:)
       topology: "One Stead application account per deployment security domain",
       lifecycle: "Organization creation creates no broker resource",
       credentials: "service-role credentials with no browser or end-user NATS credentials",
-      terminal_delivery: "unlimited broker redelivery plus PostgreSQL-owned bounded terminal state",
+      retention_recovery: "PostgreSQL canonical recovery source that cannot retire before every consumer durably succeeds or records minimized terminal/DLQ/audit state",
       failure_evidence: "protected canaries are absent from event, PostgreSQL, DLQ, telemetry and backup/restore evidence"
     }.each do |group, fragment|
       failures << "CBI-030 omits ADR-0008 #{group} bypass coverage" unless bypass_row.include?(fragment)
@@ -1094,6 +1105,11 @@ if adr_0008_source
       "API responses wait for consumer completion",
       "ADR-0008 delivery decision clause"
     ],
+    retention_recovery: [
+      "Broker age or retention expiry is a transport event, not a delivery terminal",
+      "Broker age or retention expiry completes delivery",
+      "ADR-0008 retention_recovery decision clause"
+    ],
     replay_recovery: [
       "JetStream is reconstructible transport, not backup authority",
       "JetStream is authoritative backup state",
@@ -1164,6 +1180,30 @@ adr_0008_security_mutations << {
   expected_failure_fragment: "logical producer-source registry"
 }
 
+mutated_retirement_asyncapi = deep_copy_asyncapi.call
+mutated_retirement_asyncapi.fetch("x-delivery-contract")["source-retirement"] =
+  "broker-publish-ack"
+adr_0008_security_mutations << {
+  group: :retention_recovery,
+  name: "broker acknowledgement retires recovery source",
+  adr: adr_0008_source,
+  asyncapi: mutated_retirement_asyncapi,
+  bypass: classification_bypass_source,
+  expected_failure_fragment: "x-delivery-contract source-retirement"
+}
+
+mutated_registry_asyncapi = deep_copy_asyncapi.call
+mutated_registry_asyncapi.fetch("x-delivery-contract")["required-consumers"] =
+  "resolved-after-publication"
+adr_0008_security_mutations << {
+  group: :retention_recovery,
+  name: "consumer registry resolved after publication",
+  adr: adr_0008_source,
+  asyncapi: mutated_registry_asyncapi,
+  bypass: classification_bypass_source,
+  expected_failure_fragment: "x-delivery-contract required-consumers"
+}
+
 mutated_bypass = classification_bypass_source.sub(
   "Organization creation creates no broker resource",
   "Organization creation provisions broker resources"
@@ -1175,6 +1215,19 @@ adr_0008_security_mutations << {
   asyncapi: deep_copy_asyncapi.call,
   bypass: mutated_bypass,
   expected_failure_fragment: "CBI-030 omits ADR-0008 lifecycle"
+}
+
+mutated_retention_bypass = classification_bypass_source.sub(
+  "PostgreSQL canonical recovery source that cannot retire before every consumer durably succeeds or records minimized terminal/DLQ/audit state",
+  "broker publish acknowledgement retires the recovery source"
+)
+adr_0008_security_mutations << {
+  group: :retention_recovery,
+  name: "broker expiry bypass coverage removed",
+  adr: adr_0008_source,
+  asyncapi: deep_copy_asyncapi.call,
+  bypass: mutated_retention_bypass,
+  expected_failure_fragment: "CBI-030 omits ADR-0008 retention_recovery"
 }
 
 adr_0008_security_mutation_survivors = adr_0008_security_mutations.filter_map do |mutation|
