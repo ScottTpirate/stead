@@ -17,6 +17,10 @@ requirements:
   - CLS-003
   - CLS-006
   - CLS-007
+  - SEC-006
+  - EVT-003
+  - AUD-001
+  - AUD-002
   - TEST-006
   - PERF-003
   - PERF-004
@@ -31,7 +35,7 @@ authority:
 
 field_classes:
   canonical_only:
-    examples: [organization_id, team_id, project_id, work_item_id, capabilities, team_hierarchy, relationships, agent_assignment, effective_label]
+    examples: [organization_id, team_id, project_id, work_item_id, capabilities, team_hierarchy, typed_domain_relationships, agent_assignment, effective_label]
     disagreement: quarantine_attempted_representation_or_remap
   provider_content:
     examples: [work_title, work_body, comments, reactions, repository, branch, commit, pull_request]
@@ -43,7 +47,7 @@ field_classes:
     examples: [hidden_tracker, fixed_board, managed_labels, repository_purpose, webhook_registration]
     disagreement: reset_and_verify_else_quarantine
   central_security:
-    examples: [relationships, permissions, security_domain, classification, handling, provider_path_eligibility]
+    examples: [authorization_relationship_tuples, permissions, security_domain, classification, handling, provider_path_eligibility]
     disagreement: fence_reset_verify_or_remain_denied_and_quarantined
   provider_identity:
     examples: [installation_id, repository_id, issue_id, comment_id, issue_number, git_sha, provider_creation_time]
@@ -93,6 +97,10 @@ authorization_scope:
     - compatibility_profile_id_version_and_schema_digest
     - original_deadline
     - immutable_earliest_bound_expiry
+    - execution_claim_id
+    - execution_holder_instance_id
+    - execution_fencing_token
+    - execution_claim_deadline
   call_plan_fixed_before_first_provider_call:
     - http_method_and_path_templates
     - resource_set_or_container_inventory_scope
@@ -104,6 +112,21 @@ authorization_scope:
     - maximum_pages
     - maximum_items
     - maximum_response_bytes
+  execution_claim:
+    owner: WS-03
+    activation: atomic_issued_to_active_once_before_first_provider_call
+    bound_fields: [execution_claim_id, execution_holder_instance_id, execution_fencing_token, execution_claim_deadline]
+    holder_identity_source: process_start_bound_replica_boot_pid_start_and_random_nonce
+    allowed_states: [issued, active, completed, abandoned, expired]
+    dispatch_requires: active_exact_process_instance_holder_and_monotonic_fencing_token_before_claim_deadline
+    same_holder_concurrency: process_local_single_flight_guard_on_non_shareable_instance_binding_required_before_validation
+    fork_or_clone_behavior: inherited_binding_invalid_when_current_process_identity_differs_and_child_must_rekey_with_new_scope
+    concurrent_or_forked_claim: denied_before_provider_io
+    handoff_or_resume: prohibited
+    same_scope_takeover: prohibited_new_scope_required
+    terminal_transition: permanent_compare_and_swap_to_completed_abandoned_or_expired
+    stale_holder_after_fence_or_terminal_transition: denied_before_provider_io
+    per_eligible_call_or_page_claim_writes: 0
   inventory_list_behavior:
     observed_values: opaque_provider_resource_keys_within_bound_container_and_item_budget
     authority: inventory_drift_evidence_only
@@ -119,6 +142,7 @@ authorization_scope:
       - principals_organization_domain_container_and_resources
       - installation_path_resource_key_generation_and_operation_class
       - call_plan_method_path_cursor_order_and_local_counters
+      - active_execution_claim_current_process_instance_holder_fencing_token_state_and_deadline
       - activation_snapshot_and_authorization_consistency_vector
       - latest_provider_enforcement_and_resource_fences
       - compatibility_profile_deadline_and_expiry
@@ -127,12 +151,14 @@ authorization_scope:
     checks:
       - all_before_call_checks
       - final_execution_local_totals_within_whole_plan_envelope
+      - active_execution_claim_current_process_instance_holder_fencing_token_state_and_deadline
       - no_newer_dirty_generation
       - canonical_owner_revision
   persistence:
     start_transaction:
       - immutable_scope_identity_and_bindings
       - conservative_whole_plan_envelope
+      - atomic_one_time_execution_claim_activation
       - logical_audit_start
     per_eligible_read_writes: 0
     per_eligible_page_writes: 0
@@ -142,9 +168,10 @@ authorization_scope:
     interrupted_completion: one_logical_audit_with_reserved_upper_bounds_and_abandoned_or_crash_result
     page_count_growth: constant_postgresql_write_count
   process_loss:
-    old_scope: abandoned_and_invalid
+    old_scope: permanently_abandoned_or_expired_by_fenced_compare_and_swap
     remaining_envelope: conservatively_consumed
-    restart: fresh_central_decision_and_new_scope_from_last_trusted_job_cursor
+    stale_holder_or_fork: denied_before_provider_io_by_process_instance_claim_state_fencing_token_and_deadline
+    restart: only_after_old_claim_terminalization_then_fresh_central_decision_and_new_scope_from_last_trusted_job_cursor
   canonical_acceptance:
     service_read_scope_authorizes_acceptance: false
     required_before_accept:
@@ -249,22 +276,106 @@ compatibility_profile:
   support_matrix: current_plus_two_prior_minors_and_next_candidate_when_upstream_exists
 
 privacy_and_observability:
-  audit_includes:
+  propagation_surfaces: [logical_audit, event, outbox, dlq, log, trace, metric, diagnostic, support_evidence]
+  safe_value_rules:
+    unknown_field: reject
+    provider_derived_free_text: prohibited
+    opaque_identifier_max_bytes: 128
+    codes: closed_server_owned_enums
+    counts: nonnegative_integers_within_scope_envelope
+    digests: exactly_64_lowercase_hex_sha256
+    timestamps: bounded_utc_rfc3339
+    canonical_references: authorized_audit_or_partition_scope_only
+    evidence_references: at_least_128_bits_csprng_opaque_non_content_derived_unique_per_logical_operation_and_authorized_resolution_only
+  logical_operation_audit:
+    closed_schema: true
+    allowed_fields:
+      - schema_version
+      - logical_operation_id
+      - decision_id
+      - acting_service_principal_ref
+      - initiating_principal_ref_when_relevant
+      - canonical_containing_scope_ref
+      - security_domain_id
+      - operation_class
+      - outcome_code
+      - authorization_scope_id
+      - execution_claim_id
+      - activation_revision
+      - authorization_revision
+      - provider_enforcement_revision
+      - resource_revision
+      - compatibility_profile_id
+      - compatibility_profile_schema_digest
+      - provider_binding_evidence_ref
+      - call_plan_class
+      - call_plan_evidence_ref
+      - count_mode
+      - attempt_count
+      - provider_call_count
+      - page_count
+      - item_count
+      - response_byte_count
+      - correlation_id
+      - causation_id
+      - started_at
+      - finished_at
+  provider_reconciliation_event_outbox_dlq_payload:
+    closed_schema: true
+    allowed_fields:
+      - schema_version
+      - event_type
+      - event_id
+      - occurred_at
+      - organization_id
+      - security_domain_id
+      - canonical_container_ref
+      - logical_operation_id
+      - operation_class
+      - outcome_code
+      - compatibility_profile_id
+      - count_mode
+      - attempt_count
+      - provider_call_count
+      - page_count
+      - item_count
+      - response_byte_count
+      - correlation_id
+      - causation_id
+  audit_representation:
+    provider_binding: opaque_random_reference_to_ws03_protected_operation_record
+    bounded_call_plan: closed_class_plus_opaque_random_reference_to_ws03_protected_operation_record
+    compatibility_profile: id_and_schema_digest_only
+  logical_audit_semantics:
     - acting_service_principal
     - initiating_and_effective_principal_when_relevant
     - safe_canonical_containing_scope
     - source_class_and_outcome
     - authorization_model_policy_and_provider_enforcement_revisions
     - scope_operation_and_permit_references
-    - bounded_call_plan_and_compatibility_profile
+    - bounded_counts_opaque_plan_and_provider_references_and_safe_profile_reference
     - exact_or_conservative_execution_counts
     - correlation_and_causation
-  excluded_from_events_logs_traces_metrics_and_general_diagnostics:
+  forbidden_from_all_propagation_surfaces:
     - raw_provider_bodies
-    - webhook_secrets_and_signatures
+    - parsed_provider_bodies
+    - request_or_response_headers
+    - request_query_strings
+    - raw_bounded_call_plans
+    - provider_api_paths
+    - provider_resource_keys_or_locators
+    - pagination_cursors
+    - webhook_secrets
+    - webhook_signatures
     - credentials
     - protected_content
-    - broadly_visible_hidden_resource_locators
+    - work_titles
+    - comments
+    - document_bodies
+    - authorization_inputs
+    - policy_inputs
+    - exception_text
+    - stack_traces
   performance_evidence:
     - endpoint_or_scenario
     - p50_p95_p99
@@ -303,7 +414,10 @@ verification:
     cases: [lost_update_response, lost_delete_response, lost_create_response, apply_revert, delete_recreate, delayed_create, zero_one_many_candidates, excluded_effect_permits, no_blind_retry, no_false_terminal_state]
   T-ADR-0009-FULL-RECONCILIATION:
     owners: [WS-03, WS-06, WS-12]
-    cases: [every_scope_binding_omitted_or_swapped, call_plan_widen_or_reorder, cross_scope_reuse, expiry, process_loss, bounded_inventory, zero_per_page_writes, exact_or_conservative_audit_counts, constant_writes_as_pages_grow]
+    cases: [every_scope_binding_omitted_or_swapped, call_plan_widen_or_reorder, cross_scope_reuse, atomic_one_time_execution_claim, same_scope_fork, stale_holder, post_terminal_replay, claim_deadline, permanent_terminal_invalidation, process_loss, bounded_inventory, zero_per_page_writes, exact_or_conservative_audit_counts, constant_writes_as_pages_grow]
+  T-ADR-0009-AUDIT-MINIMIZATION:
+    owners: [WS-03, WS-07]
+    cases: [closed_logical_audit_fields, closed_event_outbox_dlq_fields, provider_binding_opaque_reference_only, call_plan_opaque_reference_only, low_entropy_offline_guessing_denied, cross_event_provider_plan_reference_correlation_denied, raw_body_canary, parsed_body_canary, request_header_canary, query_string_canary, raw_call_plan_canary, provider_api_path_canary, provider_resource_key_canary, pagination_cursor_canary, webhook_secret_canary, webhook_signature_canary, credential_canary, protected_content_canary, work_title_canary, comment_canary, document_body_canary, authorization_input_canary, policy_input_canary, exception_text_canary, stack_trace_canary, every_canary_across_every_propagation_surface]
   T-ADR-0009-UPGRADE-ROLLBACK:
     owners: [WS-03, WS-12]
     cases: [support_matrix, unknown_capability, preflight, shadow_read, full_scan, compatible_rollback, forward_recovery, nonterminal_operation_preservation]

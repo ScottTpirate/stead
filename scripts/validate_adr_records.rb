@@ -83,6 +83,10 @@ EXPECTED_REQUIREMENT_TEST_LINKS = {
       T-ADR-0009-AMBIGUOUS-MUTATION
       T-ADR-0009-FULL-RECONCILIATION
     ],
+    "SEC-006" => %w[T-ADR-0009-AUDIT-MINIMIZATION],
+    "EVT-003" => %w[T-ADR-0009-AUDIT-MINIMIZATION],
+    "AUD-001" => %w[T-ADR-0009-AUDIT-MINIMIZATION],
+    "AUD-002" => %w[T-ADR-0009-AUDIT-MINIMIZATION],
     "TEST-006" => %w[
       T-ADR-0009-PRECEDENCE
       T-ADR-0009-WEBHOOK-IDEMPOTENCY
@@ -106,7 +110,7 @@ EXPECTED_REQUIREMENT_TEST_LINKS = {
 # Close the complete ADR-0009 Decision body as a separate integrity guard.
 # Semantic mutation self-tests below never use this digest as their oracle.
 ADR_0009_DECISION_BODY_SHA256 =
-  "9204a27b10a8fe53bfc5c3faf3c577463eabb678272e142de77bee1f05023f42".freeze
+  "650bcd7eef3085f25ebcc023fceefee6a57e4f2240dcc0777d39b5980d048803".freeze
 ADR_0009_OWNER_APPROVAL_LINE =
   "- **Project-owner approval required:** yes; this proposal narrowly changes locked per-provider-HTTP-call durable-permit clauses in the Master Build Directive's CLS-003/CLS-007 rules, constitution section 4.6, ADR-0005, and ADR-0007 for one closed bounded internal read plan".freeze
 ADR_0009_SUPERSESSION_LINE =
@@ -134,15 +138,15 @@ ADR_0009_SPEC_TOP_LEVEL_KEYS = %w[
 ].freeze
 ADR_0009_SPEC_SECTION_DIGESTS = {
   "authority" => "947858adec5cddd08322e65e8f4ab4f3be623eadc5265166ed0edd2b571f8835",
-  "field_classes" => "95a7610c06be06293e144c605bc531a83211e2685f5b13c3e34a7d6870102976",
-  "authorization_scope" => "4850dacd14daeffef45b10d7261365cf543fb5a840063b90af51bc85c370eadb",
+  "field_classes" => "d7bd40843dca2b1a6f121285cdd0db34ea40b49a5978dd6f411d45b2bab94ea1",
+  "authorization_scope" => "1af06b5f1740edab53c05a53c8bb89dd47502a219be22b6e72e22e9618c7fbe6",
   "snapshot_and_change_proof" => "c672ab550b3daa59e083785fd0a1f514fa27931ec4966270729452672f443378",
   "webhook" => "689ea3cfbae79f23cccf842ed28ab11f757dad81f008824ec88fe956fbfded26",
   "reconciliation" => "b340a9ea20d0f7164ac97e1d5dfcdb35c1740649c0c7d0a6dffa80c0fc9fd5ae",
   "provider_mutation" => "04d003d64cbe5cc58f23e14d26e22a936d2a9f8c1ad1b089973b1f9fbb8d2e13",
   "compatibility_profile" => "dfd004f9311eba2574f0bc213ca1d31801c55fe1e8cb2d86294cbf3bb83a57f5",
-  "privacy_and_observability" => "97bead1cdb4581faa3342618593b9b3e60cc7a41760256fe6011875948e4e1b2",
-  "verification" => "322887dfd093bb94f68ef0922ead48eb4cefd5420f78e47d530f59f46164971b"
+  "privacy_and_observability" => "7274c14173448396cb206582b1bdafdcccf358e4515ae538b1da955cfe6ad191",
+  "verification" => "07857252843154b8b41be0957356d73c3bd0a1f3af8a6ef83ac28fc6b1c9aff4"
 }.freeze
 ADR_0009_SPEC_EXPECTATIONS = {
   "schema_version" => "1.0",
@@ -152,7 +156,8 @@ ADR_0009_SPEC_EXPECTATIONS = {
   "activation_gate" => "ADR-CAND-008_ACCEPTED_AT_EXACT_IMMUTABLE_SHA",
   "requirements" => %w[
     PRIN-002 ARCH-004 DOM-004 SCM-001 SCM-002 SCM-003 SCM-004 SCM-005
-    AUTH-002 AUTH-006 CLS-003 CLS-006 CLS-007 TEST-006 PERF-003 PERF-004
+    AUTH-002 AUTH-006 CLS-003 CLS-006 CLS-007 SEC-006 EVT-003 AUD-001 AUD-002
+    TEST-006 PERF-003 PERF-004
   ],
   "authority.ordinary_ui_synchronous_provider_calls" => 0,
   "authority.provider_permission" => "enforcement_not_authority",
@@ -178,23 +183,50 @@ ADR_0009_SPEC_EXPECTATIONS = {
     provider_api_path provider_resource_key_when_resource_specific reconciliation_generation
     allowed_operation_class closed_call_plan activation_snapshot authorization_consistency_vector
     compatibility_profile_id_version_and_schema_digest original_deadline
-    immutable_earliest_bound_expiry
+    immutable_earliest_bound_expiry execution_claim_id execution_holder_instance_id
+    execution_fencing_token execution_claim_deadline
   ],
   "authorization_scope.call_plan_fixed_before_first_provider_call" => %w[
     http_method_and_path_templates resource_set_or_container_inventory_scope
     cursor_derivation_rules call_order retry_classes maximum_attempts maximum_calls
     maximum_pages maximum_items maximum_response_bytes
   ],
+  "authorization_scope.execution_claim.owner" => "WS-03",
+  "authorization_scope.execution_claim.activation" => "atomic_issued_to_active_once_before_first_provider_call",
+  "authorization_scope.execution_claim.bound_fields" => %w[
+    execution_claim_id execution_holder_instance_id execution_fencing_token execution_claim_deadline
+  ],
+  "authorization_scope.execution_claim.holder_identity_source" =>
+    "process_start_bound_replica_boot_pid_start_and_random_nonce",
+  "authorization_scope.execution_claim.allowed_states" => %w[
+    issued active completed abandoned expired
+  ],
+  "authorization_scope.execution_claim.dispatch_requires" =>
+    "active_exact_process_instance_holder_and_monotonic_fencing_token_before_claim_deadline",
+  "authorization_scope.execution_claim.same_holder_concurrency" =>
+    "process_local_single_flight_guard_on_non_shareable_instance_binding_required_before_validation",
+  "authorization_scope.execution_claim.fork_or_clone_behavior" =>
+    "inherited_binding_invalid_when_current_process_identity_differs_and_child_must_rekey_with_new_scope",
+  "authorization_scope.execution_claim.concurrent_or_forked_claim" => "denied_before_provider_io",
+  "authorization_scope.execution_claim.handoff_or_resume" => "prohibited",
+  "authorization_scope.execution_claim.same_scope_takeover" => "prohibited_new_scope_required",
+  "authorization_scope.execution_claim.terminal_transition" =>
+    "permanent_compare_and_swap_to_completed_abandoned_or_expired",
+  "authorization_scope.execution_claim.stale_holder_after_fence_or_terminal_transition" =>
+    "denied_before_provider_io",
+  "authorization_scope.execution_claim.per_eligible_call_or_page_claim_writes" => 0,
   "authorization_scope.before_each_provider_call.mode" => "read_only_validation",
   "authorization_scope.before_each_provider_call.checks" => %w[
     exact_scope_and_logical_operation principals_organization_domain_container_and_resources
     installation_path_resource_key_generation_and_operation_class
     call_plan_method_path_cursor_order_and_local_counters
+    active_execution_claim_current_process_instance_holder_fencing_token_state_and_deadline
     activation_snapshot_and_authorization_consistency_vector
     latest_provider_enforcement_and_resource_fences compatibility_profile_deadline_and_expiry
   ],
   "authorization_scope.persistence.start_transaction" => %w[
-    immutable_scope_identity_and_bindings conservative_whole_plan_envelope logical_audit_start
+    immutable_scope_identity_and_bindings conservative_whole_plan_envelope
+    atomic_one_time_execution_claim_activation logical_audit_start
   ],
   "authorization_scope.persistence.per_eligible_read_writes" => 0,
   "authorization_scope.persistence.per_eligible_page_writes" => 0,
@@ -206,11 +238,17 @@ ADR_0009_SPEC_EXPECTATIONS = {
   "authorization_scope.before_local_outcome_commit.mode" => "read_only_validation_plus_owner_transaction_fence",
   "authorization_scope.before_local_outcome_commit.checks" => %w[
     all_before_call_checks final_execution_local_totals_within_whole_plan_envelope
-    no_newer_dirty_generation canonical_owner_revision
+    active_execution_claim_current_process_instance_holder_fencing_token_state_and_deadline
+    no_newer_dirty_generation
+    canonical_owner_revision
   ],
-  "authorization_scope.process_loss.old_scope" => "abandoned_and_invalid",
+  "authorization_scope.process_loss.old_scope" =>
+    "permanently_abandoned_or_expired_by_fenced_compare_and_swap",
   "authorization_scope.process_loss.remaining_envelope" => "conservatively_consumed",
-  "authorization_scope.process_loss.restart" => "fresh_central_decision_and_new_scope_from_last_trusted_job_cursor",
+  "authorization_scope.process_loss.stale_holder_or_fork" =>
+    "denied_before_provider_io_by_process_instance_claim_state_fencing_token_and_deadline",
+  "authorization_scope.process_loss.restart" =>
+    "only_after_old_claim_terminalization_then_fresh_central_decision_and_new_scope_from_last_trusted_job_cursor",
   "authorization_scope.canonical_acceptance.service_read_scope_authorizes_acceptance" => false,
   "authorization_scope.canonical_acceptance.required_before_accept" => %w[
     fresh_effective_principal_central_decision_for_exact_delta current_impersonation_constraints
@@ -226,8 +264,75 @@ ADR_0009_SPEC_EXPECTATIONS = {
   "verification.T-ADR-0009-FULL-RECONCILIATION.owners" => %w[WS-03 WS-06 WS-12],
   "verification.T-ADR-0009-FULL-RECONCILIATION.cases" => %w[
     every_scope_binding_omitted_or_swapped call_plan_widen_or_reorder cross_scope_reuse
-    expiry process_loss bounded_inventory zero_per_page_writes exact_or_conservative_audit_counts
-    constant_writes_as_pages_grow
+    atomic_one_time_execution_claim same_scope_fork stale_holder post_terminal_replay
+    claim_deadline permanent_terminal_invalidation process_loss bounded_inventory
+    zero_per_page_writes exact_or_conservative_audit_counts constant_writes_as_pages_grow
+  ],
+  "privacy_and_observability.propagation_surfaces" => %w[
+    logical_audit event outbox dlq log trace metric diagnostic support_evidence
+  ],
+  "privacy_and_observability.logical_operation_audit.closed_schema" => true,
+  "privacy_and_observability.logical_operation_audit.allowed_fields" => %w[
+    schema_version logical_operation_id decision_id acting_service_principal_ref
+    initiating_principal_ref_when_relevant canonical_containing_scope_ref security_domain_id
+    operation_class outcome_code authorization_scope_id execution_claim_id activation_revision
+    authorization_revision provider_enforcement_revision resource_revision compatibility_profile_id
+    compatibility_profile_schema_digest provider_binding_evidence_ref call_plan_class
+    call_plan_evidence_ref
+    count_mode attempt_count provider_call_count page_count item_count response_byte_count
+    correlation_id causation_id started_at finished_at
+  ],
+  "privacy_and_observability.provider_reconciliation_event_outbox_dlq_payload.closed_schema" => true,
+  "privacy_and_observability.provider_reconciliation_event_outbox_dlq_payload.allowed_fields" => %w[
+    schema_version event_type event_id occurred_at organization_id security_domain_id
+    canonical_container_ref logical_operation_id operation_class outcome_code
+    compatibility_profile_id count_mode attempt_count provider_call_count page_count item_count
+    response_byte_count correlation_id causation_id
+  ],
+  "privacy_and_observability.audit_representation.provider_binding" =>
+    "opaque_random_reference_to_ws03_protected_operation_record",
+  "privacy_and_observability.audit_representation.bounded_call_plan" =>
+    "closed_class_plus_opaque_random_reference_to_ws03_protected_operation_record",
+  "privacy_and_observability.audit_representation.compatibility_profile" =>
+    "id_and_schema_digest_only",
+  "privacy_and_observability.safe_value_rules.unknown_field" => "reject",
+  "privacy_and_observability.safe_value_rules.provider_derived_free_text" => "prohibited",
+  "privacy_and_observability.safe_value_rules.opaque_identifier_max_bytes" => 128,
+  "privacy_and_observability.safe_value_rules.codes" => "closed_server_owned_enums",
+  "privacy_and_observability.safe_value_rules.counts" =>
+    "nonnegative_integers_within_scope_envelope",
+  "privacy_and_observability.safe_value_rules.digests" =>
+    "exactly_64_lowercase_hex_sha256",
+  "privacy_and_observability.safe_value_rules.timestamps" => "bounded_utc_rfc3339",
+  "privacy_and_observability.safe_value_rules.canonical_references" =>
+    "authorized_audit_or_partition_scope_only",
+  "privacy_and_observability.safe_value_rules.evidence_references" =>
+    "at_least_128_bits_csprng_opaque_non_content_derived_unique_per_logical_operation_and_authorized_resolution_only",
+  "privacy_and_observability.logical_audit_semantics" => %w[
+    acting_service_principal initiating_and_effective_principal_when_relevant
+    safe_canonical_containing_scope source_class_and_outcome
+    authorization_model_policy_and_provider_enforcement_revisions
+    scope_operation_and_permit_references
+    bounded_counts_opaque_plan_and_provider_references_and_safe_profile_reference
+    exact_or_conservative_execution_counts correlation_and_causation
+  ],
+  "privacy_and_observability.forbidden_from_all_propagation_surfaces" => %w[
+    raw_provider_bodies parsed_provider_bodies request_or_response_headers request_query_strings
+    raw_bounded_call_plans provider_api_paths provider_resource_keys_or_locators pagination_cursors
+    webhook_secrets webhook_signatures credentials protected_content
+    work_titles comments document_bodies authorization_inputs policy_inputs exception_text stack_traces
+  ],
+  "verification.T-ADR-0009-AUDIT-MINIMIZATION.owners" => %w[WS-03 WS-07],
+  "verification.T-ADR-0009-AUDIT-MINIMIZATION.cases" => %w[
+    closed_logical_audit_fields closed_event_outbox_dlq_fields provider_binding_opaque_reference_only
+    call_plan_opaque_reference_only low_entropy_offline_guessing_denied
+    cross_event_provider_plan_reference_correlation_denied raw_body_canary parsed_body_canary
+    request_header_canary
+    query_string_canary raw_call_plan_canary provider_api_path_canary
+    provider_resource_key_canary pagination_cursor_canary webhook_secret_canary
+    webhook_signature_canary credential_canary protected_content_canary
+    work_title_canary comment_canary document_body_canary authorization_input_canary policy_input_canary
+    exception_text_canary stack_trace_canary every_canary_across_every_propagation_surface
   ]
 }.transform_values(&:freeze).freeze
 ADR_0009_SPEC_VERIFICATION_OWNERS = {
@@ -240,12 +345,37 @@ ADR_0009_SPEC_VERIFICATION_OWNERS = {
   "T-ADR-0009-PROVIDER-OUTAGE" => %w[WS-03 WS-12],
   "T-ADR-0009-AMBIGUOUS-MUTATION" => %w[WS-03 WS-06],
   "T-ADR-0009-FULL-RECONCILIATION" => %w[WS-03 WS-06 WS-12],
+  "T-ADR-0009-AUDIT-MINIMIZATION" => %w[WS-03 WS-07],
   "T-ADR-0009-UPGRADE-ROLLBACK" => %w[WS-03 WS-12]
 }.transform_values(&:freeze).freeze
+ADR_0009_REQUIRED_PROPAGATION_SURFACES = %w[
+  logical_audit event outbox dlq log trace metric diagnostic support_evidence
+].freeze
+ADR_0009_FORBIDDEN_PROPAGATED_FIELD_PATTERNS = {
+  raw_provider_data: /\A(?:raw|parsed)_provider/,
+  request_metadata: /\Arequest_(?:or_response_headers|query_strings)\z/,
+  raw_call_plan: /raw.*call_plan/,
+  guessable_provider_or_plan_digest: /\A(?:provider_binding|call_plan)_sha256\z/,
+  provider_path: /provider_(?:api_)?paths?\z/,
+  provider_resource: /provider_resource_(?:key|keys|locator|locators|keys_or_locators)\z/,
+  pagination_cursor: /pagination_cursors?\z/
+}.freeze
+ADR_0009_REQUIRED_AUDIT_CANARY_CASES = %w[
+  low_entropy_offline_guessing_denied cross_event_provider_plan_reference_correlation_denied
+  raw_body_canary parsed_body_canary request_header_canary query_string_canary
+  raw_call_plan_canary provider_api_path_canary provider_resource_key_canary
+  pagination_cursor_canary webhook_secret_canary webhook_signature_canary credential_canary
+  protected_content_canary work_title_canary comment_canary document_body_canary
+  authorization_input_canary policy_input_canary exception_text_canary stack_trace_canary
+  every_canary_across_every_propagation_surface
+].freeze
 ADR_0009_DECISION_FRAGMENT_PREDICATES = {
-  scope_and_local_accounting: "Before each call and local outcome commit, WS-03 invokes the WS-06 read-only validator and enforces execution-local monotonic counters.",
-  zero_page_writes: "The operation performs zero durable reservation, permit, audit, or accounting writes per eligible call or page",
-  process_loss_fresh_scope: "Recovery starts from the last trusted job cursor only after a fresh decision and new scope.",
+  process_bound_holder: "The holder binding covers replica boot identity, current PID/start identity, and a fresh process nonce; every dispatch rechecks the current process identity.",
+  fork_rekeys_scope: "A keyed process-local single-flight guard prevents same-holder concurrency, while a fork or clone inherits an invalid parent binding and must rekey under a new scope.",
+  scope_and_local_accounting: "Before every dispatch and local outcome commit, WS-03 proves that the claim remains active for that exact process-instance holder and fencing token and is before its deadline, then invokes the WS-06 read-only scope/fence validator and enforces execution-local monotonic counters.",
+  terminal_no_handoff: "Claim handoff, takeover, renewal, and resume are prohibited; completion, abandonment, or expiry is a permanent compare-and-swap terminal transition, and recovery requires a new scope.",
+  zero_page_writes: "The operation performs one atomic start/claim transaction and one terminal logical-audit transaction, but zero durable reservation, permit, audit, claim-renewal, or accounting writes per eligible call or page.",
+  process_loss_fresh_scope: "Recovery starts from the last trusted job cursor only after the old claim is terminal and a fresh decision creates a new scope.",
   excluded_effect_permits: "Each such effect retains its own fresh decision, durable one-use `AuthorizationEffectPermit`",
   effective_principal: "Before canonical state accepts provider-originated data, Stead performs a separate fresh central decision for the effective provider principal",
   no_provider_transaction: "never holds a PostgreSQL transaction across Gitea I/O"
@@ -1004,7 +1134,116 @@ ADR_0007_REQUIREMENT_TEST_MAPPING = {
   ]
 }.transform_values(&:freeze).freeze
 
+YAML_AST_MAX_NODES = 250_000
+YAML_AST_MAX_DEPTH = 128
+
+class YamlAstValidationError < Psych::Exception; end
+class DuplicateYamlMappingKeyError < YamlAstValidationError; end
+class MultipleYamlDocumentsError < YamlAstValidationError; end
+class YamlAstResourceLimitError < YamlAstValidationError; end
+
+def yaml_scalar_key_identity(node, visitor)
+  value = visitor.accept(node)
+  [:scalar, value.class.name, Marshal.dump(value)]
+end
+
+def validate_yaml_ast_node!(node, filename:, visitor:, state:, depth:, fingerprint:)
+  state[:nodes] += 1
+  if state[:nodes] > YAML_AST_MAX_NODES || depth > YAML_AST_MAX_DEPTH
+    raise YamlAstResourceLimitError,
+          "#{filename}: YAML AST exceeds #{YAML_AST_MAX_NODES} nodes or depth #{YAML_AST_MAX_DEPTH}"
+  end
+
+  case node
+  when Psych::Nodes::Scalar
+    fingerprint ? yaml_scalar_key_identity(node, visitor) : nil
+  when Psych::Nodes::Alias
+    fingerprint ? [:alias, node.anchor] : nil
+  when Psych::Nodes::Sequence
+    children = node.children.map do |child|
+      validate_yaml_ast_node!(
+        child,
+        filename: filename,
+        visitor: visitor,
+        state: state,
+        depth: depth + 1,
+        fingerprint: fingerprint
+      )
+    end
+    fingerprint ? [:sequence, children] : nil
+  when Psych::Nodes::Mapping
+    unless node.children.length.even?
+      raise YamlAstValidationError, "#{filename}: malformed YAML mapping node"
+    end
+
+    seen_keys = {}
+    pairs = node.children.each_slice(2).map do |key_node, value_node|
+      key_identity = validate_yaml_ast_node!(
+        key_node,
+        filename: filename,
+        visitor: visitor,
+        state: state,
+        depth: depth + 1,
+        fingerprint: true
+      )
+      if seen_keys.key?(key_identity)
+        line = key_node.respond_to?(:start_line) ? key_node.start_line + 1 : "unknown"
+        raise DuplicateYamlMappingKeyError,
+              "#{filename}: duplicate YAML mapping key at line #{line}"
+      end
+      seen_keys[key_identity] = true
+      value_identity = validate_yaml_ast_node!(
+        value_node,
+        filename: filename,
+        visitor: visitor,
+        state: state,
+        depth: depth + 1,
+        fingerprint: fingerprint
+      )
+      [key_identity, value_identity] if fingerprint
+    end
+    fingerprint ? [:mapping, pairs.sort_by { |pair| Marshal.dump(pair) }] : nil
+  else
+    children = node.children.map do |child|
+      validate_yaml_ast_node!(
+        child,
+        filename: filename,
+        visitor: visitor,
+        state: state,
+        depth: depth + 1,
+        fingerprint: fingerprint
+      )
+    end
+    fingerprint ? [node.class.name, children] : nil
+  end
+end
+
+def reject_duplicate_yaml_mapping_keys!(source, filename:)
+  ast = Psych.parse_stream(source, filename: filename)
+  unless ast.children.length == 1
+    raise MultipleYamlDocumentsError,
+          "#{filename}: YAML source must contain exactly one document, found #{ast.children.length}"
+  end
+  class_loader = Psych::ClassLoader::Restricted.new([], [])
+  scanner = Psych::ScalarScanner.new(class_loader)
+  visitor = Psych::Visitors::ToRuby.new(
+    scanner,
+    class_loader,
+    symbolize_names: false,
+    freeze: false
+  )
+  validate_yaml_ast_node!(
+    ast,
+    filename: filename,
+    visitor: visitor,
+    state: { nodes: 0 },
+    depth: 0,
+    fingerprint: false
+  )
+end
+
 def parse_yaml(source, filename:)
+  reject_duplicate_yaml_mapping_keys!(source, filename: filename)
   YAML.safe_load(
     source,
     permitted_classes: [],
@@ -1238,20 +1477,80 @@ def adr_0009_spec_failures(spec_source:, spec:)
   if field_classes.is_a?(Hash)
     expected_classes = %w[canonical_only provider_content mapped_value managed_configuration central_security provider_identity derived_projection]
     failures << "ADR-0009 field-class registry must use the closed class order" unless field_classes.keys == expected_classes
+    example_classes = Hash.new { |hash, example| hash[example] = [] }
     field_classes.each do |name, definition|
       unless definition.is_a?(Hash) && definition.keys == %w[examples disagreement] &&
              definition["examples"].is_a?(Array) && !definition["examples"].empty? &&
              definition["examples"].uniq == definition["examples"]
         failures << "ADR-0009 field class #{name} must have unique examples and one disagreement rule"
       end
+      Array(definition["examples"]).each { |example| example_classes[example] << name } if definition.is_a?(Hash)
+    end
+    cross_class_duplicates = example_classes.filter_map do |example, classes|
+      "#{example}=#{classes.uniq.join('/')}" if classes.uniq.length > 1
+    end
+    unless cross_class_duplicates.empty?
+      failures << "ADR-0009 field-class examples must be globally unique: #{cross_class_duplicates.sort.join(', ')}"
     end
   else
     failures << "ADR-0009 field-class registry must be a mapping"
   end
 
+  privacy = spec["privacy_and_observability"]
+  if privacy.is_a?(Hash)
+    surfaces = privacy["propagation_surfaces"]
+    unless surfaces == ADR_0009_REQUIRED_PROPAGATION_SURFACES
+      failures << "ADR-0009 provider evidence propagation surfaces must match the closed audit/event/outbox/DLQ/telemetry set"
+    end
+
+    closed_field_sets = %w[
+      logical_operation_audit
+      provider_reconciliation_event_outbox_dlq_payload
+    ].filter_map do |name|
+      record = privacy[name]
+      unless record.is_a?(Hash) && record.keys == %w[closed_schema allowed_fields] &&
+             record["closed_schema"] == true && record["allowed_fields"].is_a?(Array) &&
+             !record["allowed_fields"].empty? && record["allowed_fields"].uniq == record["allowed_fields"] &&
+             record["allowed_fields"].all? { |field| field.is_a?(String) }
+        failures << "ADR-0009 #{name} must be a closed schema with unique string fields"
+        next
+      end
+      record.fetch("allowed_fields")
+    end
+
+    propagated_fields = closed_field_sets.flatten
+    leaked_classes = ADR_0009_FORBIDDEN_PROPAGATED_FIELD_PATTERNS.filter_map do |name, pattern|
+      name if propagated_fields.any? { |field| field.match?(pattern) }
+    end
+    unless leaked_classes.empty?
+      failures << "ADR-0009 closed propagation schemas expose forbidden provider evidence: #{leaked_classes.join(', ')}"
+    end
+
+    event_fields = privacy.dig(
+      "provider_reconciliation_event_outbox_dlq_payload",
+      "allowed_fields"
+    )
+    forbidden_event_references = %w[
+      provider_binding_evidence_ref
+      call_plan_evidence_ref
+    ]
+    if event_fields.is_a?(Array) && !(event_fields & forbidden_event_references).empty?
+      failures << "ADR-0009 provider event/outbox/DLQ payload must omit protected operation-record references"
+    end
+
+    forbidden = privacy["forbidden_from_all_propagation_surfaces"]
+    unless forbidden == ADR_0009_SPEC_EXPECTATIONS.fetch(
+      "privacy_and_observability.forbidden_from_all_propagation_surfaces"
+    )
+      failures << "ADR-0009 every propagation surface must apply the closed exclusion list"
+    end
+  else
+    failures << "ADR-0009 privacy and observability contract must be a mapping"
+  end
+
   verification = spec["verification"]
   unless verification.is_a?(Hash) && verification.keys == ADR_0009_SPEC_VERIFICATION_OWNERS.keys
-    failures << "ADR-0009 structured reconciliation verification registry must match the ten closed test IDs"
+    failures << "ADR-0009 structured reconciliation verification registry must match the eleven closed test IDs"
   else
     ADR_0009_SPEC_VERIFICATION_OWNERS.each do |test_id, expected_owners|
       record = verification[test_id]
@@ -1260,6 +1559,11 @@ def adr_0009_spec_failures(spec_source:, spec:)
              !record["cases"].empty? && record["cases"].uniq == record["cases"]
         failures << "ADR-0009 structured reconciliation verification contract failed: #{test_id}"
       end
+    end
+    audit_cases = verification.dig("T-ADR-0009-AUDIT-MINIMIZATION", "cases")
+    unless audit_cases.is_a?(Array) &&
+           (ADR_0009_REQUIRED_AUDIT_CANARY_CASES - audit_cases).empty?
+      failures << "ADR-0009 audit minimization must cover every forbidden-value canary across every propagation surface"
     end
   end
   failures
@@ -3642,6 +3946,132 @@ if adr_0009_spec.is_a?(Hash)
   unless top_level_failures.include?("ADR-0009 structured reconciliation spec top-level keys must match the closed order")
     adr_0009_spec_mutation_survivors << "top-level key injection"
   end
+
+  adr_0009_spec_mutation_count += 1
+  duplicate_example_spec = Marshal.load(Marshal.dump(adr_0009_spec))
+  duplicate_example = duplicate_example_spec.fetch("field_classes").fetch("canonical_only").fetch("examples").first
+  duplicate_example_spec.fetch("field_classes").fetch("central_security").fetch("examples")[0] = duplicate_example
+  duplicate_example_failures = adr_0009_spec_failures(
+    spec_source: adr_0009_spec_source,
+    spec: duplicate_example_spec
+  )
+  unless duplicate_example_failures.any? { |failure| failure.start_with?("ADR-0009 field-class examples must be globally unique:") }
+    adr_0009_spec_mutation_survivors << "cross-class duplicate example"
+  end
+
+  adr_0009_spec_mutation_count += 1
+  duplicate_key_source = adr_0009_spec_source.sub(
+    "  reusable: false\n",
+    "  reusable: true\n  reusable: false\n"
+  )
+  if duplicate_key_source == adr_0009_spec_source
+    adr_0009_spec_mutation_survivors << "duplicate YAML mapping key fixture unavailable"
+  else
+    last_wins_duplicate = YAML.safe_load(
+      duplicate_key_source,
+      permitted_classes: [],
+      permitted_symbols: [],
+      aliases: false,
+      filename: "#{ADR_0009_SPEC_PATH} (last-wins duplicate control)"
+    )
+    unless last_wins_duplicate == adr_0009_spec
+      adr_0009_spec_mutation_survivors << "duplicate YAML mapping key fixture does not preserve last-wins value"
+    end
+    begin
+      parse_yaml(duplicate_key_source, filename: "#{ADR_0009_SPEC_PATH} (duplicate reusable fixture)")
+      adr_0009_spec_mutation_survivors << "duplicate YAML mapping key"
+    rescue DuplicateYamlMappingKeyError
+      # Expected: duplicate rejection happens before last-wins safe loading.
+    rescue Psych::Exception => error
+      adr_0009_spec_mutation_survivors << "duplicate YAML mapping key wrong failure: #{error.class}"
+    end
+  end
+
+  adr_0009_spec_mutation_count += 1
+  second_document_source = "#{adr_0009_spec_source}---\nreusable: true\n"
+  first_document_only = YAML.safe_load(
+    second_document_source,
+    permitted_classes: [],
+    permitted_symbols: [],
+    aliases: false,
+    filename: "#{ADR_0009_SPEC_PATH} (first-document-only control)"
+  )
+  unless first_document_only == adr_0009_spec
+    adr_0009_spec_mutation_survivors << "multiple YAML document fixture does not preserve first loaded document"
+  end
+  begin
+    parse_yaml(second_document_source, filename: "#{ADR_0009_SPEC_PATH} (trailing document fixture)")
+    adr_0009_spec_mutation_survivors << "trailing YAML document"
+  rescue MultipleYamlDocumentsError
+    # Expected: reject ignored trailing documents before safe loading.
+  rescue Psych::Exception => error
+    adr_0009_spec_mutation_survivors << "trailing YAML document wrong failure: #{error.class}"
+  end
+
+  adr_0009_spec_mutation_count += 1
+  leaked_provider_field_spec = Marshal.load(Marshal.dump(adr_0009_spec))
+  leaked_provider_field_spec
+    .fetch("privacy_and_observability")
+    .fetch("logical_operation_audit")
+    .fetch("allowed_fields") << "provider_api_path"
+  leaked_provider_field_failures = adr_0009_spec_failures(
+    spec_source: adr_0009_spec_source,
+    spec: leaked_provider_field_spec
+  )
+  unless leaked_provider_field_failures.any? do |failure|
+           failure.start_with?("ADR-0009 closed propagation schemas expose forbidden provider evidence:")
+         end
+    adr_0009_spec_mutation_survivors << "provider path in propagated audit evidence"
+  end
+
+  adr_0009_spec_mutation_count += 1
+  guessable_provider_digest_spec = Marshal.load(Marshal.dump(adr_0009_spec))
+  guessable_provider_digest_spec
+    .fetch("privacy_and_observability")
+    .fetch("logical_operation_audit")
+    .fetch("allowed_fields") << "provider_binding_sha256"
+  guessable_provider_digest_failures = adr_0009_spec_failures(
+    spec_source: adr_0009_spec_source,
+    spec: guessable_provider_digest_spec
+  )
+  unless guessable_provider_digest_failures.any? do |failure|
+           failure.start_with?("ADR-0009 closed propagation schemas expose forbidden provider evidence:")
+         end
+    adr_0009_spec_mutation_survivors << "guessable provider digest in propagated audit evidence"
+  end
+
+  adr_0009_spec_mutation_count += 1
+  leaked_event_reference_spec = Marshal.load(Marshal.dump(adr_0009_spec))
+  leaked_event_reference_spec
+    .fetch("privacy_and_observability")
+    .fetch("provider_reconciliation_event_outbox_dlq_payload")
+    .fetch("allowed_fields") << "provider_binding_evidence_ref"
+  leaked_event_reference_failures = adr_0009_spec_failures(
+    spec_source: adr_0009_spec_source,
+    spec: leaked_event_reference_spec
+  )
+  unless leaked_event_reference_failures.include?(
+    "ADR-0009 provider event/outbox/DLQ payload must omit protected operation-record references"
+  )
+    adr_0009_spec_mutation_survivors << "protected operation-record reference in provider event evidence"
+  end
+
+  adr_0009_spec_mutation_count += 1
+  missing_cross_product_canary_spec = Marshal.load(Marshal.dump(adr_0009_spec))
+  missing_cross_product_canary_spec
+    .fetch("verification")
+    .fetch("T-ADR-0009-AUDIT-MINIMIZATION")
+    .fetch("cases")
+    .delete("every_canary_across_every_propagation_surface")
+  missing_cross_product_canary_failures = adr_0009_spec_failures(
+    spec_source: adr_0009_spec_source,
+    spec: missing_cross_product_canary_spec
+  )
+  unless missing_cross_product_canary_failures.include?(
+    "ADR-0009 audit minimization must cover every forbidden-value canary across every propagation surface"
+  )
+    adr_0009_spec_mutation_survivors << "missing propagation-surface canary cross-product"
+  end
 end
 
 ADR_0009_CROSS_FILE_REQUIRED_FRAGMENTS.each do |relative_path, fragments|
@@ -3660,6 +4090,11 @@ expected_reconciliation_record = {
   "source" => ADR_0009_SPEC_PATH,
   "provider" => "gitea",
   "authorization_scope_owner" => "WS-06",
+  "execution_claim_owner" => "WS-03",
+  "audit_event_contract_owner" => "WS-07",
+  "execution_scope" => "atomic_process_instance_single_holder",
+  "propagated_evidence" =>
+    "closed_allowlists_with_opaque_random_ws03_audit_references_and_no_event_references",
   "ordinary_ui_synchronous_provider_calls" => 0,
   "activation_gate" => "ADR-CAND-008_ACCEPTED_AT_EXACT_IMMUTABLE_SHA"
 }
@@ -5428,8 +5863,8 @@ adr_0009_traceability_failures = adr_requirement_traceability_failures(
 failures.concat(adr_0009_traceability_failures)
 
 adr_0009_expected_edges = expected_adr_requirement_test_edges(EXPECTED_REQUIREMENT_TEST_LINKS.fetch("0009")).freeze
-unless adr_0009_expected_edges.length == 49
-  failures << "ADR-0009 closed requirement mapping must contain exactly 49 edges, found #{adr_0009_expected_edges.length}"
+unless adr_0009_expected_edges.length == 53
+  failures << "ADR-0009 closed requirement mapping must contain exactly 53 edges, found #{adr_0009_expected_edges.length}"
 end
 failures.concat(
   exact_adr_requirement_mapping_failures(
@@ -5467,7 +5902,7 @@ end
 unless adr_0009_adr_mutation_survivors.empty?
   failures << "ADR-0009 bounded ADR mutation survivors: #{adr_0009_adr_mutation_survivors.join(', ')}"
 end
-unless adr_0009_spec_mutation_count == ADR_0009_SPEC_EXPECTATIONS.length + ADR_0009_SPEC_SECTION_DIGESTS.length + 1
+unless adr_0009_spec_mutation_count == ADR_0009_SPEC_EXPECTATIONS.length + ADR_0009_SPEC_SECTION_DIGESTS.length + 8
   failures << "ADR-0009 structured-spec mutation inventory count changed"
 end
 unless adr_0009_spec_mutation_survivors.empty?
@@ -5625,15 +6060,26 @@ if security_issue && adr_gates["ADR-CAND-002"]
     }
     raw_binding_mutations.each do |mutation_name, mutated_catalog_source|
       record_p1_006_mutation.call(:raw_yaml_source)
-      begin
-        mutated_catalog = parse_yaml(mutated_catalog_source, filename: "#{issue_catalog_relative} (#{mutation_name})")
-        mutated_issue = mutated_catalog.fetch("issues").find { |issue| issue["id"] == "STEAD-P1-006" }
-        decoded_failures = p1_006_adr_gate_failures(adr_gates: adr_gates, security_issue: mutated_issue)
-        unless decoded_failures.empty?
-          failures << "STEAD-P1-006 #{mutation_name} fixture no longer preserves the decoded canonical gate: #{decoded_failures.join('; ')}"
+      if mutation_name == "YAML duplicate acceptance key"
+        begin
+          parse_yaml(mutated_catalog_source, filename: "#{issue_catalog_relative} (#{mutation_name})")
+          failures << "STEAD-P1-006 #{mutation_name} mutant survived global duplicate-key rejection"
+        rescue DuplicateYamlMappingKeyError
+          # Expected: reject the ambiguous mapping before safe loading.
+        rescue Psych::Exception => error
+          failures << "STEAD-P1-006 #{mutation_name} fixture failed for the wrong reason: #{error.message}"
         end
-      rescue Psych::Exception => error
-        failures << "STEAD-P1-006 #{mutation_name} fixture must remain valid YAML: #{error.message}"
+      else
+        begin
+          mutated_catalog = parse_yaml(mutated_catalog_source, filename: "#{issue_catalog_relative} (#{mutation_name})")
+          mutated_issue = mutated_catalog.fetch("issues").find { |issue| issue["id"] == "STEAD-P1-006" }
+          decoded_failures = p1_006_adr_gate_failures(adr_gates: adr_gates, security_issue: mutated_issue)
+          unless decoded_failures.empty?
+            failures << "STEAD-P1-006 #{mutation_name} fixture no longer preserves the decoded canonical gate: #{decoded_failures.join('; ')}"
+          end
+        rescue Psych::Exception => error
+          failures << "STEAD-P1-006 #{mutation_name} fixture must remain valid YAML: #{error.message}"
+        end
       end
 
       if p1_006_raw_gate_failures(mutated_catalog_source).empty?
@@ -6070,6 +6516,7 @@ end
 adr_0009_owned_path_requirements = {
   "STEAD-P1-002" => %w[apps/core modules/project modules/work tests/integration/core packages/test-fixtures/core],
   "STEAD-P1-003" => %w[modules/scm providers/gitea tests/contract/gitea],
+  "STEAD-P1-007" => %w[apps/worker modules/audit packages/event-schemas specs/asyncapi tests/contract/events],
   "STEAD-P1-011" => %w[apps/steadctl docs/operator tests/upgrade tests/backup-restore],
   "STEAD-P1-012" => %w[specs/traceability tests/security tests/contract/harness]
 }.freeze
@@ -6345,12 +6792,16 @@ implementation_assignments = {
       T-ADR-0009-AMBIGUOUS-MUTATION
       T-ADR-0009-FULL-RECONCILIATION
     ],
+    "STEAD-P1-007" => %w[
+      T-ADR-0009-AUDIT-MINIMIZATION
+    ],
     "STEAD-P1-011" => %w[
       T-ADR-0009-WEBHOOK-IDEMPOTENCY
       T-ADR-0009-PERMISSION-DRIFT
       T-ADR-0009-PROVIDER-OUTAGE
       T-ADR-0009-AMBIGUOUS-MUTATION
       T-ADR-0009-FULL-RECONCILIATION
+      T-ADR-0009-AUDIT-MINIMIZATION
       T-ADR-0009-UPGRADE-ROLLBACK
     ],
     "STEAD-P1-012" => tests_by_number.fetch("0009", []),
@@ -6359,6 +6810,7 @@ implementation_assignments = {
       T-ADR-0009-PERMISSION-DRIFT
       T-ADR-0009-PROVIDER-OUTAGE
       T-ADR-0009-FULL-RECONCILIATION
+      T-ADR-0009-AUDIT-MINIMIZATION
       T-ADR-0009-UPGRADE-ROLLBACK
     ]
   }

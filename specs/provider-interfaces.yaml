@@ -39,6 +39,10 @@ reconciliation_contracts:
     source: specs/provider-reconciliation/gitea-v1.yaml
     provider: gitea
     authorization_scope_owner: WS-06
+    execution_claim_owner: WS-03
+    audit_event_contract_owner: WS-07
+    execution_scope: atomic_process_instance_single_holder
+    propagated_evidence: closed_allowlists_with_opaque_random_ws03_audit_references_and_no_event_references
     ordinary_ui_synchronous_provider_calls: 0
     activation_gate: ADR-CAND-008_ACCEPTED_AT_EXACT_IMMUTABLE_SHA
 interfaces:

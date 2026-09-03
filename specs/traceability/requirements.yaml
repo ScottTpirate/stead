@@ -574,9 +574,9 @@ requirements:
   - requirement_id: "EVT-003"
     title: "Event contract"
     implementation_modules: ["apps/core", "apps/worker", "packages/event-schemas"]
-    issue_ids: ["STEAD-P0-008", "STEAD-P1-007"]
-    test_ids: ["T-EVT-003-ACCEPTANCE", "T-ADR-0001-KIND-ID", "T-ADR-0001-COMPAT", "T-ADR-0008-SUBJECT-PARTITION", "T-ADR-0008-RESOURCE-ORDERING", "T-ADR-0008-RETENTION", "T-ADR-0008-IDEMPOTENCY", "T-ADR-0008-AUTHORIZED-REPLAY", "T-ADR-0008-SCHEMA-COMPATIBILITY", "T-ADR-0008-PAYLOAD-MINIMIZATION"]
-    documentation: ["docs/architecture/event-contract.md", "specs/asyncapi/stead.yaml"]
+    issue_ids: ["STEAD-P0-008", "STEAD-P1-003", "STEAD-P1-007"]
+    test_ids: ["T-EVT-003-ACCEPTANCE", "T-ADR-0001-KIND-ID", "T-ADR-0001-COMPAT", "T-ADR-0008-SUBJECT-PARTITION", "T-ADR-0008-RESOURCE-ORDERING", "T-ADR-0008-RETENTION", "T-ADR-0008-IDEMPOTENCY", "T-ADR-0008-AUTHORIZED-REPLAY", "T-ADR-0008-SCHEMA-COMPATIBILITY", "T-ADR-0008-PAYLOAD-MINIMIZATION", "T-ADR-0009-AUDIT-MINIMIZATION"]
+    documentation: ["docs/architecture/event-contract.md", "specs/asyncapi/stead.yaml", "docs/adr/0009-gitea-provider-reconciliation-precedence-and-conflict-handling.md"]
     status: DEPENDENCY_BLOCKED_PHASE_1
     release: "phase-1"
   - requirement_id: "EVT-004"
@@ -614,17 +614,17 @@ requirements:
   - requirement_id: "AUD-001"
     title: "Platform-wide audit"
     implementation_modules: ["modules/audit", "apps/worker"]
-    issue_ids: ["STEAD-P0-008", "STEAD-P1-007", "STEAD-P1-015", "STEAD-P2-005"]
-    test_ids: ["T-AUD-001-ACCEPTANCE", "T-STEAD-P1-015-CONTRACT", "T-ADR-0007-OUTBOX-ATOMICITY", "T-ADR-0007-FAILURE-INJECTION", "T-ADR-0008-AUTHORIZED-REPLAY", "T-ADR-0008-PAYLOAD-MINIMIZATION"]
-    documentation: ["docs/architecture/audit-model.md", "docs/operator/audit-export.md"]
+    issue_ids: ["STEAD-P0-008", "STEAD-P1-003", "STEAD-P1-007", "STEAD-P1-015", "STEAD-P2-005"]
+    test_ids: ["T-AUD-001-ACCEPTANCE", "T-STEAD-P1-015-CONTRACT", "T-ADR-0007-OUTBOX-ATOMICITY", "T-ADR-0007-FAILURE-INJECTION", "T-ADR-0008-AUTHORIZED-REPLAY", "T-ADR-0008-PAYLOAD-MINIMIZATION", "T-ADR-0009-AUDIT-MINIMIZATION"]
+    documentation: ["docs/architecture/audit-model.md", "docs/operator/audit-export.md", "docs/adr/0009-gitea-provider-reconciliation-precedence-and-conflict-handling.md"]
     status: DEPENDENCY_BLOCKED_PHASE_1
     release: "phase-1"
   - requirement_id: "AUD-002"
     title: "Audit record requirements"
     implementation_modules: ["modules/audit", "apps/worker"]
-    issue_ids: ["STEAD-P0-008", "STEAD-P1-007", "STEAD-P1-015", "STEAD-P3-003"]
-    test_ids: ["T-AUD-002-ACCEPTANCE", "T-STEAD-P1-015-CONTRACT", "T-ADR-0007-OUTBOX-ATOMICITY", "T-ADR-0007-BACKUP-RESTORE", "T-ADR-0007-FAILURE-INJECTION", "T-ADR-0008-AUTHORIZED-REPLAY", "T-ADR-0008-PAYLOAD-MINIMIZATION"]
-    documentation: ["docs/architecture/audit-model.md", "docs/operator/audit-export.md"]
+    issue_ids: ["STEAD-P0-008", "STEAD-P1-003", "STEAD-P1-007", "STEAD-P1-015", "STEAD-P3-003"]
+    test_ids: ["T-AUD-002-ACCEPTANCE", "T-STEAD-P1-015-CONTRACT", "T-ADR-0007-OUTBOX-ATOMICITY", "T-ADR-0007-BACKUP-RESTORE", "T-ADR-0007-FAILURE-INJECTION", "T-ADR-0008-AUTHORIZED-REPLAY", "T-ADR-0008-PAYLOAD-MINIMIZATION", "T-ADR-0009-AUDIT-MINIMIZATION"]
+    documentation: ["docs/architecture/audit-model.md", "docs/operator/audit-export.md", "docs/adr/0009-gitea-provider-reconciliation-precedence-and-conflict-handling.md"]
     status: PHASE_GATED
     release: "phase-3"
   - requirement_id: "SRCH-001"
@@ -950,9 +950,9 @@ requirements:
   - requirement_id: "SEC-006"
     title: "Privacy and telemetry"
     implementation_modules: ["cross-cutting", "policies", "deploy", "tests/security"]
-    issue_ids: ["STEAD-P0-014", "STEAD-P1-001", "STEAD-P1-012"]
-    test_ids: ["T-SEC-006-ACCEPTANCE"]
-    documentation: ["docs/security/threat-model.md", "docs/governance/license-and-dependency-approval.md", "specs/oscal"]
+    issue_ids: ["STEAD-P0-014", "STEAD-P1-001", "STEAD-P1-003", "STEAD-P1-007", "STEAD-P1-012"]
+    test_ids: ["T-SEC-006-ACCEPTANCE", "T-ADR-0009-AUDIT-MINIMIZATION"]
+    documentation: ["docs/security/threat-model.md", "docs/governance/license-and-dependency-approval.md", "specs/oscal", "docs/adr/0009-gitea-provider-reconciliation-precedence-and-conflict-handling.md"]
     status: IMPLEMENTATION_IN_PROGRESS
     release: "phase-1"
   - requirement_id: "TEST-001"
