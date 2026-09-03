@@ -1,7 +1,6 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-require "cgi"
 require "digest"
 require "json"
 require "pathname"
@@ -203,14 +202,10 @@ ADR_0008_CBI_030_SHA256 =
 ADR_0008_CBI_TABLE_HEADER =
   "| ID | Path / surface | Bypass or leakage risk | Required preventive/detective controls | Automated test contract | Owner | Residual risk and status |\n".freeze
 ADR_0008_CBI_TABLE_DELIMITER = "|---|---|---|---|---|---|---|\n".freeze
-ADR_0008_RENDERED_MARKDOWN_MAX_BYTES = 1_048_576
-ADR_0008_RENDERED_MARKDOWN_MAX_LINES = 20_000
-ADR_0008_RENDERED_MARKDOWN_MAX_LINE_CHARACTERS = 262_144
-ADR_0008_RENDERED_MARKDOWN_MAX_REFERENCES = 512
-ADR_0008_RENDERED_MARKDOWN_MAX_INLINE_CONSTRUCTS = 4_096
-ADR_0008_RENDERED_MARKDOWN_MAX_LINK_COMPONENT_CHARACTERS = 4_096
-ADR_0008_RENDERED_MARKDOWN_MAX_LINK_NESTING = 32
-ADR_0008_RENDERED_GFM_MUTATION_NAMES = [
+ADR_0008_CLASSIFICATION_BYPASS_SOURCE_BYTES = 42_378
+ADR_0008_CLASSIFICATION_BYPASS_SOURCE_SHA256 =
+  "c744bdda4a0a482d8554e2227998fa14343a191ee2796fd68236fd8b55c993c0".freeze
+ADR_0008_CBI_SOURCE_MUTATION_NAMES = [
   "multiline type-one pre block hides canonical table",
   "inline HTML comment splits rendered CBI-030",
   "multiline HTML comment splits rendered CBI-030",
@@ -220,23 +215,16 @@ ADR_0008_RENDERED_GFM_MUTATION_NAMES = [
   "numeric entity-escaped angles preserve rendered CBI-030",
   "raw HTML block exposes rendered CBI-030 text",
   "inline HTML tag splits rendered CBI-030",
-  "fenced code exposes rendered CBI-030 text"
+  "fenced code exposes rendered CBI-030 text",
+  "indented paragraph entity exposes rendered CBI-030",
+  "invalid inline link destination exposes rendered CBI-030",
+  "Unicode-folded reference link exposes rendered CBI-030",
+  "multiline reference destination is a source change",
+  "same-length non-CBI source byte change"
 ].freeze
-ADR_0008_RENDERED_GFM_CONTROL_NAMES = [
-  "inline link destination CBI-030 is nonrendered",
-  "inline link title CBI-030 is nonrendered",
-  "reference link destination CBI-030 is nonrendered",
-  "reference link label CBI-030 is nonrendered",
-  "raw HTML attribute CBI-030 is nonrendered",
-  "unterminated comment marker in inline code is literal",
-  "unterminated comment marker in fenced code is literal",
-  "hidden HTML comment CBI-030 is nonrendered"
-].freeze
-ADR_0008_RENDERED_GFM_CASE_INVENTORY_SHA256 =
-  "a02b629b5dc13d587d14f76eab123646a5f5a4a064004e1d0337435f719dd909".freeze
 
 ADR_0008_EXPECTED_SECURITY_MUTATION_GROUPS = {
-  topology: 28,
+  topology: 33,
   authorization: 1,
   streams: 1,
   delivery: 2,
@@ -728,470 +716,28 @@ def adr_0008_decision_body(adr_source)
   [adr_source[start_match.end(0)...end_match.begin(0)], []]
 end
 
-# ADR-0008 rendered Markdown projection helpers. The two projections are
-# intentionally distinct: only top-level Markdown can satisfy the exact table
-# grammar, while all text a reader can see participates in identifier counting.
-def markdown_mask_characters(source)
-  source.gsub(/[^\r\n]/, " ")
-end
-
-def markdown_backtick_closers(source)
-  runs_by_length = Hash.new { |hash, length| hash[length] = [] }
-  cursor = 0
-  while cursor < source.length
-    if source[cursor] == "`"
-      run_end = cursor + 1
-      run_end += 1 while run_end < source.length && source[run_end] == "`"
-      runs_by_length[run_end - cursor] << cursor
-      cursor = run_end
-    else
-      cursor += 1
-    end
-  end
-  runs_by_length.each_value.each_with_object({}) do |positions, closers|
-    positions.each_cons(2) { |opening, closing| closers[opening] = closing }
-  end
-end
-
-def markdown_mask_inline_comments(source)
-  closers = markdown_backtick_closers(source)
-  masked = +""
-  failures = []
-  cursor = 0
-  while cursor < source.length
-    if source[cursor] == "`" && closers[cursor]
-      closing = closers.fetch(cursor)
-      run_end = cursor + 1
-      run_end += 1 while run_end < source.length && source[run_end] == "`"
-      end_offset = closing + run_end - cursor
-      masked << source[cursor...end_offset]
-      cursor = end_offset
-    elsif source[cursor, 4] == "<!--"
-      comment_end = source.index("-->", cursor + 4)
-      unless comment_end
-        masked << markdown_mask_characters(source[cursor..])
-        failures << "classification bypass inventory contains an unterminated HTML comment outside code"
-        break
-      end
-      hidden_end = comment_end + 3
-      masked << markdown_mask_characters(source[cursor...hidden_end])
-      cursor = hidden_end
-    else
-      masked << source[cursor]
-      cursor += 1
-    end
-  end
-  [masked, failures]
-end
-
-def markdown_html_block_descriptor(line, previous_blank:)
-  body = line.delete_suffix("\n").delete_suffix("\r")
-  type_one = body.match(/\A {0,3}<(script|pre|style|textarea)(?=[\t >]|\z)/i)
-  if type_one
-    tag = type_one[1].downcase
-    return {
-      terminator: %r{</#{Regexp.escape(tag)}[ \t\r\n]*>}i,
-      visible: !%w[script style].include?(tag)
-    }
-  end
-  return { terminator: "?>", visible: false } if body.match?(/\A {0,3}<\?/)
-  return { terminator: "]]>", visible: false } if body.match?(/\A {0,3}<!\[CDATA\[/)
-  return { terminator: ">", visible: false } if body.match?(/\A {0,3}<![A-Z]/)
-
-  block_html_tags = %w[
-    address article aside base basefont blockquote body caption center col colgroup
-    dd details dialog dir div dl dt fieldset figcaption figure footer form frame
-    frameset h1 h2 h3 h4 h5 h6 head header hr html iframe legend li link main menu
-    menuitem nav noframes ol optgroup option p param search section summary table
-    tbody td tfoot th thead title tr track ul
-  ].join("|")
-  return { terminator: :blank, visible: true } if body.match?(/\A {0,3}<\/?(?:#{block_html_tags})(?:[ \t\/>]|\z)/i)
-
-  complete_tag = /\A {0,3}<\/?[A-Za-z][A-Za-z0-9-]*(?:[ \t]+[A-Za-z_:][A-Za-z0-9_.:-]*(?:[ \t]*=[ \t]*(?:"[^"]*"|'[^']*'|[^ \t\r\n"'=<>`]+))?)*[ \t]*\/?>[ \t]*\z/
-  return { terminator: :blank, visible: true } if previous_blank && body.match?(complete_tag)
-
-  nil
-end
-
-def markdown_html_block_terminated?(source, descriptor)
-  terminator = descriptor.fetch(:terminator)
-  return false if terminator == :blank
-
-  terminator.is_a?(Regexp) ? source.match?(terminator) : source.include?(terminator)
-end
-
-def markdown_html_tag_end(source, opening)
-  return nil unless source[opening] == "<"
-  return nil unless source[(opening + 1), 2].to_s.match?(/\A(?:\/?[A-Za-z]|[!?])/)
-
-  quote = nil
-  cursor = opening + 1
-  limit = [source.length, opening + ADR_0008_RENDERED_MARKDOWN_MAX_LINK_COMPONENT_CHARACTERS].min
-  while cursor < limit
-    character = source[cursor]
-    if quote
-      quote = nil if character == quote
-    elsif character == '"' || character == "'"
-      quote = character
-    elsif character == ">"
-      return cursor + 1
-    end
-    cursor += 1
-  end
-  nil
-end
-
-def markdown_decode_text_node(source)
-  entity_decoded = CGI.unescapeHTML(source)
-  numeric_decoded, invalid_numeric_reference = decode_numeric_character_references(entity_decoded)
-  invalid_numeric_reference ? entity_decoded : numeric_decoded
-end
-
-def markdown_html_rendered_text(source, visible:)
-  return ["", []] unless visible
-
-  rendered = +""
-  text = +""
-  failures = []
-  suppressed_tag = nil
-  flush_text = lambda do
-    rendered << markdown_decode_text_node(text) unless suppressed_tag
-    text.clear
-  end
-  cursor = 0
-  while cursor < source.length
-    if source[cursor, 4] == "<!--"
-      flush_text.call
-      comment_end = source.index("-->", cursor + 4)
-      cursor = comment_end ? comment_end + 3 : source.length
-    elsif source[cursor] == "<" && (tag_end = markdown_html_tag_end(source, cursor))
-      flush_text.call
-      tag = source[cursor...tag_end]
-      if (tag_match = tag.match(/\A<\s*(\/?)\s*(script|style)(?:\s|>|\/)/im))
-        if tag_match[1] == "/"
-          suppressed_tag = nil if suppressed_tag == tag_match[2].downcase
-        else
-          suppressed_tag = tag_match[2].downcase
-        end
-      end
-      cursor = tag_end
-    elsif source[cursor] == "<" && source[(cursor + 1), 2].to_s.match?(/\A(?:\/?[A-Za-z]|[!?])/)
-      flush_text.call
-      failures << "classification bypass inventory HTML tag exceeds the bounded Markdown grammar"
-      break
-    else
-      text << source[cursor]
-      cursor += 1
-    end
-  end
-  flush_text.call
-  [rendered, failures]
-end
-
-def markdown_normalize_reference_label(source)
-  markdown_decode_text_node(source.gsub(/\\([\\`*{}\[\]()#+\-.!_|>~])/, "\\1"))
-    .strip
-    .gsub(/[ \t\r\n]+/, " ")
-    .downcase
-end
-
-def markdown_reference_definition(line)
-  match = line.match(
-    /\A {0,3}\[((?:\\.|[^\\\]\r\n]){1,999})\]:[ \t]*(?:<[^<>\r\n]*>|[^ \t\r\n]+)(?:[ \t]+(?:"[^"\r\n]*"|'[^'\r\n]*'|\([^()\r\n]*\)))?[ \t]*(?:\r?\n)?\z/
-  )
-  match && markdown_normalize_reference_label(match[1])
-end
-
-def markdown_matching_bracket(source, opening)
-  depth = 1
-  cursor = opening + 1
-  limit = [source.length, opening + 1_000].min
-  while cursor < limit
-    if source[cursor] == "\\" && cursor + 1 < source.length
-      cursor += 2
-    elsif source[cursor] == "["
-      depth += 1
-      return nil if depth > ADR_0008_RENDERED_MARKDOWN_MAX_LINK_NESTING
-      cursor += 1
-    elsif source[cursor] == "]"
-      depth -= 1
-      return cursor if depth.zero?
-      cursor += 1
-    else
-      cursor += 1
-    end
-  end
-  nil
-end
-
-def markdown_inline_destination_end(source, opening)
-  depth = 1
-  quote = nil
-  cursor = opening + 1
-  limit = [source.length, opening + ADR_0008_RENDERED_MARKDOWN_MAX_LINK_COMPONENT_CHARACTERS].min
-  while cursor < limit
-    character = source[cursor]
-    if character == "\\" && cursor + 1 < source.length
-      cursor += 2
-      next
-    end
-    if quote
-      quote = nil if character == quote
-    elsif character == '"' || character == "'"
-      quote = character
-    elsif character == "("
-      depth += 1
-      return nil if depth > ADR_0008_RENDERED_MARKDOWN_MAX_LINK_NESTING
-    elsif character == ")"
-      depth -= 1
-      return cursor + 1 if depth.zero?
-    end
-    cursor += 1
-  end
-  nil
-end
-
-def markdown_inline_rendered_text(source, references:, budget:, depth: 0)
-  if depth > ADR_0008_RENDERED_MARKDOWN_MAX_LINK_NESTING
-    return ["", ["classification bypass inventory Markdown link nesting exceeds the bounded grammar"]]
-  end
-
-  rendered = +""
-  failures = []
-  closers = markdown_backtick_closers(source)
-  cursor = 0
-  while cursor < source.length
-    if "`[<&\\".include?(source[cursor])
-      budget[:constructs] += 1
-      if budget[:constructs] > ADR_0008_RENDERED_MARKDOWN_MAX_INLINE_CONSTRUCTS
-        failures << "classification bypass inventory Markdown inline construct count exceeds the bounded grammar"
-        break
-      end
-    end
-
-    if source[cursor] == "\\" && cursor + 1 < source.length && source[cursor + 1].match?(/[\\`*{}\[\]()#+\-.!_|>~]/)
-      rendered << source[cursor + 1]
-      cursor += 2
-    elsif source[cursor] == "`" && closers[cursor]
-      closing = closers.fetch(cursor)
-      run_end = cursor + 1
-      run_end += 1 while run_end < source.length && source[run_end] == "`"
-      run_length = run_end - cursor
-      code = source[run_end...closing].gsub(/[\r\n]+/, " ")
-      code = code[1...-1] if code.start_with?(" ") && code.end_with?(" ") && code.match?(/[^ ]/)
-      rendered << code
-      cursor = closing + run_length
-    elsif source[cursor, 4] == "<!--"
-      comment_end = source.index("-->", cursor + 4)
-      unless comment_end
-        failures << "classification bypass inventory contains an unterminated HTML comment outside code"
-        break
-      end
-      cursor = comment_end + 3
-    elsif source[cursor] == "<" && (autolink = source[cursor..].match(/\A<(?:[A-Za-z][A-Za-z0-9+.-]{1,31}:[^ <>]*|[^ <>@]+@[^ <>]+)>/))
-      rendered << markdown_decode_text_node(autolink[0][1...-1])
-      cursor += autolink[0].length
-    elsif source[cursor] == "<" && (tag_end = markdown_html_tag_end(source, cursor))
-      cursor = tag_end
-    elsif source[cursor] == "<" && source[(cursor + 1), 2].to_s.match?(/\A(?:\/?[A-Za-z]|[!?])/)
-      failures << "classification bypass inventory HTML tag falls outside the bounded Markdown grammar"
-      break
-    elsif source[cursor] == "[" || (source[cursor] == "!" && source[cursor + 1] == "[")
-      label_opening = source[cursor] == "!" ? cursor + 1 : cursor
-      label_closing = markdown_matching_bracket(source, label_opening)
-      unless label_closing
-        failures << "classification bypass inventory link label falls outside the bounded Markdown grammar"
-        break
-      end
-
-      label = source[(label_opening + 1)...label_closing]
-      after_label = label_closing + 1
-      construct_end = nil
-      if source[after_label] == "("
-        construct_end = markdown_inline_destination_end(source, after_label)
-        failures << "classification bypass inventory inline link falls outside the bounded Markdown grammar" unless construct_end
-      elsif source[after_label] == "["
-        reference_closing = markdown_matching_bracket(source, after_label)
-        if reference_closing
-          reference_label = source[(after_label + 1)...reference_closing]
-          reference_label = label if reference_label.empty?
-          construct_end = reference_closing + 1 if references.include?(markdown_normalize_reference_label(reference_label))
-        else
-          failures << "classification bypass inventory reference link falls outside the bounded Markdown grammar"
-        end
-      elsif references.include?(markdown_normalize_reference_label(label))
-        construct_end = after_label
-      end
-
-      if construct_end
-        label_text, label_failures = markdown_inline_rendered_text(
-          label,
-          references: references,
-          budget: budget,
-          depth: depth + 1
-        )
-        rendered << label_text
-        failures.concat(label_failures)
-        cursor = construct_end
-        next
-      end
-      rendered << source[cursor]
-      cursor += 1
-    elsif source[cursor] == "&" && (entity = source[cursor..].match(/\A&(?:#[xX][0-9A-Fa-f]{1,6}|#[0-9]{1,7}|[A-Za-z][A-Za-z0-9]{1,31});/))
-      rendered << markdown_decode_text_node(entity[0])
-      cursor += entity[0].length
-    elsif "*_~".include?(source[cursor])
-      cursor += 1
-    else
-      rendered << source[cursor]
-      cursor += 1
-    end
-  end
-  [rendered, failures]
-end
-
-def markdown_security_views(source)
-  # Syntax is ASCII-delimited. Binary indexing keeps every scan linear even
-  # when prose contains multibyte UTF-8, while slices preserve original bytes.
-  source = source.b
-  empty_views = { structural_source: "", rendered_text: "" }
-  if source.bytesize > ADR_0008_RENDERED_MARKDOWN_MAX_BYTES
-    return [empty_views, ["classification bypass inventory exceeds the bounded Markdown byte limit"]]
-  end
-  lines = source.lines
-  if lines.length > ADR_0008_RENDERED_MARKDOWN_MAX_LINES
-    return [empty_views, ["classification bypass inventory exceeds the bounded Markdown line limit"]]
-  end
-  if lines.any? { |line| line.length > ADR_0008_RENDERED_MARKDOWN_MAX_LINE_CHARACTERS }
-    return [empty_views, ["classification bypass inventory contains a line exceeding the bounded Markdown character limit"]]
-  end
-
-  structural = +""
-  segments = []
-  normal = +""
-  flush_normal = lambda do
-    unless normal.empty?
-      segments << { kind: :markdown, source: normal.dup }
-      normal.clear
-    end
-  end
-  previous_blank = true
-  index = 0
-  while index < lines.length
-    line = lines[index]
-    opening = line.match(/\A {0,3}(`{3,}|~{3,})([^\r\n]*)(?:\r?\n)?\z/)
-    if opening && !(opening[1].start_with?("`") && opening[2].include?("`"))
-      flush_normal.call
-      marker = opening[1]
-      code = +""
-      structural << markdown_mask_characters(line)
-      index += 1
-      while index < lines.length
-        candidate = lines[index]
-        structural << markdown_mask_characters(candidate)
-        delimiter = Regexp.escape(marker[0])
-        if candidate.match?(/\A {0,3}#{delimiter}{#{marker.length},}[ \t]*(?:\r?\n)?\z/)
-          index += 1
-          break
-        end
-        code << candidate
-        index += 1
-      end
-      segments << { kind: :code, source: code }
-      previous_blank = false
-      next
-    end
-
-    descriptor = markdown_html_block_descriptor(line, previous_blank: previous_blank)
-    if descriptor
-      flush_normal.call
-      raw = +""
-      while index < lines.length
-        candidate = lines[index]
-        break if descriptor.fetch(:terminator) == :blank && candidate.strip.empty?
-
-        raw << candidate
-        structural << markdown_mask_characters(candidate)
-        index += 1
-        break if markdown_html_block_terminated?(raw, descriptor)
-      end
-      segments << { kind: :html, source: raw, visible: descriptor.fetch(:visible) }
-      previous_blank = false
-      next
-    end
-
-    if line.start_with?("    ", "\t")
-      flush_normal.call
-      code = +""
-      while index < lines.length && (lines[index].strip.empty? || lines[index].start_with?("    ", "\t"))
-        candidate = lines[index]
-        structural << markdown_mask_characters(candidate)
-        code << if candidate.start_with?("\t")
-                  candidate.delete_prefix("\t")
-                elsif candidate.start_with?("    ")
-                  candidate.delete_prefix("    ")
-                else
-                  candidate
-                end
-        index += 1
-      end
-      segments << { kind: :code, source: code }
-      previous_blank = false
-      next
-    end
-
-    structural << line
-    normal << line
-    previous_blank = line.strip.empty?
-    index += 1
-  end
-  flush_normal.call
-
-  structural, comment_failures = markdown_mask_inline_comments(structural)
-  failures = comment_failures
-  references = structural.lines.filter_map { |line| markdown_reference_definition(line) }.to_set
-  if references.length > ADR_0008_RENDERED_MARKDOWN_MAX_REFERENCES
-    failures << "classification bypass inventory reference definition count exceeds the bounded Markdown grammar"
-  end
-
-  rendered = +""
-  budget = { constructs: 0 }
-  segments.each do |segment|
-    case segment.fetch(:kind)
-    when :code
-      rendered << segment.fetch(:source)
-    when :html
-      text, html_failures = markdown_html_rendered_text(segment.fetch(:source), visible: segment.fetch(:visible))
-      rendered << text
-      failures.concat(html_failures)
-    when :markdown
-      masked_segment, segment_comment_failures = markdown_mask_inline_comments(segment.fetch(:source))
-      failures.concat(segment_comment_failures)
-      renderable_lines = segment.fetch(:source).lines.zip(masked_segment.lines).filter_map do |original, masked|
-        next(original.end_with?("\n") ? "\n" : "") if markdown_reference_definition(masked)
-
-        original
-      end
-      text, inline_failures = markdown_inline_rendered_text(
-        renderable_lines.join,
-        references: references,
-        budget: budget
-      )
-      rendered << text
-      failures.concat(inline_failures)
-    end
-  end
-
-  [{ structural_source: structural, rendered_text: rendered }, failures.uniq]
-end
-
+# CBI-030 is interpreted only after the complete classification-bypass
+# inventory matches its reviewed byte length and digest. This deliberately
+# avoids a partial Markdown renderer: any source change, including hidden or
+# alternate rendered syntax, requires an explicit reviewed digest update.
 def adr_0008_bypass_inventory_rows(source)
   failures = []
-  # The exact table must be top-level Markdown, but document-wide identity
-  # uniqueness is checked against the separately modeled rendered text.
-  markdown_views, markdown_failures = markdown_security_views(source)
-  failures.concat(markdown_failures)
-  visible_source = markdown_views.fetch(:structural_source)
+  unless source.bytesize == ADR_0008_CLASSIFICATION_BYPASS_SOURCE_BYTES
+    return [[], [
+      "classification bypass inventory source byte length mismatch: expected " \
+      "#{ADR_0008_CLASSIFICATION_BYPASS_SOURCE_BYTES}, found #{source.bytesize}"
+    ]]
+  end
+
+  actual_source_sha256 = Digest::SHA256.hexdigest(source)
+  unless actual_source_sha256 == ADR_0008_CLASSIFICATION_BYPASS_SOURCE_SHA256
+    return [[], [
+      "classification bypass inventory source digest mismatch: expected " \
+      "#{ADR_0008_CLASSIFICATION_BYPASS_SOURCE_SHA256}, found #{actual_source_sha256}"
+    ]]
+  end
+
+  visible_source = source
   section_heading = "## Complete bypass inventory\n"
   section_end_heading = "## Common test fixture and oracle\n"
   section_starts = visible_source.enum_for(:scan, /^#{Regexp.escape(section_heading)}/).map { Regexp.last_match }
@@ -1223,9 +769,8 @@ def adr_0008_bypass_inventory_rows(source)
     failures << "classification bypass inventory row #{index + 1} must use canonical CBI table-row syntax"
   end
 
-  rendered_cbi_030_count = markdown_views.fetch(:rendered_text).upcase.scan("CBI-030").length
-  unless rendered_cbi_030_count == 1 && rows.grep(/\A\| CBI-030 \|/).length == 1
-    failures << "classification bypass inventory must render CBI-030 exactly once in the canonical table"
+  unless rows.grep(/\A\| CBI-030 \|/).length == 1
+    failures << "classification bypass inventory canonical table must contain exactly one CBI-030 row"
   end
   [rows, failures]
 end
@@ -1586,7 +1131,15 @@ issue_catalog = load_yaml(issue_catalog_relative)
 adr_gates = issue_catalog.fetch("adr_decision_gates").to_h { |gate| [gate.fetch("adr_id"), gate] }
 issues = issue_catalog.fetch("issues").to_h { |issue| [issue.fetch("id"), issue] }
 asyncapi = load_yaml("specs/asyncapi/stead.yaml")
-classification_bypass_source = ROOT.join("docs/security/classification-bypass-inventory.md").read(encoding: "UTF-8")
+classification_bypass_path = ROOT.join("docs/security/classification-bypass-inventory.md")
+classification_bypass_source = classification_bypass_path.open("rb") do |file|
+  file.read(ADR_0008_CLASSIFICATION_BYPASS_SOURCE_BYTES + 1).to_s
+end
+classification_bypass_source.force_encoding(Encoding::UTF_8)
+unless classification_bypass_source.valid_encoding?
+  failures << "docs/security/classification-bypass-inventory.md must be valid UTF-8"
+  classification_bypass_source = ""
+end
 adr_index = ROOT.join("docs/adr/INDEX.md").read(encoding: "UTF-8")
 candidate_index = ROOT.join("docs/governance/adr-candidate-index.md").read(encoding: "UTF-8")
 choice_queue = ROOT.join("docs/adr/unresolved-implementation-choices.md").read(encoding: "UTF-8")
@@ -1925,7 +1478,7 @@ adr_0008_security_mutations << {
   adr: adr_0008_source,
   asyncapi: deep_copy_asyncapi.call,
   bypass: mutated_bypass,
-  expected_failure_fragment: "CBI-030 omits ADR-0008 lifecycle"
+  expected_failure_fragment: "classification bypass inventory source"
 }
 
 mutated_retention_bypass = classification_bypass_source.sub(
@@ -1938,7 +1491,7 @@ adr_0008_security_mutations << {
   adr: adr_0008_source,
   asyncapi: deep_copy_asyncapi.call,
   bypass: mutated_retention_bypass,
-  expected_failure_fragment: "CBI-030 omits ADR-0008 retention_recovery"
+  expected_failure_fragment: "classification bypass inventory source"
 }
 
 {
@@ -1956,7 +1509,7 @@ adr_0008_security_mutations << {
     adr: adr_0008_source,
     asyncapi: deep_copy_asyncapi.call,
     bypass: mutated_closed_bypass,
-    expected_failure_fragment: "exact closed ADR-0008 security control row"
+    expected_failure_fragment: "classification bypass inventory source"
   }
 end
 
@@ -1972,45 +1525,29 @@ if canonical_bypass_header_index
   ].join
 
   {
-    "HTML-comment-hidden complete inventory table" => [
+    "HTML-comment-hidden complete inventory table" =>
       "<!--\n#{canonical_bypass_table}-->\n",
-      "exactly one canonical visible complete-inventory table"
-    ],
-    "fenced-code-hidden complete inventory table" => [
+    "fenced-code-hidden complete inventory table" =>
       "```text\n#{canonical_bypass_table}```\n",
-      "exactly one canonical visible complete-inventory table"
-    ],
-    "raw-HTML-hidden complete inventory table" => [
+    "raw-HTML-hidden complete inventory table" =>
       "<div>\n#{canonical_bypass_table}</div>\n\n",
-      "exactly one canonical visible complete-inventory table"
-    ],
-    "type-seven-inline-HTML-hidden complete inventory table" => [
+    "type-seven-inline-HTML-hidden complete inventory table" =>
       "<span>\n#{canonical_bypass_table}</span>\n\n",
-      "exactly one canonical visible complete-inventory table"
-    ],
-    "type-seven-custom-HTML-hidden complete inventory table" => [
+    "type-seven-custom-HTML-hidden complete inventory table" =>
       "<stead-contract>\n#{canonical_bypass_table}</stead-contract>\n\n",
-      "exactly one canonical visible complete-inventory table"
-    ],
-    "second complete inventory table after a blank line" => [
+    "second complete inventory table after a blank line" =>
       "#{canonical_bypass_table}\n#{canonical_bypass_table}",
-      "exactly one canonical visible complete-inventory table"
-    ],
-    "nested formatted duplicate CBI-030 table" => [
+    "nested formatted duplicate CBI-030 table" =>
       "#{canonical_bypass_table}\n#{canonical_bypass_table.lines.map { |line| "> #{line.sub("CBI-030", "CBI-**030**")}" }.join}",
-      "render CBI-030 exactly once"
-    ],
-    "security-control header meaning changed" => [
+    "security-control header meaning changed" =>
       canonical_bypass_table.sub(
         ADR_0008_CBI_TABLE_HEADER,
         ADR_0008_CBI_TABLE_HEADER.sub(
           "Required preventive/detective controls",
           "Optional preventive/detective guidance"
         )
-      ),
-      "exactly one canonical visible complete-inventory table"
-    ]
-  }.each do |name, (replacement_table, expected_failure_fragment)|
+      )
+  }.each do |name, replacement_table|
     mutated_rendered_bypass = classification_bypass_source.sub(
       canonical_bypass_table,
       replacement_table
@@ -2021,7 +1558,7 @@ if canonical_bypass_header_index
       adr: adr_0008_source,
       asyncapi: deep_copy_asyncapi.call,
       bypass: mutated_rendered_bypass,
-      expected_failure_fragment: expected_failure_fragment
+      expected_failure_fragment: "classification bypass inventory source"
     }
   end
 
@@ -2035,7 +1572,7 @@ if canonical_bypass_header_index
     adr: adr_0008_source,
     asyncapi: deep_copy_asyncapi.call,
     bypass: multiline_pre_bypass,
-    expected_failure_fragment: "exactly one canonical visible complete-inventory table"
+    expected_failure_fragment: "classification bypass inventory source"
   }
 end
 
@@ -2056,7 +1593,7 @@ if canonical_bypass_row
       adr: adr_0008_source,
       asyncapi: deep_copy_asyncapi.call,
       bypass: mutated_duplicate_bypass,
-      expected_failure_fragment: "canonical CBI table-row syntax"
+      expected_failure_fragment: "classification bypass inventory source"
     }
   end
 end
@@ -2072,7 +1609,7 @@ if canonical_bypass_table
     adr: adr_0008_source,
     asyncapi: deep_copy_asyncapi.call,
     bypass: post_boundary_duplicate,
-    expected_failure_fragment: "render CBI-030 exactly once"
+    expected_failure_fragment: "classification bypass inventory source"
   }
 
   {
@@ -2084,7 +1621,15 @@ if canonical_bypass_table
     "numeric entity-escaped angles preserve rendered CBI-030" => "&#60;CBI-030&#62;",
     "raw HTML block exposes rendered CBI-030 text" => "<div>\nCBI-030\n</div>",
     "inline HTML tag splits rendered CBI-030" => "CBI<span data-safe=\"true\"></span>-030",
-    "fenced code exposes rendered CBI-030 text" => "```text\nCBI-030\n```"
+    "fenced code exposes rendered CBI-030 text" => "```text\nCBI-030\n```",
+    "indented paragraph entity exposes rendered CBI-030" =>
+      "paragraph continuation\n    CBI-&#48;30",
+    "invalid inline link destination exposes rendered CBI-030" =>
+      "[safe](not a CBI-030 destination)",
+    "Unicode-folded reference link exposes rendered CBI-030" =>
+      "[CBI][\u00C4]-030\n\n[\u00E4]: https://example.invalid/",
+    "multiline reference destination is a source change" =>
+      "[safe][dest]\n\n[dest]:\n  https://example.invalid/CBI-030"
   }.each do |name, rendered_duplicate|
     mutated_rendered_identity = classification_bypass_source.sub(
       "## Common test fixture and oracle\n",
@@ -2096,73 +1641,34 @@ if canonical_bypass_table
       adr: adr_0008_source,
       asyncapi: deep_copy_asyncapi.call,
       bypass: mutated_rendered_identity,
-      expected_failure_fragment: "render CBI-030 exactly once"
+      expected_failure_fragment: "classification bypass inventory source"
     }
   end
 end
 
-adr_0008_rendered_gfm_controls = {
-  "inline link destination CBI-030 is nonrendered" =>
-    "[safe](https://example.invalid/CBI-030)",
-  "inline link title CBI-030 is nonrendered" =>
-    "[safe](https://example.invalid/ \"CBI-030\")",
-  "reference link destination CBI-030 is nonrendered" =>
-    "[safe][destination]\n\n[destination]: https://example.invalid/CBI-030",
-  "reference link label CBI-030 is nonrendered" =>
-    "[safe][CBI-030]\n\n[CBI-030]: https://example.invalid/",
-  "raw HTML attribute CBI-030 is nonrendered" =>
-    "<span data-contract=\"CBI-030\">safe</span>",
-  "unterminated comment marker in inline code is literal" =>
-    "`<!--`",
-  "unterminated comment marker in fenced code is literal" =>
-    "```text\n<!--\n```",
-  "hidden HTML comment CBI-030 is nonrendered" =>
-    "<!-- CBI-030 -->"
-}.freeze
-
-adr_0008_rendered_gfm_controls.each do |name, control_source|
-  controlled_bypass = classification_bypass_source.sub(
-    "## Common test fixture and oracle\n",
-    "#{control_source}\n\n## Common test fixture and oracle\n"
-  )
-  control_failures = adr_0008_security_contract_failures(
-    adr_source: adr_0008_source,
-    asyncapi: deep_copy_asyncapi.call,
-    bypass_source: controlled_bypass
-  )
-  unless control_failures.empty?
-    failures << "ADR-0008 rendered GFM control #{name} was rejected: #{control_failures.join('; ')}"
-  end
-end
-
-actual_rendered_gfm_mutation_names = adr_0008_security_mutations.filter_map do |mutation|
-  mutation.fetch(:name) if ADR_0008_RENDERED_GFM_MUTATION_NAMES.include?(mutation.fetch(:name))
-end
-unless actual_rendered_gfm_mutation_names == ADR_0008_RENDERED_GFM_MUTATION_NAMES
-  failures << "ADR-0008 rendered GFM mutation inventory changed: expected #{ADR_0008_RENDERED_GFM_MUTATION_NAMES.inspect}, found #{actual_rendered_gfm_mutation_names.inspect}"
-end
-unless adr_0008_rendered_gfm_controls.keys == ADR_0008_RENDERED_GFM_CONTROL_NAMES
-  failures << "ADR-0008 rendered GFM control inventory changed: expected #{ADR_0008_RENDERED_GFM_CONTROL_NAMES.inspect}, found #{adr_0008_rendered_gfm_controls.keys.inspect}"
-end
-rendered_gfm_case_inventory = [
-  *actual_rendered_gfm_mutation_names.map { |name| "mutant:#{name}" },
-  *adr_0008_rendered_gfm_controls.keys.map { |name| "control:#{name}" }
-].join("\n")
-unless Digest::SHA256.hexdigest(rendered_gfm_case_inventory) == ADR_0008_RENDERED_GFM_CASE_INVENTORY_SHA256
-  failures << "ADR-0008 rendered GFM case inventory digest changed"
-end
-
-harmless_escaped_pipe_prose = classification_bypass_source.sub(
-  "Positive controls prove an authorized principal still succeeds.\n",
-  "Positive controls prove an authorized principal still succeeds.\n\nExample literal \\| separator\n---|---\n"
+same_length_bypass_change = classification_bypass_source.sub(
+  "Positive controls prove an authorized principal still succeeds.",
+  "positive controls prove an authorized principal still succeeds."
 )
-harmless_escaped_pipe_failures = adr_0008_security_contract_failures(
-  adr_source: adr_0008_source,
+adr_0008_security_mutations << {
+  group: :topology,
+  name: "same-length non-CBI source byte change",
+  adr: adr_0008_source,
   asyncapi: deep_copy_asyncapi.call,
-  bypass_source: harmless_escaped_pipe_prose
-)
-unless harmless_escaped_pipe_failures.empty?
-  failures << "ADR-0008 closed inventory grammar rejected harmless escaped-pipe prose: #{harmless_escaped_pipe_failures.join('; ')}"
+  bypass: same_length_bypass_change,
+  expected_failure_fragment: "classification bypass inventory source digest mismatch"
+}
+
+actual_cbi_source_mutation_names = adr_0008_security_mutations.filter_map do |mutation|
+  mutation.fetch(:name) if ADR_0008_CBI_SOURCE_MUTATION_NAMES.include?(mutation.fetch(:name))
+end
+unless actual_cbi_source_mutation_names == ADR_0008_CBI_SOURCE_MUTATION_NAMES
+  failures << "ADR-0008 pinned CBI source mutation inventory changed: expected #{ADR_0008_CBI_SOURCE_MUTATION_NAMES.inspect}, found #{actual_cbi_source_mutation_names.inspect}"
+end
+
+baseline_cbi_rows, baseline_cbi_failures = adr_0008_bypass_inventory_rows(classification_bypass_source)
+unless baseline_cbi_failures.empty? && baseline_cbi_rows.length == 47
+  failures << "ADR-0008 pinned CBI source baseline failed: #{baseline_cbi_failures.join('; ')}; rows=#{baseline_cbi_rows.length}"
 end
 
 adr_0008_security_mutation_survivors = adr_0008_security_mutations.filter_map do |mutation|
@@ -3209,7 +2715,7 @@ if failures.empty?
   puts "STEAD-P1-006 strict raw gate mutation guard: PASS (#{p1_006_gate_mutation_count}/#{EXPECTED_P1_006_GATE_MUTATION_COUNT} mutations killed)"
   puts "ADR-0007 exact-mapping mutation guard: PASS (#{adr_0007_killed_mutations}/#{adr_0007_expected_edges.length} required edge deletions killed)"
   puts "ADR-0008 exact-mapping mutation guard: PASS (#{adr_0008_killed_mutations}/#{adr_0008_expected_edges.length} required edge deletions killed)"
-  puts "ADR-0008 rendered-GFM guard: PASS (#{ADR_0008_RENDERED_GFM_MUTATION_NAMES.length} mutations killed, #{adr_0008_rendered_gfm_controls.length} controls accepted)"
+  puts "ADR-0008 pinned-CBI-source guard: PASS (baseline=#{ADR_0008_CLASSIFICATION_BYPASS_SOURCE_BYTES} bytes, #{ADR_0008_CBI_SOURCE_MUTATION_NAMES.length}/#{ADR_0008_CBI_SOURCE_MUTATION_NAMES.length} adversarial mutations killed)"
   puts "ADR-0008 security-contract mutation guard: PASS (#{adr_0008_security_mutations.length}/#{adr_0008_security_mutations.length} mutations killed across #{adr_0008_security_mutation_groups.length} gap groups)"
   puts "ADR traceability validation: PASS (records=#{paths.length}, requirements=#{known_requirement_ids.length}, tests=#{all_test_owners.length})"
 else
