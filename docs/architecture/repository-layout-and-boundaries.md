@@ -272,10 +272,10 @@ Exact physical PostgreSQL schema naming is a Phase 0 implementation choice, but 
 | `notification.*` | `WS-07` | authoritative in-app notification/read/archive/channel-delivery state |
 | `audit.*` | `WS-07` | append-only authoritative audit records plus rebuildable activity projection |
 | `migration.*` | `WS-11` | authoritative migration jobs/checkpoints/mappings/quarantine/redirects/reports |
-| `core_outbox.*` | `WS-02` | authoritative undelivered event intent coupled atomically to platform domain transactions |
+| `core_outbox.*` | `WS-02` | authoritative event intent plus exact canonical bytes/digest and identity, frozen consumer-registry revision/set, provider-neutral fenced claim, monotonic publication generation, opaque publication receipt, and retirement eligibility coupled atomically to platform domain transactions |
 | `<module>.*processed_event*` | destination module owner | local consumer idempotency/checkpoint state only |
 
-Special access to `core_outbox.*` is narrow: modules request insertion through a `WS-02` transaction-scoped outbox port, and the `WS-07` publisher claims/marks delivery through a reviewed repository port. Neither receives unrestricted SQL ownership. Consumer processed-event records live in the destination owner's namespace.
+Special access to `core_outbox.*` is narrow: modules request insertion through a `WS-02` transaction-scoped outbox port, and the `WS-07` publisher uses reviewed WS-02-owned claim/generation/opaque-receipt/retirement ports. The core contract remains provider-neutral and exposes no NATS header, publish acknowledgement, stream, or broker-client type. Neither consumer receives unrestricted SQL ownership. WS-07 owns required-consumer registry semantics/artifacts and NATS handling; each consumer owner writes its own completion/processed/checkpoint state and exposes typed reads; WS-12 only renders, pins, validates, backs up, restores, and diagnoses reviewed artifacts and state.
 
 External boundaries are absolute:
 

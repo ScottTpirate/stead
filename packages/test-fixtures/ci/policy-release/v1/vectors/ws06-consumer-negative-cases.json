@@ -1,0 +1,131 @@
+{
+  "schema_version": "1.0.0",
+  "fixture_status": "nonauthorizing_consumer_mutation_instructions",
+  "base_vector": "ws06/canonical-threshold-two-vector.json",
+  "verification_time": "2026-09-01T00:00:00Z",
+  "execution_contract": "mutation_materialization_only",
+  "authority": "none",
+  "consumer_owner": "WS-06",
+  "cases": [
+    {
+      "id": "activation-signature-bit-flip",
+      "obligation": "T-ADR-0006-DSSE",
+      "baseline": {"release_vector_file": "vectors/ws06/canonical-threshold-two-vector.json", "consumer_environment_file": "vectors/ws06/consumer-environment.json", "signature_threshold": 2, "distinct_custodians_required": true},
+      "mutation": {"operation": "flip_nested_base64_bit", "target": "/release/activation/envelope_base64", "decoded_target": "/signatures/0/sig", "byte_offset": 7, "bit_mask": 1},
+      "expected_outcome": "reject",
+      "expected_consumer_code": "crypto_signature_invalid"
+    },
+    {
+      "id": "release-signature-bit-flip",
+      "obligation": "T-ADR-0006-DSSE",
+      "baseline": {"release_vector_file": "vectors/ws06/canonical-threshold-two-vector.json", "consumer_environment_file": "vectors/ws06/consumer-environment.json", "signature_threshold": 2, "distinct_custodians_required": true},
+      "mutation": {"operation": "flip_nested_base64_bit", "target": "/release/attestation/envelope_base64", "decoded_target": "/signatures/0/sig", "byte_offset": 7, "bit_mask": 1},
+      "expected_outcome": "reject",
+      "expected_consumer_code": "crypto_signature_invalid"
+    },
+    {
+      "id": "activation-payload-bit-flip",
+      "obligation": "T-ADR-0006-CONTENT-INTEGRITY",
+      "baseline": {"release_vector_file": "vectors/ws06/canonical-threshold-two-vector.json", "consumer_environment_file": "vectors/ws06/consumer-environment.json", "signature_threshold": 2, "distinct_custodians_required": true},
+      "mutation": {"operation": "flip_base64_bit", "target": "/release/activation/manifest_payload_base64", "byte_offset": 19, "bit_mask": 1},
+      "expected_outcome": "reject",
+      "expected_consumer_code": "signed_payload_mismatch"
+    },
+    {
+      "id": "release-payload-bit-flip",
+      "obligation": "T-ADR-0006-CONTENT-INTEGRITY",
+      "baseline": {"release_vector_file": "vectors/ws06/canonical-threshold-two-vector.json", "consumer_environment_file": "vectors/ws06/consumer-environment.json", "signature_threshold": 2, "distinct_custodians_required": true},
+      "mutation": {"operation": "flip_base64_bit", "target": "/release/attestation/payload_base64", "byte_offset": 19, "bit_mask": 1},
+      "expected_outcome": "reject",
+      "expected_consumer_code": "signed_payload_mismatch"
+    },
+    {
+      "id": "misleading-keyid",
+      "obligation": "T-ADR-0006-DSSE",
+      "baseline": {"release_vector_file": "vectors/ws06/canonical-threshold-two-vector.json", "consumer_environment_file": "vectors/ws06/consumer-environment.json", "signature_threshold": 2, "distinct_custodians_required": true},
+      "mutation": {"operation": "replace_base64_json_value", "target": "/release/activation/envelope_base64", "decoded_target": "/signatures/0/keyid", "replacement": "sha256:0000000000000000000000000000000000000000000000000000000000000000"},
+      "expected_outcome": "reject",
+      "expected_consumer_code": "spki_identity_mismatch"
+    },
+    {
+      "id": "wrong-curve-spki",
+      "obligation": "T-ADR-0006-DSSE",
+      "baseline": {"release_vector_file": "vectors/ws06/canonical-threshold-two-vector.json", "consumer_environment_file": "vectors/ws06/consumer-environment.json", "signature_threshold": 2, "distinct_custodians_required": true},
+      "mutation": {"operation": "merge_signed_trust_key_from_file", "target": "/trusted_release_policy", "decoded_target": "/keys/0", "replacement_file": "vectors/ws06/public-p384-spki.json"},
+      "expected_outcome": "reject",
+      "expected_consumer_code": "unsupported_key_profile"
+    },
+    {
+      "id": "wrong-purpose",
+      "obligation": "T-ADR-0006-ASSURANCE-POLICY",
+      "baseline": {"release_vector_file": "vectors/ws06/canonical-threshold-two-vector.json", "consumer_environment_file": "vectors/ws06/consumer-environment.json", "signature_threshold": 2, "distinct_custodians_required": true},
+      "mutation": {"operation": "replace_signed_trust_value", "target": "/trusted_release_policy", "decoded_target": "/keys/0/purpose", "replacement": "non-release-purpose"},
+      "expected_outcome": "reject",
+      "expected_consumer_code": "key_purpose_mismatch"
+    },
+    {
+      "id": "duplicate-spki-alias",
+      "obligation": "T-ADR-0006-DSSE",
+      "baseline": {"release_vector_file": "vectors/ws06/canonical-threshold-two-vector.json", "consumer_environment_file": "vectors/ws06/consumer-environment.json", "signature_threshold": 2, "distinct_custodians_required": true},
+      "mutation": {"operation": "append_signed_trust_key_from_file", "target": "/trusted_release_policy", "decoded_target": "/keys", "replacement_file": "vectors/ws06/duplicate-spki-alias.json"},
+      "expected_outcome": "reject",
+      "expected_consumer_code": "duplicate_key_identity"
+    },
+    {
+      "id": "duplicate-custodian-alias",
+      "obligation": "T-ADR-0006-CUSTODIAN-SEPARATION",
+      "baseline": {"release_vector_file": "vectors/ws06/canonical-threshold-two-vector.json", "consumer_environment_file": "vectors/ws06/consumer-environment.json", "signature_threshold": 2, "distinct_custodians_required": true},
+      "mutation": {"operation": "replace_signed_trust_value", "target": "/trusted_release_policy", "decoded_target": "/keys/1/custodian_id", "replacement": "fixture-custodian-a"},
+      "expected_outcome": "reject",
+      "expected_consumer_code": "distinct_custodian_threshold_not_met"
+    },
+    {
+      "id": "expired-trust-key",
+      "obligation": "T-ADR-0006-ASSURANCE-POLICY",
+      "baseline": {"release_vector_file": "vectors/ws06/canonical-threshold-two-vector.json", "consumer_environment_file": "vectors/ws06/consumer-environment.json", "signature_threshold": 2, "distinct_custodians_required": true},
+      "mutation": {"operation": "replace_signed_trust_value", "target": "/trusted_release_policy", "decoded_target": "/keys/0/not_after", "replacement": "2026-08-31T23:59:59Z"},
+      "expected_outcome": "reject",
+      "expected_consumer_code": "key_outside_validity"
+    },
+    {
+      "id": "revoked-trust-key",
+      "obligation": "T-ADR-0006-ASSURANCE-POLICY",
+      "baseline": {"release_vector_file": "vectors/ws06/canonical-threshold-two-vector.json", "consumer_environment_file": "vectors/ws06/consumer-environment.json", "signature_threshold": 2, "distinct_custodians_required": true},
+      "mutation": {"operation": "replace_signed_trust_value", "target": "/trusted_release_policy", "decoded_target": "/keys/0/status", "replacement": "revoked"},
+      "expected_outcome": "reject",
+      "expected_consumer_code": "key_revoked"
+    },
+    {
+      "id": "archive-attestation-swap",
+      "obligation": "T-ADR-0006-TRANSPORT-IDENTITY",
+      "baseline": {"release_vector_file": "vectors/ws06/canonical-threshold-two-vector.json", "consumer_environment_file": "vectors/ws06/consumer-environment.json", "signature_threshold": 2, "distinct_custodians_required": true},
+      "mutation": {"operation": "reserialize_base64_json_from_recipe", "target": "/release/attestation/envelope_base64", "replacement_file": "vectors/ws06/different-exact-ceremony.json"},
+      "expected_outcome": "reject",
+      "expected_consumer_code": "immutable_pair_mismatch"
+    },
+    {
+      "id": "tuf-only-substitution",
+      "obligation": "T-ADR-0006-TUF-NONAUTHORITY",
+      "baseline": {"release_vector_file": "vectors/ws06/canonical-threshold-two-vector.json", "consumer_environment_file": "vectors/ws06/consumer-environment.json", "signature_threshold": 2, "distinct_custodians_required": true},
+      "mutation": {"operation": "replace_document_from_file", "target": "/release", "replacement_file": "vectors/ws06/tuf-like-metadata-only.json"},
+      "expected_outcome": "reject",
+      "expected_consumer_code": "authoritative_dsse_missing"
+    },
+    {
+      "id": "offline-egress-denied",
+      "obligation": "T-ADR-0006-TRANSPORT-IDENTITY",
+      "baseline": {"release_vector_file": "vectors/golden-vector.json", "consumer_environment_file": "vectors/ws06/consumer-environment.json", "signature_threshold": 1, "distinct_custodians_required": false},
+      "mutation": {"operation": "replace_value", "target": "/consumer_environment/network_enabled", "replacement": false},
+      "expected_outcome": "accept",
+      "expected_consumer_code": "offline_verification_complete"
+    },
+    {
+      "id": "syntactic-r1-s1-arbitrary-receipt",
+      "obligation": "T-ADR-0006-DSSE",
+      "baseline": {"release_vector_file": "vectors/ws06/canonical-threshold-two-vector.json", "consumer_environment_file": "vectors/ws06/consumer-environment.json", "signature_threshold": 2, "distinct_custodians_required": true},
+      "mutation": {"operation": "replace_signature_and_add_receipt", "target": "/release/activation/envelope_base64", "replacement_file": "vectors/ws06/r1-s1-and-receipt.json"},
+      "expected_outcome": "reject",
+      "expected_consumer_code": "crypto_signature_invalid"
+    }
+  ]
+}
