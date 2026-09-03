@@ -158,6 +158,7 @@ const (
 	bindingFresh uint32 = iota
 	bindingRunning
 	bindingConsumed
+	bindingClosing
 	bindingClosed
 )
 
@@ -172,7 +173,12 @@ type sessionState struct {
 type bindingState struct {
 	session *sessionState
 	owner   string
+	done    atomic.Pointer[bindingCompletion]
 	state   atomic.Uint32
+}
+
+type bindingCompletion struct {
+	done chan struct{}
 }
 
 // SessionBinding is the opaque WS-02-owned lease used only to enlist the
@@ -199,11 +205,50 @@ func (binding SessionBinding) Use(operation func() error) (BindingReceipt, error
 		!binding.state.state.CompareAndSwap(bindingFresh, bindingRunning) {
 		return BindingReceipt{}, fail(CodeParticipantFailed)
 	}
-	defer binding.state.state.CompareAndSwap(bindingRunning, bindingConsumed)
-	if err := operation(); err != nil {
+	finished := false
+	defer func() {
+		if !finished {
+			binding.state.finishUse()
+		}
+	}()
+	err := operation()
+	finished = true
+	if !binding.state.finishUse() {
+		return BindingReceipt{}, fail(CodeParticipantFailed)
+	}
+	if err != nil {
 		return BindingReceipt{}, err
 	}
 	return BindingReceipt{state: binding.state}, nil
+}
+
+func (state *bindingState) finishUse() bool {
+	for {
+		switch state.state.Load() {
+		case bindingRunning:
+			if state.state.CompareAndSwap(bindingRunning, bindingConsumed) {
+				return true
+			}
+		case bindingClosing:
+			if state.state.CompareAndSwap(bindingClosing, bindingClosed) {
+				close(state.completion().done)
+				return false
+			}
+		default:
+			return false
+		}
+	}
+}
+
+func (state *bindingState) completion() *bindingCompletion {
+	if existing := state.done.Load(); existing != nil {
+		return existing
+	}
+	candidate := &bindingCompletion{done: make(chan struct{})}
+	if state.done.CompareAndSwap(nil, candidate) {
+		return candidate
+	}
+	return state.done.Load()
 }
 
 func newSessionBinding(session *sessionState, owner string) SessionBinding {
@@ -216,7 +261,29 @@ func (binding SessionBinding) close(receipt BindingReceipt) bool {
 	if binding.state == nil {
 		return false
 	}
-	return binding.state.state.Swap(bindingClosed) == bindingConsumed && receipt.state == binding.state
+	for {
+		switch binding.state.state.Load() {
+		case bindingFresh:
+			if binding.state.state.CompareAndSwap(bindingFresh, bindingClosed) {
+				return false
+			}
+		case bindingRunning:
+			completion := binding.state.completion()
+			if binding.state.state.CompareAndSwap(bindingRunning, bindingClosing) {
+				<-completion.done
+				return false
+			}
+		case bindingConsumed:
+			if binding.state.state.CompareAndSwap(bindingConsumed, bindingClosed) {
+				return receipt.state == binding.state
+			}
+		case bindingClosing:
+			<-binding.state.completion().done
+			return false
+		default:
+			return false
+		}
+	}
 }
 
 // resolve is used only by the trusted WS-02 outbox storage adapter to bind its

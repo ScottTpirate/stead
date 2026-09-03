@@ -97,16 +97,16 @@ type operationCallSeal struct{ marker byte }
 type operationContextKey struct{}
 
 type operationPortState[T any] struct {
-	session    *sessionState
-	backend    *backendSeal
-	operation  *backendOperationSeal
-	owner      string
-	invocation T
-	execute    func(context.Context, Session, T) error
-	call       *operationCallSeal
-	context    context.Context
-	done       chan struct{}
-	state      atomic.Uint32
+	session           *sessionState
+	backend           *backendSeal
+	operation         *backendOperationSeal
+	owner             string
+	backendInvocation T
+	execute           func(context.Context, Session, T) error
+	call              *operationCallSeal
+	context           context.Context
+	done              chan struct{}
+	state             atomic.Uint32
 }
 
 // OperationPort is the only capability delivered to an owner adapter. It is
@@ -135,7 +135,7 @@ func (port OperationPort[T]) Execute(ctx context.Context) error {
 		return fail(CodeParticipantFailed)
 	}
 
-	err := safeBackendOperation(state.context, state.execute, state.session.session, state.invocation)
+	err := safeBackendOperation(state.context, state.execute, state.session.session, state.backendInvocation)
 	completed := operationConsumed
 	if err != nil {
 		completed = operationFailed
@@ -159,7 +159,7 @@ func (port OperationPort[T]) Execute(ctx context.Context) error {
 	return fail(CodeParticipantFailed)
 }
 
-func (operation RegisteredOperation[T]) run(ctx context.Context, session *sessionState, invocation T) error {
+func (operation RegisteredOperation[T]) run(ctx context.Context, session *sessionState, ownerInvocation, backendInvocation T) error {
 	definition := operation.definition
 	if definition == nil || definition.backend == nil || definition.operation == nil ||
 		definition.execute == nil || definition.invoke == nil || session == nil ||
@@ -169,18 +169,18 @@ func (operation RegisteredOperation[T]) run(ctx context.Context, session *sessio
 	call := &operationCallSeal{}
 	callContext := context.WithValue(ctx, operationContextKey{}, call)
 	state := &operationPortState[T]{
-		session:    session,
-		backend:    definition.backend,
-		operation:  definition.operation,
-		owner:      definition.owner,
-		invocation: invocation,
-		execute:    definition.execute,
-		call:       call,
-		context:    callContext,
-		done:       make(chan struct{}),
+		session:           session,
+		backend:           definition.backend,
+		operation:         definition.operation,
+		owner:             definition.owner,
+		backendInvocation: backendInvocation,
+		execute:           definition.execute,
+		call:              call,
+		context:           callContext,
+		done:              make(chan struct{}),
 	}
 	port := OperationPort[T]{state: state}
-	err := safeOwnerOperation(callContext, definition.invoke, port, invocation)
+	err := safeOwnerOperation(callContext, definition.invoke, port, ownerInvocation)
 	for {
 		switch state.state.Load() {
 		case operationFresh:

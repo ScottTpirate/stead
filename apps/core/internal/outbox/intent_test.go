@@ -5,6 +5,7 @@ import (
 	"errors"
 	"reflect"
 	"testing"
+	"time"
 )
 
 func TestValidatedIntentIsSealedAndImmutable(t *testing.T) {
@@ -26,6 +27,71 @@ func TestValidatedIntentIsSealedAndImmutable(t *testing.T) {
 	}
 	if intent.HandoffVersion() != ValidatedIntentHandoffV1 || intent.Size() != len(source) {
 		t.Fatal("safe intent metadata drifted")
+	}
+}
+
+func TestCloseScopeWaitsForActiveUseAndSuppressesLateResult(t *testing.T) {
+	authority := NewScopeAuthority()
+	scope, err := OpenScope[string, string](authority, "exact-binding")
+	if err != nil {
+		t.Fatal(err)
+	}
+	copy := scope
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	type useResult struct {
+		receipt ScopeReceipt[string, string]
+		value   string
+		err     error
+	}
+	useDone := make(chan useResult, 1)
+	go func() {
+		receipt, value, useErr := scope.Use(func(binding string) (string, error) {
+			close(entered)
+			<-release
+			return binding, nil
+		})
+		useDone <- useResult{receipt: receipt, value: value, err: useErr}
+	}()
+	<-entered
+	closeDone := make(chan bool, 2)
+	go func() {
+		closeDone <- CloseScope(authority, copy, ScopeReceipt[string, string]{})
+	}()
+	deadline := time.After(time.Second)
+	for copy.state.state.Load() != scopeClosing {
+		select {
+		case <-deadline:
+			t.Fatal("CloseScope did not enter closing state")
+		default:
+		}
+	}
+	go func() {
+		closeDone <- CloseScope(authority, copy, ScopeReceipt[string, string]{})
+	}()
+	select {
+	case result := <-closeDone:
+		t.Fatalf("CloseScope returned before active Use completed: %t", result)
+	default:
+	}
+	if _, _, err := copy.Use(func(string) (string, error) { return "late", nil }); !errors.Is(err, ErrInvalidTransactionScope) {
+		t.Fatalf("closing scope admitted another Use: %v", err)
+	}
+	close(release)
+	result := <-useDone
+	if result.receipt.state != nil || result.value != "" || !errors.Is(result.err, ErrInvalidTransactionScope) {
+		t.Fatalf("late Use escaped result: receipt=%#v value=%q error=%v", result.receipt, result.value, result.err)
+	}
+	for range 2 {
+		if closedAsConsumed := <-closeDone; closedAsConsumed {
+			t.Fatal("closing scope reported a valid synchronous receipt")
+		}
+	}
+	if copy.state.state.Load() != scopeClosed {
+		t.Fatalf("scope state = %d", copy.state.state.Load())
+	}
+	if CloseScope(authority, copy, ScopeReceipt[string, string]{}) || copy.state.finishUse() {
+		t.Fatal("closed scope was reusable")
 	}
 }
 

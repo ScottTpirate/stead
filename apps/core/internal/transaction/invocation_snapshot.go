@@ -5,6 +5,7 @@ import (
 	"encoding"
 	"encoding/json"
 	"reflect"
+	"sort"
 )
 
 const (
@@ -154,7 +155,11 @@ func captureImmutableInvocation[T any](profile invocationSnapshotProfile, invoca
 	if isNil(invocation) {
 		return immutableInvocationSnapshot[T]{}, fail(CodeInvalidPlan)
 	}
-	if err := validateSnapshotValue(reflect.ValueOf(invocation), 0, &snapshotBudget{}, make(map[snapshotVisit]bool)); err != nil {
+	budget := &snapshotBudget{}
+	if err := validateSnapshotValue(reflect.ValueOf(invocation), 0, budget, make(map[snapshotVisit]bool)); err != nil {
+		return immutableInvocationSnapshot[T]{}, fail(CodeInvalidPlan)
+	}
+	if err := budget.validateRegions(); err != nil {
 		return immutableInvocationSnapshot[T]{}, fail(CodeInvalidPlan)
 	}
 	if !profile.referenceBearing {
@@ -192,13 +197,18 @@ func (snapshot immutableInvocationSnapshot[T]) view() (T, error) {
 }
 
 type snapshotVisit struct {
-	typeOf  reflect.Type
 	pointer uintptr
 }
 
 type snapshotBudget struct {
-	nodes int
-	bytes int
+	nodes   int
+	bytes   int
+	regions []snapshotMemoryRegion
+}
+
+type snapshotMemoryRegion struct {
+	start uintptr
+	end   uintptr
 }
 
 func (budget *snapshotBudget) consume(bytes int) error {
@@ -209,7 +219,43 @@ func (budget *snapshotBudget) consume(bytes int) error {
 	return nil
 }
 
-func validateSnapshotValue(value reflect.Value, depth int, budget *snapshotBudget, path map[snapshotVisit]bool) error {
+func (budget *snapshotBudget) registerRegion(start uintptr, size uintptr) error {
+	if start == 0 || size == 0 || start > ^uintptr(0)-size {
+		return fail(CodeInvalidPlan)
+	}
+	budget.regions = append(budget.regions, snapshotMemoryRegion{start: start, end: start + size})
+	return nil
+}
+
+func (budget *snapshotBudget) validateRegions() error {
+	sort.Slice(budget.regions, func(left, right int) bool {
+		return budget.regions[left].start < budget.regions[right].start
+	})
+	for index := 1; index < len(budget.regions); index++ {
+		if budget.regions[index].start < budget.regions[index-1].end {
+			return fail(CodeInvalidPlan)
+		}
+	}
+	return nil
+}
+
+// registerSnapshotReference rejects cycles, repeated pointer/map identities,
+// and overlapping pointer/slice storage. JSON round-tripping preserves values
+// but not alias topology, so accepting any such graph would make the snapshot
+// appear equal while changing what later mutations can observe.
+func registerSnapshotReference(value reflect.Value, budget *snapshotBudget, seen map[snapshotVisit]bool, size uintptr) error {
+	visit := snapshotVisit{pointer: value.Pointer()}
+	if visit.pointer == 0 || seen[visit] {
+		return fail(CodeInvalidPlan)
+	}
+	seen[visit] = true
+	if size == 0 {
+		return nil
+	}
+	return budget.registerRegion(visit.pointer, size)
+}
+
+func validateSnapshotValue(value reflect.Value, depth int, budget *snapshotBudget, seen map[snapshotVisit]bool) error {
 	if !value.IsValid() {
 		return nil
 	}
@@ -230,16 +276,23 @@ func validateSnapshotValue(value reflect.Value, depth int, budget *snapshotBudge
 		if value.IsNil() {
 			return budget.consume(4)
 		}
-		visit := snapshotVisit{typeOf: value.Type(), pointer: value.Pointer()}
-		if path[visit] {
+		if err := registerSnapshotReference(value, budget, seen, value.Type().Elem().Size()); err != nil {
 			return fail(CodeInvalidPlan)
 		}
-		path[visit] = true
-		defer delete(path, visit)
-		return validateSnapshotValue(value.Elem(), depth+1, budget, path)
+		return validateSnapshotValue(value.Elem(), depth+1, budget, seen)
 	case reflect.Slice:
 		if value.IsNil() {
 			return budget.consume(4)
+		}
+		elementSize := value.Type().Elem().Size()
+		if elementSize == 0 && value.Cap() > 0 {
+			return fail(CodeInvalidPlan)
+		}
+		if elementSize > 0 && uintptr(value.Cap()) > ^uintptr(0)/elementSize {
+			return fail(CodeInvalidPlan)
+		}
+		if err := registerSnapshotReference(value, budget, seen, uintptr(value.Cap())*elementSize); err != nil {
+			return fail(CodeInvalidPlan)
 		}
 		if value.Type().Elem().Kind() == reflect.Uint8 {
 			if value.Len() > maxInvocationSnapshotNodes-budget.nodes {
@@ -252,7 +305,7 @@ func validateSnapshotValue(value reflect.Value, depth int, budget *snapshotBudge
 			return fail(CodeInvalidPlan)
 		}
 		for index := 0; index < value.Len(); index++ {
-			if err := validateSnapshotValue(value.Index(index), depth+1, budget, path); err != nil {
+			if err := validateSnapshotValue(value.Index(index), depth+1, budget, seen); err != nil {
 				return err
 			}
 		}
@@ -261,7 +314,7 @@ func validateSnapshotValue(value reflect.Value, depth int, budget *snapshotBudge
 			return fail(CodeInvalidPlan)
 		}
 		for index := 0; index < value.Len(); index++ {
-			if err := validateSnapshotValue(value.Index(index), depth+1, budget, path); err != nil {
+			if err := validateSnapshotValue(value.Index(index), depth+1, budget, seen); err != nil {
 				return err
 			}
 		}
@@ -269,15 +322,18 @@ func validateSnapshotValue(value reflect.Value, depth int, budget *snapshotBudge
 		if value.IsNil() {
 			return budget.consume(4)
 		}
+		if err := registerSnapshotReference(value, budget, seen, 0); err != nil {
+			return fail(CodeInvalidPlan)
+		}
 		if value.Len() > (maxInvocationSnapshotNodes-budget.nodes)/2 || budget.consume(2+2*value.Len()) != nil {
 			return fail(CodeInvalidPlan)
 		}
 		iterator := value.MapRange()
 		for iterator.Next() {
-			if err := validateSnapshotValue(iterator.Key(), depth+1, budget, path); err != nil {
+			if err := validateSnapshotValue(iterator.Key(), depth+1, budget, seen); err != nil {
 				return err
 			}
-			if err := validateSnapshotValue(iterator.Value(), depth+1, budget, path); err != nil {
+			if err := validateSnapshotValue(iterator.Value(), depth+1, budget, seen); err != nil {
 				return err
 			}
 		}
@@ -289,7 +345,7 @@ func validateSnapshotValue(value reflect.Value, depth int, budget *snapshotBudge
 			if err := budget.consume(3 + len(value.Type().Field(index).Name)); err != nil {
 				return err
 			}
-			if err := validateSnapshotValue(value.Field(index), depth+1, budget, path); err != nil {
+			if err := validateSnapshotValue(value.Field(index), depth+1, budget, seen); err != nil {
 				return err
 			}
 		}

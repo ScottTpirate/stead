@@ -356,11 +356,18 @@ func (contract PlanContract[T]) bindView(registry Registry, invocationView func(
 			logicalAuthorizationAudit: definition.logicalAuthorizationAudit,
 			durableEffectHandoff:      definition.durableEffectHandoff,
 			operation: func(ctx context.Context, session *sessionState) error {
-				invocation, err := invocationView()
-				if err != nil || isNil(invocation) {
+				ownerInvocation, err := invocationView()
+				if err != nil || isNil(ownerInvocation) {
 					return fail(CodeParticipantFailed)
 				}
-				return typedOperation.run(ctx, session, invocation)
+				backendInvocation := ownerInvocation
+				if !contract.coordinatorOwned {
+					backendInvocation, err = invocationView()
+					if err != nil || isNil(backendInvocation) {
+						return fail(CodeParticipantFailed)
+					}
+				}
+				return typedOperation.run(ctx, session, ownerInvocation, backendInvocation)
 			},
 		}
 	}

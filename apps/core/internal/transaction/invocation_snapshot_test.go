@@ -121,6 +121,7 @@ func TestBindSnapshotsPointerSliceAndMapBeforeCallerCanMutateThem(t *testing.T) 
 
 func TestInvocationSnapshotRoundTripsAllSupportedReferenceShapes(t *testing.T) {
 	text := "pointer"
+	mappedText := "mapped-pointer"
 	original := &snapshotAllShapes{
 		Flag:     true,
 		Integer:  -42,
@@ -131,7 +132,7 @@ func TestInvocationSnapshotRoundTripsAllSupportedReferenceShapes(t *testing.T) {
 		Bytes:    []byte{0, 1, 2, 255},
 		Values:   []snapshotPointerValue{{Name: "first"}, {Name: "second"}},
 		Array:    [2]int{3, 4},
-		Mapping:  map[int]*string{7: &text},
+		Mapping:  map[int]*string{7: &mappedText},
 		Nested:   snapshotPointerValue{Name: "nested"},
 	}
 	profile, err := newInvocationSnapshotProfile[*snapshotAllShapes]()
@@ -166,6 +167,127 @@ func TestInvocationSnapshotRoundTripsAllSupportedReferenceShapes(t *testing.T) {
 	if _, err := corrupt.view(); ErrorCodeOf(err) != CodeInvalidPlan {
 		t.Fatalf("wrong digest error = %v", err)
 	}
+}
+
+type snapshotSharedPointers struct {
+	First  *snapshotPointerValue
+	Second *snapshotPointerValue
+}
+
+type snapshotSharedMaps struct {
+	First  map[string]string
+	Second map[string]string
+}
+
+type snapshotSharedSlices struct {
+	First  []string
+	Second []string
+}
+
+func TestInvocationSnapshotRejectsSharedAndOverlappingAliasTopology(t *testing.T) {
+	sharedPointer := &snapshotPointerValue{Name: "shared"}
+	sharedMap := map[string]string{"scope": "shared"}
+	backing := []string{"zero", "one", "two", "three"}
+	tests := []struct {
+		name    string
+		capture func() error
+	}{
+		{
+			name: "pointer identity",
+			capture: func() error {
+				profile, err := newInvocationSnapshotProfile[*snapshotSharedPointers]()
+				if err != nil {
+					return err
+				}
+				_, err = captureImmutableInvocation(profile, &snapshotSharedPointers{First: sharedPointer, Second: sharedPointer})
+				return err
+			},
+		},
+		{
+			name: "map identity",
+			capture: func() error {
+				profile, err := newInvocationSnapshotProfile[*snapshotSharedMaps]()
+				if err != nil {
+					return err
+				}
+				_, err = captureImmutableInvocation(profile, &snapshotSharedMaps{First: sharedMap, Second: sharedMap})
+				return err
+			},
+		},
+		{
+			name: "overlapping slice storage",
+			capture: func() error {
+				profile, err := newInvocationSnapshotProfile[*snapshotSharedSlices]()
+				if err != nil {
+					return err
+				}
+				_, err = captureImmutableInvocation(profile, &snapshotSharedSlices{First: backing[:3], Second: backing[1:]})
+				return err
+			},
+		},
+	}
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			if err := testCase.capture(); ErrorCodeOf(err) != CodeInvalidPlan {
+				t.Fatalf("alias topology error = %v", err)
+			}
+		})
+	}
+}
+
+func executeOwnerMutationBeforeBackendTest[T any](t *testing.T, invocation T, mutate func(T), render func(T) string) {
+	t.Helper()
+	backend := &fakeBackend{}
+	backendOperation, err := NewBackendOperation(backend.backendContract(), "work", func(ctx context.Context, session Session, backendView T) error {
+		return backend.stage(ctx, session, "work", render(backendView))
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	operation, err := NewRegisteredOperation(backendOperation, func(ctx context.Context, port OperationPort[T], ownerView T) error {
+		mutate(ownerView)
+		return port.Execute(ctx)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	template, contract, err := NewPlanContract(ContractVersionV1, "owner_backend_view", []TypedParticipant[T]{{Key: "write", Operation: operation}}, OutboxOptional)
+	if err != nil {
+		t.Fatal(err)
+	}
+	registry, err := NewRegistry([]PlanTemplate{template})
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan, err := contract.Bind(registry, invocation, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := newTestCoordinator(backend, registry, &fakeAppender{backend: backend}, nil, nil).Execute(context.Background(), plan); err != nil {
+		t.Fatal(err)
+	}
+	_, committed, _, _, _, _ := backend.snapshot()
+	if !reflect.DeepEqual(committed, []string{"authorized"}) {
+		t.Fatalf("owner mutation reached backend: %v", committed)
+	}
+}
+
+func TestOwnerMutationBeforeExecuteCannotAlterBackendInvocation(t *testing.T) {
+	t.Run("pointer", func(t *testing.T) {
+		executeOwnerMutationBeforeBackendTest(t, &snapshotPointerValue{Name: "authorized"}, func(value *snapshotPointerValue) {
+			value.Name = "owner-mutated"
+		}, func(value *snapshotPointerValue) string { return value.Name })
+	})
+	t.Run("slice", func(t *testing.T) {
+		executeOwnerMutationBeforeBackendTest(t, []string{"authorized"}, func(value []string) {
+			value[0] = "owner-mutated"
+		}, func(value []string) string { return value[0] })
+	})
+	t.Run("map", func(t *testing.T) {
+		executeOwnerMutationBeforeBackendTest(t, map[string]string{"scope": "authorized"}, func(value map[string]string) {
+			value["scope"] = "owner-mutated"
+		}, func(value map[string]string) string { return value["scope"] })
+	})
 }
 
 func TestInvocationSnapshotRejectsUnsupportedTypeProfiles(t *testing.T) {
@@ -287,6 +409,9 @@ func TestEveryParticipantAndDeferredIntentReceivesIndependentSnapshotView(t *tes
 		t.Fatal(err)
 	}
 	first, err := NewRegisteredOperation(firstBackend, func(ctx context.Context, port OperationPort[*snapshotCompositeValue], value *snapshotCompositeValue) error {
+		value.Pointer.Name = "pre-execute-mutated"
+		value.Items[0] = "pre-execute-mutated"
+		value.Attributes["scope"] = "pre-execute-mutated"
 		if err := port.Execute(ctx); err != nil {
 			return err
 		}

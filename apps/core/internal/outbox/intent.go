@@ -96,13 +96,19 @@ const (
 	scopeFresh uint32 = iota
 	scopeRunning
 	scopeConsumed
+	scopeClosing
 	scopeClosed
 )
 
 type scopeState[T, R any] struct {
 	seal    *scopeSeal
 	binding T
+	done    atomic.Pointer[scopeCompletion]
 	state   atomic.Uint32
+}
+
+type scopeCompletion struct {
+	done chan struct{}
 }
 
 // ScopeAuthority is owned by one coordinator. It is required to bind and close
@@ -146,12 +152,53 @@ func (scope TransactionScope[T, R]) Use(operation func(T) (R, error)) (receipt S
 		!scope.state.state.CompareAndSwap(scopeFresh, scopeRunning) {
 		return receipt, result, ErrInvalidTransactionScope
 	}
-	defer scope.state.state.CompareAndSwap(scopeRunning, scopeConsumed)
+	finished := false
+	defer func() {
+		if !finished {
+			scope.state.finishUse()
+		}
+	}()
 	result, resultErr = operation(scope.state.binding)
+	finished = true
+	if !scope.state.finishUse() {
+		var zero R
+		return ScopeReceipt[T, R]{}, zero, ErrInvalidTransactionScope
+	}
 	if resultErr != nil {
 		return ScopeReceipt[T, R]{}, result, resultErr
 	}
 	return ScopeReceipt[T, R]{state: scope.state}, result, nil
+}
+
+// finishUse publishes completion exactly once. False means CloseScope began
+// while the callback was active, so no callback result or receipt may escape.
+func (state *scopeState[T, R]) finishUse() bool {
+	for {
+		switch state.state.Load() {
+		case scopeRunning:
+			if state.state.CompareAndSwap(scopeRunning, scopeConsumed) {
+				return true
+			}
+		case scopeClosing:
+			if state.state.CompareAndSwap(scopeClosing, scopeClosed) {
+				close(state.completion().done)
+				return false
+			}
+		default:
+			return false
+		}
+	}
+}
+
+func (state *scopeState[T, R]) completion() *scopeCompletion {
+	if existing := state.done.Load(); existing != nil {
+		return existing
+	}
+	candidate := &scopeCompletion{done: make(chan struct{})}
+	if state.done.CompareAndSwap(nil, candidate) {
+		return candidate
+	}
+	return state.done.Load()
 }
 
 // CloseScope invalidates every copy and reports whether the exact owned scope
@@ -160,8 +207,29 @@ func CloseScope[T, R any](a ScopeAuthority, scope TransactionScope[T, R], receip
 	if a.seal == nil || scope.state == nil || scope.state.seal != a.seal {
 		return false
 	}
-	previous := scope.state.state.Swap(scopeClosed)
-	return previous == scopeConsumed && receipt.state == scope.state
+	for {
+		switch scope.state.state.Load() {
+		case scopeFresh:
+			if scope.state.state.CompareAndSwap(scopeFresh, scopeClosed) {
+				return false
+			}
+		case scopeRunning:
+			completion := scope.state.completion()
+			if scope.state.state.CompareAndSwap(scopeRunning, scopeClosing) {
+				<-completion.done
+				return false
+			}
+		case scopeConsumed:
+			if scope.state.state.CompareAndSwap(scopeConsumed, scopeClosed) {
+				return receipt.state == scope.state
+			}
+		case scopeClosing:
+			<-scope.state.completion().done
+			return false
+		default:
+			return false
+		}
+	}
 }
 
 // AppendPort is the only transaction-scoped insertion surface. It deliberately
