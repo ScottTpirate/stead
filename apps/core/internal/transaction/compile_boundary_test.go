@@ -55,7 +55,7 @@ func TestCoordinatorInvokesExternalOwnerAdapterThroughTypedContract(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	backendOperation, err := testbackendadapter.RegisterCommandOperation(backend, backendContract, "organization")
+	backendOperation, err := testbackendadapter.RegisterCommandOperation(backend, backendContract, "owner_a")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,8 +95,8 @@ func TestCoordinatorInvokesExternalOwnerAdapterThroughTypedContract(t *testing.T
 	}
 	committed, rolledBack, active, executed := backend.Snapshot()
 	begins, commits, rollbacks := backend.Lifecycle()
-	if !reflect.DeepEqual(committed, []testbackendadapter.Record{{SessionID: 1, Owner: "organization", Value: "typed-command"}}) ||
-		len(rolledBack) != 0 || active != 0 || executed["organization"] != 1 || begins != 1 || commits != 1 || rollbacks != 0 {
+	if !reflect.DeepEqual(committed, []testbackendadapter.Record{{SessionID: 1, Owner: "owner_a", Value: "typed-command"}}) ||
+		len(rolledBack) != 0 || active != 0 || executed["owner_a"] != 1 || begins != 1 || commits != 1 || rollbacks != 0 {
 		t.Fatalf("external transaction commit=%v rollback=%v active=%d executed=%v lifecycle=%d/%d/%d", committed, rolledBack, active, executed, begins, commits, rollbacks)
 	}
 }
@@ -122,7 +122,7 @@ func TestForeignModulesAndCallersCannotCompileForbiddenCapabilities(t *testing.T
 	if err := decoder.Decode(&trailing); err != io.EOF {
 		t.Fatal("compile-fail inventory contains trailing data")
 	}
-	if inventory.Scope != "P1-015-CORE-PORTS compile-time negative boundaries" || len(inventory.Cases) != 16 {
+	if inventory.Scope != "P1-015-CORE-PORTS compile-time negative boundaries" || len(inventory.Cases) != 17 {
 		t.Fatalf("compile-fail inventory drifted: %q cases=%d", inventory.Scope, len(inventory.Cases))
 	}
 	seen := make(map[string]struct{}, len(inventory.Cases))
@@ -173,6 +173,7 @@ func TestOpaqueAndCoordinatorExportedSurfacesHaveNoBypassMethods(t *testing.T) {
 	bannedMethods := []string{"Add", "AddParticipant", "Allowed", "Begin", "Commit", "Exec", "PrepareEffect", "Query", "Raw", "Retry", "Rollback", "SetMode", "SetRole"}
 	types := []reflect.Type{
 		reflect.TypeOf(transaction.OperationPort[struct{}]{}),
+		reflect.TypeOf(transaction.ExecutorBinding{}),
 		reflect.TypeOf(transaction.BackendContract{}),
 		reflect.TypeOf(transaction.BackendOperation[struct{}]{}),
 		reflect.TypeOf(transaction.RegisteredOperation[struct{}]{}),
@@ -195,6 +196,7 @@ func TestOpaqueAndCoordinatorExportedSurfacesHaveNoBypassMethods(t *testing.T) {
 	}
 	for _, valueType := range []reflect.Type{
 		reflect.TypeOf(transaction.OperationPort[struct{}]{}),
+		reflect.TypeOf(transaction.ExecutorBinding{}),
 		reflect.TypeOf(transaction.BackendContract{}),
 		reflect.TypeOf(transaction.BackendOperation[struct{}]{}),
 		reflect.TypeOf(transaction.RegisteredOperation[struct{}]{}),

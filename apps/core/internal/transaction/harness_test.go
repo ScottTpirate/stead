@@ -24,12 +24,13 @@ type fakeBackend struct {
 	commitCalls   int
 	rollbackCalls int
 
-	failBegin     bool
-	failCommit    bool
-	failRollback  bool
-	panicBegin    bool
-	panicCommit   bool
-	panicRollback bool
+	failBegin       bool
+	failCommit      bool
+	failRollback    bool
+	panicBegin      bool
+	panicCommit     bool
+	panicRollback   bool
+	mismatchBinding bool
 
 	rollbackContextWasLive bool
 	contractOnce           sync.Once
@@ -41,6 +42,10 @@ type fakeSession struct {
 	id      int
 	staged  []string
 	closed  bool
+}
+
+type fakeExecutorBinding struct {
+	session *fakeSession
 }
 
 func (backend *fakeBackend) initializeLocked() {
@@ -55,7 +60,7 @@ func (backend *fakeBackend) initializeLocked() {
 	}
 }
 
-func (backend *fakeBackend) Begin(context.Context) (Session, error) {
+func (backend *fakeBackend) Begin(context.Context) (Session, ExecutorBinding, error) {
 	backend.mu.Lock()
 	defer backend.mu.Unlock()
 	backend.initializeLocked()
@@ -65,12 +70,20 @@ func (backend *fakeBackend) Begin(context.Context) (Session, error) {
 		panic("injected begin panic")
 	}
 	if backend.failBegin {
-		return nil, errInjected
+		return nil, ExecutorBinding{}, errInjected
 	}
 	backend.nextSession++
 	session := &fakeSession{backend: backend, id: backend.nextSession}
 	backend.active[session] = struct{}{}
-	return session, nil
+	bindingSession := Session(session)
+	if backend.mismatchBinding {
+		bindingSession = &fakeSession{backend: backend, id: -session.id}
+	}
+	binding, err := NewExecutorBinding(bindingSession, &fakeExecutorBinding{session: session})
+	if err != nil {
+		return nil, ExecutorBinding{}, err
+	}
+	return session, binding, nil
 }
 
 func (session *fakeSession) Commit(context.Context) error {
@@ -131,10 +144,14 @@ func (backend *fakeBackend) backendContract() BackendContract {
 }
 
 // stage is the trusted fake repository executor. The owner-authored adapter
-// reaches it only through OperationPort; it cannot receive this Session.
-func (backend *fakeBackend) stage(_ context.Context, sessionValue Session, owner, value string) error {
-	session, ok := sessionValue.(*fakeSession)
-	if !ok || session.backend != backend {
+// reaches it only through OperationPort and receives no lifecycle capability.
+func (backend *fakeBackend) stage(_ context.Context, binding ExecutorBinding, owner, value string) error {
+	executor, ok := ResolveExecutorBinding[*fakeExecutorBinding](binding)
+	if !ok || executor == nil {
+		return errInjected
+	}
+	session := executor.session
+	if session == nil || session.backend != backend {
 		return errInjected
 	}
 	backend.mu.Lock()
@@ -157,14 +174,15 @@ func (backend *fakeBackend) stageOutbox(scope outbox.TransactionScope[SessionBin
 	}
 	return scope.Use(func(binding SessionBinding) (BindingReceipt, error) {
 		return binding.Use(func() error {
-			sessionValue, ok := binding.resolve("core_outbox")
+			executorBinding, ok := binding.resolve("core_outbox")
 			if !ok {
 				return errInjected
 			}
-			session, ok := sessionValue.(*fakeSession)
-			if !ok || session.backend != backend {
+			executor, ok := ResolveExecutorBinding[*fakeExecutorBinding](executorBinding)
+			if !ok || executor == nil || executor.session == nil || executor.session.backend != backend {
 				return errInjected
 			}
+			session := executor.session
 			backend.mu.Lock()
 			defer backend.mu.Unlock()
 			backend.initializeLocked()
@@ -245,7 +263,7 @@ type testInvocation struct {
 	Prefix string
 }
 
-func registeredOperationForTest[T any](backend *fakeBackend, owner string, execute func(context.Context, Session, T) error, invoke func(context.Context, OperationPort[T], T) error) RegisteredOperation[T] {
+func registeredOperationForTest[T any](backend *fakeBackend, owner string, execute func(context.Context, ExecutorBinding, T) error, invoke func(context.Context, OperationPort[T], T) error) RegisteredOperation[T] {
 	backendOperation, err := NewBackendOperation(backend.backendContract(), owner, execute)
 	if err != nil {
 		panic(err)
@@ -261,8 +279,8 @@ func passthroughOperationForTest[T any](backend *fakeBackend, owner string, valu
 	return registeredOperationForTest(
 		backend,
 		owner,
-		func(ctx context.Context, session Session, invocation T) error {
-			return backend.stage(ctx, session, owner, value(invocation))
+		func(ctx context.Context, binding ExecutorBinding, invocation T) error {
+			return backend.stage(ctx, binding, owner, value(invocation))
 		},
 		func(ctx context.Context, port OperationPort[T], _ T) error {
 			return port.Execute(ctx)
@@ -285,8 +303,8 @@ func registeredTestPlan(backend *fakeBackend, controls []participantControl, pol
 			After:         after,
 			DeclaresWrite: true,
 		}
-		backendOperation, err := NewBackendOperation(backend.backendContract(), owner, func(ctx context.Context, session Session, invocation testInvocation) error {
-			return backend.stage(ctx, session, owner, invocation.Prefix+key)
+		backendOperation, err := NewBackendOperation(backend.backendContract(), owner, func(ctx context.Context, binding ExecutorBinding, invocation testInvocation) error {
+			return backend.stage(ctx, binding, owner, invocation.Prefix+key)
 		})
 		if err != nil {
 			panic(err)
@@ -341,17 +359,17 @@ func registeredTestPlan(backend *fakeBackend, controls []participantControl, pol
 	return template, contract
 }
 
-func newTestCoordinator(backend *fakeBackend, registry Registry, appender *fakeAppender, finalizer FinalAuthorizationAuditPort, durable DurableEffectPreparationPort) *Coordinator {
+func newTestCoordinator(backend *fakeBackend, registry Registry, appender outbox.AppendPort[SessionBinding, BindingReceipt], finalizer FinalAuthorizationAuditPort, durable DurableEffectPreparationPort) *Coordinator {
 	var finalOperation BackendOperation[*FinalAuthorizationAuditOperation]
 	if !isNil(finalizer) {
-		finalOperation, _ = NewBackendOperation(backend.backendContract(), FinalAuthorizationOwner, func(ctx context.Context, session Session, _ *FinalAuthorizationAuditOperation) error {
-			return backend.stage(ctx, session, FinalAuthorizationOwner, "final_authorization_audit")
+		finalOperation, _ = NewBackendOperation(backend.backendContract(), FinalAuthorizationOwner, func(ctx context.Context, binding ExecutorBinding, _ *FinalAuthorizationAuditOperation) error {
+			return backend.stage(ctx, binding, FinalAuthorizationOwner, "final_authorization_audit")
 		})
 	}
 	var durableOperation BackendOperation[*DurableEffectOperation]
 	if !isNil(durable) {
-		durableOperation, _ = NewBackendOperation(backend.backendContract(), DurableEffectOwner, func(ctx context.Context, session Session, _ *DurableEffectOperation) error {
-			return backend.stage(ctx, session, DurableEffectOwner, "durable_effect_preparation")
+		durableOperation, _ = NewBackendOperation(backend.backendContract(), DurableEffectOwner, func(ctx context.Context, binding ExecutorBinding, _ *DurableEffectOperation) error {
+			return backend.stage(ctx, binding, DurableEffectOwner, "durable_effect_preparation")
 		})
 	}
 	coordinator, err := NewCoordinator(Configuration{

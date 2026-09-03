@@ -1,5 +1,5 @@
 // Package testbackendadapter is a trusted lifecycle/storage integration test
-// fixture. Unlike an owner adapter, it may see transaction.Session while
+// fixture. Unlike an owner adapter, it resolves an opaque executor binding while
 // registering a fixed typed repository operation. Its per-session journal
 // proves that owner calls through OperationPort enlist in commit and rollback.
 package testbackendadapter
@@ -48,6 +48,10 @@ type session struct {
 	closed  bool
 }
 
+type executorBinding struct {
+	session *session
+}
+
 func (backend *Backend) initializeLocked() {
 	if backend.active == nil {
 		backend.active = make(map[*session]struct{})
@@ -60,7 +64,7 @@ func (backend *Backend) initializeLocked() {
 	}
 }
 
-func (backend *Backend) Begin(context.Context) (transaction.Session, error) {
+func (backend *Backend) Begin(context.Context) (transaction.Session, transaction.ExecutorBinding, error) {
 	backend.mu.Lock()
 	defer backend.mu.Unlock()
 	backend.initializeLocked()
@@ -68,7 +72,11 @@ func (backend *Backend) Begin(context.Context) (transaction.Session, error) {
 	backend.begins++
 	value := &session{backend: backend, id: backend.next}
 	backend.active[value] = struct{}{}
-	return value, nil
+	binding, err := transaction.NewExecutorBinding(value, &executorBinding{session: value})
+	if err != nil {
+		return nil, transaction.ExecutorBinding{}, err
+	}
+	return value, binding, nil
 }
 
 func (value *session) Commit(context.Context) error {
@@ -106,14 +114,14 @@ func (value *session) Rollback(context.Context) error {
 
 // RegisterCommandOperation is the trusted integration step. The returned
 // operation fixes owner and backend; testowneradapter never receives either
-// the contract or the Session-bearing executor.
+// the contract or the executor binding.
 func RegisterCommandOperation(backend *Backend, contract transaction.BackendContract, owner string) (transaction.BackendOperation[testowneradapter.Command], error) {
-	return transaction.NewBackendOperation(contract, owner, func(ctx context.Context, raw transaction.Session, command testowneradapter.Command) error {
-		value, ok := raw.(*session)
-		if !ok || value.backend != backend {
+	return transaction.NewBackendOperation(contract, owner, func(ctx context.Context, binding transaction.ExecutorBinding, command testowneradapter.Command) error {
+		executor, ok := transaction.ResolveExecutorBinding[*executorBinding](binding)
+		if !ok || executor == nil || executor.session == nil || executor.session.backend != backend {
 			return errInvalidSession
 		}
-		return backend.stage(ctx, value, owner, command.Value)
+		return backend.stage(ctx, executor.session, owner, command.Value)
 	})
 }
 

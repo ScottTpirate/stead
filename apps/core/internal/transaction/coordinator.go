@@ -8,14 +8,15 @@ import (
 	"github.com/ScottTpirate/stead/apps/core/internal/outbox"
 )
 
-// Backend and Session are WS-02 adapter contracts. Every successful Begin must
-// return a distinct independently live Session, including for overlapping
-// requests. They are intentionally internal to apps/core and are never passed
-// to an owner participant. Session contains only lifecycle methods; the later
-// driver-backed implementation must remain in this trusted boundary and expose
-// typed owner repositories instead of a raw connection or query executor.
+// Backend and Session are WS-02 lifecycle contracts. Every successful Begin
+// returns a distinct independently live Session plus a distinct opaque executor
+// binding for the same transaction, including for overlapping requests. Only
+// the coordinator receives Session; registered operations receive the separate
+// non-lifecycle binding. The later driver-backed implementation must remain in
+// this trusted boundary and expose typed owner repositories rather than a raw
+// connection or query executor.
 type Backend interface {
-	Begin(context.Context) (Session, error)
+	Begin(context.Context) (Session, ExecutorBinding, error)
 }
 
 type Session interface {
@@ -96,7 +97,7 @@ func NewCoordinator(configuration Configuration) (*Coordinator, error) {
 
 func (coordinator *Coordinator) reservedTemplates(finalOperation BackendOperation[*FinalAuthorizationAuditOperation], durableOperation BackendOperation[*DurableEffectOperation]) ([]PlanTemplate, error) {
 	if isNil(coordinator.finalAuthorizationAudit) {
-		finalOperation, _ = NewBackendOperation(coordinator.backendContract, FinalAuthorizationOwner, func(context.Context, Session, *FinalAuthorizationAuditOperation) error {
+		finalOperation, _ = NewBackendOperation(coordinator.backendContract, FinalAuthorizationOwner, func(context.Context, ExecutorBinding, *FinalAuthorizationAuditOperation) error {
 			return fail(CodeBoundaryDenied)
 		})
 	} else if !backendOperationMatches(finalOperation, coordinator.backendContract.seal, FinalAuthorizationOwner) {
@@ -123,7 +124,7 @@ func (coordinator *Coordinator) reservedTemplates(finalOperation BackendOperatio
 		return nil, err
 	}
 	if isNil(coordinator.durableEffectPreparation) {
-		durableOperation, _ = NewBackendOperation(coordinator.backendContract, DurableEffectOwner, func(context.Context, Session, *DurableEffectOperation) error {
+		durableOperation, _ = NewBackendOperation(coordinator.backendContract, DurableEffectOwner, func(context.Context, ExecutorBinding, *DurableEffectOperation) error {
 			return fail(CodeDurableHandoffFail)
 		})
 	} else if !backendOperationMatches(durableOperation, coordinator.backendContract.seal, DurableEffectOwner) {
@@ -167,6 +168,7 @@ type sessionState struct {
 	backend  *backendSeal
 	plan     *planState
 	session  Session
+	binding  ExecutorBinding
 	active   atomic.Bool
 }
 
@@ -182,8 +184,9 @@ type bindingCompletion struct {
 }
 
 // SessionBinding is the opaque WS-02-owned lease used only to enlist the
-// predeclared core outbox append in the exact Session returned by this
-// execution's Begin. Domain owner adapters receive OperationPort instead.
+// predeclared core outbox append through the exact non-lifecycle executor
+// binding returned beside this execution's Session. Domain owner adapters
+// receive OperationPort instead.
 type SessionBinding struct {
 	state *bindingState
 }
@@ -287,15 +290,16 @@ func (binding SessionBinding) close(receipt BindingReceipt) bool {
 }
 
 // resolve is used only by the trusted WS-02 outbox storage adapter to bind its
-// append to the exact returned Session. Domain owner packages never receive a
-// SessionBinding, this resolver, or the Session.
-func (binding SessionBinding) resolve(owner string) (Session, bool) {
+// append to the exact returned executor binding. Domain owner packages never
+// receive a SessionBinding, this resolver, or the lifecycle Session.
+func (binding SessionBinding) resolve(owner string) (ExecutorBinding, bool) {
 	if binding.state == nil || binding.state.session == nil || binding.state.session.registry == nil || binding.state.owner != owner ||
 		binding.state.state.Load() != bindingRunning || !binding.state.session.active.Load() ||
-		binding.state.session.plan == nil || binding.state.session.plan.state.Load() != planRunning {
-		return nil, false
+		binding.state.session.plan == nil || binding.state.session.plan.state.Load() != planRunning ||
+		!binding.state.session.binding.validFor(binding.state.session.session) {
+		return ExecutorBinding{}, false
 	}
-	return binding.state.session.session, true
+	return binding.state.session.binding, true
 }
 
 func isNil(value any) bool {
@@ -375,12 +379,15 @@ func (coordinator *Coordinator) run(ctx context.Context, specification execution
 	}
 
 	report.BeginCalls++
-	session, err := safeBegin(ctx, coordinator.backend)
-	if err != nil || isNil(session) {
+	session, binding, err := safeBegin(ctx, coordinator.backend)
+	if isNil(session) {
 		return report, fail(CodeBeginFailed)
 	}
+	if err != nil || !binding.validFor(session) {
+		return coordinator.rollback(ctx, session, report, fail(CodeBeginFailed))
+	}
 
-	operation := &sessionState{registry: specification.registry, backend: coordinator.backendContract.seal, plan: specification.plan, session: session}
+	operation := &sessionState{registry: specification.registry, backend: coordinator.backendContract.seal, plan: specification.plan, session: session, binding: binding}
 	operation.active.Store(true)
 	defer operation.active.Store(false)
 
@@ -474,10 +481,11 @@ func contextFailure(ctx context.Context) error {
 	return nil
 }
 
-func safeBegin(ctx context.Context, backend Backend) (session Session, err error) {
+func safeBegin(ctx context.Context, backend Backend) (session Session, binding ExecutorBinding, err error) {
 	defer func() {
 		if recover() != nil {
 			session = nil
+			binding = ExecutorBinding{}
 			err = fail(CodeBeginFailed)
 		}
 	}()

@@ -9,10 +9,15 @@ import (
 
 type benchmarkBackend struct{}
 type benchmarkSession struct{}
+type benchmarkExecutorBinding struct{}
 
-func (benchmarkBackend) Begin(context.Context) (Session, error) { return &benchmarkSession{}, nil }
-func (*benchmarkSession) Commit(context.Context) error          { return nil }
-func (*benchmarkSession) Rollback(context.Context) error        { return nil }
+func (benchmarkBackend) Begin(context.Context) (Session, ExecutorBinding, error) {
+	session := &benchmarkSession{}
+	binding, err := NewExecutorBinding(session, benchmarkExecutorBinding{})
+	return session, binding, err
+}
+func (*benchmarkSession) Commit(context.Context) error   { return nil }
+func (*benchmarkSession) Rollback(context.Context) error { return nil }
 
 type benchmarkAppender struct{}
 
@@ -56,7 +61,7 @@ func benchmarkRegistry(b testing.TB) (BackendContract, Registry, PlanContract[st
 		b.Fatal(err)
 	}
 	operation := func(owner string) RegisteredOperation[struct{}] {
-		backendOperation, err := NewBackendOperation(backend, owner, func(context.Context, Session, struct{}) error { return nil })
+		backendOperation, err := NewBackendOperation(backend, owner, func(context.Context, ExecutorBinding, struct{}) error { return nil })
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -89,7 +94,7 @@ func benchmarkCoordinator(b testing.TB, backend BackendContract, registry Regist
 	b.Helper()
 	var finalOperation BackendOperation[*FinalAuthorizationAuditOperation]
 	if !isNil(finalizer) {
-		finalOperation, _ = NewBackendOperation(backend, FinalAuthorizationOwner, func(context.Context, Session, *FinalAuthorizationAuditOperation) error { return nil })
+		finalOperation, _ = NewBackendOperation(backend, FinalAuthorizationOwner, func(context.Context, ExecutorBinding, *FinalAuthorizationAuditOperation) error { return nil })
 	}
 	coordinator, err := NewCoordinator(Configuration{
 		Backend:                     backend,
@@ -128,7 +133,7 @@ func BenchmarkExecuteReferenceSnapshotPlan(b *testing.B) {
 		b.Fatal(err)
 	}
 	operation := func(owner string) RegisteredOperation[*benchmarkReferenceInvocation] {
-		backendOperation, err := NewBackendOperation(backend, owner, func(context.Context, Session, *benchmarkReferenceInvocation) error { return nil })
+		backendOperation, err := NewBackendOperation(backend, owner, func(context.Context, ExecutorBinding, *benchmarkReferenceInvocation) error { return nil })
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -198,9 +203,15 @@ func BenchmarkRequestBoundaryRecheck(b *testing.B) {
 	for range b.N {
 		issuer := newBoundRevisionIssuer()
 		revision, err := issuer.BindValidated(BoundRevisionHandoffV1, []byte("benchmark-revision"))
-		issuer.close()
 		if err != nil {
 			b.Fatal(err)
+		}
+		if !issuer.accept(revision) {
+			b.Fatal("benchmark revision acceptance failed")
+		}
+		issuer.close()
+		if !revision.activate() {
+			b.Fatal("benchmark revision activation failed")
 		}
 		if _, err := adapter.ReleaseProtected(context.Background(), revision, benchmarkResponse{}); err != nil {
 			b.Fatal(err)

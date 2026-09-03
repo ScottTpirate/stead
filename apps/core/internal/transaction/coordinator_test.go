@@ -111,8 +111,8 @@ func TestTypedContractFreezesOrderOwnersAndOperationsBeforeRequestBinding(t *tes
 		return registeredOperationForTest(
 			backend,
 			owner,
-			func(ctx context.Context, session Session, _ struct{}) error {
-				return backend.stage(ctx, session, owner, event)
+			func(ctx context.Context, binding ExecutorBinding, _ struct{}) error {
+				return backend.stage(ctx, binding, owner, event)
 			},
 			func(ctx context.Context, port OperationPort[struct{}], _ struct{}) error {
 				events = append(events, event)
@@ -457,8 +457,8 @@ func TestConcurrentSessionsInterleaveAndKeepCommitRollbackOutboxIndependent(t *t
 		{Key: "second", After: []string{"first"}, DeclaresWrite: true, Operation: registeredOperationForTest(
 			backend,
 			"owner",
-			func(ctx context.Context, session Session, value invocation) error {
-				return backend.stage(ctx, session, "owner", value.label+":second")
+			func(ctx context.Context, binding ExecutorBinding, value invocation) error {
+				return backend.stage(ctx, binding, "owner", value.label+":second")
 			},
 			func(ctx context.Context, port OperationPort[invocation], value invocation) error {
 				control := controls[value.label]
@@ -561,8 +561,8 @@ func TestCrossSwappedLiveOperationPortsFailBeforeRepositoryExecution(t *testing.
 	operation := registeredOperationForTest(
 		backend,
 		"owner",
-		func(ctx context.Context, session Session, value invocation) error {
-			return backend.stage(ctx, session, "owner", value.label+":cross-swapped")
+		func(ctx context.Context, binding ExecutorBinding, value invocation) error {
+			return backend.stage(ctx, binding, "owner", value.label+":cross-swapped")
 		},
 		func(ctx context.Context, port OperationPort[invocation], value invocation) error {
 			shared.mu.Lock()
@@ -786,8 +786,8 @@ func TestRetainedAndGoroutineAfterReturnPortsFailWithoutCallingRepository(t *tes
 	operation := registeredOperationForTest(
 		backend,
 		"owner",
-		func(ctx context.Context, session Session, _ struct{}) error {
-			return backend.stage(ctx, session, "owner", "local")
+		func(ctx context.Context, binding ExecutorBinding, _ struct{}) error {
+			return backend.stage(ctx, binding, "owner", "local")
 		},
 		func(ctx context.Context, port OperationPort[struct{}], _ struct{}) error {
 			retained = port
@@ -856,10 +856,10 @@ func TestConfiguredReservedOwnerPortsRequireExactBackendAndOwnerOperations(t *te
 	appender := &fakeAppender{backend: backend}
 	finalizer := &fakeFinalizer{backend: backend}
 	durable := &fakeDurablePreparation{backend: backend, intent: testIntent()}
-	foreignFinal, _ := NewBackendOperation(foreign.backendContract(), FinalAuthorizationOwner, func(context.Context, Session, *FinalAuthorizationAuditOperation) error { return nil })
-	wrongFinalOwner, _ := NewBackendOperation(backend.backendContract(), "wrong.final.owner", func(context.Context, Session, *FinalAuthorizationAuditOperation) error { return nil })
-	foreignDurable, _ := NewBackendOperation(foreign.backendContract(), DurableEffectOwner, func(context.Context, Session, *DurableEffectOperation) error { return nil })
-	wrongDurableOwner, _ := NewBackendOperation(backend.backendContract(), "wrong.durable.owner", func(context.Context, Session, *DurableEffectOperation) error { return nil })
+	foreignFinal, _ := NewBackendOperation(foreign.backendContract(), FinalAuthorizationOwner, func(context.Context, ExecutorBinding, *FinalAuthorizationAuditOperation) error { return nil })
+	wrongFinalOwner, _ := NewBackendOperation(backend.backendContract(), "wrong.final.owner", func(context.Context, ExecutorBinding, *FinalAuthorizationAuditOperation) error { return nil })
+	foreignDurable, _ := NewBackendOperation(foreign.backendContract(), DurableEffectOwner, func(context.Context, ExecutorBinding, *DurableEffectOperation) error { return nil })
+	wrongDurableOwner, _ := NewBackendOperation(backend.backendContract(), "wrong.durable.owner", func(context.Context, ExecutorBinding, *DurableEffectOperation) error { return nil })
 	tests := []Configuration{
 		{Backend: backend.backendContract(), Registry: registry, Outbox: appender, FinalAuthorizationAudit: finalizer},
 		{Backend: backend.backendContract(), Registry: registry, Outbox: appender, FinalAuthorizationAudit: finalizer, FinalAuthorizationOperation: foreignFinal},
@@ -943,7 +943,7 @@ func FuzzTemplateIdentifiersFailClosed(f *testing.F) {
 	f.Add("operation", "../escape", "owner")
 	f.Fuzz(func(t *testing.T, operation, participant, owner string) {
 		backend := &fakeBackend{}
-		backendOperation, _ := NewBackendOperation(backend.backendContract(), owner, func(context.Context, Session, struct{}) error { return nil })
+		backendOperation, _ := NewBackendOperation(backend.backendContract(), owner, func(context.Context, ExecutorBinding, struct{}) error { return nil })
 		registered, _ := NewRegisteredOperation(backendOperation, func(ctx context.Context, port OperationPort[struct{}], _ struct{}) error { return port.Execute(ctx) })
 		_, _, err := NewPlanContract(ContractVersionV1, operation, []TypedParticipant[struct{}]{
 			{Key: participant, Operation: registered},

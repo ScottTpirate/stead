@@ -2,8 +2,77 @@ package transaction
 
 import (
 	"context"
+	"reflect"
 	"sync/atomic"
 )
+
+type commitCapability interface {
+	Commit(context.Context) error
+}
+
+type rollbackCapability interface {
+	Rollback(context.Context) error
+}
+
+type executorBindingState struct {
+	session Session
+	value   any
+}
+
+// ExecutorBinding is the opaque per-transaction storage binding delivered to
+// registered backend operations. Unlike Session, its method set contains no
+// commit or rollback authority. The trusted backend adapter supplies a distinct
+// non-lifecycle value for each successful Begin and resolves only its own type.
+type ExecutorBinding struct {
+	state *executorBindingState
+}
+
+// NewExecutorBinding seals an adapter-private non-lifecycle value to the exact
+// lifecycle session returned beside it from Backend.Begin.
+func NewExecutorBinding(session Session, value any) (ExecutorBinding, error) {
+	if isNil(session) || !reflect.TypeOf(session).Comparable() || isNil(value) {
+		return ExecutorBinding{}, fail(CodeInvalidContract)
+	}
+	if _, carriesCommit := value.(commitCapability); carriesCommit {
+		return ExecutorBinding{}, fail(CodeInvalidContract)
+	}
+	if _, carriesRollback := value.(rollbackCapability); carriesRollback {
+		return ExecutorBinding{}, fail(CodeInvalidContract)
+	}
+	return ExecutorBinding{state: &executorBindingState{session: session, value: value}}, nil
+}
+
+// ResolveExecutorBinding recovers one adapter-private non-lifecycle binding.
+// It cannot resolve the coordinator-owned Session because construction rejects
+// values carrying either lifecycle method.
+func ResolveExecutorBinding[T any](binding ExecutorBinding) (T, bool) {
+	var zero T
+	if !binding.valid() {
+		return zero, false
+	}
+	value, ok := binding.state.value.(T)
+	if !ok || isNil(value) {
+		return zero, false
+	}
+	return value, true
+}
+
+func (binding ExecutorBinding) valid() bool {
+	if binding.state == nil || isNil(binding.state.session) || !reflect.TypeOf(binding.state.session).Comparable() || isNil(binding.state.value) {
+		return false
+	}
+	if _, carriesCommit := binding.state.value.(commitCapability); carriesCommit {
+		return false
+	}
+	if _, carriesRollback := binding.state.value.(rollbackCapability); carriesRollback {
+		return false
+	}
+	return true
+}
+
+func (binding ExecutorBinding) validFor(session Session) bool {
+	return binding.valid() && !isNil(session) && reflect.TypeOf(session).Comparable() && binding.state.session == session
+}
 
 // BackendContract is the opaque authority for one lifecycle backend. It is
 // minted once at server startup and binds every registered owner operation,
@@ -29,7 +98,7 @@ type backendOperationDefinition[T any] struct {
 	backend *backendSeal
 	seal    *backendOperationSeal
 	owner   string
-	execute func(context.Context, Session, T) error
+	execute func(context.Context, ExecutorBinding, T) error
 }
 
 // BackendOperation is a startup-only, fixed-owner repository operation. The
@@ -40,10 +109,10 @@ type BackendOperation[T any] struct {
 }
 
 // NewBackendOperation binds one typed repository operation to one backend and
-// owner. The executor belongs at the trusted lifecycle/storage integration
-// boundary. Domain owner adapters must not receive the BackendContract or this
-// constructor's Session-bearing executor; they consume RegisteredOperation.
-func NewBackendOperation[T any](contract BackendContract, owner string, execute func(context.Context, Session, T) error) (BackendOperation[T], error) {
+// owner. The executor belongs at the trusted storage integration boundary and
+// receives only the non-lifecycle binding returned beside Session by Begin.
+// Domain owner adapters consume RegisteredOperation instead.
+func NewBackendOperation[T any](contract BackendContract, owner string, execute func(context.Context, ExecutorBinding, T) error) (BackendOperation[T], error) {
 	if contract.seal == nil || isNil(contract.backend) || !identifierPattern.MatchString(owner) || execute == nil || owner == "core_outbox" {
 		return BackendOperation[T]{}, fail(CodeInvalidContract)
 	}
@@ -59,7 +128,7 @@ type registeredOperationDefinition[T any] struct {
 	backend   *backendSeal
 	operation *backendOperationSeal
 	owner     string
-	execute   func(context.Context, Session, T) error
+	execute   func(context.Context, ExecutorBinding, T) error
 	invoke    func(context.Context, OperationPort[T], T) error
 }
 
@@ -102,7 +171,7 @@ type operationPortState[T any] struct {
 	operation         *backendOperationSeal
 	owner             string
 	backendInvocation T
-	execute           func(context.Context, Session, T) error
+	execute           func(context.Context, ExecutorBinding, T) error
 	call              *operationCallSeal
 	context           context.Context
 	done              chan struct{}
@@ -129,13 +198,13 @@ func (port OperationPort[T]) Execute(ctx context.Context) error {
 		state.execute == nil || state.call == nil || state.context == nil || state.done == nil || ctx == nil ||
 		ctx != state.context || state.context.Err() != nil || state.context.Value(operationContextKey{}) != state.call ||
 		state.session.backend != state.backend ||
-		state.session.registry == nil || state.session.plan == nil || !state.session.active.Load() ||
+		state.session.registry == nil || state.session.plan == nil || !state.session.binding.validFor(state.session.session) || !state.session.active.Load() ||
 		state.session.plan.state.Load() != planRunning ||
 		!state.state.CompareAndSwap(operationFresh, operationRunning) {
 		return fail(CodeParticipantFailed)
 	}
 
-	err := safeBackendOperation(state.context, state.execute, state.session.session, state.backendInvocation)
+	err := safeBackendOperation(state.context, state.execute, state.session.binding, state.backendInvocation)
 	completed := operationConsumed
 	if err != nil {
 		completed = operationFailed
@@ -218,11 +287,11 @@ func safeOwnerOperation[T any](ctx context.Context, invoke func(context.Context,
 	return invoke(ctx, port, invocation)
 }
 
-func safeBackendOperation[T any](ctx context.Context, execute func(context.Context, Session, T) error, session Session, invocation T) (err error) {
+func safeBackendOperation[T any](ctx context.Context, execute func(context.Context, ExecutorBinding, T) error, binding ExecutorBinding, invocation T) (err error) {
 	defer func() {
 		if recover() != nil {
 			err = fail(CodeParticipantFailed)
 		}
 	}()
-	return execute(ctx, session, invocation)
+	return execute(ctx, binding, invocation)
 }

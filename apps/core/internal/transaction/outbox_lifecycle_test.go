@@ -20,7 +20,12 @@ type escapedOutboxResult struct {
 func TestSessionBindingCloseWaitsForActiveUseAndSuppressesLateReceipt(t *testing.T) {
 	plan := &planState{}
 	plan.state.Store(planRunning)
-	session := &sessionState{registry: &registrySeal{}, backend: &backendSeal{}, plan: plan, session: &fakeSession{}}
+	lifecycleSession := &fakeSession{}
+	executorBinding, err := NewExecutorBinding(lifecycleSession, &fakeExecutorBinding{session: lifecycleSession})
+	if err != nil {
+		t.Fatal(err)
+	}
+	session := &sessionState{registry: &registrySeal{}, backend: &backendSeal{}, plan: plan, session: lifecycleSession, binding: executorBinding}
 	session.active.Store(true)
 	binding := newSessionBinding(session, "core_outbox")
 	copy := binding
@@ -107,12 +112,11 @@ func (appender *outerEscapingAppender) Append(_ context.Context, scope outbox.Tr
 				panic("escaped outer scope")
 			}
 			result.bindingResult, result.bindingErr = binding.Use(func() error {
-				sessionValue, ok := binding.resolve("core_outbox")
-				session, typed := sessionValue.(*fakeSession)
-				if !ok || !typed || session.backend != appender.backend {
+				executorBinding, ok := binding.resolve("core_outbox")
+				if !ok {
 					return errInjected
 				}
-				return appender.backend.stage(context.Background(), session, "core_outbox", "escaped-outbox")
+				return appender.backend.stage(context.Background(), executorBinding, "core_outbox", "escaped-outbox")
 			})
 			return result.bindingResult, result.bindingErr
 		})
@@ -143,9 +147,8 @@ func (appender *innerEscapingAppender) Append(_ context.Context, scope outbox.Tr
 				appender.completed <- result
 			}()
 			result.bindingResult, result.bindingErr = binding.Use(func() error {
-				sessionValue, ok := binding.resolve("core_outbox")
-				session, typed := sessionValue.(*fakeSession)
-				if !ok || !typed || session.backend != appender.backend {
+				executorBinding, ok := binding.resolve("core_outbox")
+				if !ok {
 					return errInjected
 				}
 				close(appender.entered)
@@ -153,7 +156,7 @@ func (appender *innerEscapingAppender) Append(_ context.Context, scope outbox.Tr
 				if appender.panicUse {
 					panic("escaped inner binding")
 				}
-				return appender.backend.stage(context.Background(), session, "core_outbox", "escaped-outbox")
+				return appender.backend.stage(context.Background(), executorBinding, "core_outbox", "escaped-outbox")
 			})
 		}()
 		<-appender.entered

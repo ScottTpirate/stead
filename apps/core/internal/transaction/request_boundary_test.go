@@ -268,9 +268,15 @@ func testBoundRevision(t testing.TB) BoundRevision {
 	t.Helper()
 	issuer := newBoundRevisionIssuer()
 	revision, err := issuer.BindValidated(BoundRevisionHandoffV1, []byte("opaque-bound-revision"))
-	issuer.close()
 	if err != nil {
 		t.Fatal(err)
+	}
+	if !issuer.accept(revision) {
+		t.Fatal("issued bound revision was not accepted")
+	}
+	issuer.close()
+	if !revision.activate() {
+		t.Fatal("accepted bound revision was not activated")
 	}
 	return revision
 }

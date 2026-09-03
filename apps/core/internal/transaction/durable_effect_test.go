@@ -60,8 +60,9 @@ func TestDurableEffectHandoffCommitsIntentBeforeReceiptAndPerformsNoEffect(t *te
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !receipt.validFor(receipt.seal) || preparation.calls != 1 || appender.callCount() != 1 {
-		t.Fatalf("receipt valid=%t prepare=%d append=%d", receipt.validFor(receipt.seal), preparation.calls, appender.callCount())
+	if receipt.state == nil || !receipt.validFor(receipt.state.seal) || preparation.calls != 1 || appender.callCount() != 1 {
+		valid := receipt.state != nil && receipt.validFor(receipt.state.seal)
+		t.Fatalf("receipt valid=%t prepare=%d append=%d", valid, preparation.calls, appender.callCount())
 	}
 	calls, committed, _, _, _, _ := backend.snapshot()
 	wantCalls := []string{"begin", "durable_effect_preparation", "outbox", "commit"}
@@ -103,7 +104,7 @@ func TestDurableEffectFailuresReturnNoReceiptAndRollback(t *testing.T) {
 			testCase.configure(preparation, appender, backend)
 			coordinator := newTestCoordinator(backend, minimalRegistry(t, backend), appender, nil, preparation)
 			receipt, report, err := coordinator.PrepareDurableEffect(context.Background())
-			if ErrorCodeOf(err) != testCase.wantCode || receipt.seal != nil || report.Retries != 0 {
+			if ErrorCodeOf(err) != testCase.wantCode || receipt.state != nil || report.Retries != 0 {
 				t.Fatalf("error=%v code=%s receipt=%#v report=%#v", err, ErrorCodeOf(err), receipt, report)
 			}
 			_, committed, beginCalls, _, rollbackCalls, _ := backend.snapshot()
@@ -115,7 +116,7 @@ func TestDurableEffectFailuresReturnNoReceiptAndRollback(t *testing.T) {
 	backend := &fakeBackend{}
 	var typedNil *fakeDurablePreparation
 	coordinator := newTestCoordinator(backend, minimalRegistry(t, backend), &fakeAppender{backend: backend}, nil, typedNil)
-	if receipt, _, err := coordinator.PrepareDurableEffect(context.Background()); ErrorCodeOf(err) != CodeDurableHandoffFail || receipt.seal != nil {
+	if receipt, _, err := coordinator.PrepareDurableEffect(context.Background()); ErrorCodeOf(err) != CodeDurableHandoffFail || receipt.state != nil {
 		t.Fatalf("typed-nil result=%#v error=%v", receipt, err)
 	}
 	_, _, beginCalls, _, _, _ := backend.snapshot()
@@ -132,7 +133,13 @@ func TestDurableReceiptIsOpaqueImmutableAndVersionStrict(t *testing.T) {
 		t.Fatal(err)
 	}
 	seal := issuer.state.seal
+	if !issuer.accept(receipt) {
+		t.Fatal("issued durable receipt was not accepted")
+	}
 	issuer.close()
+	if receipt.validFor(seal) || !receipt.activate(seal) || !receipt.validFor(seal) || receipt.activate(seal) {
+		t.Fatal("durable receipt lifecycle drifted")
+	}
 	digest := receipt.Digest()
 	source[0] ^= 0xff
 	copy := receipt.OpaqueCopy()

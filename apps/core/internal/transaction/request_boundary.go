@@ -3,6 +3,7 @@ package transaction
 import (
 	"context"
 	"crypto/sha256"
+	"sync"
 	"sync/atomic"
 
 	"github.com/ScottTpirate/stead/apps/core/internal/outbox"
@@ -21,12 +22,16 @@ type revisionState struct {
 	version  string
 	opaque   []byte
 	digest   [sha256.Size]byte
+	proof    proofLifecycle
 	boundary atomic.Uint32
 }
 
 type revisionIssuerState struct {
-	seal   *revisionSeal
-	active atomic.Bool
+	mu       sync.Mutex
+	seal     *revisionSeal
+	open     bool
+	issued   *revisionState
+	accepted bool
 }
 
 // BoundRevisionIssuer is supplied only during the registered WS-06 handoff.
@@ -37,29 +42,63 @@ type BoundRevisionIssuer struct {
 }
 
 func newBoundRevisionIssuer() BoundRevisionIssuer {
-	state := &revisionIssuerState{seal: &revisionSeal{}}
-	state.active.Store(true)
-	return BoundRevisionIssuer{state: state}
+	return BoundRevisionIssuer{state: &revisionIssuerState{seal: &revisionSeal{}, open: true}}
 }
 
 func (issuer BoundRevisionIssuer) BindValidated(version string, opaque []byte) (BoundRevision, error) {
-	if issuer.state == nil || issuer.state.seal == nil || !issuer.state.active.Load() ||
-		version != BoundRevisionHandoffV1 || len(opaque) == 0 {
+	if issuer.state == nil || version != BoundRevisionHandoffV1 || len(opaque) == 0 {
+		return BoundRevision{}, fail(CodeBoundaryDenied)
+	}
+	issuer.state.mu.Lock()
+	defer issuer.state.mu.Unlock()
+	if issuer.state.seal == nil || !issuer.state.open || issuer.state.issued != nil {
 		return BoundRevision{}, fail(CodeBoundaryDenied)
 	}
 	value := append([]byte(nil), opaque...)
-	return BoundRevision{state: &revisionState{
+	state := &revisionState{
 		seal:    issuer.state.seal,
 		version: version,
 		opaque:  value,
 		digest:  sha256.Sum256(value),
-	}}, nil
+	}
+	issuer.state.issued = state
+	return BoundRevision{state: state}, nil
 }
 
 func (issuer BoundRevisionIssuer) close() {
-	if issuer.state != nil {
-		issuer.state.active.Store(false)
+	if issuer.state == nil {
+		return
 	}
+	issuer.state.mu.Lock()
+	if !issuer.state.open {
+		issuer.state.mu.Unlock()
+		return
+	}
+	issuer.state.open = false
+	issued := issuer.state.issued
+	accepted := issuer.state.accepted
+	issuer.state.mu.Unlock()
+	if issued != nil && !accepted {
+		issued.proof.invalidate()
+	}
+}
+
+// accept seals the one exact value returned by this issuer for the surrounding
+// transaction. It remains unusable until FinalizeRead activates it after a
+// successful commit.
+func (issuer BoundRevisionIssuer) accept(revision BoundRevision) bool {
+	if issuer.state == nil || revision.state == nil {
+		return false
+	}
+	issuer.state.mu.Lock()
+	defer issuer.state.mu.Unlock()
+	if issuer.state.seal == nil || !issuer.state.open || issuer.state.accepted ||
+		issuer.state.issued != revision.state || !revision.validMaterial() ||
+		!revision.state.proof.sealForCommit() {
+		return false
+	}
+	issuer.state.accepted = true
+	return true
 }
 
 // BoundRevision is an opaque, immutable, single-use response-boundary input.
@@ -90,9 +129,23 @@ func (revision BoundRevision) OpaqueCopy() []byte {
 	return append([]byte(nil), revision.state.opaque...)
 }
 
-func (revision BoundRevision) verify() bool {
+func (revision BoundRevision) validMaterial() bool {
 	return revision.state != nil && revision.state.seal != nil && revision.state.version == BoundRevisionHandoffV1 &&
 		len(revision.state.opaque) != 0 && sha256.Sum256(revision.state.opaque) == revision.state.digest
+}
+
+func (revision BoundRevision) verify() bool {
+	return revision.validMaterial() && revision.state.proof.isActive()
+}
+
+func (revision BoundRevision) activate() bool {
+	return revision.validMaterial() && revision.state.proof.activate()
+}
+
+func (revision BoundRevision) invalidate() {
+	if revision.state != nil {
+		revision.state.proof.invalidate()
+	}
 }
 
 type FinalAuthorizationAuditResult struct {
@@ -126,9 +179,9 @@ func (coordinator *Coordinator) finalizeReadParticipant(ctx context.Context, por
 		return fail(CodeBoundaryDenied)
 	}
 	issuer := newBoundRevisionIssuer()
+	defer issuer.close()
 	result, err := coordinator.finalAuthorizationAudit.Finalize(ctx, port, issuer)
-	issuer.close()
-	if err != nil || !result.Revision.verify() || result.Revision.state.seal != issuer.state.seal {
+	if err != nil {
 		return fail(CodeBoundaryDenied)
 	}
 	if result.Intent != nil {
@@ -137,6 +190,9 @@ func (coordinator *Coordinator) finalizeReadParticipant(ctx context.Context, por
 		}
 		intent := *result.Intent
 		result.Intent = &intent
+	}
+	if !issuer.accept(result.Revision) {
+		return fail(CodeBoundaryDenied)
 	}
 	invocation.result = result
 	return nil
@@ -150,6 +206,12 @@ func (coordinator *Coordinator) FinalizeRead(ctx context.Context) (BoundRevision
 		return BoundRevision{}, Report{}, fail(CodeBoundaryDenied)
 	}
 	invocation := &FinalAuthorizationAuditOperation{}
+	activated := false
+	defer func() {
+		if !activated {
+			invocation.result.Revision.invalidate()
+		}
+	}()
 	plan, err := coordinator.finalReadContract.bindCoordinatorOwned(coordinator.registry, invocation, func(value *FinalAuthorizationAuditOperation) *outbox.ValidatedIntent {
 		return value.intent()
 	})
@@ -160,9 +222,10 @@ func (coordinator *Coordinator) FinalizeRead(ctx context.Context) (BoundRevision
 	if err != nil {
 		return BoundRevision{}, report, err
 	}
-	if !invocation.result.Revision.verify() {
+	if !invocation.result.Revision.activate() || !invocation.result.Revision.verify() {
 		return BoundRevision{}, report, fail(CodeBoundaryDenied)
 	}
+	activated = true
 	return invocation.result.Revision, report, nil
 }
 

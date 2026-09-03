@@ -261,8 +261,8 @@ func TestInvocationSnapshotRejectsSharedAndOverlappingAliasTopology(t *testing.T
 func executeOwnerMutationBeforeBackendTest[T any](t *testing.T, invocation T, mutate func(T), render func(T) string) {
 	t.Helper()
 	backend := &fakeBackend{}
-	backendOperation, err := NewBackendOperation(backend.backendContract(), "work", func(ctx context.Context, session Session, backendView T) error {
-		return backend.stage(ctx, session, "work", render(backendView))
+	backendOperation, err := NewBackendOperation(backend.backendContract(), "work", func(ctx context.Context, binding ExecutorBinding, backendView T) error {
+		return backend.stage(ctx, binding, "work", render(backendView))
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -425,8 +425,8 @@ func TestEveryParticipantAndDeferredIntentReceivesIndependentSnapshotView(t *tes
 		return fmt.Sprintf("%s|%s|%s", value.Pointer.Name, value.Items[0], value.Attributes["scope"])
 	}
 	backend := &fakeBackend{}
-	firstBackend, err := NewBackendOperation(backend.backendContract(), "authorization", func(ctx context.Context, session Session, value *snapshotCompositeValue) error {
-		return backend.stage(ctx, session, "authorization", "authorized:"+render(value))
+	firstBackend, err := NewBackendOperation(backend.backendContract(), "authorization", func(ctx context.Context, binding ExecutorBinding, value *snapshotCompositeValue) error {
+		return backend.stage(ctx, binding, "authorization", "authorized:"+render(value))
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -534,7 +534,7 @@ func TestInvocationSnapshotLimitsAndUnsupportedTypesFailBeforeBegin(t *testing.T
 		t.Fatalf("oversize snapshot error = %v", err)
 	}
 
-	nodeBackendOperation, err := NewBackendOperation(backend.backendContract(), "work", func(context.Context, Session, *snapshotNode) error { return nil })
+	nodeBackendOperation, err := NewBackendOperation(backend.backendContract(), "work", func(context.Context, ExecutorBinding, *snapshotNode) error { return nil })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -570,7 +570,7 @@ func TestInvocationSnapshotLimitsAndUnsupportedTypesFailBeforeBegin(t *testing.T
 	type unsupportedInvocation struct {
 		Signal chan struct{}
 	}
-	unsupportedBackend, err := NewBackendOperation(backend.backendContract(), "work", func(context.Context, Session, unsupportedInvocation) error { return nil })
+	unsupportedBackend, err := NewBackendOperation(backend.backendContract(), "work", func(context.Context, ExecutorBinding, unsupportedInvocation) error { return nil })
 	if err != nil {
 		t.Fatal(err)
 	}
