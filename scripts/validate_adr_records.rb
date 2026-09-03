@@ -200,6 +200,21 @@ ADR_0008_DELIVERY_CONTRACT = {
 ADR_0008_CBI_030_SHA256 =
   "25b5d8e6e7c32b572635a02622e8c429b54de8bbfed876b220d16e05da851082".freeze
 
+ADR_0008_EXPECTED_SECURITY_MUTATION_GROUPS = {
+  topology: 6,
+  authorization: 1,
+  streams: 1,
+  delivery: 2,
+  retention_recovery: 81,
+  replay_recovery: 1,
+  credentials: 11,
+  tls: 1,
+  opaque_receipt: 1,
+  additive_contradiction: 1
+}.freeze
+ADR_0008_EXPECTED_SECURITY_MUTATION_COUNT =
+  ADR_0008_EXPECTED_SECURITY_MUTATION_GROUPS.values.sum
+
 ADR_0008_REQUIRED_DECISION_CLAUSES = {
   topology: [
     "one internal Stead NATS application account for each deployment security domain",
@@ -742,7 +757,10 @@ def adr_0008_security_contract_failures(adr_source:, asyncapi:, bypass_source:)
     failures << "AsyncAPI x-delivery-contract must match the exact closed ADR-0008 delivery contract"
   end
 
-  bypass_rows = bypass_source.lines.grep(/^\| CBI-030 \|/)
+  # GFM permits up to three leading spaces before a table row. Include every
+  # rendered spelling in the multiplicity check, then require the sole row to
+  # be the canonical unindented, digest-pinned form.
+  bypass_rows = bypass_source.lines.grep(/\A {0,3}\| CBI-030 \|/)
   if bypass_rows.length != 1
     failures << "classification bypass inventory must contain exactly one CBI-030 row"
   else
@@ -1406,6 +1424,22 @@ adr_0008_security_mutations << {
   }
 end
 
+canonical_bypass_row = classification_bypass_source.lines.grep(/\A\| CBI-030 \|/).first
+if canonical_bypass_row
+  mutated_duplicate_bypass = classification_bypass_source.sub(
+    canonical_bypass_row,
+    "#{canonical_bypass_row} #{canonical_bypass_row}"
+  )
+  adr_0008_security_mutations << {
+    group: :topology,
+    name: "space-indented duplicate CBI-030 row",
+    adr: adr_0008_source,
+    asyncapi: deep_copy_asyncapi.call,
+    bypass: mutated_duplicate_bypass,
+    expected_failure_fragment: "must contain exactly one CBI-030 row"
+  }
+end
+
 adr_0008_security_mutation_survivors = adr_0008_security_mutations.filter_map do |mutation|
   mutation_failures = adr_0008_security_contract_failures(
     adr_source: mutation.fetch(:adr),
@@ -1421,6 +1455,12 @@ end
 
 adr_0008_security_mutation_groups = adr_0008_security_mutations.each_with_object(Hash.new(0)) do |mutation, counts|
   counts[mutation.fetch(:group)] += 1
+end
+unless adr_0008_security_mutation_groups == ADR_0008_EXPECTED_SECURITY_MUTATION_GROUPS
+  failures << "ADR-0008 security mutation inventory groups changed: expected #{ADR_0008_EXPECTED_SECURITY_MUTATION_GROUPS.inspect}, found #{adr_0008_security_mutation_groups.inspect}"
+end
+unless adr_0008_security_mutations.length == ADR_0008_EXPECTED_SECURITY_MUTATION_COUNT
+  failures << "ADR-0008 security mutation inventory must contain exactly #{ADR_0008_EXPECTED_SECURITY_MUTATION_COUNT} cases, found #{adr_0008_security_mutations.length}"
 end
 
 all_test_owners.each do |test_id, owners|
