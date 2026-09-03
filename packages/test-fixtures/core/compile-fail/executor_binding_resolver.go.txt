@@ -1,0 +1,7 @@
+package compilecontract
+
+import transaction "github.com/ScottTpirate/stead/apps/core/internal/transaction"
+
+func rejected(binding transaction.ExecutorBinding) {
+	_, _ = transaction.ResolveExecutorBinding[transaction.Session](binding)
+}

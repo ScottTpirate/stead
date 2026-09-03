@@ -1,0 +1,7 @@
+package compilecontract
+
+import transaction "github.com/ScottTpirate/stead/apps/core/internal/transaction"
+
+func rejected(port transaction.OperationPort[struct{}]) {
+	port.Exec("DELETE FROM foreign.table")
+}

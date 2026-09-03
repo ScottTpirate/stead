@@ -1,0 +1,91 @@
+{
+  "schema_version": "1.2.0",
+  "authority": "none",
+  "producer_owner": "WS-09",
+  "durable_audit_owner": "WS-07",
+  "identifier_max_bytes": 128,
+  "build_recipe_version_max_bytes": 256,
+  "approval_threshold_minimum": 1,
+  "approval_threshold_representation": "exact_positive_go_int",
+  "signature_threshold_maximum": 16,
+  "observer_failure_code": "lifecycle_observer_failed",
+  "operation_guard_failure_code": "lifecycle_operation_in_progress",
+  "acknowledgement_fields": [
+    "error_code",
+    "observation_digest",
+    "outcome",
+    "schema_version"
+  ],
+  "workflows": [
+    "policy_activation",
+    "policy_release",
+    "policy_transport"
+  ],
+  "outcomes": [
+    "failure",
+    "success"
+  ],
+  "threshold_results": [
+    "not_evaluated",
+    "presented_unverified_satisfied",
+    "presented_unverified_short"
+  ],
+  "stages": [
+    "prepare_unsigned_activation",
+    "finalize_activation_archive",
+    "inspect_activation_archive",
+    "validate_activation_archive",
+    "prepare_release_attestation",
+    "finalize_release_handoff",
+    "build_transport_descriptor"
+  ],
+  "event_fields": [
+    "authority",
+    "context",
+    "durable_audit_owner",
+    "error_code",
+    "facts",
+    "outcome",
+    "producer_owner",
+    "schema_version",
+    "stage",
+    "workflow"
+  ],
+  "fact_fields": [
+    "activation_set_id",
+    "archive_digest",
+    "archive_entry_count",
+    "archive_file_count",
+    "build_recipe_version",
+    "build_workflow_identity",
+    "builder_identity",
+    "dependency_lock_digest",
+    "deployment_policy_digest",
+    "distinct_custodians_required",
+    "evidence_manifest_digest",
+    "lowering_approval_threshold",
+    "policy_bundle_id",
+    "presented_accepted_review_count",
+    "presented_approved_waiver_count",
+    "presented_assurance_result_digest",
+    "presented_offline_report_digest",
+    "presented_review_receipt_count",
+    "presented_signing_receipt_count",
+    "presented_signing_receipt_set_digest",
+    "presented_waiver_receipt_count",
+    "release_attestation_envelope_digest",
+    "release_attestation_id",
+    "release_workflow_identity",
+    "required_signature_threshold",
+    "review_approval_treatment",
+    "signed_envelope_digest",
+    "signing_request_pae_digest",
+    "signing_result_treatment",
+    "signing_workflow_identity",
+    "source_revision",
+    "threshold_result",
+    "threshold_treatment",
+    "trust_recovery_approval_threshold",
+    "waiver_approval_treatment"
+  ]
+}

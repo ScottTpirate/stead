@@ -1,0 +1,25 @@
+{
+  "scope": "P1-015-CORE-PORTS compile-time negative boundaries",
+  "cases": [
+    {"id": "foreign_internal_import", "placement": "foreign", "source": "foreign_internal_import.go.txt", "expected": "use of internal package github.com/ScottTpirate/stead/apps/core/internal/transaction not allowed"},
+    {"id": "forge_session_binding", "placement": "apps_core", "source": "forge_session_binding.go.txt", "expected": "unknown field Owner"},
+    {"id": "late_participant", "placement": "apps_core", "source": "late_participant.go.txt", "expected": "plan.AddParticipant undefined"},
+    {"id": "caller_commit", "placement": "apps_core", "source": "caller_commit.go.txt", "expected": "coordinator.Commit undefined"},
+    {"id": "raw_sql", "placement": "apps_core", "source": "raw_sql.go.txt", "expected": "port.Exec undefined"},
+    {"id": "role_selection", "placement": "apps_core", "source": "role_selection.go.txt", "expected": "port.SetRole undefined"},
+    {"id": "mode_downgrade", "placement": "apps_core", "source": "mode_downgrade.go.txt", "expected": "coordinator.SetMode undefined"},
+    {"id": "effect_class_selection", "placement": "apps_core", "source": "effect_class_selection.go.txt", "expected": "coordinator.PrepareEffect undefined"},
+    {"id": "forge_bound_revision", "placement": "apps_core", "source": "forge_bound_revision.go.txt", "expected": "unknown field Opaque"},
+    {"id": "forge_durable_receipt", "placement": "apps_core", "source": "forge_durable_receipt.go.txt", "expected": "unknown field Opaque"},
+    {"id": "raw_outbox_table", "placement": "apps_core", "source": "raw_outbox_table.go.txt", "expected": "scope.Exec undefined"},
+    {"id": "wrong_invocation_type", "placement": "apps_core", "source": "wrong_invocation_type.go.txt", "expected": "cannot use \"wrong invocation type\""},
+    {"id": "caller_snapshotter", "placement": "apps_core", "source": "caller_snapshotter.go.txt", "expected": "contract.BindWithSnapshot undefined"},
+    {"id": "dynamic_participant", "placement": "apps_core", "source": "dynamic_participant.go.txt", "expected": "unknown field Participants"},
+    {"id": "separable_validity", "placement": "apps_core", "source": "separable_validity.go.txt", "expected": "port.ValidFor undefined"},
+    {"id": "owner_session_access", "placement": "apps_core", "source": "owner_session_access.go.txt", "expected": "port.Session undefined"},
+    {"id": "executor_early_commit", "placement": "apps_core", "source": "executor_early_commit.go.txt", "expected": "binding.Commit undefined"},
+    {"id": "executor_early_rollback", "placement": "apps_core", "source": "executor_early_rollback.go.txt", "expected": "binding.Rollback undefined"},
+    {"id": "executor_binding_resolver", "placement": "apps_core", "source": "executor_binding_resolver.go.txt", "expected": "undefined: transaction.ResolveExecutorBinding"},
+    {"id": "executor_payload_constructor", "placement": "apps_core", "source": "executor_payload_constructor.go.txt", "expected": "too many arguments in call to transaction.NewBeginResult"}
+  ]
+}

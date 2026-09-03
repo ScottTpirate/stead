@@ -1,0 +1,17 @@
+{
+  "scope": "P1-015-CORE-PORTS dependency-free rollback contribution",
+  "cases": [
+    {"id": "begin_error", "expected_code": "begin_failed", "begin_calls": 1, "commit_calls": 0, "rollback_calls": 0},
+    {"id": "begin_panic", "expected_code": "begin_failed", "begin_calls": 1, "commit_calls": 0, "rollback_calls": 0},
+    {"id": "first_participant_error", "expected_code": "participant_failed", "begin_calls": 1, "commit_calls": 0, "rollback_calls": 1},
+    {"id": "stale_fence_error", "expected_code": "participant_failed", "begin_calls": 1, "commit_calls": 0, "rollback_calls": 1},
+    {"id": "participant_panic", "expected_code": "participant_failed", "begin_calls": 1, "commit_calls": 0, "rollback_calls": 1},
+    {"id": "cancellation_between_participants", "expected_code": "cancelled", "begin_calls": 1, "commit_calls": 0, "rollback_calls": 1},
+    {"id": "outbox_error", "expected_code": "outbox_failed", "begin_calls": 1, "commit_calls": 0, "rollback_calls": 1},
+    {"id": "outbox_panic", "expected_code": "outbox_failed", "begin_calls": 1, "commit_calls": 0, "rollback_calls": 1},
+    {"id": "commit_error", "expected_code": "commit_failed", "begin_calls": 1, "commit_calls": 1, "rollback_calls": 1},
+    {"id": "commit_panic", "expected_code": "commit_failed", "begin_calls": 1, "commit_calls": 1, "rollback_calls": 1},
+    {"id": "rollback_error", "expected_code": "rollback_failed", "begin_calls": 1, "commit_calls": 0, "rollback_calls": 1},
+    {"id": "rollback_panic", "expected_code": "rollback_failed", "begin_calls": 1, "commit_calls": 0, "rollback_calls": 1}
+  ]
+}
