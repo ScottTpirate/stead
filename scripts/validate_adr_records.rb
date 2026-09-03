@@ -6,6 +6,9 @@ require "date"
 require "json"
 require "open3"
 require "pathname"
+require "rbconfig"
+require "securerandom"
+require "tmpdir"
 require "set"
 require "yaml"
 
@@ -314,6 +317,11 @@ ADR_0008_DECISION_RECORD_PATH =
 ADR_0008_ISSUE_CATALOG_PATH = "docs/planning/implementation-issue-catalog.yaml".freeze
 ADR_0008_ACCEPTANCE_HISTORY_MAX_COMMITS = 4_096
 ADR_0008_ACCEPTANCE_SNAPSHOT_MAX_BYTES = 524_288
+ADR_0008_REAL_HISTORY_PROBE_TOKEN_ENV =
+  "STEAD_ADR_0008_REAL_HISTORY_PROBE_TOKEN".freeze
+ADR_0008_REAL_HISTORY_PROBE_CONFIG_KEY =
+  "stead.adr0008RealHistoryProbeToken".freeze
+ADR_0008_REAL_HISTORY_PROBE_TOKEN_PATTERN = /\A[0-9a-f]{64}\z/
 ADR_0008_ACCEPTANCE_TRANSITION_CHANGES = {
   ADR_0008_DECISION_RECORD_PATH => "M",
   ADR_0008_APPROVAL_RECORD_PATH => "A",
@@ -1017,6 +1025,11 @@ def adr_0008_markdown_table_cells(line)
 end
 
 def adr_0008_expected_index_transition(path:, parent_source:, metadata:)
+  unless parent_source.is_a?(String) && parent_source.valid_encoding? &&
+         parent_source.bytesize <= ADR_0008_ACCEPTANCE_SNAPSHOT_MAX_BYTES
+    return [nil, ["ADR-0008 #{path} Proposed parent fixture is unavailable, invalid, or oversized"]]
+  end
+
   immutable_revision = metadata.fetch(:immutable_revision)
   accepted_at = metadata.fetch(:accepted_at)
   lines = parent_source.lines
@@ -1321,6 +1334,45 @@ def adr_0008_accepted_catalog_gate_fixture(metadata)
   }
 end
 
+def adr_0008_accepted_catalog_source_fixture(parent_source, metadata)
+  unless parent_source.is_a?(String) && parent_source.valid_encoding? &&
+         parent_source.bytesize <= ADR_0008_ACCEPTANCE_SNAPSHOT_MAX_BYTES
+    return [nil, ["ADR-0008 Proposed catalog source fixture is unavailable, invalid, or oversized"]]
+  end
+
+  header = "  - adr_id: ADR-CAND-006\n"
+  header_offsets = parent_source.enum_for(:scan, /^#{Regexp.escape(header)}/).map { Regexp.last_match.begin(0) }
+  return [nil, ["ADR-0008 Proposed catalog source must contain one canonical gate header"]] unless header_offsets.length == 1
+
+  block_start = header_offsets.first
+  next_header = parent_source.match(/^  - adr_id: /, block_start + header.bytesize)
+  return [nil, ["ADR-0008 Proposed catalog gate must have a bounded successor"]] unless next_header
+
+  block = parent_source[block_start...next_header.begin(0)]
+  proposed_state = "    state: PROPOSED\n"
+  premature_fields = %w[immutable_revision accepted_at approval_record approval_records].select do |field|
+    block.match?(/^    #{Regexp.escape(field)}:/)
+  end
+  unless block.lines.count(proposed_state) == 1 && premature_fields.empty?
+    return [nil, ["ADR-0008 Proposed catalog gate has noncanonical state or premature acceptance fields"]]
+  end
+
+  accepted_fields = +"    state: ACCEPTED\n"
+  accepted_fields << "    immutable_revision: #{JSON.generate(metadata.fetch(:immutable_revision))}\n"
+  accepted_fields << "    accepted_at: #{JSON.generate(metadata.fetch(:accepted_at))}\n"
+  accepted_fields << "    approval_record: #{JSON.generate(metadata.fetch(:approval_record_path))}\n"
+  accepted_fields << "    approval_records:\n"
+  metadata.fetch(:approval_records).each do |record|
+    accepted_fields << "      - {role: #{JSON.generate(record.fetch('role'))}, " \
+                       "identity: #{JSON.generate(record.fetch('identity'))}, " \
+                       "disposition: #{JSON.generate(record.fetch('disposition'))}}\n"
+  end
+  accepted_block = block.sub(proposed_state, accepted_fields)
+  [parent_source[0...block_start] + accepted_block + parent_source[next_header.begin(0)..], []]
+rescue KeyError, TypeError => error
+  [nil, ["ADR-0008 accepted catalog source fixture failed: #{error.class}"]]
+end
+
 def adr_0008_substantive_source_failures(
   adr_source,
   acceptance_metadata: ACCEPTED_RECORD_METADATA["0008"]
@@ -1410,12 +1462,12 @@ def adr_0008_substantive_source_failures(
   failures
 end
 
-def adr_0008_git_capture(*arguments)
+def adr_0008_git_capture(*arguments, root: ROOT, environment: {})
   stdout, stderr, status = Open3.capture3(
-    { "GIT_NO_REPLACE_OBJECTS" => "1", "GIT_OPTIONAL_LOCKS" => "0" },
+    { "GIT_NO_REPLACE_OBJECTS" => "1", "GIT_OPTIONAL_LOCKS" => "0" }.merge(environment),
     "git",
     "-C",
-    ROOT.to_s,
+    root.to_s,
     *arguments
   )
   {
@@ -1676,6 +1728,223 @@ def adr_0008_live_acceptance_history_failures(metadata)
     history_failures << "ADR-0008 direct-child acceptance snapshots failed: #{detail.join('; ')}"
   end
   history_failures
+end
+
+def adr_0008_real_history_probe_write_acceptance(root, metadata)
+  failures = []
+  adr_path = root.join(ADR_0008_DECISION_RECORD_PATH)
+  adr_source = adr_path.read(encoding: "UTF-8")
+  adr_path.write(adr_0008_accepted_adr_fixture(adr_source, metadata), mode: "w", encoding: "UTF-8")
+
+  catalog_path = root.join(ADR_0008_ISSUE_CATALOG_PATH)
+  accepted_catalog, catalog_failures = adr_0008_accepted_catalog_source_fixture(
+    catalog_path.read(encoding: "UTF-8"),
+    metadata
+  )
+  failures.concat(catalog_failures)
+  catalog_path.write(accepted_catalog, mode: "w", encoding: "UTF-8") if accepted_catalog
+
+  approval_path = root.join(ADR_0008_APPROVAL_RECORD_PATH)
+  approval_path.write(adr_0008_approval_record_fixture(metadata), mode: "w", encoding: "UTF-8")
+
+  [ADR_0008_ADR_INDEX_PATH, ADR_0008_CHOICE_QUEUE_PATH, ADR_0008_CANDIDATE_INDEX_PATH].each do |path|
+    index_path = root.join(path)
+    parent_source = index_path.read(encoding: "UTF-8")
+    accepted_source, index_failures = adr_0008_expected_index_transition(
+      path: path,
+      parent_source: parent_source,
+      metadata: metadata
+    )
+    failures.concat(index_failures)
+    next unless accepted_source
+
+    index_path.write(accepted_source, mode: "w", encoding: "UTF-8")
+  end
+  failures
+rescue Errno::ENOENT, KeyError, Psych::Exception, SystemCallError => error
+  failures << "ADR-0008 real-history probe fixture generation failed: #{error.class}: #{error.message}"
+end
+
+def adr_0008_real_history_probe_git(root, *arguments, environment: {})
+  result = adr_0008_git_capture(*arguments, root: root, environment: environment)
+  return [result.fetch(:stdout), nil] if result.fetch(:success)
+
+  [nil, "git #{arguments.first} failed: #{adr_0008_git_failure(result)}"]
+end
+
+def adr_0008_real_history_probe_validator(root, stage, token:)
+  stdout, stderr, status = Open3.capture3(
+    { ADR_0008_REAL_HISTORY_PROBE_TOKEN_ENV => token },
+    RbConfig.ruby,
+    "scripts/validate_adr_records.rb",
+    chdir: root.to_s
+  )
+  return [] if status.success? && stdout.include?("ADR traceability validation: PASS")
+
+  detail = (stderr + stdout).lines.first(8).join(" ").strip
+  ["ADR-0008 real-history #{stage} complete validator failed: #{detail.byteslice(0, 1_000)}"]
+rescue Errno::ENOENT, SystemCallError => error
+  ["ADR-0008 real-history #{stage} validator could not run: #{error.class}: #{error.message}"]
+end
+
+def adr_0008_real_history_probe_failures(decision_revision:, metadata_template:)
+  return ["ADR-0008 real-history probe decision revision is malformed"] unless adr_0008_exact_revision?(decision_revision)
+
+  base = Pathname.new(ENV.fetch("STEAD_TEST_TMPDIR", ROOT.parent.to_s)).expand_path
+  unless base.directory? && base.writable?
+    return ["ADR-0008 real-history probe temporary base is unavailable"]
+  end
+  root_real = ROOT.realpath
+  base_real = base.realpath
+  if base_real == root_real || base_real.to_s.start_with?("#{root_real}/")
+    return ["ADR-0008 real-history probe temporary base must be outside the repository"]
+  end
+
+  failures = []
+  Dir.mktmpdir("stead-adr0008-history-", base_real.to_s) do |temporary|
+    probe_root = Pathname.new(temporary).join("repository")
+    probe_token = SecureRandom.hex(32)
+    _output, error = adr_0008_real_history_probe_git(
+      ROOT,
+      "clone",
+      "--quiet",
+      "--no-local",
+      ROOT.to_s,
+      probe_root.to_s
+    )
+    return ["ADR-0008 real-history probe clone failed: #{error}"] if error
+
+    {
+      "user.name" => "Stead ADR probe",
+      "user.email" => "adr-probe@stead.invalid",
+      ADR_0008_REAL_HISTORY_PROBE_CONFIG_KEY => probe_token
+    }.each do |key, value|
+      _config_output, config_error = adr_0008_real_history_probe_git(probe_root, "config", key, value)
+      return ["ADR-0008 real-history probe #{config_error}"] if config_error
+    end
+    _checkout_output, checkout_error = adr_0008_real_history_probe_git(
+      probe_root,
+      "switch",
+      "--detach",
+      decision_revision
+    )
+    return ["ADR-0008 real-history probe #{checkout_error}"] if checkout_error
+    _branch_output, branch_error = adr_0008_real_history_probe_git(
+      probe_root,
+      "switch",
+      "-c",
+      "probe-accepted"
+    )
+    return ["ADR-0008 real-history probe #{branch_error}"] if branch_error
+
+    metadata = metadata_template.merge(immutable_revision: decision_revision)
+    fixture_failures = adr_0008_real_history_probe_write_acceptance(probe_root, metadata)
+    return fixture_failures unless fixture_failures.empty?
+
+    paths = ADR_0008_ACCEPTANCE_TRANSITION_CHANGES.keys
+    _add_output, add_error = adr_0008_real_history_probe_git(probe_root, "add", "--", *paths)
+    return ["ADR-0008 real-history probe #{add_error}"] if add_error
+    staged_output, staged_error = adr_0008_real_history_probe_git(
+      probe_root,
+      "diff",
+      "--cached",
+      "--name-status"
+    )
+    return ["ADR-0008 real-history probe #{staged_error}"] if staged_error
+    staged_changes = staged_output.lines.to_h do |line|
+      status, path = line.chomp.split("\t", 2)
+      [path, status]
+    end
+    staged_failures = adr_0008_acceptance_transition_change_failures(staged_changes)
+    return staged_failures unless staged_failures.empty?
+
+    commit_environment = {
+      "GIT_AUTHOR_DATE" => "2026-09-04T00:00:00Z",
+      "GIT_COMMITTER_DATE" => "2026-09-04T00:00:00Z"
+    }
+    _commit_output, commit_error = adr_0008_real_history_probe_git(
+      probe_root,
+      "commit",
+      "--quiet",
+      "--no-gpg-sign",
+      "-m",
+      "test: accept ADR-0008 fixture",
+      environment: commit_environment
+    )
+    return ["ADR-0008 real-history probe #{commit_error}"] if commit_error
+    failures.concat(
+      adr_0008_real_history_probe_validator(
+        probe_root,
+        "immediate-child",
+        token: probe_token
+      )
+    )
+    return failures unless failures.empty?
+
+    _descendant_output, descendant_error = adr_0008_real_history_probe_git(
+      probe_root,
+      "commit",
+      "--quiet",
+      "--allow-empty",
+      "--no-gpg-sign",
+      "-m",
+      "test: later accepted descendant",
+      environment: commit_environment.merge("GIT_AUTHOR_DATE" => "2026-09-05T00:00:00Z", "GIT_COMMITTER_DATE" => "2026-09-05T00:00:00Z")
+    )
+    return ["ADR-0008 real-history probe #{descendant_error}"] if descendant_error
+    failures.concat(
+      adr_0008_real_history_probe_validator(
+        probe_root,
+        "later-descendant",
+        token: probe_token
+      )
+    )
+    return failures unless failures.empty?
+
+    _side_output, side_error = adr_0008_real_history_probe_git(
+      probe_root,
+      "switch",
+      "-c",
+      "probe-side",
+      decision_revision
+    )
+    return ["ADR-0008 real-history probe #{side_error}"] if side_error
+    _side_commit_output, side_commit_error = adr_0008_real_history_probe_git(
+      probe_root,
+      "commit",
+      "--quiet",
+      "--allow-empty",
+      "--no-gpg-sign",
+      "-m",
+      "test: sibling branch",
+      environment: commit_environment.merge("GIT_AUTHOR_DATE" => "2026-09-06T00:00:00Z", "GIT_COMMITTER_DATE" => "2026-09-06T00:00:00Z")
+    )
+    return ["ADR-0008 real-history probe #{side_commit_error}"] if side_commit_error
+    _return_output, return_error = adr_0008_real_history_probe_git(probe_root, "switch", "probe-accepted")
+    return ["ADR-0008 real-history probe #{return_error}"] if return_error
+    _merge_output, merge_error = adr_0008_real_history_probe_git(
+      probe_root,
+      "merge",
+      "--quiet",
+      "--no-ff",
+      "--no-gpg-sign",
+      "-m",
+      "test: normal integration merge",
+      "probe-side",
+      environment: commit_environment.merge("GIT_COMMITTER_DATE" => "2026-09-07T00:00:00Z")
+    )
+    return ["ADR-0008 real-history probe #{merge_error}"] if merge_error
+    failures.concat(
+      adr_0008_real_history_probe_validator(
+        probe_root,
+        "normal-merge",
+        token: probe_token
+      )
+    )
+  end
+  failures
+rescue ArgumentError, Errno::ENOENT, SystemCallError => error
+  ["ADR-0008 real-history probe failed closed: #{error.class}: #{error.message}"]
 end
 
 def adr_0008_decision_body(adr_source)
@@ -2273,6 +2542,33 @@ if adr_0008_acceptance_metadata && adr_0008_source
   failures.concat(adr_0008_live_acceptance_history_failures(adr_0008_acceptance_metadata))
 end
 
+adr_0008_proposed_fixture_source = adr_0008_source
+adr_0008_proposed_fixture_gate = adr_gates["ADR-CAND-006"]
+if adr_0008_acceptance_metadata
+  fixture_parent_revision = adr_0008_acceptance_metadata.fetch(:immutable_revision)
+  parent_adr_source, parent_adr_error = adr_0008_git_file_at(
+    fixture_parent_revision,
+    ADR_0008_DECISION_RECORD_PATH
+  )
+  parent_catalog_source, parent_catalog_error = adr_0008_git_file_at(
+    fixture_parent_revision,
+    ADR_0008_ISSUE_CATALOG_PATH
+  )
+  failures << parent_adr_error if parent_adr_error
+  failures << parent_catalog_error if parent_catalog_error
+  adr_0008_proposed_fixture_source = parent_adr_source
+  if parent_catalog_source
+    parent_gate, parent_gate_failures = adr_0008_catalog_gate_from_source(
+      parent_catalog_source,
+      filename: "#{ADR_0008_ISSUE_CATALOG_PATH}@#{fixture_parent_revision}"
+    )
+    failures.concat(parent_gate_failures)
+    adr_0008_proposed_fixture_gate = parent_gate
+  else
+    adr_0008_proposed_fixture_gate = nil
+  end
+end
+
 # Exercise both sides of the acceptance seam before an approval record exists.
 # The fixture is local data only: repository state remains Proposed until a
 # later mechanical commit supplies the matching metadata and record updates.
@@ -2294,8 +2590,8 @@ adr_0008_future_acceptance_metadata = {
   ].map(&:freeze).freeze
 }.freeze
 
-if adr_0008_source
-  if adr_0008_source.include?(ADR_0008_REVIEWS_HEADING)
+if adr_0008_proposed_fixture_source
+  if adr_0008_proposed_fixture_source.include?(ADR_0008_REVIEWS_HEADING)
     fixture_status = adr_0008_accepted_status_line(adr_0008_future_acceptance_metadata)
     fixture_reviews = adr_0008_accepted_reviews_tail(adr_0008_future_acceptance_metadata)
     unless fixture_status == ADR_0008_FUTURE_ACCEPTED_FIXTURE_STATUS_LINE &&
@@ -2304,7 +2600,7 @@ if adr_0008_source
       failures << "ADR-0008 future accepted fixture serialization changed"
     end
     accepted_fixture = adr_0008_accepted_adr_fixture(
-      adr_0008_source,
+      adr_0008_proposed_fixture_source,
       adr_0008_future_acceptance_metadata
     )
     accepted_fixture_failures = adr_0008_substantive_source_failures(
@@ -2407,9 +2703,9 @@ if adr_0008_source
 
   adr_0008_record_mutations << {
     name: "proposed review amendment",
-    source: adr_0008_source + "\nReview amendment: accept a different revision.\n",
+    source: adr_0008_proposed_fixture_source + "\nReview amendment: accept a different revision.\n",
     metadata: nil,
-    baseline: adr_0008_source,
+    baseline: adr_0008_proposed_fixture_source,
     expected_failure_fragment: "proposed Reviews and approvals tail must match the exact pinned proposal"
   }
 end
@@ -2444,7 +2740,7 @@ end
 # graph includes a later descendant and a normal merge so acceptance remains
 # valid after integration while the original transition edge stays immutable.
 adr_0008_history_mutations = []
-if adr_0008_source && defined?(accepted_fixture) && accepted_fixture
+if adr_0008_proposed_fixture_source && defined?(accepted_fixture) && accepted_fixture
   fixture_revision = adr_0008_future_acceptance_metadata.fetch(:immutable_revision)
   fixture_ancestor = "a" * 40
   fixture_acceptance = "1" * 40
@@ -2469,7 +2765,10 @@ if adr_0008_source && defined?(accepted_fixture) && accepted_fixture
     failures << "ADR-0008 future acceptance metadata derivation fixture failed: " \
                 "#{fixture_metadata_failures.join('; ')}; derived=#{fixture_derived_metadata.inspect}"
   end
-  fixture_parent_gate = Marshal.load(Marshal.dump(adr_gates.fetch("ADR-CAND-006")))
+  unless adr_0008_proposed_fixture_gate.is_a?(Hash)
+    failures << "ADR-0008 future acceptance fixture Proposed catalog gate is unavailable"
+  end
+  fixture_parent_gate = Marshal.load(Marshal.dump(adr_0008_proposed_fixture_gate || {}))
   fixture_parent_catalog = {
     "adr_decision_gates" => [fixture_parent_gate],
     "fixture_sentinel" => { "unchanged" => true }
@@ -2486,14 +2785,29 @@ if adr_0008_source && defined?(accepted_fixture) && accepted_fixture
     JSON.generate(fixture_parent_catalog.merge("adr_decision_gates" => [child_gate]))
   end
   fixture_child_catalog_source = fixture_catalog_child_source.call(adr_0008_future_acceptance_metadata)
+  fixture_index_paths = [
+    ADR_0008_ADR_INDEX_PATH,
+    ADR_0008_CHOICE_QUEUE_PATH,
+    ADR_0008_CANDIDATE_INDEX_PATH
+  ].freeze
+  proposed_index_sources = {}
+  proposed_index_source_failures = []
+  fixture_index_paths.each do |path|
+    if adr_0008_acceptance_metadata
+      parent_source, parent_error = adr_0008_git_file_at(
+        adr_0008_acceptance_metadata.fetch(:immutable_revision),
+        path
+      )
+      proposed_index_source_failures << parent_error if parent_error
+      proposed_index_sources[path] = parent_source
+    else
+      proposed_index_sources[path] = ROOT.join(path).read(encoding: "UTF-8")
+    end
+  end
   fixture_index_sources = lambda do |metadata|
-    index_failures = []
-    sources = [
-      ADR_0008_ADR_INDEX_PATH,
-      ADR_0008_CHOICE_QUEUE_PATH,
-      ADR_0008_CANDIDATE_INDEX_PATH
-    ].to_h do |path|
-      parent_source = ROOT.join(path).read(encoding: "UTF-8")
+    index_failures = proposed_index_source_failures.dup
+    sources = fixture_index_paths.to_h do |path|
+      parent_source = proposed_index_sources[path]
       child_source, child_failures = adr_0008_expected_index_transition(
         path: path,
         parent_source: parent_source,
@@ -2530,8 +2844,6 @@ if adr_0008_source && defined?(accepted_fixture) && accepted_fixture
   )
   positive_index_failures = fixture_index_generation_failures.dup
   fixture_indexes.each do |path, sources|
-    next unless sources.fetch(:child)
-
     positive_index_failures.concat(
       adr_0008_index_transition_failures(
         path: path,
@@ -2553,7 +2865,7 @@ if adr_0008_source && defined?(accepted_fixture) && accepted_fixture
     failures << "ADR-0008 consistent index fixture generation failed: #{index_failures.join('; ')}" unless index_failures.empty?
     {
       metadata: metadata,
-      source: adr_0008_accepted_adr_fixture(adr_0008_source, metadata),
+      source: adr_0008_accepted_adr_fixture(adr_0008_proposed_fixture_source, metadata),
       gate: adr_0008_accepted_catalog_gate_fixture(metadata),
       approval: adr_0008_approval_record_fixture(metadata),
       parent_catalog: fixture_parent_catalog_source,
@@ -2638,10 +2950,12 @@ if adr_0008_source && defined?(accepted_fixture) && accepted_fixture
   }
   unrelated_indexes = Marshal.load(Marshal.dump(fixture_indexes))
   choice_queue_child = unrelated_indexes.fetch(ADR_0008_CHOICE_QUEUE_PATH).fetch(:child)
-  unrelated_indexes.fetch(ADR_0008_CHOICE_QUEUE_PATH)[:child] = choice_queue_child.sub(
-    "| `ADR-CAND-002` PostgreSQL module isolation and cross-module reads |",
-    "| `ADR-CAND-002` MUTATED unrelated decision row |"
-  )
+  unrelated_indexes.fetch(ADR_0008_CHOICE_QUEUE_PATH)[:child] = if choice_queue_child
+                                                                  choice_queue_child.sub(
+                                                                    "| `ADR-CAND-002` PostgreSQL module isolation and cross-module reads |",
+                                                                    "| `ADR-CAND-002` MUTATED unrelated decision row |"
+                                                                  )
+                                                                end
   adr_0008_history_mutations << {
     name: "unrelated index row",
     surface: canonical_surface.merge(indexes: unrelated_indexes),
@@ -2703,6 +3017,35 @@ history_mutation_survivors = adr_0008_history_mutations.filter_map do |mutation|
 end
 unless history_mutation_survivors.empty?
   failures << "ADR-0008 acceptance-history mutation survivors: #{history_mutation_survivors.join(', ')}"
+end
+
+adr_0008_probe_environment_token = ENV[ADR_0008_REAL_HISTORY_PROBE_TOKEN_ENV]
+adr_0008_probe_config = adr_0008_git_capture(
+  "config",
+  "--local",
+  "--get",
+  ADR_0008_REAL_HISTORY_PROBE_CONFIG_KEY
+)
+adr_0008_probe_config_token = adr_0008_probe_config.fetch(:stdout).strip if adr_0008_probe_config.fetch(:success)
+adr_0008_real_history_probe_child = !adr_0008_probe_environment_token.nil? || !adr_0008_probe_config_token.nil?
+if adr_0008_real_history_probe_child &&
+   (!adr_0008_probe_environment_token&.match?(ADR_0008_REAL_HISTORY_PROBE_TOKEN_PATTERN) ||
+    adr_0008_probe_config_token != adr_0008_probe_environment_token)
+  failures << "ADR-0008 real-history probe child token/config binding is invalid"
+end
+adr_0008_real_history_probe_ran = !adr_0008_real_history_probe_child
+if adr_0008_real_history_probe_ran
+  probe_decision_revision = adr_0008_acceptance_metadata&.fetch(:immutable_revision)
+  unless probe_decision_revision
+    probe_head = adr_0008_git_capture("rev-parse", "--verify", "HEAD^{commit}")
+    probe_decision_revision = probe_head.fetch(:stdout).strip if probe_head.fetch(:success)
+  end
+  failures.concat(
+    adr_0008_real_history_probe_failures(
+      decision_revision: probe_decision_revision,
+      metadata_template: adr_0008_future_acceptance_metadata
+    )
+  )
 end
 
 # Mutate executable security invariants independently from the record seam.
@@ -3119,7 +3462,8 @@ adr_0008_security_mutation_survivors = adr_0008_security_mutations.filter_map do
   mutation_failures = adr_0008_security_contract_failures(
     adr_source: mutation.fetch(:adr),
     asyncapi: mutation.fetch(:asyncapi),
-    bypass_source: mutation.fetch(:bypass)
+    bypass_source: mutation.fetch(:bypass),
+    acceptance_metadata: adr_0008_acceptance_metadata
   )
   expected = mutation.fetch(:expected_failure_fragment)
   "#{mutation.fetch(:group)}/#{mutation.fetch(:name)}" unless mutation_failures.any? { |failure| failure.include?(expected) }
@@ -4161,6 +4505,7 @@ if failures.empty?
   puts "ADR-0008 exact-mapping mutation guard: PASS (#{adr_0008_killed_mutations}/#{adr_0008_expected_edges.length} required edge deletions killed)"
   puts "ADR-0008 record-state mutation guard: PASS (#{adr_0008_record_mutations.length}/#{ADR_0008_EXPECTED_RECORD_MUTATION_NAMES.length} mutations killed; proposed and future-accepted controls pass)"
   puts "ADR-0008 acceptance-history mutation guard: PASS (#{adr_0008_history_mutations.length}/#{ADR_0008_EXPECTED_HISTORY_MUTATION_NAMES.length} mutations killed; exact-parent descendant/merge fixture passes)"
+  puts "ADR-0008 real acceptance-history integration guard: PASS (immediate child, later descendant, normal merge)" if adr_0008_real_history_probe_ran
   puts "ADR-0008 pinned-CBI-source guard: PASS (baseline=#{ADR_0008_CLASSIFICATION_BYPASS_SOURCE_BYTES} bytes, #{ADR_0008_CBI_SOURCE_MUTATION_NAMES.length}/#{ADR_0008_CBI_SOURCE_MUTATION_NAMES.length} adversarial mutations killed)"
   puts "ADR-0008 security-contract mutation guard: PASS (#{adr_0008_security_mutations.length}/#{adr_0008_security_mutations.length} mutations killed across #{adr_0008_security_mutation_groups.length} gap groups)"
   puts "ADR traceability validation: PASS (records=#{paths.length}, requirements=#{known_requirement_ids.length}, tests=#{all_test_owners.length})"
