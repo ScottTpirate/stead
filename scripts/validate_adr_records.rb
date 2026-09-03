@@ -66,6 +66,12 @@ EXPECTED_REQUIREMENT_TEST_LINKS = {
       T-ADR-0009-FULL-RECONCILIATION
       T-ADR-0009-UPGRADE-ROLLBACK
     ],
+    "AUTH-002" => %w[
+      T-ADR-0009-AMBIGUOUS-MUTATION
+      T-ADR-0009-FULL-RECONCILIATION
+    ],
+    "AUTH-006" => %w[T-ADR-0009-FULL-RECONCILIATION],
+    "CLS-003" => %w[T-ADR-0009-FULL-RECONCILIATION],
     "CLS-006" => %w[
       T-ADR-0009-CONFLICT-QUARANTINE
       T-ADR-0009-PERMISSION-DRIFT
@@ -92,22 +98,19 @@ EXPECTED_REQUIREMENT_TEST_LINKS = {
     "PERF-003" => %w[
       T-ADR-0009-PROVIDER-OUTAGE
       T-ADR-0009-FULL-RECONCILIATION
-    ]
+    ],
+    "PERF-004" => %w[T-ADR-0009-FULL-RECONCILIATION]
   }.freeze
 }.freeze
 
 # Close the complete ADR-0009 Decision body as a separate integrity guard.
 # Semantic mutation self-tests below never use this digest as their oracle.
 ADR_0009_DECISION_BODY_SHA256 =
-  "9577e0488c7f05a324ae420a8c5722c1820c3b43185ce2d9dcc41299f757d16d".freeze
+  "9204a27b10a8fe53bfc5c3faf3c577463eabb678272e142de77bee1f05023f42".freeze
 ADR_0009_OWNER_APPROVAL_LINE =
-  "- **Project-owner approval required:** yes; this proposal narrowly changes the locked per-provider-HTTP-call durable-permit granularity in ADR-0005, CLS-007, and ADR-0007 for one closed bounded internal read plan, so acceptance requires explicit project-owner approval naming the exact immutable commit SHA".freeze
+  "- **Project-owner approval required:** yes; this proposal narrowly changes locked per-provider-HTTP-call durable-permit clauses in the Master Build Directive's CLS-003/CLS-007 rules, constitution section 4.6, ADR-0005, and ADR-0007 for one closed bounded internal read plan".freeze
 ADR_0009_SUPERSESSION_LINE =
-  "- **Supersedes / superseded by:** only on acceptance at an exact immutable commit SHA with explicit project-owner approval, supersedes only ADR-0005, CLS-007, and ADR-0007's per-provider-HTTP-call durable-permit granularity for the one closed bounded internal pagination/snapshot/verification/safe-idempotent-read plan defined here; every other decision and fence remains in force, and any broader exception requires a superseding ADR".freeze
-ADR_0009_PROJECT_OWNER_REVIEW_LINE =
-  "| Project owner | pending explicit approver | pending | must name the exact immutable commit SHA; no approval or acceptance record exists |".freeze
-ADR_0009_EXACT_SHA_APPROVAL_SENTENCE =
-  "Each approval must name the exact immutable commit SHA containing the decision; approval of a branch, tag, pull request, moving head, unspecified revision, or later-mutated text is insufficient.".freeze
+  "- **Supersedes / superseded by:** only on acceptance at an exact immutable commit SHA with explicit project-owner approval, supersedes only the Master Build Directive CLS-003 final durable-effect sentence and CLS-007 durable-effect paragraph, constitution section 4.6's provider-effect sentence, ADR-0005 option 6/decision item 15/`T-ADR-0005-REQUEST-BOUNDARY` provider-call clauses, and ADR-0007's durable-effects provider-call sentence, and only for the bounded internal pagination/snapshot/verification/safe-idempotent-read plan defined here".freeze
 ADR_0009_METADATA_KEY_ORDER = [
   "Status",
   "Date",
@@ -118,311 +121,262 @@ ADR_0009_METADATA_KEY_ORDER = [
   "Resolves on acceptance",
   "Supersedes / superseded by"
 ].freeze
-ADR_0009_APPROVAL_PARAGRAPH =
-  "Because this proposal narrowly supersedes an accepted/locked call-granularity rule, every named review and explicit project-owner approval is required. #{ADR_0009_EXACT_SHA_APPROVAL_SENTENCE} Until those records exist, ADR-0009 remains Proposed, `ADR-CAND-008` remains blocking, and no bounded-read permit exception is authorized. Decision acceptance would approve this contract and its future verification obligations, not claim that runtime implementation or evidence already exists.".freeze
-ADR_0009_EXPECTED_REVIEW_ROWS = [
-  "| Contract owner (WS-03) | pending non-author reviewer | pending | pending |",
-  "| Architecture and standards (WS-01) | pending | pending | pending |",
-  "| Canonical transaction owner (WS-02) | pending | pending | pending |",
-  "| Authorization/classification owner (WS-06) | pending | pending | pending |",
-  "| Event/audit owner (WS-07) | pending | pending | pending |",
-  "| Deployment/operations owner (WS-12) | pending | pending | pending |",
-  "| Independent QA and C-QA traceability owner (distinct WS-13 identity) | pending non-author reviewer | pending | pending |",
-  "| Independent security (distinct WS-13 identity) | pending non-author reviewer | pending | pending |",
-  ADR_0009_PROJECT_OWNER_REVIEW_LINE
+ADR_0009_PROPOSED_REVIEWS_BYTES = 1_269
+ADR_0009_PROPOSED_REVIEWS_SHA256 =
+  "e1c67e2d156e880034269febcd571835a564cfa886ed4e30d33fe8cdc60375b3".freeze
+ADR_0009_MARKDOWN_MAX_BYTES = 262_144
+ADR_0009_SPEC_PATH = "specs/provider-reconciliation/gitea-v1.yaml".freeze
+ADR_0009_SPEC_MAX_BYTES = 131_072
+ADR_0009_SPEC_TOP_LEVEL_KEYS = %w[
+  schema_version status owner decision_record activation_gate requirements authority
+  field_classes authorization_scope snapshot_and_change_proof webhook reconciliation
+  provider_mutation compatibility_profile privacy_and_observability verification
 ].freeze
-ADR_0009_REVIEW_TABLE_HEADER = "| Role | Identity | Disposition | Evidence/date |".freeze
-ADR_0009_REVIEW_TABLE_SEPARATOR = "|---|---|---|---|".freeze
-ADR_0009_HIDDEN_GOVERNANCE_MARKERS = (
-  ADR_0009_METADATA_KEY_ORDER.map { |key| "- **#{key}:**" } +
-  [
-    "## Reviews and approvals",
-    ADR_0009_EXACT_SHA_APPROVAL_SENTENCE,
-    ADR_0009_REVIEW_TABLE_HEADER
-  ] +
-  ADR_0009_EXPECTED_REVIEW_ROWS.map { |row| "| #{row.split('|', -1)[1].strip} |" }
-).freeze
-ADR_0009_SEMANTIC_FRAGMENT_PREDICATES = {
-  scope_id: ["unique, nontransferable `scope_id`"],
-  logical_operation_id: ["`scope_id` and `logical_operation_id` and binding"],
-  scope_nontransferable: [
-    "The scope cannot be renewed, transferred, output-widened, or reused across a logical operation, `ReconciliationGeneration`, provider installation, `ProviderResourceKey`, resource, security domain, or compatibility profile."
+ADR_0009_SPEC_SECTION_DIGESTS = {
+  "authority" => "947858adec5cddd08322e65e8f4ab4f3be623eadc5265166ed0edd2b571f8835",
+  "field_classes" => "95a7610c06be06293e144c605bc531a83211e2685f5b13c3e34a7d6870102976",
+  "authorization_scope" => "4850dacd14daeffef45b10d7261365cf543fb5a840063b90af51bc85c370eadb",
+  "snapshot_and_change_proof" => "c672ab550b3daa59e083785fd0a1f514fa27931ec4966270729452672f443378",
+  "webhook" => "689ea3cfbae79f23cccf842ed28ab11f757dad81f008824ec88fe956fbfded26",
+  "reconciliation" => "b340a9ea20d0f7164ac97e1d5dfcdb35c1740649c0c7d0a6dffa80c0fc9fd5ae",
+  "provider_mutation" => "04d003d64cbe5cc58f23e14d26e22a936d2a9f8c1ad1b089973b1f9fbb8d2e13",
+  "compatibility_profile" => "dfd004f9311eba2574f0bc213ca1d31801c55fe1e8cb2d86294cbf3bb83a57f5",
+  "privacy_and_observability" => "97bead1cdb4581faa3342618593b9b3e60cc7a41760256fe6011875948e4e1b2",
+  "verification" => "322887dfd093bb94f68ef0922ead48eb4cefd5420f78e47d530f59f46164971b"
+}.freeze
+ADR_0009_SPEC_EXPECTATIONS = {
+  "schema_version" => "1.0",
+  "status" => "governed_by_adr_0009",
+  "owner" => "WS-03",
+  "decision_record" => "docs/adr/0009-gitea-provider-reconciliation-precedence-and-conflict-handling.md",
+  "activation_gate" => "ADR-CAND-008_ACCEPTED_AT_EXACT_IMMUTABLE_SHA",
+  "requirements" => %w[
+    PRIN-002 ARCH-004 DOM-004 SCM-001 SCM-002 SCM-003 SCM-004 SCM-005
+    AUTH-002 AUTH-006 CLS-003 CLS-006 CLS-007 TEST-006 PERF-003 PERF-004
   ],
-  acting_principal: [
-    "binding the acting service principal",
-    "Authenticate the acting service principal and resolve the exact initiating principal"
+  "authority.ordinary_ui_synchronous_provider_calls" => 0,
+  "authority.provider_permission" => "enforcement_not_authority",
+  "authorization_scope.type" => "ProviderAuthorizationScope",
+  "authorization_scope.owner" => "WS-06",
+  "authorization_scope.consumer" => "WS-03",
+  "authorization_scope.reusable" => false,
+  "authorization_scope.renewable" => false,
+  "authorization_scope.transferable" => false,
+  "authorization_scope.purpose" => "one_bounded_logical_internal_reconciliation_read_operation",
+  "authorization_scope.eligible_calls" => %w[
+    pagination_read snapshot_read bounded_verification_read
+    compatibility_profile_safe_idempotent_read_retry
   ],
-  initiating_principal: [
-    "exact initiating principal (including an explicit system initiator for scheduled work)",
-    "resolve the exact initiating principal; scheduled work binds an explicit system initiator rather than omitting that field"
+  "authorization_scope.excluded_effects_requiring_own_durable_one_use_permit" => %w[
+    provider_mutation credential_issuance direct_git_or_protocol_access export_or_download
+    non_idempotent_call ambiguous_external_effect operation_outliving_logical_request_or_job
   ],
-  organization: ["Organization, security domain"],
-  security_domain: ["security domain, exact canonical container"],
-  canonical_container_resource: ["exact canonical container and closed resource set"],
-  provider_installation: ["exact provider installation UUID"],
-  provider_path: ["provider installation UUID and API path"],
-  provider_resource_key: ["API path plus `ProviderResourceKey`"],
-  reconciliation_generation: ["`ProviderResourceKey`, `ReconciliationGeneration`"],
-  operation_class: ["`ReconciliationGeneration`, one allowed operation class"],
-  closed_call_plan: [
-    "one allowed operation class and closed call plan",
-    "The plan fixes the exact HTTP method/path templates, resource set, cursor derivation rules, call order, retry classes, and maximum attempts/calls/pages/items/response bytes before the first provider call."
+  "authorization_scope.required_bindings" => %w[
+    scope_id logical_operation_id acting_service_principal
+    initiating_principal_or_explicit_system_initiator organization_id security_domain_id
+    canonical_container closed_resource_set_or_container_inventory_scope provider_installation_id
+    provider_api_path provider_resource_key_when_resource_specific reconciliation_generation
+    allowed_operation_class closed_call_plan activation_snapshot authorization_consistency_vector
+    compatibility_profile_id_version_and_schema_digest original_deadline
+    immutable_earliest_bound_expiry
   ],
-  activation_vector_definition: [
-    "the complete immutable ADR-0005 activation snapshot and consistency vector, durable monotonic dispatch/page ordinals"
+  "authorization_scope.call_plan_fixed_before_first_provider_call" => %w[
+    http_method_and_path_templates resource_set_or_container_inventory_scope
+    cursor_derivation_rules call_order retry_classes maximum_attempts maximum_calls
+    maximum_pages maximum_items maximum_response_bytes
   ],
-  activation_vector_expiry: [
-    "earliest bound temporal input in the complete ADR-0005 activation snapshot and consistency vector or the original logical-operation deadline"
+  "authorization_scope.before_each_provider_call.mode" => "read_only_validation",
+  "authorization_scope.before_each_provider_call.checks" => %w[
+    exact_scope_and_logical_operation principals_organization_domain_container_and_resources
+    installation_path_resource_key_generation_and_operation_class
+    call_plan_method_path_cursor_order_and_local_counters
+    activation_snapshot_and_authorization_consistency_vector
+    latest_provider_enforcement_and_resource_fences compatibility_profile_deadline_and_expiry
   ],
-  activation_vector_revalidation_summary: [
-    "operation class/call plan, complete activation snapshot and consistency vector, compatibility profile, ordinals/counters, deadline, and earliest-bound expiry"
+  "authorization_scope.persistence.start_transaction" => %w[
+    immutable_scope_identity_and_bindings conservative_whole_plan_envelope logical_audit_start
   ],
-  activation_vector_persistence: [
-    "persist its immutable identity, complete ADR-0005 activation snapshot and consistency vector, fixed deadline/expiry, cumulative accounting"
+  "authorization_scope.persistence.per_eligible_read_writes" => 0,
+  "authorization_scope.persistence.per_eligible_page_writes" => 0,
+  "authorization_scope.persistence.accounting_during_execution" => "process_local_monotonic_counters",
+  "authorization_scope.persistence.uncertain_dispatch" => "consumes_local_attempt_and_allowance",
+  "authorization_scope.persistence.clean_completion" => "one_logical_audit_with_exact_attempt_call_page_item_byte_counts",
+  "authorization_scope.persistence.interrupted_completion" => "one_logical_audit_with_reserved_upper_bounds_and_abandoned_or_crash_result",
+  "authorization_scope.persistence.page_count_growth" => "constant_postgresql_write_count",
+  "authorization_scope.before_local_outcome_commit.mode" => "read_only_validation_plus_owner_transaction_fence",
+  "authorization_scope.before_local_outcome_commit.checks" => %w[
+    all_before_call_checks final_execution_local_totals_within_whole_plan_envelope
+    no_newer_dirty_generation canonical_owner_revision
   ],
-  activation_vector_pre_call: [
-    "Revalidate every component of the complete activation snapshot and consistency vector, including the latest provider-enforcement and resource fences"
+  "authorization_scope.process_loss.old_scope" => "abandoned_and_invalid",
+  "authorization_scope.process_loss.remaining_envelope" => "conservatively_consumed",
+  "authorization_scope.process_loss.restart" => "fresh_central_decision_and_new_scope_from_last_trusted_job_cursor",
+  "authorization_scope.canonical_acceptance.service_read_scope_authorizes_acceptance" => false,
+  "authorization_scope.canonical_acceptance.required_before_accept" => %w[
+    fresh_effective_principal_central_decision_for_exact_delta current_impersonation_constraints
+    final_activation_authorization_provider_enforcement_resource_and_operation_fences
+    optimistic_canonical_owner_precondition
   ],
-  activation_vector_pre_commit: [
-    "compare the complete activation snapshot, consistency vector, exact installation/path/resource key"
-  ],
-  accounting_attempt: ["reserved and actual attempt/call/", "never-reused attempt/call/"],
-  accounting_call: ["cumulative call/page/item/response-byte accounting", "attempt/call/page/item/byte counts"],
-  accounting_page: ["durable monotonic dispatch/page ordinals", "call/page/item/byte bounds"],
-  accounting_item: ["cumulative call/page/item/response-byte accounting", "page/item/byte counts"],
-  accounting_byte: ["item/response-byte accounting", "item/byte counts"],
-  accounting_crash_persistence: [
-    "Crash/resume never rolls back, resets, or narrows those cumulative counters to manufacture more budget."
-  ],
-  compatibility_profile: ["the exact compatibility-profile ID/version/schema digest"],
-  original_deadline: ["the original deadline, and immutable expiry", "original logical-operation deadline"],
-  earliest_expiry: [
-    "Its expiry is fixed at creation to no later than the earliest bound temporal input in the complete ADR-0005 activation snapshot and consistency vector or the original logical-operation deadline"
-  ],
-  provider_output_no_widen: [
-    "Provider output may supply only a cursor admitted by those rules; it cannot add an endpoint, method, resource, operation class, retry, result field, or budget."
-  ],
-  pre_call_revalidation: ["Immediately before every provider call"],
-  pre_commit_revalidation: [
-    "immediately before every local outcome commit",
-    "Immediately before the local outcome commit"
-  ],
-  latest_provider_fence: ["including the latest provider-enforcement and resource fences, immediately before dispatch"],
-  latest_resource_fence: ["provider-enforcement and resource fences, immediately before dispatch"],
-  effect_latest_fences: ["revalidate the complete scope/temporal state plus the latest fences"],
-  actor_isolation: ["one actor can never authorize a combined snapshot"],
-  causal_proof: [
-    "A complete contiguous proof chain must connect the last confirmed token to the freshly read token."
-  ],
-  impersonation_chain: [
-    "binds the effective actor and every administrator/Sudo impersonator",
-    "Resolve the effective actor and every impersonator to current canonical principals"
-  ],
-  actor_laundering: [
-    "administrator-laundered",
-    "The service actor's read scope, historical permission, webhook HMAC, and provider-local permission cannot authorize acceptance."
-  ],
-  operation_bound_create_identity: [
-    "Exactly one candidate carrying that verified operation-bound key may be adopted."
-  ],
-  before_state_not_terminal: [
-    "a current before, intended-after, absent, or recreated snapshot is never by itself terminal proof"
-  ],
-  aba_not_terminal: [
-    "Without such proof, snapshot comparison guides containment only; the original permit remains `reconciling`"
-  ],
-  effect_permit_sequence: [
-    "freshly authorize that exact effect, commit its own durable one-use `AuthorizationEffectPermit`",
-    "atomically consume only that permit, and invoke the effect once",
-    "These categories retain per-effect-call permits"
-  ],
-  read_scope_not_effect_authority: ["the read scope can neither authorize nor substitute for them"],
-  effective_principal_fresh_decision: [
-    "Run a separate complete fresh central decision for that effective acting principal, impersonation constraint, and exact canonical delta",
-    "run the required fresh decision for the effective initiating/provider principal and exact delta"
-  ],
-  final_transaction_fence: [
-    "then compare final activation, authorization, provider-enforcement, resource, and operation revisions inside the owning transaction"
+  "reconciliation.postgresql_transaction_across_provider_io" => "prohibited",
+  "reconciliation.general_project_creates_code_repository" => false,
+  "provider_mutation.permit" => "one_use_per_excluded_effect_call",
+  "provider_mutation.ambiguous_result" => "reconciling_until_terminal_proof",
+  "provider_mutation.blind_retry" => "prohibited",
+  "verification.T-ADR-0009-AMBIGUOUS-MUTATION.owners" => %w[WS-03 WS-06],
+  "verification.T-ADR-0009-FULL-RECONCILIATION.owners" => %w[WS-03 WS-06 WS-12],
+  "verification.T-ADR-0009-FULL-RECONCILIATION.cases" => %w[
+    every_scope_binding_omitted_or_swapped call_plan_widen_or_reorder cross_scope_reuse
+    expiry process_loss bounded_inventory zero_per_page_writes exact_or_conservative_audit_counts
+    constant_writes_as_pages_grow
   ]
+}.transform_values(&:freeze).freeze
+ADR_0009_SPEC_VERIFICATION_OWNERS = {
+  "T-ADR-0009-PRECEDENCE" => %w[WS-03],
+  "T-ADR-0009-WEBHOOK-IDEMPOTENCY" => %w[WS-03 WS-07],
+  "T-ADR-0009-DIRECT-CHANGE-ACCEPT" => %w[WS-03 WS-02 WS-06],
+  "T-ADR-0009-DIRECT-CHANGE-RESET" => %w[WS-03 WS-06],
+  "T-ADR-0009-CONFLICT-QUARANTINE" => %w[WS-03 WS-06],
+  "T-ADR-0009-PERMISSION-DRIFT" => %w[WS-03 WS-06],
+  "T-ADR-0009-PROVIDER-OUTAGE" => %w[WS-03 WS-12],
+  "T-ADR-0009-AMBIGUOUS-MUTATION" => %w[WS-03 WS-06],
+  "T-ADR-0009-FULL-RECONCILIATION" => %w[WS-03 WS-06 WS-12],
+  "T-ADR-0009-UPGRADE-ROLLBACK" => %w[WS-03 WS-12]
+}.transform_values(&:freeze).freeze
+ADR_0009_DECISION_FRAGMENT_PREDICATES = {
+  scope_and_local_accounting: "Before each call and local outcome commit, WS-03 invokes the WS-06 read-only validator and enforces execution-local monotonic counters.",
+  zero_page_writes: "The operation performs zero durable reservation, permit, audit, or accounting writes per eligible call or page",
+  process_loss_fresh_scope: "Recovery starts from the last trusted job cursor only after a fresh decision and new scope.",
+  excluded_effect_permits: "Each such effect retains its own fresh decision, durable one-use `AuthorizationEffectPermit`",
+  effective_principal: "Before canonical state accepts provider-originated data, Stead performs a separate fresh central decision for the effective provider principal",
+  no_provider_transaction: "never holds a PostgreSQL transaction across Gitea I/O"
 }.freeze
-ADR_0009_EXCLUDED_EFFECT_PREDICATES = {
-  effect_permit_provider_mutation: "provider mutation",
-  effect_permit_credential: "credential issuance",
-  effect_permit_direct_protocol: "direct Git/protocol access",
-  effect_permit_export_download: "export/download",
-  effect_permit_non_idempotent: "non-idempotent call",
-  effect_permit_ambiguous: "ambiguous external effect",
-  effect_permit_outliving: "operation that can outlive the logical request/job"
-}.freeze
-ADR_0009_SEMANTIC_FORBIDDEN_FRAGMENTS = {
-  scope_nontransferable: ["The scope may be transferred or reused"],
-  acting_principal: ["The acting principal may be omitted"],
-  initiating_principal: ["The initiating principal may be omitted"],
-  accounting_crash_persistence: ["Crash/resume may reset cumulative accounting"],
-  earliest_expiry: ["The scope expiry may be extended"],
-  provider_output_no_widen: ["Provider output may widen the call plan"],
-  actor_isolation: ["A later actor may authorize a combined snapshot"],
-  causal_proof: ["The causal proof may be omitted"],
-  impersonation_chain: ["Administrator or Sudo impersonation may be ignored"],
-  actor_laundering: ["An administrator-laundered identity may be accepted"],
-  operation_bound_create_identity: ["A content match alone may prove create operation identity"],
-  before_state_not_terminal: ["A before-state snapshot alone may terminalize no effect"],
-  aba_not_terminal: ["An apply-revert or delete-recreate snapshot may terminalize the operation"],
-  read_scope_not_effect_authority: ["The read scope may authorize a retained effect category"],
-  effective_principal_fresh_decision: ["The final fresh effective-principal decision may be skipped"],
-  final_transaction_fence: ["The final transaction fence may be skipped"]
-}.freeze
-ADR_0009_EXPECTED_CRITICAL_VERIFICATION_ROWS = {
-  ambiguous_mutation_verification: "| `T-ADR-0009-AMBIGUOUS-MUTATION` | Lost responses for update/delete/create exercise before/after/third-state, apply/revert, delete/recreate, delayed true create, and coincident zero/one/multiple-candidate states. No snapshot alone or absence-after-horizon can terminalize success or `failed_without_effect`; create adoption requires a verified operation-bound immutable key. Tests prove the bounded read scope cannot authorize a mutation, credential, direct Git/protocol operation, export/download, non-idempotent call, ambiguous effect, or operation outliving its logical request/job; each retains its own durable one-use permit and complete immediate pre-call/final-commit revalidation. No widening, blind retry, duplicate, ABA terminalization, candidate misadoption, cross-installation/generation reuse, expired outcome commit, or false success occurs. |",
-  full_reconciliation_verification: "| `T-ADR-0009-FULL-RECONCILIATION` | One fresh `ProviderAuthorizationScope` binds unique nontransferable scope/logical-operation IDs; acting and initiating principals; Organization/security domain; exact canonical container/resource set; installation/path/`ProviderResourceKey`; `ReconciliationGeneration`; operation class/closed call plan; the complete ADR-0005 activation snapshot and consistency vector; monotonic attempt/call/page ordinals and cumulative call/page/item/byte accounting; exact compatibility profile; original deadline; and earliest-bound immutable expiry. Negative fixtures omit or swap every binding, alter activation/vector components, widen/reorder the call plan from provider output, roll back or reset counters across crash/resume, reuse across operation/generation/installation/resource/domain/profile, renew or extend expiry, and cross a deadline. Bounded pagination, snapshot/verification reads, and declared safe idempotent-read retries omit per-call permits only inside that plan; exact scope/temporal revalidation occurs immediately before every provider call and local outcome commit, while one logical audit reports reserved/actual counts/results and measured call/query/memory bounds. |"
-}.freeze
-ADR_0009_EXPECTED_SEMANTIC_MUTATIONS = {
-  "scope ID uniqueness removed" => :scope_id,
-  "logical-operation ID binding removed" => :logical_operation_id,
-  "scope transfer and reuse admitted" => :scope_nontransferable,
-  "scope renewal admitted" => :scope_nontransferable,
-  "scope output widening admitted" => :scope_nontransferable,
-  "logical-operation reuse admitted" => :scope_nontransferable,
-  "cross-generation reuse admitted" => :scope_nontransferable,
-  "cross-installation reuse admitted" => :scope_nontransferable,
-  "acting principal binding removed" => :acting_principal,
-  "initiating principal binding removed" => :initiating_principal,
-  "organization binding removed" => :organization,
-  "security-domain binding removed" => :security_domain,
-  "canonical container/resource binding removed" => :canonical_container_resource,
-  "provider installation binding removed" => :provider_installation,
-  "provider path binding removed" => :provider_path,
-  "provider resource-key binding removed" => :provider_resource_key,
-  "reconciliation-generation binding removed" => :reconciliation_generation,
-  "operation-class binding removed" => :operation_class,
-  "closed call-plan binding removed" => :closed_call_plan,
-  "activation/vector definition binding removed" => :activation_vector_definition,
-  "activation/vector earliest-expiry binding removed" => :activation_vector_expiry,
-  "activation/vector revalidation summary removed" => :activation_vector_revalidation_summary,
-  "activation/vector persistence binding removed" => :activation_vector_persistence,
-  "activation/vector pre-call binding removed" => :activation_vector_pre_call,
-  "activation/vector pre-commit binding removed" => :activation_vector_pre_commit,
-  "attempt accounting dimension removed" => :accounting_attempt,
-  "call accounting dimension removed" => :accounting_call,
-  "page accounting dimension removed" => :accounting_page,
-  "item accounting dimension removed" => :accounting_item,
-  "byte accounting dimension removed" => :accounting_byte,
-  "crash persistence guarantee removed" => :accounting_crash_persistence,
-  "compatibility-profile binding removed" => :compatibility_profile,
-  "original-deadline binding removed" => :original_deadline,
-  "earliest-bound expiry removed" => :earliest_expiry,
-  "provider-output widening admitted" => :provider_output_no_widen,
-  "pre-call revalidation removed" => :pre_call_revalidation,
-  "pre-commit revalidation removed" => :pre_commit_revalidation,
-  "latest provider-enforcement fence removed" => :latest_provider_fence,
-  "latest resource fence removed" => :latest_resource_fence,
-  "latest effect fence removed" => :effect_latest_fences,
-  "later actor authorizes combined snapshot" => :actor_isolation,
-  "causal proof made optional" => :causal_proof,
-  "administrator impersonation ignored" => :impersonation_chain,
-  "administrator laundering admitted" => :actor_laundering,
-  "create adopted without operation identity" => :operation_bound_create_identity,
-  "before snapshot treated as no-effect proof" => :before_state_not_terminal,
-  "apply-revert ABA admitted" => :aba_not_terminal,
-  "fresh effect-permit sequence removed" => :effect_permit_sequence,
-  "read scope authorizes retained effect" => :read_scope_not_effect_authority,
-  "provider mutation permit removed" => :effect_permit_provider_mutation,
-  "credential permit removed" => :effect_permit_credential,
-  "direct protocol permit removed" => :effect_permit_direct_protocol,
-  "export/download permit removed" => :effect_permit_export_download,
-  "non-idempotent permit removed" => :effect_permit_non_idempotent,
-  "ambiguous-effect permit removed" => :effect_permit_ambiguous,
-  "outliving-operation permit removed" => :effect_permit_outliving,
-  "excluded-effect list widened" => :effect_permit_exhaustive,
-  "final fresh effective-principal authorization removed" => :effective_principal_fresh_decision,
-  "final transaction fence removed" => :final_transaction_fence,
-  "ambiguous-mutation verification weakened" => :ambiguous_mutation_verification,
-  "full-reconciliation verification weakened" => :full_reconciliation_verification,
-  "Decision hidden in HTML comment" => :visible_decision_structure,
-  "Decision hidden in fenced code" => :visible_decision_structure,
-  "Decision hidden in type-one raw HTML" => :visible_decision_structure,
-  "Decision hidden in processing-instruction raw HTML" => :visible_decision_structure,
-  "Decision hidden in declaration raw HTML" => :visible_decision_structure,
-  "Decision hidden in CDATA raw HTML" => :visible_decision_structure,
-  "Decision heading hidden in type-six raw HTML" => :visible_decision_structure,
-  "Decision heading hidden in type-seven raw HTML" => :visible_decision_structure,
-  "Verification hidden in type-one raw HTML" => :verification_structure,
-  "Markdown byte bound exceeded" => :markdown_resource_bounds,
-  "Markdown line-count bound exceeded" => :markdown_resource_bounds,
-  "Markdown line-length bound exceeded" => :markdown_resource_bounds,
-  "contradictory scope reuse appended" => :scope_nontransferable,
-  "contradictory acting-principal omission appended" => :acting_principal,
-  "contradictory initiating-principal omission appended" => :initiating_principal,
-  "contradictory crash reset appended" => :accounting_crash_persistence,
-  "contradictory expiry extension appended" => :earliest_expiry,
-  "contradictory provider widening appended" => :provider_output_no_widen,
-  "contradictory combined-actor authorization appended" => :actor_isolation,
-  "contradictory optional causal proof appended" => :causal_proof,
-  "contradictory impersonation bypass appended" => :impersonation_chain,
-  "contradictory actor laundering appended" => :actor_laundering,
-  "contradictory content-only create identity appended" => :operation_bound_create_identity,
-  "contradictory before-state terminalization appended" => :before_state_not_terminal,
-  "contradictory ABA terminalization appended" => :aba_not_terminal,
-  "contradictory read-scope effect authority appended" => :read_scope_not_effect_authority,
-  "contradictory final fresh authorization bypass appended" => :effective_principal_fresh_decision,
-  "contradictory final-fence bypass appended" => :final_transaction_fence
-}.freeze
-ADR_0009_EXPECTED_REVIEW_MUTATIONS = {
-  "missing independent QA row" => :review_rows,
-  "missing independent security row" => :review_rows,
-  "combined QA/security row" => :review_duplicates_conflicts,
-  "duplicate independent QA row" => :review_duplicates_conflicts
-}.freeze
-ADR_0009_EXPECTED_GOVERNANCE_MUTATIONS = {
-  "supersession removed" => :metadata_supersession_narrow,
-  "supersession broadened beyond read-plan granularity" => :metadata_supersession_narrow,
-  "project-owner metadata weakened" => :metadata_owner_required,
-  "project-owner review row weakened" => :project_owner_row,
-  "immutable-SHA approval weakened" => :exact_sha_approval_placement,
-  "catalog project-owner gate weakened" => :catalog_owner_gate,
-  "catalog state changed to accepted" => :catalog_proposed,
-  "catalog acceptance record fabricated" => :catalog_no_acceptance,
-  "catalog decision record redirected" => :catalog_decision_record,
-  "catalog ADR-CAND-008 gate duplicated" => :catalog_gate_unique,
-  "comment-hidden composite with visible contradictions" => :hidden_governance_substitution,
-  "fence-hidden composite with visible contradictions" => :hidden_governance_substitution,
-  "comment-hidden owner line with visible contradiction" => :hidden_governance_substitution,
-  "fence-hidden owner line with visible contradiction" => :hidden_governance_substitution,
-  "comment-hidden supersession with visible contradiction" => :hidden_governance_substitution,
-  "fence-hidden supersession with visible contradiction" => :hidden_governance_substitution,
-  "comment-hidden immutable-SHA paragraph with visible contradiction" => :hidden_governance_substitution,
-  "fence-hidden immutable-SHA paragraph with visible contradiction" => :hidden_governance_substitution,
-  "comment-hidden project-owner row with visible contradiction" => :hidden_governance_substitution,
-  "fence-hidden project-owner row with visible contradiction" => :hidden_governance_substitution,
-  "duplicate conflicting owner metadata" => :metadata_duplicates_conflicts,
-  "duplicate conflicting supersession metadata" => :metadata_duplicates_conflicts,
-  "misplaced owner metadata" => :metadata_duplicates_conflicts,
-  "misplaced supersession metadata" => :metadata_duplicates_conflicts,
-  "misplaced immutable-SHA sentence" => :exact_sha_approval_placement,
-  "misplaced project-owner review row" => :project_owner_row,
-  "duplicate conflicting project-owner review row" => :review_duplicates_conflicts,
-  "Reviews table hidden in HTML comment" => :review_layout,
-  "Reviews table hidden in fenced code" => :review_layout,
-  "Reviews section hidden in type-one raw HTML" => :review_layout,
-  "Reviews heading hidden in type-six raw HTML" => :review_layout,
-  "Reviews heading hidden in type-seven raw HTML" => :review_layout,
-  "Project-owner review row hidden in type-one raw HTML" => :project_owner_row
-}.freeze
-ADR_0009_EXPECTED_REVIEW_MUTATION_COUNT = 4
-ADR_0009_EXPECTED_SEMANTIC_MUTATION_COUNT = 89
-ADR_0009_EXPECTED_GOVERNANCE_MUTATION_COUNT = 33
-ADR_0009_EXPECTED_MARKDOWN_CONTROLS = [
-  "closed type-one raw HTML after protected sections",
-  "closed type-six raw HTML after protected sections",
-  "closed type-seven raw HTML after protected sections",
-  "inline-code comment opener outside protected sections",
-  "fenced HTML-like example outside protected sections",
-  "closed HTML comment outside protected sections"
+ADR_0009_CROSS_FILE_REQUIRED_FRAGMENTS = {
+  "docs/architecture/authorization-contract.md" => [
+    "one fresh centrally issued `ProviderAuthorizationScope`",
+    "without a separate durable permit transaction for each eligible read"
+  ],
+  "docs/architecture/contract-ownership-matrix.md" => [
+    "`P-SCM-RECONCILIATION-GITEA-V1`",
+    "`/specs/provider-reconciliation/gitea-v1.yaml`",
+    "scope issuance/validation remains WS-06-owned"
+  ],
+  "specs/provider-interfaces.yaml" => [
+    "id: P-SCM-RECONCILIATION-GITEA-V1",
+    "authorization_scope_owner: WS-06",
+    "activation_gate: ADR-CAND-008_ACCEPTED_AT_EXACT_IMMUTABLE_SHA"
+  ]
+}.transform_values(&:freeze).freeze
+ADR_0009_EXPECTED_ADR_MUTATIONS = %i[
+  decision_digest
+  owner_metadata
+  supersession_metadata
+  proposed_reviews
 ].freeze
-ADR_0009_EXPECTED_MARKDOWN_CONTROL_COUNT = ADR_0009_EXPECTED_MARKDOWN_CONTROLS.length
-ADR_0009_MARKDOWN_MAX_BYTES = 1_048_576
-ADR_0009_MARKDOWN_MAX_LINES = 20_000
-ADR_0009_MARKDOWN_MAX_LINE_CHARACTERS = 262_144
+ADR_0009_PROPOSED_STATUS_LINE = "- **Status:** Proposed\n".freeze
+ADR_0009_PROPOSED_RESOLUTION_LINE =
+  "- **Resolves on acceptance:** `ADR-CAND-008`\n".freeze
+ADR_0009_ACCEPTED_RESOLUTION_LINE = "- **Resolves:** `ADR-CAND-008`\n".freeze
+ADR_0009_REVIEWS_HEADING = "## Reviews and approvals\n".freeze
+ADR_0009_FOOTNOTE_MARKER = "[^gitea-webhooks]:".freeze
+ADR_0009_APPROVAL_RECORD_PATH = "docs/governance/adr-0009-approval-record.md".freeze
+ADR_0009_DECISION_RECORD_PATH =
+  "docs/adr/0009-gitea-provider-reconciliation-precedence-and-conflict-handling.md".freeze
+ADR_0009_ISSUE_CATALOG_PATH = "docs/planning/implementation-issue-catalog.yaml".freeze
+ADR_0009_ADR_INDEX_PATH = "docs/adr/INDEX.md".freeze
+ADR_0009_CHOICE_QUEUE_PATH = "docs/adr/unresolved-implementation-choices.md".freeze
+ADR_0009_CANDIDATE_INDEX_PATH = "docs/governance/adr-candidate-index.md".freeze
+ADR_0009_ACCEPTANCE_RECORD_SCAN_MAX = 16
+ADR_0009_ACCEPTANCE_HISTORY_MAX_COMMITS = 4_096
+ADR_0009_ACCEPTANCE_SNAPSHOT_MAX_BYTES = 524_288
+ADR_0009_ACCEPTANCE_TRANSITION_CHANGES = {
+  ADR_0009_DECISION_RECORD_PATH => "M",
+  ADR_0009_APPROVAL_RECORD_PATH => "A",
+  ADR_0009_ISSUE_CATALOG_PATH => "M",
+  ADR_0009_ADR_INDEX_PATH => "M",
+  ADR_0009_CHOICE_QUEUE_PATH => "M",
+  ADR_0009_CANDIDATE_INDEX_PATH => "M"
+}.freeze
+ADR_0009_CHOICE_QUEUE_PROPOSED_STATUS =
+  "**Status:** Active candidate queue; eight candidates are resolved, ADR-CAND-008 is proposed, and the remaining entries are deferred to their named decision point<br>\n".freeze
+ADR_0009_CHOICE_QUEUE_ACCEPTED_STATUS =
+  "**Status:** Active candidate queue; nine candidates are resolved, and the remaining entries are deferred to their named decision point<br>\n".freeze
+ADR_0009_CANDIDATE_INDEX_PROPOSED_STATUS =
+  "Status: **Phase 1 active; eight candidates are resolved, ADR-CAND-008 is proposed, and the remaining candidates stay deferred to their named gates**\n".freeze
+ADR_0009_CANDIDATE_INDEX_ACCEPTED_STATUS =
+  "Status: **Phase 1 active; nine candidates are resolved, and the remaining candidates stay deferred to their named gates**\n".freeze
+ADR_0009_ACCEPTED_REVIEW_HEADER =
+  "| Role | Identity | Decision revision | Disposition | Evidence |\n".freeze
+ADR_0009_ACCEPTED_REVIEW_DELIMITER = "|---|---|---|---|---|\n".freeze
+ADR_0009_ACCEPTED_REVIEW_ROLES = [
+  {
+    role: "WS-03-provider-reconciliation",
+    label: "Contract owner (WS-03)",
+    evidence: "Provider reconciliation contract review accepted"
+  },
+  {
+    role: "WS-01-architecture",
+    label: "Architecture and standards (WS-01)",
+    evidence: "Architecture, compatibility, and narrow supersession review accepted"
+  },
+  {
+    role: "WS-02-canonical-transaction",
+    label: "Canonical transaction owner (WS-02)",
+    evidence: "Canonical acceptance and transaction-boundary review accepted"
+  },
+  {
+    role: "WS-06-authorization-classification",
+    label: "Authorization/classification owner (WS-06)",
+    evidence: "Central decision, scope, and fence review accepted"
+  },
+  {
+    role: "WS-07-event-audit",
+    label: "Event/audit owner (WS-07)",
+    evidence: "Logical audit and event-boundary review accepted"
+  },
+  {
+    role: "WS-12-deployment-operations",
+    label: "Deployment/operations owner (WS-12)",
+    evidence: "Configuration, recovery, upgrade, and performance review accepted"
+  },
+  {
+    role: "WS-13-independent-qa",
+    label: "Independent QA and C-QA traceability owner (WS-13)",
+    evidence: "Independent traceability and failure-path review accepted"
+  },
+  {
+    role: "WS-13-independent-security",
+    label: "Independent security (WS-13)",
+    evidence: "Independent authorization, ambiguity, and nondisclosure review accepted"
+  },
+  {
+    role: "project-owner",
+    label: "Project owner",
+    evidence: "Explicit project-owner approval of this exact immutable decision revision"
+  }
+].map(&:freeze).freeze
+ADR_0009_ACCEPTED_REVIEW_ROLE_NAMES =
+  ADR_0009_ACCEPTED_REVIEW_ROLES.map { |record| record.fetch(:role) }.freeze
+ADR_0009_ACCEPTED_REVIEWS_INTRO =
+  "Every required non-author review and the explicit project-owner approval below bind the exact immutable decision revision. Acceptance adopts only that decision content and its future evidence obligations; implementation remains separately gated.\n".freeze
+ADR_0009_EXPECTED_ACCEPTANCE_MUTATION_NAMES = [
+  "accepted gate missing immutable revision",
+  "accepted gate missing project-owner approval",
+  "accepted gate wrong project-owner disposition",
+  "accepted gate invalid project-owner identity",
+  "accepted gate duplicate project-owner approval",
+  "accepted gate mixed reviewer revision surface",
+  "approval record missing project-owner row",
+  "approval record wrong project-owner revision",
+  "approval record mixed non-owner revision",
+  "acceptance change adds implementation path",
+  "acceptance change omits required record path",
+  "acceptance change uses wrong path status",
+  "history omits acceptance transition",
+  "history uses non-direct acceptance descendant",
+  "history uses merge acceptance child",
+  "history contains multiple acceptance transitions",
+  "history decision revision is not reachable"
+].freeze
 
 ADR_0008_REQUIREMENT_TEST_MAPPING = {
   "EVT-001" => %w[
@@ -859,10 +813,12 @@ EXPECTED_P1_006_ADR_CANDIDATES = %w[
   ADR-CAND-004
   ADR-CAND-005
   ADR-CAND-007
+  ADR-CAND-008
   ADR-CAND-021
 ].freeze
 EXPECTED_P1_006_ADR_GATE_CLAUSE =
-  "Only after ADR-CAND-002, ADR-CAND-003, ADR-CAND-004, ADR-CAND-005, ADR-CAND-007, and ADR-CAND-021 are accepted,".freeze
+  "Only after ADR-CAND-002, ADR-CAND-003, ADR-CAND-004, ADR-CAND-005, ADR-CAND-007, ADR-CAND-008, and ADR-CAND-021 are accepted,".freeze
+P1_006_ALLOWED_ACCEPTED_ADR_0009_CLAUSE = "For accepted ADR-0009 only,".freeze
 P1_006_RAW_ISSUES_KEY_LINE = "issues:".freeze
 P1_006_RAW_ISSUE_ID_LINE = '  - id: "STEAD-P1-006"'.freeze
 P1_006_RAW_ACCEPTANCE_PREFIX =
@@ -873,7 +829,7 @@ P1_006_INVALID_ENCODED_FRAGMENT = "invalid-encoded-ADR-fragment".freeze
 P1_006_NON_ASCII_FRAGMENT = "non-ASCII-ADR-fragment".freeze
 EXPECTED_P1_006_GATE_MUTATION_GROUPS = {
   paired_boundary: 2,
-  candidate_boundary: 12,
+  candidate_boundary: 14,
   raw_yaml_source: 12,
   named_noncanonical: 33,
   unicode_dash: 25,
@@ -1134,506 +1090,181 @@ def exact_adr_requirement_mapping_failures(requirements:, adr_number:, expected_
   failures
 end
 
-def adr_0009_markdown_mask_characters(source)
-  source.gsub(/[^\r\n]/, " ")
-end
+def adr_0009_decision_body(source)
+  start_matches = source.enum_for(:scan, /^## Decision\n/).map { Regexp.last_match }
+  end_matches = source.enum_for(:scan, /^## Consequences\n/).map { Regexp.last_match }
+  return [nil, ["ADR-0009 Decision heading must occur exactly once"]] unless start_matches.length == 1
+  return [nil, ["ADR-0009 Consequences heading must occur exactly once"]] unless end_matches.length == 1
 
-def adr_0009_markdown_backtick_closers(source)
-  source = source.b
-  runs_by_length = Hash.new { |hash, length| hash[length] = [] }
-  cursor = 0
-  while cursor < source.length
-    if source[cursor] == "`"
-      run_end = cursor + 1
-      run_end += 1 while run_end < source.length && source[run_end] == "`"
-      runs_by_length[run_end - cursor] << cursor
-      cursor = run_end
-    else
-      cursor += 1
-    end
+  start_match = start_matches.first
+  end_match = end_matches.first
+  return [nil, ["ADR-0009 Decision must precede Consequences"]] if end_match.begin(0) <= start_match.end(0)
+
+  next_heading = source.match(/^## ([^#\n][^\n]*)\n/, start_match.end(0))
+  unless next_heading&.begin(0) == end_match.begin(0)
+    return [nil, ["ADR-0009 Consequences must immediately follow the Decision section"]]
   end
-  runs_by_length.each_value.each_with_object({}) do |positions, closers|
-    positions.each_cons(2) { |opening, closing| closers[opening] = closing }
-  end
-end
-
-def adr_0009_markdown_mask_inline_comments(source)
-  original_encoding = source.encoding
-  source = source.b
-  closers = adr_0009_markdown_backtick_closers(source)
-  masked = +""
-  hidden = []
-  cursor = 0
-  unclosed = false
-  while cursor < source.length
-    if source[cursor] == "`" && closers[cursor]
-      closing = closers.fetch(cursor)
-      run_end = cursor + 1
-      run_end += 1 while run_end < source.length && source[run_end] == "`"
-      end_offset = closing + run_end - cursor
-      masked << source[cursor...end_offset]
-      cursor = end_offset
-    elsif source[cursor, 4] == "<!--"
-      comment_end = source.index("-->", cursor + 4)
-      unless comment_end
-        hidden << source[cursor..].dup.force_encoding(original_encoding)
-        masked << adr_0009_markdown_mask_characters(source[cursor..])
-        unclosed = true
-        break
-      end
-      hidden_end = comment_end + 3
-      hidden << source[cursor...hidden_end].dup.force_encoding(original_encoding)
-      masked << adr_0009_markdown_mask_characters(source[cursor...hidden_end])
-      cursor = hidden_end
-    else
-      masked << source[cursor]
-      cursor += 1
-    end
-  end
-  [masked.force_encoding(original_encoding), hidden, unclosed]
-end
-
-def adr_0009_markdown_html_block_descriptor(line, previous_blank:)
-  body = line.delete_suffix("\n").delete_suffix("\r")
-  type_one = body.match(/\A {0,3}<(script|pre|style|textarea)(?=[\t >]|\z)/i)
-  if type_one
-    tag = type_one[1].downcase
-    return { terminator: %r{</#{Regexp.escape(tag)}[ \t\r\n]*>}i }
-  end
-  return { terminator: "-->" } if body.match?(/\A {0,3}<!--/)
-  return { terminator: "?>" } if body.match?(/\A {0,3}<\?/)
-  return { terminator: "]]>" } if body.match?(/\A {0,3}<!\[CDATA\[/)
-  return { terminator: ">" } if body.match?(/\A {0,3}<![A-Z]/)
-
-  block_html_tags = %w[
-    address article aside base basefont blockquote body caption center col colgroup
-    dd details dialog dir div dl dt fieldset figcaption figure footer form frame
-    frameset h1 h2 h3 h4 h5 h6 head header hr html iframe legend li link main menu
-    menuitem nav noframes ol optgroup option p param search section summary table
-    tbody td tfoot th thead title tr track ul
-  ].join("|")
-  return { terminator: :blank } if body.match?(/\A {0,3}<\/?(?:#{block_html_tags})(?:[ \t\/>]|\z)/i)
-
-  complete_tag = /\A {0,3}<\/?[A-Za-z][A-Za-z0-9-]*(?:[ \t]+[A-Za-z_:][A-Za-z0-9_.:-]*(?:[ \t]*=[ \t]*(?:"[^"]*"|'[^']*'|[^ \t\r\n"'=<>`]+))?)*[ \t]*\/?>[ \t]*\z/
-  return { terminator: :blank } if previous_blank && body.match?(complete_tag)
-
-  nil
-end
-
-def adr_0009_markdown_html_block_terminated?(source, descriptor)
-  terminator = descriptor.fetch(:terminator)
-  return false if terminator == :blank
-
-  terminator.is_a?(Regexp) ? source.match?(terminator) : source.include?(terminator)
-end
-
-def markdown_visibility(source)
-  empty = {
-    raw_lines: [],
-    visible_lines: [],
-    hidden_text: "",
-    unclosed_fence: false,
-    unclosed_comment: false,
-    resource_bounds_exceeded: true
-  }
-  return empty if source.bytesize > ADR_0009_MARKDOWN_MAX_BYTES
-
-  line_count = source.count("\n") + (source.end_with?("\n") ? 0 : 1)
-  return empty if line_count > ADR_0009_MARKDOWN_MAX_LINES
-  return empty if source.each_line.any? { |line| line.length > ADR_0009_MARKDOWN_MAX_LINE_CHARACTERS }
-
-  raw_lines = source.lines(chomp: true)
-  structural = +""
-  hidden_fragments = []
-  lines = source.lines
-  fence = nil
-  previous_blank = true
-  index = 0
-  while index < lines.length
-    line = lines[index]
-    if fence
-      hidden_fragments << line
-      structural << adr_0009_markdown_mask_characters(line)
-      delimiter = Regexp.escape(fence.fetch(:character))
-      minimum_length = fence.fetch(:length)
-      fence = nil if line.match?(/\A {0,3}#{delimiter}{#{minimum_length},}[ \t]*(?:\r?\n)?\z/)
-      previous_blank = false
-      index += 1
-      next
-    end
-
-    opening = line.match(/\A {0,3}(`{3,}|~{3,})([^\r\n]*)(?:\r?\n)?\z/)
-    if opening && !(opening[1].start_with?("`") && opening[2].include?("`"))
-      marker = opening[1]
-      fence = { character: marker[0], length: marker.length }
-      hidden_fragments << line
-      structural << adr_0009_markdown_mask_characters(line)
-      previous_blank = false
-      index += 1
-      next
-    end
-
-    descriptor = adr_0009_markdown_html_block_descriptor(line, previous_blank: previous_blank)
-    if descriptor
-      raw = +""
-      while index < lines.length
-        candidate = lines[index]
-        break if descriptor.fetch(:terminator) == :blank && candidate.strip.empty?
-
-        raw << candidate
-        structural << adr_0009_markdown_mask_characters(candidate)
-        index += 1
-        break if adr_0009_markdown_html_block_terminated?(raw, descriptor)
-      end
-      hidden_fragments << raw
-      previous_blank = false
-      next
-    end
-
-    if line.start_with?("    ", "\t")
-      code = +""
-      while index < lines.length && (lines[index].strip.empty? || lines[index].start_with?("    ", "\t"))
-        candidate = lines[index]
-        code << candidate
-        structural << adr_0009_markdown_mask_characters(candidate)
-        index += 1
-      end
-      hidden_fragments << code
-      previous_blank = false
-      next
-    end
-
-    structural << line
-    previous_blank = line.strip.empty?
-    index += 1
-  end
-
-  masked, hidden_comments, unclosed_comment = adr_0009_markdown_mask_inline_comments(structural)
-  hidden_fragments.concat(hidden_comments)
-  {
-    raw_lines: raw_lines,
-    visible_lines: masked.lines(chomp: true),
-    hidden_text: hidden_fragments.join("\n"),
-    unclosed_fence: !fence.nil?,
-    unclosed_comment: unclosed_comment,
-    resource_bounds_exceeded: false
-  }
-end
-
-def visible_markdown_section(visibility:, heading:, next_heading:)
-  visible_lines = visibility.fetch(:visible_lines)
-  heading_indexes = visible_lines.each_index.select { |index| visible_lines[index] == heading }
-  next_heading_indexes = visible_lines.each_index.select { |index| visible_lines[index] == next_heading }
-  return nil unless heading_indexes.length == 1 && next_heading_indexes.length == 1
-
-  heading_index = heading_indexes.first
-  next_heading_index = next_heading_indexes.first
-  return nil unless next_heading_index > heading_index
-
-  intervening_h2_indexes = visible_lines.each_index.select do |index|
-    index > heading_index && index <= next_heading_index && visible_lines[index].match?(/\A## [^#]/)
-  end
-  return nil unless intervening_h2_indexes == [next_heading_index]
-
-  {
-    heading_index: heading_index,
-    next_heading_index: next_heading_index,
-    lines: visible_lines[(heading_index + 1)...next_heading_index]
-  }
-end
-
-def markdown_table_cells(line)
-  return nil unless line.start_with?("|") && line.end_with?("|")
-
-  cells = line.split("|", -1)[1...-1].map(&:strip)
-  cells.length == 4 ? cells : nil
-end
-
-def adr_0009_semantic_predicate_failures(source)
-  decision_predicates = ADR_0009_SEMANTIC_FRAGMENT_PREDICATES.keys |
-                        ADR_0009_EXCLUDED_EFFECT_PREDICATES.keys |
-                        [:effect_permit_exhaustive, :visible_decision_structure]
-  failed = adr_0009_verification_predicate_failures(source)
-  visibility = markdown_visibility(source)
-  failed << :markdown_resource_bounds if visibility.fetch(:resource_bounds_exceeded)
-  decision = visible_markdown_section(
-    visibility: visibility,
-    heading: "## Decision",
-    next_heading: "## Consequences"
-  )
-  unless decision
-    failed.merge(decision_predicates)
-    return failed
-  end
-
-  if visibility.fetch(:unclosed_fence) || visibility.fetch(:unclosed_comment)
-    failed << :visible_decision_structure
-  end
-  visible_body = decision.fetch(:lines).join("\n")
-
-  ADR_0009_SEMANTIC_FRAGMENT_PREDICATES.each do |predicate, fragments|
-    fragments.each do |fragment|
-      count = visible_body.scan(Regexp.new(Regexp.escape(fragment))).length
-      failed << predicate unless count == 1
-    end
-  end
-  ADR_0009_SEMANTIC_FORBIDDEN_FRAGMENTS.each do |predicate, fragments|
-    fragments.each do |fragment|
-      failed << predicate unless visible_body.scan(Regexp.new(Regexp.escape(fragment))).empty?
-    end
-  end
-
-  execute_lines = decision.fetch(:lines).select { |line| line.start_with?("2. **Execute:**") }
-  if execute_lines.length != 1
-    ADR_0009_EXCLUDED_EFFECT_PREDICATES.each_key { |predicate| failed << predicate }
-    failed << :effect_permit_exhaustive
-    failed << :effect_permit_sequence
-    failed << :read_scope_not_effect_authority
-  else
-    execute_line = execute_lines.first
-    effect_list_match = execute_line.match(
-      /Immediately before each (.+?), freshly authorize that exact effect,/
-    )
-    if effect_list_match
-      actual_effects = effect_list_match[1].sub(/, or /, ", ").split(", ")
-      expected_effects = ADR_0009_EXCLUDED_EFFECT_PREDICATES.values
-      failed << :effect_permit_exhaustive unless actual_effects == expected_effects
-      ADR_0009_EXCLUDED_EFFECT_PREDICATES.each do |predicate, category|
-        failed << predicate unless actual_effects.count(category) == 1
-      end
-    else
-      ADR_0009_EXCLUDED_EFFECT_PREDICATES.each_key { |predicate| failed << predicate }
-      failed << :effect_permit_exhaustive
-    end
-  end
-
-  failed
-end
-
-def adr_0009_verification_predicate_failures(source)
-  visibility = markdown_visibility(source)
-  visible_lines = visibility.fetch(:visible_lines)
-  hidden_text = visibility.fetch(:hidden_text)
-  failed = Set.new
-  failed << :markdown_resource_bounds if visibility.fetch(:resource_bounds_exceeded)
-  verification = visible_markdown_section(
-    visibility: visibility,
-    heading: "## Verification",
-    next_heading: "## Rollout and supersession"
-  )
-  unless verification
-    failed << :verification_structure
-    failed.merge(ADR_0009_EXPECTED_CRITICAL_VERIFICATION_ROWS.keys)
-    return failed
-  end
-
-  heading_index = verification.fetch(:heading_index)
-  header_index = heading_index + 4
-  separator_index = heading_index + 5
-  first_row_index = heading_index + 6
-  table_rows = []
-  index = first_row_index
-  while index < verification.fetch(:next_heading_index) && !visible_lines[index].empty?
-    table_rows << [index, visible_lines[index]]
-    index += 1
-  end
-  layout_valid =
-    visible_lines[heading_index + 1] == "" &&
-    visible_lines[heading_index + 2] == "Decision acceptance names future implementation obligations; it does not claim they already pass." &&
-    visible_lines[heading_index + 3] == "" &&
-    visible_lines[header_index] == "| Test ID | Required evidence |" &&
-    visible_lines[separator_index] == "|---|---|" &&
-    table_rows.length == 10 &&
-    table_rows.all? { |_row_index, row| row.start_with?("|") && row.end_with?("|") && row.split("|", -1)[1...-1].length == 2 }
-  failed << :verification_structure unless layout_valid
-
-  ADR_0009_EXPECTED_CRITICAL_VERIFICATION_ROWS.each do |predicate, expected_row|
-    test_id = expected_row[/`(T-ADR-0009-[A-Z0-9-]+)`/, 1]
-    matching_rows = table_rows.select { |_row_index, row| row.include?("`#{test_id}`") }
-    visible_occurrences = visible_lines.each_index.select { |line_index| visible_lines[line_index].include?("`#{test_id}`") }
-    unless matching_rows.length == 1 &&
-           matching_rows.first.last == expected_row &&
-           visible_occurrences == [matching_rows.first.first] &&
-           !hidden_text.include?("`#{test_id}`")
-      failed << predicate
-    end
-  end
-
-  failed
-end
-
-def adr_0009_semantic_contract_failures(source)
-  adr_0009_semantic_predicate_failures(source).to_a.sort.map do |predicate|
-    "ADR-0009 independent semantic predicate failed: #{predicate}"
-  end
-end
-
-def adr_0009_document_governance_predicate_failures(source)
-  visibility = markdown_visibility(source)
-  raw_lines = visibility.fetch(:raw_lines)
-  visible_lines = visibility.fetch(:visible_lines)
-  hidden_text = visibility.fetch(:hidden_text)
-  failed = Set.new
-  failed << :markdown_resource_bounds if visibility.fetch(:resource_bounds_exceeded)
-
-  unless source.valid_encoding? && source.end_with?("\n") &&
-         !source.start_with?("\uFEFF") && !source.include?("\r") && !source.include?("\0")
-    failed << :canonical_markdown_bytes
-  end
-  if visibility.fetch(:unclosed_fence) || visibility.fetch(:unclosed_comment)
-    failed << :markdown_visibility
-  end
-
-  metadata_lines = raw_lines[2, ADR_0009_METADATA_KEY_ORDER.length] || []
-  metadata_keys = metadata_lines.map { |line| line[/\A- \*\*([^*]+):\*\*\s*/, 1] }
-  metadata_shape_valid =
-    raw_lines[0] == "# ADR-0009: Gitea provider reconciliation precedence and conflict handling" &&
-    raw_lines[1] == "" &&
-    metadata_lines.length == ADR_0009_METADATA_KEY_ORDER.length &&
-    metadata_keys == ADR_0009_METADATA_KEY_ORDER &&
-    raw_lines[2 + ADR_0009_METADATA_KEY_ORDER.length] == "" &&
-    raw_lines[3 + ADR_0009_METADATA_KEY_ORDER.length] == "## Context and decision scope" &&
-    metadata_lines.each_with_index.all? { |line, offset| visible_lines[2 + offset] == line }
-  failed << :metadata_layout unless metadata_shape_valid
-
-  owner_index = 2 + ADR_0009_METADATA_KEY_ORDER.index("Project-owner approval required")
-  supersession_index = 2 + ADR_0009_METADATA_KEY_ORDER.index("Supersedes / superseded by")
-  status_index = 2 + ADR_0009_METADATA_KEY_ORDER.index("Status")
-  failed << :metadata_status_proposed unless raw_lines[status_index] == "- **Status:** Proposed"
-  failed << :metadata_owner_required unless raw_lines[owner_index] == ADR_0009_OWNER_APPROVAL_LINE
-  failed << :metadata_supersession_narrow unless raw_lines[supersession_index] == ADR_0009_SUPERSESSION_LINE
-
-  visible_metadata_rows = visible_lines.each_with_index.filter_map do |line, index|
-    match = line.match(/\A- \*\*([^*]+):\*\*\s*/)
-    [match[1], index] if match && ADR_0009_METADATA_KEY_ORDER.include?(match[1])
-  end
-  metadata_occurrences = visible_metadata_rows.group_by(&:first)
-  metadata_duplicates_or_misplacements = ADR_0009_METADATA_KEY_ORDER.any? do |key|
-    expected_index = 2 + ADR_0009_METADATA_KEY_ORDER.index(key)
-    Array(metadata_occurrences[key]).map(&:last) != [expected_index]
-  end
-  failed << :metadata_duplicates_conflicts if metadata_duplicates_or_misplacements
-
-  if ADR_0009_HIDDEN_GOVERNANCE_MARKERS.any? { |marker| hidden_text.include?(marker) }
-    failed << :hidden_governance_substitution
-  end
-
-  review_heading_indexes = visible_lines.each_index.select do |index|
-    visible_lines[index] == "## Reviews and approvals"
-  end
-  if review_heading_indexes.length != 1
-    failed << :review_layout
-    failed << :exact_sha_approval_placement
-    failed << :review_rows
-    failed << :project_owner_row
-    failed << :review_duplicates_conflicts
-    return failed
-  end
-
-  heading_index = review_heading_indexes.first
-  paragraph_index = heading_index + 2
-  table_header_index = heading_index + 4
-  table_separator_index = heading_index + 5
-  first_row_index = heading_index + 6
-  expected_row_indexes = (first_row_index...(first_row_index + ADR_0009_EXPECTED_REVIEW_ROWS.length)).to_a
-  review_layout_valid =
-    raw_lines[heading_index] == "## Reviews and approvals" &&
-    raw_lines[heading_index + 1] == "" &&
-    raw_lines[paragraph_index] == ADR_0009_APPROVAL_PARAGRAPH &&
-    visible_lines[paragraph_index] == ADR_0009_APPROVAL_PARAGRAPH &&
-    raw_lines[heading_index + 3] == "" &&
-    raw_lines[table_header_index] == ADR_0009_REVIEW_TABLE_HEADER &&
-    raw_lines[table_separator_index] == ADR_0009_REVIEW_TABLE_SEPARATOR &&
-    raw_lines[first_row_index + ADR_0009_EXPECTED_REVIEW_ROWS.length] == ""
-  failed << :review_layout unless review_layout_valid
-
-  visible_sha_indexes = visible_lines.each_index.select do |index|
-    visible_lines[index].include?(ADR_0009_EXACT_SHA_APPROVAL_SENTENCE)
-  end
-  unless visible_sha_indexes == [paragraph_index] &&
-         raw_lines[paragraph_index] == ADR_0009_APPROVAL_PARAGRAPH
-    failed << :exact_sha_approval_placement
-  end
-
-  actual_review_rows = expected_row_indexes.map { |index| raw_lines[index] }
-  failed << :review_rows unless actual_review_rows == ADR_0009_EXPECTED_REVIEW_ROWS
-
-  project_owner_indexes = visible_lines.each_index.select do |index|
-    cells = markdown_table_cells(visible_lines[index])
-    cells && cells.first == "Project owner"
-  end
-  expected_project_owner_index = expected_row_indexes.last
-  unless project_owner_indexes == [expected_project_owner_index] &&
-         raw_lines[expected_project_owner_index] == ADR_0009_PROJECT_OWNER_REVIEW_LINE
-    failed << :project_owner_row
-  end
-
-  expected_roles = ADR_0009_EXPECTED_REVIEW_ROWS.map { |row| markdown_table_cells(row).first }
-  visible_review_role_rows = visible_lines.each_with_index.filter_map do |line, index|
-    cells = markdown_table_cells(line)
-    [cells.first, index] if cells && expected_roles.include?(cells.first)
-  end
-  actual_roles = expected_row_indexes.filter_map do |index|
-    markdown_table_cells(visible_lines[index])&.first
-  end
-  unless actual_roles == expected_roles &&
-         actual_roles.uniq.length == expected_roles.length &&
-         visible_review_role_rows.map(&:last) == expected_row_indexes
-    failed << :review_duplicates_conflicts
-  end
-
-  combined_role = visible_lines.any? do |line|
-    cells = markdown_table_cells(line)
-    role = cells&.first.to_s
-    role.match?(/independent/i) && role.match?(/\bqa\b/i) && role.match?(/security/i)
-  end
-  failed << :review_duplicates_conflicts if combined_role
-
-  failed
-end
-
-def adr_0009_review_structure_failures(source)
-  review_predicates = Set[
-    :canonical_markdown_bytes,
-    :markdown_resource_bounds,
-    :markdown_visibility,
-    :hidden_governance_substitution,
-    :review_layout,
-    :exact_sha_approval_placement,
-    :review_rows,
-    :project_owner_row,
-    :review_duplicates_conflicts
-  ]
-  failures = adr_0009_document_governance_predicate_failures(source) & review_predicates
-  failures.to_a.sort.map { |predicate| "ADR-0009 review structure predicate failed: #{predicate}" }
+  [source.byteslice(start_match.end(0), end_match.begin(0) - start_match.end(0)), []]
 end
 
 def adr_0009_decision_body_failures(source)
-  failures = []
-  decision_matches = source.to_enum(:scan, /^## Decision\n/).map { Regexp.last_match }
-  consequence_matches = source.to_enum(:scan, /^## Consequences\n/).map { Regexp.last_match }
-  if decision_matches.length != 1 || consequence_matches.length != 1
-    failures << "ADR-0009 raw Decision and Consequences headings must each occur exactly once"
-    return failures
-  end
+  body, failures = adr_0009_decision_body(source)
+  return failures unless failures.empty?
 
-  decision_match = decision_matches.first
-  consequence_match = consequence_matches.first
-  if consequence_match.begin(0) <= decision_match.end(0)
-    failures << "ADR-0009 raw Decision body must precede Consequences"
-    return failures
-  end
-
-  first_h2 = source.match(/^## ([^#\n][^\n]*)\n/, decision_match.end(0))
-  unless first_h2&.begin(0) == consequence_match.begin(0)
-    failures << "ADR-0009 Consequences must be the next raw level-two section after Decision"
-  end
-
-  body = source.byteslice(decision_match.end(0), consequence_match.begin(0) - decision_match.end(0))
   actual = Digest::SHA256.hexdigest(body)
-  unless actual == ADR_0009_DECISION_BODY_SHA256
-    failures << "ADR-0009 Decision body must match closed semantic digest #{ADR_0009_DECISION_BODY_SHA256}, found #{actual}"
+  return [] if actual == ADR_0009_DECISION_BODY_SHA256
+
+  ["ADR-0009 Decision body must match closed semantic digest #{ADR_0009_DECISION_BODY_SHA256}, found #{actual}"]
+end
+
+def adr_0009_semantic_contract_failures(source)
+  body, body_failures = adr_0009_decision_body(source)
+  return body_failures unless body
+
+  failures = []
+  ADR_0009_DECISION_FRAGMENT_PREDICATES.each do |predicate, fragment|
+    count = body.scan(Regexp.new(Regexp.escape(fragment))).length
+    failures << "ADR-0009 Decision predicate failed: #{predicate}" unless count == 1
   end
+  failures
+end
+
+def adr_0009_document_governance_predicate_failures(source)
+  failed = Set.new
+  unless source.is_a?(String) && source.valid_encoding? && source.end_with?("\n") &&
+         source.bytesize <= ADR_0009_MARKDOWN_MAX_BYTES &&
+         !source.start_with?("\uFEFF") && !source.include?("\r") && !source.include?("\0")
+    failed << :canonical_markdown
+    return failed
+  end
+
+  lines = source.lines(chomp: true)
+  metadata_lines = lines[2, ADR_0009_METADATA_KEY_ORDER.length] || []
+  metadata_keys = metadata_lines.map { |line| line[/\A- \*\*([^*]+):\*\*\s*/, 1] }
+  unless lines[0] == "# ADR-0009: Gitea provider reconciliation precedence and conflict handling" &&
+         lines[1] == "" &&
+         metadata_keys == ADR_0009_METADATA_KEY_ORDER &&
+         lines[2 + ADR_0009_METADATA_KEY_ORDER.length] == "" &&
+         lines[3 + ADR_0009_METADATA_KEY_ORDER.length] == "## Context"
+    failed << :metadata_layout
+  end
+
+  status_index = 2 + ADR_0009_METADATA_KEY_ORDER.index("Status")
+  owner_index = 2 + ADR_0009_METADATA_KEY_ORDER.index("Project-owner approval required")
+  supersession_index = 2 + ADR_0009_METADATA_KEY_ORDER.index("Supersedes / superseded by")
+  failed << :metadata_status_proposed unless lines[status_index] == ADR_0009_PROPOSED_STATUS_LINE.chomp
+  failed << :metadata_owner_required unless lines[owner_index] == ADR_0009_OWNER_APPROVAL_LINE
+  failed << :metadata_supersession_narrow unless lines[supersession_index] == ADR_0009_SUPERSESSION_LINE
+
+  review_offset = source.index(ADR_0009_REVIEWS_HEADING)
+  footnote_offset = source.index(ADR_0009_FOOTNOTE_MARKER, review_offset.to_i)
+  if review_offset.nil? || footnote_offset.nil? || footnote_offset <= review_offset
+    failed << :proposed_reviews
+    return failed
+  end
+  reviews = source[review_offset...footnote_offset]
+  unless reviews.bytesize == ADR_0009_PROPOSED_REVIEWS_BYTES &&
+         Digest::SHA256.hexdigest(reviews) == ADR_0009_PROPOSED_REVIEWS_SHA256
+    failed << :proposed_reviews
+  end
+  failed
+end
+
+def adr_0009_canonical_value(value)
+  case value
+  when Hash
+    value.keys.sort.to_h { |key| [key, adr_0009_canonical_value(value.fetch(key))] }
+  when Array
+    value.map { |entry| adr_0009_canonical_value(entry) }
+  else
+    value
+  end
+end
+
+def adr_0009_spec_value(spec, path)
+  path.split(".").reduce(spec) do |value, component|
+    break nil unless value.is_a?(Hash) && value.key?(component)
+
+    value.fetch(component)
+  end
+end
+
+def adr_0009_mutate_spec_path(spec, path)
+  mutated = Marshal.load(Marshal.dump(spec))
+  components = path.split(".")
+  leaf = components.pop
+  parent = components.reduce(mutated) { |value, component| value.fetch(component) }
+  original = parent.fetch(leaf)
+  parent[leaf] = case original
+                 when false then true
+                 when true then false
+                 when Integer then original + 1
+                 when String then "mutated_#{original}"
+                 when Array then original + ["mutated_extra_value"]
+                 when Hash then original.merge("mutated_extra_key" => true)
+                 else nil
+                 end
+  mutated
+end
+
+def adr_0009_spec_failures(spec_source:, spec:)
+  failures = []
+  unless spec_source.is_a?(String) && spec_source.valid_encoding? &&
+         spec_source.bytesize <= ADR_0009_SPEC_MAX_BYTES && spec_source.end_with?("\n")
+    failures << "ADR-0009 structured reconciliation spec exceeds its canonical resource or encoding bounds"
+  end
+  unless spec.is_a?(Hash)
+    failures << "ADR-0009 structured reconciliation spec must be one mapping"
+    return failures
+  end
+  unless spec.keys == ADR_0009_SPEC_TOP_LEVEL_KEYS
+    failures << "ADR-0009 structured reconciliation spec top-level keys must match the closed order"
+  end
+
+  ADR_0009_SPEC_SECTION_DIGESTS.each do |section, expected_digest|
+    value = spec[section]
+    actual_digest = Digest::SHA256.hexdigest(JSON.generate(adr_0009_canonical_value(value)))
+    unless actual_digest == expected_digest
+      failures << "ADR-0009 structured reconciliation spec section digest mismatch: #{section}"
+    end
+  end
+
+  ADR_0009_SPEC_EXPECTATIONS.each do |path, expected|
+    actual = adr_0009_spec_value(spec, path)
+    failures << "ADR-0009 structured reconciliation spec invariant failed: #{path}" unless actual == expected
+  end
+
+  field_classes = spec["field_classes"]
+  if field_classes.is_a?(Hash)
+    expected_classes = %w[canonical_only provider_content mapped_value managed_configuration central_security provider_identity derived_projection]
+    failures << "ADR-0009 field-class registry must use the closed class order" unless field_classes.keys == expected_classes
+    field_classes.each do |name, definition|
+      unless definition.is_a?(Hash) && definition.keys == %w[examples disagreement] &&
+             definition["examples"].is_a?(Array) && !definition["examples"].empty? &&
+             definition["examples"].uniq == definition["examples"]
+        failures << "ADR-0009 field class #{name} must have unique examples and one disagreement rule"
+      end
+    end
+  else
+    failures << "ADR-0009 field-class registry must be a mapping"
+  end
+
+  verification = spec["verification"]
+  unless verification.is_a?(Hash) && verification.keys == ADR_0009_SPEC_VERIFICATION_OWNERS.keys
+    failures << "ADR-0009 structured reconciliation verification registry must match the ten closed test IDs"
+  else
+    ADR_0009_SPEC_VERIFICATION_OWNERS.each do |test_id, expected_owners|
+      record = verification[test_id]
+      unless record.is_a?(Hash) && record.keys == %w[owners cases] &&
+             record["owners"] == expected_owners && record["cases"].is_a?(Array) &&
+             !record["cases"].empty? && record["cases"].uniq == record["cases"]
+        failures << "ADR-0009 structured reconciliation verification contract failed: #{test_id}"
+      end
+    end
+  end
+  failures
+rescue JSON::GeneratorError, TypeError => error
+  failures << "ADR-0009 structured reconciliation spec cannot be canonicalized: #{error.class}"
   failures
 end
 
@@ -1946,6 +1577,670 @@ def adr_0008_acceptance_transition_change_failures(changes)
     failures << "ADR-0008 acceptance transition has noncanonical record changes: #{wrong_statuses.join(', ')}"
   end
   failures
+end
+
+def adr_0009_exact_revision?(value)
+  value.is_a?(String) && value.bytesize == 40 && value.match?(/\A[0-9a-f]{40}\z/)
+end
+
+def adr_0009_acceptance_metadata_failures(metadata)
+  return ["ADR-0009 acceptance metadata must be a mapping"] unless metadata.is_a?(Hash)
+
+  failures = []
+  expected_keys = Set[:immutable_revision, :accepted_at, :approval_record_path, :approval_records]
+  unless metadata.keys.to_set == expected_keys
+    failures << "ADR-0009 acceptance metadata must contain only immutable revision, date, approval record, and approval records"
+  end
+
+  immutable_revision = metadata[:immutable_revision]
+  unless adr_0009_exact_revision?(immutable_revision)
+    failures << "ADR-0009 acceptance metadata immutable revision must be exactly 40 lowercase hexadecimal characters"
+  end
+
+  accepted_at = metadata[:accepted_at]
+  valid_date = accepted_at.is_a?(String) && accepted_at.match?(/\A[0-9]{4}-[0-9]{2}-[0-9]{2}\z/)
+  if valid_date
+    begin
+      Date.iso8601(accepted_at)
+    rescue Date::Error
+      valid_date = false
+    end
+  end
+  failures << "ADR-0009 acceptance metadata date must be a valid YYYY-MM-DD date" unless valid_date
+
+  unless metadata[:approval_record_path] == ADR_0009_APPROVAL_RECORD_PATH
+    failures << "ADR-0009 acceptance metadata must use #{ADR_0009_APPROVAL_RECORD_PATH}"
+  end
+
+  records = metadata[:approval_records]
+  unless records.is_a?(Array)
+    failures << "ADR-0009 acceptance approval records must be an ordered list"
+    return failures
+  end
+  if records.length > ADR_0009_ACCEPTANCE_RECORD_SCAN_MAX
+    failures << "ADR-0009 acceptance approval records exceed their resource bound"
+    return failures
+  end
+
+  roles = []
+  identities = {}
+  records.each_with_index do |record, index|
+    unless record.is_a?(Hash)
+      failures << "ADR-0009 acceptance approval record #{index + 1} must be a mapping"
+      next
+    end
+    unless record.keys.to_set == Set["role", "identity", "disposition"]
+      failures << "ADR-0009 acceptance approval record #{index + 1} must contain only role, identity, and disposition"
+    end
+
+    role = record["role"]
+    identity = record["identity"]
+    disposition = record["disposition"]
+    roles << role
+    identities[role] = identity if role.is_a?(String)
+    next unless ADR_0009_ACCEPTED_REVIEW_ROLE_NAMES.include?(role)
+
+    failures << "ADR-0009 acceptance role #{role} disposition must be APPROVED" unless disposition == "APPROVED"
+    if role == "project-owner"
+      safe_owner = identity.is_a?(String) && identity.bytesize.between?(1, 240) &&
+                   identity.ascii_only? && !identity.match?(/[\r\n`|]/) &&
+                   identity.start_with?("explicit ") && identity.include?("project-owner")
+      failures << "ADR-0009 project-owner approval must name one explicit bounded project-owner identity" unless safe_owner
+    else
+      safe_identity = identity.is_a?(String) && identity.bytesize.between?(1, 160) &&
+                      identity.ascii_only? && identity.match?(/\A\/root\/[a-z0-9][a-z0-9_\/-]*\z/)
+      failures << "ADR-0009 acceptance role #{role} must name one bounded non-author reviewer identity" unless safe_identity
+      if identity == "/root/adr_cand_008"
+        failures << "ADR-0009 decision author cannot supply acceptance role #{role}"
+      end
+    end
+  end
+
+  missing_roles = ADR_0009_ACCEPTED_REVIEW_ROLE_NAMES - roles
+  duplicate_roles = roles.select { |role| roles.count(role) > 1 }.uniq
+  unexpected_roles = roles.compact - ADR_0009_ACCEPTED_REVIEW_ROLE_NAMES
+  failures << "ADR-0009 acceptance approval records omit roles: #{missing_roles.join(', ')}" unless missing_roles.empty?
+  failures << "ADR-0009 acceptance approval records duplicate roles: #{duplicate_roles.join(', ')}" unless duplicate_roles.empty?
+  failures << "ADR-0009 acceptance approval records contain unexpected roles: #{unexpected_roles.join(', ')}" unless unexpected_roles.empty?
+  unless roles == ADR_0009_ACCEPTED_REVIEW_ROLE_NAMES
+    failures << "ADR-0009 acceptance approval records must use the exact canonical role order"
+  end
+  if identities["WS-13-independent-qa"] == identities["WS-13-independent-security"]
+    failures << "ADR-0009 independent QA and security reviewer identities must be distinct"
+  end
+  failures
+end
+
+def adr_0009_acceptance_metadata_from_gate(gate)
+  return [nil, ["ADR-0009 catalog gate must be a mapping"]] unless gate.is_a?(Hash)
+
+  acceptance_fields = %w[immutable_revision accepted_at approval_record approval_records]
+  case gate["state"]
+  when "PROPOSED"
+    premature = acceptance_fields.select { |field| gate.key?(field) }
+    failures = premature.empty? ? [] : ["ADR-0009 proposed catalog gate has premature acceptance fields: #{premature.join(', ')}"]
+    [nil, failures]
+  when "ACCEPTED"
+    missing = acceptance_fields.reject { |field| gate.key?(field) }
+    return [nil, ["ADR-0009 accepted catalog gate omits acceptance fields: #{missing.join(', ')}"]] unless missing.empty?
+
+    metadata = {
+      immutable_revision: gate["immutable_revision"],
+      accepted_at: gate["accepted_at"],
+      approval_record_path: gate["approval_record"],
+      approval_records: gate["approval_records"]
+    }
+    metadata_failures = adr_0009_acceptance_metadata_failures(metadata)
+    [metadata_failures.empty? ? metadata : nil, metadata_failures]
+  else
+    [nil, ["ADR-0009 catalog gate state must be PROPOSED or ACCEPTED"]]
+  end
+end
+
+def adr_0009_accepted_status_line(metadata)
+  "- **Status:** Accepted at immutable decision revision `#{metadata.fetch(:immutable_revision)}` on #{metadata.fetch(:accepted_at)}\n"
+end
+
+def adr_0009_accepted_reviews_section(metadata)
+  records_by_role = metadata.fetch(:approval_records).to_h { |record| [record.fetch("role"), record] }
+  immutable_revision = metadata.fetch(:immutable_revision)
+  source = +ADR_0009_REVIEWS_HEADING
+  source << "\n"
+  source << ADR_0009_ACCEPTED_REVIEWS_INTRO
+  source << "\n"
+  source << ADR_0009_ACCEPTED_REVIEW_HEADER
+  source << ADR_0009_ACCEPTED_REVIEW_DELIMITER
+  source << "| Decision author (WS-03) | `/root/adr_cand_008` | `#{immutable_revision}` | AUTHOR - NOT APPROVAL | Authored decision; author cannot approve |\n"
+  ADR_0009_ACCEPTED_REVIEW_ROLES.each do |definition|
+    record = records_by_role.fetch(definition.fetch(:role))
+    source << "| #{definition.fetch(:label)} | `#{record.fetch('identity')}` | `#{immutable_revision}` | " \
+              "#{record.fetch('disposition')} | #{definition.fetch(:evidence)} |\n"
+  end
+  source << "\n"
+  source
+end
+
+def adr_0009_approval_record_fixture(metadata)
+  immutable_revision = metadata.fetch(:immutable_revision)
+  records_by_role = metadata.fetch(:approval_records).to_h { |record| [record.fetch("role"), record] }
+  source = +"# ADR-0009 approval record\n\n"
+  source << "Status: **APPROVED**\n\n"
+  source << "- **Immutable decision revision:** `#{immutable_revision}`\n"
+  source << "- **Approval scope:** ADR-CAND-008 only; implementation and release evidence remain separately gated.\n\n"
+  source << "## Exact-revision dispositions\n\n"
+  source << ADR_0009_ACCEPTED_REVIEW_HEADER
+  source << ADR_0009_ACCEPTED_REVIEW_DELIMITER
+  ADR_0009_ACCEPTED_REVIEW_ROLES.each do |definition|
+    record = records_by_role.fetch(definition.fetch(:role))
+    source << "| #{definition.fetch(:label)} | `#{record.fetch('identity')}` | `#{immutable_revision}` | " \
+              "#{record.fetch('disposition')} | #{definition.fetch(:evidence)} |\n"
+  end
+  source
+end
+
+def adr_0009_accepted_adr_fixture(proposed_source, metadata)
+  accepted = proposed_source
+             .sub(ADR_0009_PROPOSED_STATUS_LINE, adr_0009_accepted_status_line(metadata))
+             .sub(ADR_0009_PROPOSED_RESOLUTION_LINE, ADR_0009_ACCEPTED_RESOLUTION_LINE)
+  reviews_offset = accepted.index(ADR_0009_REVIEWS_HEADING)
+  footnotes_offset = accepted.index(ADR_0009_FOOTNOTE_MARKER, reviews_offset.to_i)
+  return accepted unless reviews_offset && footnotes_offset
+
+  accepted[0...reviews_offset] + adr_0009_accepted_reviews_section(metadata) + accepted[footnotes_offset..]
+end
+
+def adr_0009_catalog_gate_from_source(source, filename:)
+  catalog = parse_yaml(source, filename: filename)
+  gates = catalog.fetch("adr_decision_gates")
+  return [nil, ["#{filename}: adr_decision_gates must be an array"]] unless gates.is_a?(Array)
+
+  matching = gates.select { |gate| gate.is_a?(Hash) && gate["adr_id"] == "ADR-CAND-008" }
+  return [nil, ["#{filename}: must contain exactly one ADR-CAND-008 gate"]] unless matching.length == 1
+
+  [matching.first, []]
+rescue KeyError, Psych::Exception, TypeError => error
+  [nil, ["#{filename}: cannot parse ADR-CAND-008 gate: #{error.class}"]]
+end
+
+def adr_0009_accepted_catalog_source_fixture(parent_source, metadata)
+  unless parent_source.is_a?(String) && parent_source.valid_encoding? &&
+         parent_source.bytesize <= ADR_0009_ACCEPTANCE_SNAPSHOT_MAX_BYTES
+    return [nil, ["ADR-0009 Proposed catalog source fixture is unavailable, invalid, or oversized"]]
+  end
+
+  header = "  - adr_id: ADR-CAND-008\n"
+  offsets = parent_source.enum_for(:scan, /^#{Regexp.escape(header)}/).map { Regexp.last_match.begin(0) }
+  return [nil, ["ADR-0009 Proposed catalog source must contain one canonical gate header"]] unless offsets.length == 1
+
+  block_start = offsets.first
+  next_header = parent_source.match(/^  - adr_id: /, block_start + header.bytesize)
+  return [nil, ["ADR-0009 Proposed catalog gate must have a bounded successor"]] unless next_header
+
+  block = parent_source[block_start...next_header.begin(0)]
+  proposed_state = "    state: PROPOSED\n"
+  premature = %w[immutable_revision accepted_at approval_record approval_records].select do |field|
+    block.match?(/^    #{Regexp.escape(field)}:/)
+  end
+  unless block.lines.count(proposed_state) == 1 && premature.empty?
+    return [nil, ["ADR-0009 Proposed catalog gate has noncanonical state or premature acceptance fields"]]
+  end
+
+  accepted_fields = +"    state: ACCEPTED\n"
+  accepted_fields << "    immutable_revision: #{JSON.generate(metadata.fetch(:immutable_revision))}\n"
+  accepted_fields << "    accepted_at: #{JSON.generate(metadata.fetch(:accepted_at))}\n"
+  accepted_fields << "    approval_record: #{JSON.generate(metadata.fetch(:approval_record_path))}\n"
+  accepted_fields << "    approval_records:\n"
+  metadata.fetch(:approval_records).each do |record|
+    accepted_fields << "      - {role: #{JSON.generate(record.fetch('role'))}, " \
+                       "identity: #{JSON.generate(record.fetch('identity'))}, " \
+                       "disposition: #{JSON.generate(record.fetch('disposition'))}}\n"
+  end
+  accepted_block = block.sub(proposed_state, accepted_fields)
+  [parent_source[0...block_start] + accepted_block + parent_source[next_header.begin(0)..], []]
+rescue KeyError, TypeError => error
+  [nil, ["ADR-0009 accepted catalog source fixture failed: #{error.class}"]]
+end
+
+def adr_0009_catalog_transition_failures(parent_source:, child_source:, metadata:)
+  failures = []
+  expected_child_source, source_failures = adr_0009_accepted_catalog_source_fixture(parent_source, metadata)
+  failures.concat(source_failures)
+  if expected_child_source && child_source != expected_child_source
+    failures << "ADR-0009 acceptance catalog child must exactly match the metadata-derived canonical source"
+  end
+
+  parent_catalog = parse_yaml(parent_source, filename: "ADR-0009 immutable parent catalog fixture")
+  child_catalog = parse_yaml(child_source, filename: "ADR-0009 acceptance child catalog fixture")
+  parent_gates = parent_catalog.fetch("adr_decision_gates")
+  child_gates = child_catalog.fetch("adr_decision_gates")
+  unless parent_gates.is_a?(Array) && child_gates.is_a?(Array)
+    return ["ADR-0009 acceptance catalog transition requires gate arrays"]
+  end
+  parent_indices = parent_gates.each_index.select do |index|
+    parent_gates[index].is_a?(Hash) && parent_gates[index]["adr_id"] == "ADR-CAND-008"
+  end
+  child_indices = child_gates.each_index.select do |index|
+    child_gates[index].is_a?(Hash) && child_gates[index]["adr_id"] == "ADR-CAND-008"
+  end
+  return ["ADR-0009 acceptance catalog transition must preserve one gate at the same position"] unless parent_indices.length == 1 && child_indices == parent_indices
+
+  gate_index = parent_indices.first
+  parent_gate = parent_gates.fetch(gate_index)
+  child_gate = child_gates.fetch(gate_index)
+  failures << "ADR-0009 acceptance catalog parent gate must be PROPOSED" unless parent_gate["state"] == "PROPOSED"
+  premature = %w[immutable_revision accepted_at approval_record approval_records].select { |field| parent_gate.key?(field) }
+  failures << "ADR-0009 acceptance catalog parent has premature fields: #{premature.join(', ')}" unless premature.empty?
+  expected_child_gate = parent_gate.merge(
+    "state" => "ACCEPTED",
+    "immutable_revision" => metadata.fetch(:immutable_revision),
+    "accepted_at" => metadata.fetch(:accepted_at),
+    "approval_record" => metadata.fetch(:approval_record_path),
+    "approval_records" => metadata.fetch(:approval_records)
+  )
+  failures << "ADR-0009 acceptance catalog child may change only exact metadata-derived gate fields" unless child_gate == expected_child_gate
+  normalized_child = Marshal.load(Marshal.dump(child_catalog))
+  normalized_child.fetch("adr_decision_gates")[gate_index] = parent_gate
+  failures << "ADR-0009 acceptance catalog child changes unrelated catalog semantics" unless normalized_child == parent_catalog
+  failures
+rescue KeyError, Psych::Exception, TypeError => error
+  failures << "ADR-0009 acceptance catalog transition cannot be compared: #{error.class}"
+  failures
+end
+
+def adr_0009_acceptance_transition_change_failures(changes)
+  unless changes.is_a?(Hash) && changes.keys.all? { |path| path.is_a?(String) } &&
+         changes.values.all? { |status| status.is_a?(String) }
+    return ["ADR-0009 acceptance transition change inventory is malformed"]
+  end
+
+  failures = []
+  unexpected = changes.keys - ADR_0009_ACCEPTANCE_TRANSITION_CHANGES.keys
+  failures << "ADR-0009 acceptance transition changes paths outside the closed approval/gate/review allowlist: #{unexpected.sort.join(', ')}" unless unexpected.empty?
+  missing = ADR_0009_ACCEPTANCE_TRANSITION_CHANGES.keys - changes.keys
+  failures << "ADR-0009 acceptance transition omits required record paths: #{missing.sort.join(', ')}" unless missing.empty?
+  wrong = ADR_0009_ACCEPTANCE_TRANSITION_CHANGES.filter_map do |path, expected_status|
+    actual_status = changes[path]
+    "#{path}=#{actual_status.inspect} (expected #{expected_status})" if actual_status && actual_status != expected_status
+  end
+  failures << "ADR-0009 acceptance transition has noncanonical record changes: #{wrong.join(', ')}" unless wrong.empty?
+  failures
+end
+
+def adr_0009_expected_index_transition(path:, parent_source:, metadata:)
+  unless parent_source.is_a?(String) && parent_source.valid_encoding? &&
+         parent_source.bytesize <= ADR_0009_ACCEPTANCE_SNAPSHOT_MAX_BYTES
+    return [nil, ["ADR-0009 #{path} Proposed parent fixture is unavailable, invalid, or oversized"]]
+  end
+
+  immutable_revision = metadata.fetch(:immutable_revision)
+  accepted_at = metadata.fetch(:accepted_at)
+  lines = parent_source.lines
+  case path
+  when ADR_0009_ADR_INDEX_PATH
+    accepted_rows = lines.select { |line| line.start_with?("| Accepted |") }
+    proposed_rows = lines.select { |line| line.start_with?("| Proposed |") }
+    unless accepted_rows.length == 1 && proposed_rows.length == 1 &&
+           proposed_rows.first.include?("ADR-0009") && proposed_rows.first.include?("ADR-CAND-008")
+      return [nil, ["ADR-0009 ADR index parent rows are not canonical"]]
+    end
+    accepted_base = accepted_rows.first.delete_suffix(" |\n")
+    addition =
+      " [ADR-0009: Gitea provider reconciliation precedence and conflict handling]" \
+      "(./0009-gitea-provider-reconciliation-precedence-and-conflict-handling.md) (`ADR-CAND-008`) is accepted " \
+      "at immutable decision revision `#{immutable_revision}` with explicit project-owner approval; implementation evidence remains separately gated."
+    expected = parent_source.sub(accepted_rows.first, "#{accepted_base}#{addition} |\n")
+    expected = expected.sub(proposed_rows.first, "| Proposed | None. |\n")
+    [expected, []]
+  when ADR_0009_CHOICE_QUEUE_PATH
+    unless lines.count(ADR_0009_CHOICE_QUEUE_PROPOSED_STATUS) == 1
+      return [nil, ["ADR-0009 choice queue parent status is not canonical"]]
+    end
+    candidate_rows = lines.select { |line| line.start_with?("| `ADR-CAND-008` Provider reconciliation conflict semantics |") }
+    insertion_rows = lines.select { |line| line.start_with?("| `ADR-CAND-021` Initial Team relation model |") }
+    unless candidate_rows.length == 1 && insertion_rows.length == 1
+      return [nil, ["ADR-0009 choice queue parent candidate rows are not canonical"]]
+    end
+    cells = adr_0008_markdown_table_cells(candidate_rows.first)
+    return [nil, ["ADR-0009 choice queue candidate row is malformed"]] unless cells&.length == 3
+
+    selected = cells[1].sub(" proposes ", " selects ")
+                       .sub("On acceptance it would supersede", "It supersedes")
+                       .sub("; it is non-operative while Proposed.", ".")
+    return [nil, ["ADR-0009 choice queue row omits canonical proposal wording"]] if selected == cells[1]
+
+    accepted_row = "| #{cells[0]} | `ACCEPTED` on #{accepted_at} at `#{immutable_revision}` with explicit project-owner approval | #{selected} |\n"
+    expected = parent_source.sub(ADR_0009_CHOICE_QUEUE_PROPOSED_STATUS, ADR_0009_CHOICE_QUEUE_ACCEPTED_STATUS)
+    expected = expected.sub(insertion_rows.first, accepted_row + insertion_rows.first)
+    expected = expected.sub(candidate_rows.first, "| None. | None. | None. |\n")
+    [expected, []]
+  when ADR_0009_CANDIDATE_INDEX_PATH
+    unless lines.count(ADR_0009_CANDIDATE_INDEX_PROPOSED_STATUS) == 1
+      return [nil, ["ADR-0009 candidate index parent status is not canonical"]]
+    end
+    candidate_rows = lines.select { |line| line.start_with?("| `ADR-CAND-008` |") }
+    return [nil, ["ADR-0009 candidate index parent row is not canonical"]] unless candidate_rows.length == 1
+
+    cells = adr_0008_markdown_table_cells(candidate_rows.first)
+    return [nil, ["ADR-0009 candidate index row is malformed"]] unless cells&.length == 4
+
+    accepted_note = cells[3]
+                    .sub("The revised proposal selects", "The accepted decision selects")
+                    .sub("It would supersede", "It supersedes")
+                    .sub(
+                      "Required WS-01/02/03/06/07/12, distinct WS-13 reviews, and explicit project-owner approval must name the same exact immutable commit SHA; none is yet recorded.",
+                      "Decision-time reviews and explicit project-owner approval are recorded at the immutable revision; implementation evidence remains separately gated."
+                    )
+    if accepted_note == cells[3] || accepted_note.include?("none is yet recorded")
+      return [nil, ["ADR-0009 candidate index row omits canonical pending-review wording"]]
+    end
+    accepted_row =
+      "| #{cells[0]} | **RESOLVED by accepted [ADR-0009]" \
+      "(../adr/0009-gitea-provider-reconciliation-precedence-and-conflict-handling.md) at `#{immutable_revision}` " \
+      "with explicit project-owner approval** | #{cells[2]} | #{accepted_note} |\n"
+    expected = parent_source.sub(
+      ADR_0009_CANDIDATE_INDEX_PROPOSED_STATUS,
+      ADR_0009_CANDIDATE_INDEX_ACCEPTED_STATUS
+    )
+    expected = expected.sub(candidate_rows.first, accepted_row)
+    [expected, []]
+  else
+    [nil, ["ADR-0009 acceptance index path is outside the closed record set: #{path}"]]
+  end
+rescue KeyError, TypeError => error
+  [nil, ["ADR-0009 acceptance index fixture failed: #{error.class}"]]
+end
+
+def adr_0009_acceptance_surface_failures(
+  current_adr_source:,
+  proposed_adr_source:,
+  gate:,
+  approval_record:,
+  metadata:
+)
+  failures = adr_0009_acceptance_metadata_failures(metadata)
+  return failures unless failures.empty?
+
+  expected_adr_source = adr_0009_accepted_adr_fixture(proposed_adr_source, metadata)
+  unless current_adr_source == expected_adr_source
+    failures << "ADR-0009 accepted decision record must exactly match the metadata-derived records-only transition"
+  end
+  failures.concat(adr_0009_decision_body_failures(current_adr_source))
+  failures.concat(adr_0009_semantic_contract_failures(current_adr_source))
+
+  unless gate.is_a?(Hash)
+    failures << "ADR-0009 accepted catalog gate must be a mapping"
+    return failures
+  end
+  failures << "ADR-0009 accepted catalog gate state must be ACCEPTED" unless gate["state"] == "ACCEPTED"
+  failures << "ADR-0009 accepted catalog project-owner gate must remain true" unless gate["project_owner_approval_required"] == true
+  failures << "ADR-0009 accepted catalog immutable revision mismatch" unless gate["immutable_revision"] == metadata.fetch(:immutable_revision)
+  failures << "ADR-0009 accepted catalog date mismatch" unless gate["accepted_at"] == metadata.fetch(:accepted_at)
+  failures << "ADR-0009 accepted catalog approval record mismatch" unless gate["approval_record"] == metadata.fetch(:approval_record_path)
+  failures << "ADR-0009 accepted catalog approval records mismatch" unless gate["approval_records"] == metadata.fetch(:approval_records)
+
+  expected_approval_record = adr_0009_approval_record_fixture(metadata)
+  unless approval_record == expected_approval_record
+    failures << "ADR-0009 approval record must exactly match the metadata-derived exact-revision dispositions and end after its final row"
+  end
+  failures
+end
+
+def adr_0009_acceptance_graph_failures(
+  immutable_revision:,
+  repository_available:,
+  shallow:,
+  head_revision:,
+  commits:,
+  acceptance_transitions:
+)
+  return ["ADR-0009 acceptance history immutable revision must be exactly 40 lowercase hexadecimal characters"] unless adr_0009_exact_revision?(immutable_revision)
+  return ["ADR-0009 acceptance history repository is unavailable"] unless repository_available
+  return ["ADR-0009 acceptance history is shallow and cannot prove the immutable transition"] if shallow
+
+  failures = []
+  unless adr_0009_exact_revision?(head_revision)
+    return ["ADR-0009 acceptance history HEAD must resolve to one exact commit"]
+  end
+  unless commits.is_a?(Hash) && commits.length <= ADR_0009_ACCEPTANCE_HISTORY_MAX_COMMITS &&
+         commits.keys.all? { |revision| adr_0009_exact_revision?(revision) } &&
+         commits.values.all? { |parents| parents.is_a?(Array) && parents.all? { |revision| adr_0009_exact_revision?(revision) } }
+    return ["ADR-0009 acceptance history contains a malformed or oversized commit graph"]
+  end
+  return ["ADR-0009 immutable decision revision does not exist in the available Git history"] unless commits.key?(immutable_revision)
+  return ["ADR-0009 acceptance history does not contain HEAD"] unless commits.key?(head_revision)
+
+  reachable = Set.new
+  pending = [head_revision]
+  until pending.empty?
+    revision = pending.pop
+    next if reachable.include?(revision)
+
+    reachable << revision
+    pending.concat(commits.fetch(revision, []))
+    return ["ADR-0009 acceptance history reachability exceeds its closed commit bound"] if reachable.length > ADR_0009_ACCEPTANCE_HISTORY_MAX_COMMITS
+  end
+  return ["ADR-0009 immutable decision revision is not an ancestor of HEAD"] unless reachable.include?(immutable_revision)
+
+  unless acceptance_transitions.is_a?(Array) && acceptance_transitions.uniq == acceptance_transitions &&
+         acceptance_transitions.all? { |revision| adr_0009_exact_revision?(revision) && commits.key?(revision) }
+    return ["ADR-0009 acceptance transition set is malformed or ambiguous"]
+  end
+  reachable_transitions = acceptance_transitions.select { |revision| reachable.include?(revision) }
+  unless reachable_transitions.length == 1
+    return ["ADR-0009 acceptance history must contain exactly one reachable mechanical acceptance transition"]
+  end
+  transition = reachable_transitions.first
+  unless commits.fetch(transition) == [immutable_revision]
+    failures << "ADR-0009 mechanical acceptance transition must be the single-parent immediate child of the immutable decision revision"
+  end
+  failures
+end
+
+def adr_0009_proposed_decision_snapshot_failures(revision)
+  failures = []
+  adr_source, adr_error = adr_0008_git_file_at(revision, ADR_0009_DECISION_RECORD_PATH)
+  catalog_source, catalog_error = adr_0008_git_file_at(revision, ADR_0009_ISSUE_CATALOG_PATH)
+  failures << adr_error if adr_error
+  failures << catalog_error if catalog_error
+  return failures unless failures.empty?
+
+  failures.concat(adr_0009_decision_body_failures(adr_source))
+  failures.concat(adr_0009_semantic_contract_failures(adr_source))
+  gate, gate_failures = adr_0009_catalog_gate_from_source(
+    catalog_source,
+    filename: "#{ADR_0009_ISSUE_CATALOG_PATH}@#{revision}"
+  )
+  failures.concat(gate_failures)
+  if gate
+    failures.concat(
+      adr_0009_governance_gate_failures(
+        source: adr_source,
+        gate: gate,
+        gate_count: 1
+      )
+    )
+  end
+  approval = adr_0008_git_capture("cat-file", "-e", "#{revision}:#{ADR_0009_APPROVAL_RECORD_PATH}")
+  failures << "ADR-0009 immutable decision parent must not contain an acceptance approval record" if approval.fetch(:success)
+  failures
+end
+
+def adr_0009_accepted_transition_snapshot_failures(revision, metadata)
+  failures = []
+  immutable_revision = metadata.fetch(:immutable_revision)
+  current_adr, current_adr_error = adr_0008_git_file_at(revision, ADR_0009_DECISION_RECORD_PATH)
+  proposed_adr, proposed_adr_error = adr_0008_git_file_at(immutable_revision, ADR_0009_DECISION_RECORD_PATH)
+  current_catalog, current_catalog_error = adr_0008_git_file_at(revision, ADR_0009_ISSUE_CATALOG_PATH)
+  proposed_catalog, proposed_catalog_error = adr_0008_git_file_at(immutable_revision, ADR_0009_ISSUE_CATALOG_PATH)
+  approval_record, approval_error = adr_0008_git_file_at(revision, metadata.fetch(:approval_record_path))
+  [current_adr_error, proposed_adr_error, current_catalog_error, proposed_catalog_error, approval_error].compact.each do |error|
+    failures << error
+  end
+  return failures unless failures.empty?
+
+  gate, gate_failures = adr_0009_catalog_gate_from_source(
+    current_catalog,
+    filename: "#{ADR_0009_ISSUE_CATALOG_PATH}@#{revision}"
+  )
+  failures.concat(gate_failures)
+  if gate
+    failures.concat(
+      adr_0009_acceptance_surface_failures(
+        current_adr_source: current_adr,
+        proposed_adr_source: proposed_adr,
+        gate: gate,
+        approval_record: approval_record,
+        metadata: metadata
+      )
+    )
+  end
+  failures.concat(
+    adr_0009_catalog_transition_failures(
+      parent_source: proposed_catalog,
+      child_source: current_catalog,
+      metadata: metadata
+    )
+  )
+
+  diff = adr_0008_git_capture(
+    "diff-tree",
+    "--no-commit-id",
+    "--name-status",
+    "-r",
+    immutable_revision,
+    revision
+  )
+  unless diff.fetch(:success)
+    failures << "ADR-0009 acceptance transition diff is unavailable: #{adr_0008_git_failure(diff)}"
+    return failures
+  end
+  changes = {}
+  malformed = false
+  diff.fetch(:stdout).lines.each do |line|
+    fields = line.chomp.split("\t", -1)
+    unless fields.length == 2 && fields[0].match?(/\A[A-Z]\z/) && !fields[1].empty?
+      malformed = true
+      next
+    end
+    malformed = true if changes.key?(fields[1])
+    changes[fields[1]] = fields[0]
+  end
+  failures << "ADR-0009 acceptance transition Git diff contains a malformed or duplicate path" if malformed
+  failures.concat(adr_0009_acceptance_transition_change_failures(changes))
+
+  [ADR_0009_ADR_INDEX_PATH, ADR_0009_CHOICE_QUEUE_PATH, ADR_0009_CANDIDATE_INDEX_PATH].each do |path|
+    parent_source, parent_error = adr_0008_git_file_at(immutable_revision, path)
+    child_source, child_error = adr_0008_git_file_at(revision, path)
+    failures << parent_error if parent_error
+    failures << child_error if child_error
+    next if parent_error || child_error
+
+    expected_source, expected_failures = adr_0009_expected_index_transition(
+      path: path,
+      parent_source: parent_source,
+      metadata: metadata
+    )
+    failures.concat(expected_failures)
+    if expected_source && child_source != expected_source
+      failures << "ADR-0009 acceptance transition changes unrelated #{path} content or omits exact accepted wording"
+    end
+  end
+  failures
+end
+
+def adr_0009_parse_git_commit_lines(lines)
+  commits = {}
+  failures = []
+  lines.each do |line|
+    fields = line.split
+    unless fields.any? && fields.all? { |revision| adr_0009_exact_revision?(revision) }
+      failures << "ADR-0009 acceptance history contains malformed Git revision output"
+      next
+    end
+    revision = fields.first
+    parents = fields.drop(1)
+    if commits.key?(revision) && commits.fetch(revision) != parents
+      failures << "ADR-0009 acceptance history contains conflicting parent records"
+    else
+      commits[revision] = parents
+    end
+  end
+  [commits, failures]
+end
+
+def adr_0009_live_acceptance_history_failures(metadata)
+  metadata_failures = adr_0009_acceptance_metadata_failures(metadata)
+  return metadata_failures unless metadata_failures.empty?
+
+  immutable_revision = metadata.fetch(:immutable_revision)
+  inside = adr_0008_git_capture("rev-parse", "--is-inside-work-tree")
+  unless inside.fetch(:success) && inside.fetch(:stdout) == "true\n"
+    return ["ADR-0009 acceptance history repository is unavailable: #{adr_0008_git_failure(inside)}"]
+  end
+  shallow_result = adr_0008_git_capture("rev-parse", "--is-shallow-repository")
+  unless shallow_result.fetch(:success) && ["true\n", "false\n"].include?(shallow_result.fetch(:stdout))
+    return ["ADR-0009 acceptance history cannot determine shallow state: #{adr_0008_git_failure(shallow_result)}"]
+  end
+  return ["ADR-0009 acceptance history is shallow and cannot prove the immutable transition"] if shallow_result.fetch(:stdout) == "true\n"
+
+  decision_result = adr_0008_git_capture("rev-parse", "--verify", "#{immutable_revision}^{commit}")
+  unless decision_result.fetch(:success) && decision_result.fetch(:stdout) == "#{immutable_revision}\n"
+    return ["ADR-0009 immutable decision revision does not resolve to the exact available commit"]
+  end
+  head_result = adr_0008_git_capture("rev-parse", "--verify", "HEAD^{commit}")
+  unless head_result.fetch(:success) && adr_0009_exact_revision?(head_result.fetch(:stdout).strip)
+    return ["ADR-0009 acceptance history HEAD does not resolve to one exact commit"]
+  end
+  head_revision = head_result.fetch(:stdout).strip
+  ancestor = adr_0008_git_capture("merge-base", "--is-ancestor", immutable_revision, head_revision)
+  unless ancestor.fetch(:success)
+    return ["ADR-0009 immutable decision revision is not an ancestor of HEAD"] if ancestor.fetch(:exitstatus) == 1
+
+    return ["ADR-0009 acceptance history cannot prove ancestry: #{adr_0008_git_failure(ancestor)}"]
+  end
+
+  range = adr_0008_git_capture(
+    "rev-list",
+    "--parents",
+    "--ancestry-path",
+    "--max-count=#{ADR_0009_ACCEPTANCE_HISTORY_MAX_COMMITS + 1}",
+    "#{immutable_revision}..#{head_revision}"
+  )
+  return ["ADR-0009 acceptance history cannot enumerate the decision ancestry path: #{adr_0008_git_failure(range)}"] unless range.fetch(:success)
+  range_lines = range.fetch(:stdout).lines
+  return ["ADR-0009 acceptance history exceeds its closed commit bound"] if range_lines.length > ADR_0009_ACCEPTANCE_HISTORY_MAX_COMMITS
+
+  decision_line = adr_0008_git_capture("rev-list", "--parents", "--max-count=1", immutable_revision)
+  unless decision_line.fetch(:success) && decision_line.fetch(:stdout).lines.length == 1
+    return ["ADR-0009 acceptance history cannot read the immutable decision parent record"]
+  end
+  commits, parse_failures = adr_0009_parse_git_commit_lines(range_lines + decision_line.fetch(:stdout).lines)
+  return parse_failures unless parse_failures.empty?
+
+  proposed_failures = adr_0009_proposed_decision_snapshot_failures(immutable_revision)
+  unless proposed_failures.empty?
+    return proposed_failures.map { |failure| "ADR-0009 immutable decision parent invalid: #{failure}" }
+  end
+  direct_children = commits.filter_map { |revision, parents| revision if parents.include?(immutable_revision) }
+  snapshots = {}
+  transitions = direct_children.filter_map do |revision|
+    child_failures = adr_0009_accepted_transition_snapshot_failures(revision, metadata)
+    snapshots[revision] = child_failures
+    revision if child_failures.empty?
+  end
+  history_failures = adr_0009_acceptance_graph_failures(
+    immutable_revision: immutable_revision,
+    repository_available: true,
+    shallow: false,
+    head_revision: head_revision,
+    commits: commits,
+    acceptance_transitions: transitions
+  )
+  if transitions.empty? && snapshots.any?
+    detail = snapshots.sort_by(&:first).first(3).map { |revision, child_failures| "#{revision}: #{child_failures.first}" }
+    history_failures << "ADR-0009 direct-child acceptance snapshots failed: #{detail.join('; ')}"
+  end
+  history_failures
 end
 
 def adr_0009_governance_predicate_failures(source:, gate:, gate_count:)
@@ -3132,6 +3427,23 @@ def noncanonical_adr_candidate_fragments(criteria)
   end
 end
 
+def p1_006_without_allowed_accepted_adr_reference(criteria)
+  residual_criteria = criteria.dup
+  occurrence_count = residual_criteria.sum do |criterion|
+    criterion.is_a?(String) ? criterion.scan(P1_006_ALLOWED_ACCEPTED_ADR_0009_CLAUSE).length : 0
+  end
+  return residual_criteria unless occurrence_count == 1
+
+  reference_index = residual_criteria.index do |criterion|
+    criterion.is_a?(String) && criterion.include?(P1_006_ALLOWED_ACCEPTED_ADR_0009_CLAUSE)
+  end
+  residual_criteria[reference_index] = residual_criteria.fetch(reference_index).sub(
+    P1_006_ALLOWED_ACCEPTED_ADR_0009_CLAUSE,
+    ""
+  )
+  residual_criteria
+end
+
 def yaml_mapping_entries(node, key)
   return [] unless node.is_a?(Psych::Nodes::Mapping)
 
@@ -3208,7 +3520,9 @@ def p1_006_raw_gate_failures(issue_catalog_source)
   end
 
   residual_source = acceptance_line.delete_prefix(P1_006_RAW_ACCEPTANCE_PREFIX)
-  residual_fragments = noncanonical_adr_candidate_fragments([residual_source])
+  residual_fragments = noncanonical_adr_candidate_fragments(
+    p1_006_without_allowed_accepted_adr_reference([residual_source])
+  )
   unless residual_fragments.empty?
     failures << "STEAD-P1-006 raw acceptance source contains ADR fragments outside the exact clause: #{residual_fragments.uniq.sort.join(', ')}"
   end
@@ -3250,7 +3564,9 @@ def p1_006_adr_gate_failures(adr_gates:, security_issue:)
 
     residual_criteria = criteria.dup
     residual_criteria[0] = residual_criteria.first.delete_prefix(EXPECTED_P1_006_ADR_GATE_CLAUSE) if canonical_clause_present
-    residual_fragments = noncanonical_adr_candidate_fragments(residual_criteria)
+    residual_fragments = noncanonical_adr_candidate_fragments(
+      p1_006_without_allowed_accepted_adr_reference(residual_criteria)
+    )
     unless residual_fragments.empty?
       failures << "STEAD-P1-006 acceptance criteria contain noncanonical ADR fragments outside the exact raw gate clause: #{residual_fragments.uniq.sort.join(', ')}"
     end
@@ -3284,6 +3600,92 @@ issues = issue_catalog.fetch("issues").to_h { |issue| [issue.fetch("id"), issue]
 adr_0008_acceptance_metadata, adr_0008_gate_metadata_failures =
   adr_0008_acceptance_metadata_from_gate(adr_gates["ADR-CAND-006"])
 failures.concat(adr_0008_gate_metadata_failures)
+adr_0009_acceptance_metadata, adr_0009_gate_metadata_failures =
+  adr_0009_acceptance_metadata_from_gate(adr_gates["ADR-CAND-008"])
+failures.concat(adr_0009_gate_metadata_failures)
+adr_0009_spec_path = ROOT.join(ADR_0009_SPEC_PATH)
+adr_0009_spec_source = if adr_0009_spec_path.file? && !adr_0009_spec_path.symlink?
+                         adr_0009_spec_path.open("rb") { |file| file.read(ADR_0009_SPEC_MAX_BYTES + 1).to_s }
+                       else
+                         ""
+                       end
+adr_0009_spec_source.force_encoding(Encoding::UTF_8)
+begin
+  adr_0009_spec = parse_yaml(adr_0009_spec_source, filename: ADR_0009_SPEC_PATH)
+rescue Psych::Exception => error
+  failures << "#{ADR_0009_SPEC_PATH}: cannot parse closed reconciliation contract: #{error.class}"
+  adr_0009_spec = nil
+end
+failures.concat(adr_0009_spec_failures(spec_source: adr_0009_spec_source, spec: adr_0009_spec))
+
+adr_0009_spec_mutation_survivors = []
+adr_0009_spec_mutation_count = 0
+if adr_0009_spec.is_a?(Hash)
+  ADR_0009_SPEC_EXPECTATIONS.each_key do |path|
+    adr_0009_spec_mutation_count += 1
+    mutated = adr_0009_mutate_spec_path(adr_0009_spec, path)
+    mutation_failures = adr_0009_spec_failures(spec_source: adr_0009_spec_source, spec: mutated)
+    expected_failure = "ADR-0009 structured reconciliation spec invariant failed: #{path}"
+    adr_0009_spec_mutation_survivors << path unless mutation_failures.include?(expected_failure)
+  end
+  ADR_0009_SPEC_SECTION_DIGESTS.each_key do |section|
+    adr_0009_spec_mutation_count += 1
+    mutated = Marshal.load(Marshal.dump(adr_0009_spec))
+    mutated.fetch(section)["adversarial_extra_key"] = true
+    mutation_failures = adr_0009_spec_failures(spec_source: adr_0009_spec_source, spec: mutated)
+    expected_failure = "ADR-0009 structured reconciliation spec section digest mismatch: #{section}"
+    adr_0009_spec_mutation_survivors << "#{section} digest" unless mutation_failures.include?(expected_failure)
+  end
+  adr_0009_spec_mutation_count += 1
+  mutated_top_level = adr_0009_spec.merge("adversarial_extra_contract" => {})
+  top_level_failures = adr_0009_spec_failures(spec_source: adr_0009_spec_source, spec: mutated_top_level)
+  unless top_level_failures.include?("ADR-0009 structured reconciliation spec top-level keys must match the closed order")
+    adr_0009_spec_mutation_survivors << "top-level key injection"
+  end
+end
+
+ADR_0009_CROSS_FILE_REQUIRED_FRAGMENTS.each do |relative_path, fragments|
+  cross_source = ROOT.join(relative_path).read(encoding: "UTF-8")
+  fragments.each do |fragment|
+    failures << "#{relative_path}: omits ADR-0009 cross-file contract #{fragment.inspect}" unless cross_source.include?(fragment)
+  end
+end
+
+provider_interfaces = load_yaml("specs/provider-interfaces.yaml")
+reconciliation_records = Array(provider_interfaces["reconciliation_contracts"])
+expected_reconciliation_record = {
+  "id" => "P-SCM-RECONCILIATION-GITEA-V1",
+  "owner" => "WS-03",
+  "status" => "governed_by_adr_0009",
+  "source" => ADR_0009_SPEC_PATH,
+  "provider" => "gitea",
+  "authorization_scope_owner" => "WS-06",
+  "ordinary_ui_synchronous_provider_calls" => 0,
+  "activation_gate" => "ADR-CAND-008_ACCEPTED_AT_EXACT_IMMUTABLE_SHA"
+}
+unless reconciliation_records == [expected_reconciliation_record]
+  failures << "specs/provider-interfaces.yaml: ADR-0009 reconciliation registry must match the exact owner/source/activation contract"
+end
+
+p1_003 = issues["STEAD-P1-003"]
+p1_006 = issues["STEAD-P1-006"]
+if p1_003 && p1_006
+  unless Array(p1_003["owned_directories"]).include?("specs/provider-reconciliation") &&
+         Array(p1_003["dependencies"]).include?("STEAD-P1-006")
+    failures << "STEAD-P1-003 must own the reconciliation spec and consume STEAD-P1-006"
+  end
+  unless %w[T-ADR-0009-AMBIGUOUS-MUTATION T-ADR-0009-FULL-RECONCILIATION].all? do |test_id|
+           Array(p1_003["automated_tests"]).include?(test_id) &&
+             Array(p1_006["automated_tests"]).include?(test_id)
+         end
+    failures << "STEAD-P1-003 and STEAD-P1-006 must share the two closed ADR-0009 authorization/effect integration suites"
+  end
+  if Array(p1_006["owned_directories"]).include?("specs/provider-reconciliation")
+    failures << "STEAD-P1-006 must not own the WS-03 provider-reconciliation specification"
+  end
+else
+  failures << "implementation issue catalog must contain STEAD-P1-003 and STEAD-P1-006"
+end
 asyncapi = load_yaml("specs/asyncapi/stead.yaml")
 classification_bypass_path = ROOT.join("docs/security/classification-bypass-inventory.md")
 classification_bypass_source = classification_bypass_path.open("rb") do |file|
@@ -3321,15 +3723,13 @@ failures << "ADR record set mismatch: expected #{expected_numbers.join(', ')}, f
 all_test_owners = Hash.new { |hash, key| hash[key] = [] }
 tests_by_number = {}
 requirements_by_number = {}
-adr_0009_review_mutation_survivors = []
-adr_0009_review_mutation_count = 0
-adr_0009_security_mutation_survivors = []
-adr_0009_security_mutation_count = 0
-adr_0009_governance_mutation_survivors = []
-adr_0009_governance_mutation_count = 0
-adr_0009_markdown_control_failures = []
-adr_0009_markdown_control_count = 0
+adr_0009_adr_mutation_survivors = []
+adr_0009_adr_mutation_count = 0
 adr_0008_source = nil
+adr_0009_source = nil
+adr_0009_proposed_fixture_source = nil
+adr_0009_proposed_fixture_catalog_source = nil
+adr_0009_proposed_fixture_gate = nil
 
 paths.each do |path|
   basename = path.basename.to_s
@@ -3339,16 +3739,32 @@ paths.each do |path|
   expected = EXPECTED_RECORDS.fetch(number)
   source = path.read(encoding: "UTF-8")
   adr_0008_source = source if number == "0008"
+  adr_0009_source = source if number == "0009"
   relative = path.relative_path_from(ROOT).to_s
   expected_adr_id = "ADR-#{number}"
 
   failures << "#{relative}: title must begin '# #{expected_adr_id}:'" unless source.start_with?("# #{expected_adr_id}:")
-  REQUIRED_SECTIONS.each do |section|
+  required_sections = if number == "0009"
+                        [
+                          "Context",
+                          "Decision drivers",
+                          "Considered options",
+                          "Decision",
+                          "Consequences",
+                          "Migration, upgrade, rollback, and recovery",
+                          "Verification",
+                          "Reviews and approvals"
+                        ]
+                      else
+                        REQUIRED_SECTIONS
+                      end
+  required_sections.each do |section|
     failures << "#{relative}: missing section #{section.inspect}" unless source.match?(/^## #{Regexp.escape(section)}$/)
   end
 
   status = source[/^- \*\*Status:\*\*\s*(.+)$/, 1]
-  expected_state = if number == "0008" && adr_0008_acceptance_metadata
+  expected_state = if (number == "0008" && adr_0008_acceptance_metadata) ||
+                      (number == "0009" && adr_0009_acceptance_metadata)
                      "ACCEPTED"
                    else
                      expected.fetch(:state)
@@ -3380,7 +3796,38 @@ paths.each do |path|
   if number == "0009"
     failures.concat(adr_0009_decision_body_failures(source))
     failures.concat(adr_0009_semantic_contract_failures(source))
+    current_adr_0009_source = source
     adr_0009_gate = adr_gates["ADR-CAND-008"]
+    if adr_0009_acceptance_metadata
+      decision_revision = adr_0009_acceptance_metadata.fetch(:immutable_revision)
+      proposed_source, proposed_source_error = adr_0008_git_file_at(
+        decision_revision,
+        ADR_0009_DECISION_RECORD_PATH
+      )
+      proposed_catalog, proposed_catalog_error = adr_0008_git_file_at(
+        decision_revision,
+        ADR_0009_ISSUE_CATALOG_PATH
+      )
+      failures << proposed_source_error if proposed_source_error
+      failures << proposed_catalog_error if proposed_catalog_error
+      if proposed_catalog
+        proposed_gate, proposed_gate_failures = adr_0009_catalog_gate_from_source(
+          proposed_catalog,
+          filename: "#{ADR_0009_ISSUE_CATALOG_PATH}@#{decision_revision}"
+        )
+        failures.concat(proposed_gate_failures)
+        adr_0009_gate = proposed_gate
+      end
+      source = proposed_source if proposed_source
+      adr_0009_proposed_fixture_source = proposed_source
+      adr_0009_proposed_fixture_catalog_source = proposed_catalog
+      adr_0009_proposed_fixture_gate = adr_0009_gate
+    else
+      adr_0009_proposed_fixture_source = source
+      adr_0009_proposed_fixture_catalog_source = issue_catalog_source
+      adr_0009_proposed_fixture_gate = adr_0009_gate
+    end
+
     failures.concat(
       adr_0009_governance_gate_failures(
         source: source,
@@ -3388,510 +3835,45 @@ paths.each do |path|
         gate_count: adr_0009_gate_records.length
       )
     )
-    qa_line = source.lines.find { |line| line.start_with?("| Independent QA and C-QA traceability owner (distinct WS-13 identity) |") }
-    security_line = source.lines.find { |line| line.start_with?("| Independent security (distinct WS-13 identity) |") }
-    if qa_line && security_line
-      combined_line = "| Independent QA/security (WS-13) | pending distinct reviewer | pending | pending |\n"
-      review_mutations = {
-        "missing independent QA row" => { source: source.sub(qa_line, ""), predicate: :review_rows },
-        "missing independent security row" => { source: source.sub(security_line, ""), predicate: :review_rows },
-        "combined QA/security row" => {
-          source: source.sub(qa_line, combined_line).sub(security_line, ""),
-          predicate: :review_duplicates_conflicts
-        },
-        "duplicate independent QA row" => {
-          source: source.sub(qa_line, qa_line * 2),
-          predicate: :review_duplicates_conflicts
-        }
-      }
-      actual_review_inventory = review_mutations.transform_values { |mutation| mutation.fetch(:predicate) }
-      unless actual_review_inventory == ADR_0009_EXPECTED_REVIEW_MUTATIONS
-        failures << "ADR-0009 review-separation mutation inventory/mapping differs from the pinned inventory"
-      end
-      unless review_mutations.values.map { |mutation| mutation.fetch(:source) }.uniq.length == review_mutations.length
-        failures << "ADR-0009 review-separation mutations must have unique source payloads"
-      end
-      review_mutations.each do |label, mutation|
-        adr_0009_review_mutation_count += 1
-        mutated_source = mutation.fetch(:source)
-        expected_predicate = mutation.fetch(:predicate)
-        mutation_failures = adr_0009_document_governance_predicate_failures(mutated_source)
-        if mutated_source == source || !mutation_failures.include?(expected_predicate)
-          adr_0009_review_mutation_survivors <<
-            "#{label} (expected #{expected_predicate}; got #{mutation_failures.to_a.sort.join(', ')})"
-        end
-      end
-    end
 
-    # Each mutant names and must trigger its own source-level predicate. The
-    # whole-Decision digest is intentionally absent from this mutation oracle.
-    semantic_mutation_specs = [
-      ["scope ID uniqueness removed", :scope_id, "unique, nontransferable `scope_id`", "reusable `scope_id`"],
-      ["logical-operation ID binding removed", :logical_operation_id, "`scope_id` and `logical_operation_id` and binding", "`scope_id` and binding"],
-      ["scope transfer and reuse admitted", :scope_nontransferable, "The scope cannot be renewed, transferred, output-widened, or reused across a logical operation, `ReconciliationGeneration`, provider installation, `ProviderResourceKey`, resource, security domain, or compatibility profile.", "The scope may be transferred and reused across operations, generations, installations, resources, domains, and profiles."],
-      ["scope renewal admitted", :scope_nontransferable, "cannot be renewed, transferred", "may be renewed but cannot be transferred"],
-      ["scope output widening admitted", :scope_nontransferable, "transferred, output-widened, or reused", "transferred or reused"],
-      ["logical-operation reuse admitted", :scope_nontransferable, "reused across a logical operation, `ReconciliationGeneration`", "reused across `ReconciliationGeneration`"],
-      ["cross-generation reuse admitted", :scope_nontransferable, "`ReconciliationGeneration`, provider installation", "provider installation"],
-      ["cross-installation reuse admitted", :scope_nontransferable, "provider installation, `ProviderResourceKey`", "`ProviderResourceKey`"],
-      ["acting principal binding removed", :acting_principal, "binding the acting service principal, exact initiating principal", "binding the exact initiating principal"],
-      ["initiating principal binding removed", :initiating_principal, "exact initiating principal (including an explicit system initiator for scheduled work)", "an optional initiating-principal hint"],
-      ["organization binding removed", :organization, "Organization, security domain", "security domain"],
-      ["security-domain binding removed", :security_domain, "security domain, exact canonical container", "exact canonical container"],
-      ["canonical container/resource binding removed", :canonical_container_resource, "exact canonical container and closed resource set", "unscoped resource set"],
-      ["provider installation binding removed", :provider_installation, "exact provider installation UUID", "provider type"],
-      ["provider path binding removed", :provider_path, "provider installation UUID and API path", "provider installation UUID"],
-      ["provider resource-key binding removed", :provider_resource_key, "API path plus `ProviderResourceKey`", "API path"],
-      ["reconciliation-generation binding removed", :reconciliation_generation, "`ProviderResourceKey`, `ReconciliationGeneration`", "`ProviderResourceKey`"],
-      ["operation-class binding removed", :operation_class, "`ReconciliationGeneration`, one allowed operation class", "`ReconciliationGeneration`"],
-      ["closed call-plan binding removed", :closed_call_plan, "one allowed operation class and closed call plan", "one allowed operation class and dynamic call plan"],
-      ["activation/vector definition binding removed", :activation_vector_definition, "the complete immutable ADR-0005 activation snapshot and consistency vector, durable monotonic dispatch/page ordinals", "an incomplete activation snapshot, durable monotonic dispatch/page ordinals"],
-      ["activation/vector earliest-expiry binding removed", :activation_vector_expiry, "earliest bound temporal input in the complete ADR-0005 activation snapshot and consistency vector or the original logical-operation deadline", "worker-selected expiry input"],
-      ["activation/vector revalidation summary removed", :activation_vector_revalidation_summary, "operation class/call plan, complete activation snapshot and consistency vector, compatibility profile, ordinals/counters, deadline, and earliest-bound expiry", "operation class/call plan and compatibility profile"],
-      ["activation/vector persistence binding removed", :activation_vector_persistence, "persist its immutable identity, complete ADR-0005 activation snapshot and consistency vector, fixed deadline/expiry, cumulative accounting", "persist its immutable identity and fixed deadline/expiry"],
-      ["activation/vector pre-call binding removed", :activation_vector_pre_call, "Revalidate every component of the complete activation snapshot and consistency vector, including the latest provider-enforcement and resource fences", "Revalidate only the scope identity"],
-      ["activation/vector pre-commit binding removed", :activation_vector_pre_commit, "compare the complete activation snapshot, consistency vector, exact installation/path/resource key", "compare the exact installation/path/resource key"],
-      ["attempt accounting dimension removed", :accounting_attempt, "reserved and actual attempt/call/page/item/byte counts", "reserved and actual call/page/item/byte counts"],
-      ["call accounting dimension removed", :accounting_call, "cumulative call/page/item/response-byte accounting", "cumulative page/item/response-byte accounting"],
-      ["page accounting dimension removed", :accounting_page, "durable monotonic dispatch/page ordinals", "durable monotonic dispatch ordinals"],
-      ["item accounting dimension removed", :accounting_item, "page/item/response-byte accounting", "page/response-byte accounting"],
-      ["byte accounting dimension removed", :accounting_byte, "item/response-byte accounting", "item accounting"],
-      ["crash persistence guarantee removed", :accounting_crash_persistence, "Crash/resume never rolls back, resets, or narrows those cumulative counters to manufacture more budget.", "Crash/resume may reset counters and manufacture a fresh budget."],
-      ["compatibility-profile binding removed", :compatibility_profile, "the exact compatibility-profile ID/version/schema digest", "a provider-family profile"],
-      ["original-deadline binding removed", :original_deadline, "the original deadline, and immutable expiry", "an immutable expiry"],
-      ["earliest-bound expiry removed", :earliest_expiry, "Its expiry is fixed at creation to no later than the earliest bound temporal input", "Its expiry is selected by the worker after creation"],
-      ["provider-output widening admitted", :provider_output_no_widen, "Provider output may supply only a cursor admitted by those rules; it cannot add an endpoint, method, resource, operation class, retry, result field, or budget.", "Provider output may add endpoints, methods, resources, operation classes, retries, result fields, and budget."],
-      ["pre-call revalidation removed", :pre_call_revalidation, "Immediately before every provider call and immediately before every local outcome commit", "At scope creation and immediately before every local outcome commit"],
-      ["pre-commit revalidation removed", :pre_commit_revalidation, "Immediately before every provider call and immediately before every local outcome commit", "Immediately before every provider call and only after every local outcome commit"],
-      ["latest provider-enforcement fence removed", :latest_provider_fence, "including the latest provider-enforcement and resource fences, immediately before dispatch", "including the latest resource fences, immediately before dispatch"],
-      ["latest resource fence removed", :latest_resource_fence, "including the latest provider-enforcement and resource fences, immediately before dispatch", "including the latest provider-enforcement fence, immediately before dispatch"],
-      ["latest effect fence removed", :effect_latest_fences, "revalidate the complete scope/temporal state plus the latest fences", "reuse the fences captured at scope creation"],
-      ["later actor authorizes combined snapshot", :actor_isolation, "one actor can never authorize a combined snapshot", "the latest actor may authorize the combined snapshot"],
-      ["causal proof made optional", :causal_proof, "A complete contiguous proof chain must connect the last confirmed token to the freshly read token.", "A current readable snapshot makes the causal proof optional."],
-      ["administrator impersonation ignored", :impersonation_chain, "binds the effective actor and every administrator/Sudo impersonator", "binds only the displayed sender"],
-      ["administrator laundering admitted", :actor_laundering, "administrator-laundered", "administrator-approved"],
-      ["create adopted without operation identity", :operation_bound_create_identity, "Exactly one candidate carrying that verified operation-bound key may be adopted.", "Exactly one content-matching candidate may be adopted."],
-      ["before snapshot treated as no-effect proof", :before_state_not_terminal, "a current before, intended-after, absent, or recreated snapshot is never by itself terminal proof", "a current before snapshot proves no effect"],
-      ["apply-revert ABA admitted", :aba_not_terminal, "Without such proof, snapshot comparison guides containment only; the original permit remains `reconciling`", "Without such proof, an apply-revert snapshot may terminalize the permit"],
-      ["fresh effect-permit sequence removed", :effect_permit_sequence, "freshly authorize that exact effect, commit its own durable one-use `AuthorizationEffectPermit`", "invoke that effect under the read scope"],
-      ["read scope authorizes retained effect", :read_scope_not_effect_authority, "the read scope can neither authorize nor substitute for them", "the read scope may authorize them"],
-      ["provider mutation permit removed", :effect_permit_provider_mutation, "each provider mutation, credential issuance", "each credential issuance"],
-      ["credential permit removed", :effect_permit_credential, "provider mutation, credential issuance, direct Git/protocol access", "provider mutation, direct Git/protocol access"],
-      ["direct protocol permit removed", :effect_permit_direct_protocol, "credential issuance, direct Git/protocol access, export/download", "credential issuance, export/download"],
-      ["export/download permit removed", :effect_permit_export_download, "direct Git/protocol access, export/download, non-idempotent call", "direct Git/protocol access, non-idempotent call"],
-      ["non-idempotent permit removed", :effect_permit_non_idempotent, "export/download, non-idempotent call, ambiguous external effect", "export/download, ambiguous external effect"],
-      ["ambiguous-effect permit removed", :effect_permit_ambiguous, "non-idempotent call, ambiguous external effect, or operation", "non-idempotent call, or operation"],
-      ["outliving-operation permit removed", :effect_permit_outliving, "ambiguous external effect, or operation that can outlive the logical request/job", "ambiguous external effect"],
-      ["excluded-effect list widened", :effect_permit_exhaustive, "provider mutation, credential issuance", "provider mutation, plugin-defined external effect, credential issuance"],
-      ["final fresh effective-principal authorization removed", :effective_principal_fresh_decision, "run the required fresh decision for the effective initiating/provider principal and exact delta", "reuse the decision captured before provider I/O"],
-      ["final transaction fence removed", :final_transaction_fence, "then compare final activation, authorization, provider-enforcement, resource, and operation revisions inside the owning transaction", "then commit without another revision comparison"],
-      ["ambiguous-mutation verification weakened", :ambiguous_mutation_verification, ADR_0009_EXPECTED_CRITICAL_VERIFICATION_ROWS.fetch(:ambiguous_mutation_verification), "| `T-ADR-0009-AMBIGUOUS-MUTATION` | One happy-path ambiguous mutation test passes. |"],
-      ["full-reconciliation verification weakened", :full_reconciliation_verification, ADR_0009_EXPECTED_CRITICAL_VERIFICATION_ROWS.fetch(:full_reconciliation_verification), "| `T-ADR-0009-FULL-RECONCILIATION` | One happy-path full reconciliation test passes. |"]
-    ]
-    security_mutations = semantic_mutation_specs.to_h do |label, predicate, target, replacement|
-      [label, { source: source.sub(target, replacement), predicate: predicate }]
+    adr_mutations = {
+      decision_digest: [
+        source.sub(
+          ADR_0009_DECISION_FRAGMENT_PREDICATES.fetch(:zero_page_writes),
+          "The operation permits one durable write per eligible page"
+        ),
+        ->(mutated) { adr_0009_decision_body_failures(mutated).any? }
+      ],
+      owner_metadata: [
+        source.sub(ADR_0009_OWNER_APPROVAL_LINE, "- **Project-owner approval required:** no"),
+        ->(mutated) { adr_0009_document_governance_predicate_failures(mutated).include?(:metadata_owner_required) }
+      ],
+      supersession_metadata: [
+        source.sub(ADR_0009_SUPERSESSION_LINE, "- **Supersedes / superseded by:** supersedes all provider rules"),
+        ->(mutated) { adr_0009_document_governance_predicate_failures(mutated).include?(:metadata_supersession_narrow) }
+      ],
+      proposed_reviews: [
+        source.sub(ADR_0009_FOOTNOTE_MARKER, "Unreviewed amendment.\n\n#{ADR_0009_FOOTNOTE_MARKER}"),
+        ->(mutated) { adr_0009_document_governance_predicate_failures(mutated).include?(:proposed_reviews) }
+      ]
+    }
+    unless adr_mutations.keys == ADR_0009_EXPECTED_ADR_MUTATIONS
+      failures << "ADR-0009 bounded ADR mutation inventory differs from the pinned inventory"
     end
-    security_mutations["Decision hidden in HTML comment"] = {
-      source: source.sub("## Decision\n", "<!--\n## Decision\n").sub("## Consequences\n", "## Consequences\n-->\n"),
-      predicate: :visible_decision_structure
-    }
-    security_mutations["Decision hidden in fenced code"] = {
-      source: source.sub("## Decision\n", "```text\n## Decision\n").sub("## Consequences\n", "## Consequences\n```\n"),
-      predicate: :visible_decision_structure
-    }
-    security_mutations["Decision hidden in type-one raw HTML"] = {
-      source: source.sub("## Decision\n", "<pre\n>\n## Decision\n").sub("## Consequences\n", "## Consequences\n</pre>\n"),
-      predicate: :visible_decision_structure
-    }
-    security_mutations["Decision hidden in processing-instruction raw HTML"] = {
-      source: source.sub("## Decision\n", "<?stead\n## Decision\n").sub("## Consequences\n", "## Consequences\n?>\n"),
-      predicate: :visible_decision_structure
-    }
-    security_mutations["Decision hidden in declaration raw HTML"] = {
-      source: source.sub("## Decision\n", "<!STEAD\n## Decision\n").sub("## Consequences\n", "## Consequences\n>\n"),
-      predicate: :visible_decision_structure
-    }
-    security_mutations["Decision hidden in CDATA raw HTML"] = {
-      source: source.sub("## Decision\n", "<![CDATA[\n## Decision\n").sub("## Consequences\n", "## Consequences\n]]>\n"),
-      predicate: :visible_decision_structure
-    }
-    security_mutations["Decision heading hidden in type-six raw HTML"] = {
-      source: source.sub("## Decision\n", "<div>\n## Decision\n") + "</div>\n",
-      predicate: :visible_decision_structure
-    }
-    security_mutations["Decision heading hidden in type-seven raw HTML"] = {
-      source: source.sub("## Decision\n", "<stead-contract>\n## Decision\n") + "</stead-contract>\n",
-      predicate: :visible_decision_structure
-    }
-    security_mutations["Verification hidden in type-one raw HTML"] = {
-      source: source.sub("## Verification\n", "<pre\n>\n## Verification\n").sub(
-        "## Rollout and supersession\n",
-        "## Rollout and supersession\n</pre>\n"
-      ),
-      predicate: :verification_structure
-    }
-    security_mutations["Markdown byte bound exceeded"] = {
-      source: source + ("x" * (ADR_0009_MARKDOWN_MAX_BYTES - source.bytesize + 1)),
-      predicate: :markdown_resource_bounds
-    }
-    security_mutations["Markdown line-count bound exceeded"] = {
-      source: source + ("\n" * (ADR_0009_MARKDOWN_MAX_LINES + 1)),
-      predicate: :markdown_resource_bounds
-    }
-    security_mutations["Markdown line-length bound exceeded"] = {
-      source: source + ("x" * (ADR_0009_MARKDOWN_MAX_LINE_CHARACTERS + 1)) + "\n",
-      predicate: :markdown_resource_bounds
-    }
-    ADR_0009_SEMANTIC_FORBIDDEN_FRAGMENTS.each do |predicate, fragments|
-      label = {
-        scope_nontransferable: "contradictory scope reuse appended",
-        acting_principal: "contradictory acting-principal omission appended",
-        initiating_principal: "contradictory initiating-principal omission appended",
-        accounting_crash_persistence: "contradictory crash reset appended",
-        earliest_expiry: "contradictory expiry extension appended",
-        provider_output_no_widen: "contradictory provider widening appended",
-        actor_isolation: "contradictory combined-actor authorization appended",
-        causal_proof: "contradictory optional causal proof appended",
-        impersonation_chain: "contradictory impersonation bypass appended",
-        actor_laundering: "contradictory actor laundering appended",
-        operation_bound_create_identity: "contradictory content-only create identity appended",
-        before_state_not_terminal: "contradictory before-state terminalization appended",
-        aba_not_terminal: "contradictory ABA terminalization appended",
-        read_scope_not_effect_authority: "contradictory read-scope effect authority appended",
-        effective_principal_fresh_decision: "contradictory final fresh authorization bypass appended",
-        final_transaction_fence: "contradictory final-fence bypass appended"
-      }.fetch(predicate)
-      security_mutations[label] = {
-        source: source.sub("## Decision\n\n", "## Decision\n\n#{fragments.first}.\n\n"),
-        predicate: predicate
-      }
-    end
-    actual_semantic_inventory = security_mutations.transform_values { |mutation| mutation.fetch(:predicate) }
-    unless actual_semantic_inventory == ADR_0009_EXPECTED_SEMANTIC_MUTATIONS
-      failures << "ADR-0009 semantic-security mutation inventory/mapping differs from the pinned inventory"
-    end
-    unless security_mutations.values.map { |mutation| mutation.fetch(:source) }.uniq.length == security_mutations.length
-      failures << "ADR-0009 semantic-security mutations must have unique source payloads"
-    end
-    security_mutations.each do |label, mutation|
-      adr_0009_security_mutation_count += 1
-      mutated_source = mutation.fetch(:source)
-      expected_predicate = mutation.fetch(:predicate)
-      mutation_failures = adr_0009_semantic_predicate_failures(mutated_source)
-      if mutated_source == source || !mutation_failures.include?(expected_predicate)
-        adr_0009_security_mutation_survivors <<
-          "#{label} (expected #{expected_predicate}; got #{mutation_failures.to_a.sort.join(', ')})"
+    adr_mutations.each do |name, (mutated, oracle)|
+      adr_0009_adr_mutation_count += 1
+      unless mutated != source && oracle.call(mutated)
+        adr_0009_adr_mutation_survivors << name
       end
     end
-
-    if adr_0009_gate
-      weakened_owner_line = "- **Project-owner approval required:** no"
-      weakened_supersession_line = "- **Supersedes / superseded by:** on acceptance supersedes ADR-0005, CLS-007, and ADR-0007 in full"
-      weakened_approval_paragraph = "This proposal may be accepted by approval of the pull request or current branch head."
-      weakened_project_owner_row = "| Project owner | same author | approved | no immutable revision required |"
-      review_table = ([ADR_0009_REVIEW_TABLE_HEADER, ADR_0009_REVIEW_TABLE_SEPARATOR] +
-                      ADR_0009_EXPECTED_REVIEW_ROWS).join("\n")
-      weakened_review_table = [
-        ADR_0009_REVIEW_TABLE_HEADER,
-        ADR_0009_REVIEW_TABLE_SEPARATOR,
-        weakened_project_owner_row
-      ].join("\n")
-      hidden_governance_controls = [
-        ADR_0009_OWNER_APPROVAL_LINE,
-        ADR_0009_SUPERSESSION_LINE,
-        ADR_0009_APPROVAL_PARAGRAPH,
-        ADR_0009_PROJECT_OWNER_REVIEW_LINE
-      ].join("\n")
-      weakened_composite = source
-        .sub(ADR_0009_OWNER_APPROVAL_LINE, weakened_owner_line)
-        .sub(ADR_0009_SUPERSESSION_LINE, weakened_supersession_line)
-        .sub(ADR_0009_APPROVAL_PARAGRAPH, weakened_approval_paragraph)
-        .sub(ADR_0009_PROJECT_OWNER_REVIEW_LINE, weakened_project_owner_row)
-      comment_hidden_composite = weakened_composite.sub(
-        "\n\n- **Status:**",
-        "\n\n<!--\n#{hidden_governance_controls}\n-->\n- **Status:**"
-      )
-      fence_hidden_composite = weakened_composite.sub(
-        "\n\n- **Status:**",
-        "\n\n~~~text\n#{hidden_governance_controls}\n~~~\n- **Status:**"
-      )
-      governance_mutations = {
-        "supersession removed" => {
-          source: source.sub(
-            ADR_0009_SUPERSESSION_LINE,
-            "- **Supersedes / superseded by:** supersedes no accepted decision"
-          ),
-          gate: adr_0009_gate,
-          gate_count: 1,
-          predicate: :metadata_supersession_narrow
-        },
-        "supersession broadened beyond read-plan granularity" => {
-          source: source.sub(ADR_0009_SUPERSESSION_LINE, weakened_supersession_line),
-          gate: adr_0009_gate,
-          gate_count: 1,
-          predicate: :metadata_supersession_narrow
-        },
-        "project-owner metadata weakened" => {
-          source: source.sub(ADR_0009_OWNER_APPROVAL_LINE, weakened_owner_line),
-          gate: adr_0009_gate,
-          gate_count: 1,
-          predicate: :metadata_owner_required
-        },
-        "project-owner review row weakened" => {
-          source: source.sub(ADR_0009_PROJECT_OWNER_REVIEW_LINE, weakened_project_owner_row),
-          gate: adr_0009_gate,
-          gate_count: 1,
-          predicate: :project_owner_row
-        },
-        "immutable-SHA approval weakened" => {
-          source: source.sub(ADR_0009_APPROVAL_PARAGRAPH, weakened_approval_paragraph),
-          gate: adr_0009_gate,
-          gate_count: 1,
-          predicate: :exact_sha_approval_placement
-        },
-        "catalog project-owner gate weakened" => {
-          source: source,
-          gate: adr_0009_gate.merge("project_owner_approval_required" => false),
-          gate_count: 1,
-          predicate: :catalog_owner_gate
-        },
-        "catalog state changed to accepted" => {
-          source: source,
-          gate: adr_0009_gate.merge("state" => "ACCEPTED"),
-          gate_count: 1,
-          predicate: :catalog_proposed
-        },
-        "catalog acceptance record fabricated" => {
-          source: source,
-          gate: adr_0009_gate.merge("immutable_revision" => "deadbeef"),
-          gate_count: 1,
-          predicate: :catalog_no_acceptance
-        },
-        "catalog decision record redirected" => {
-          source: source,
-          gate: adr_0009_gate.merge("decision_record" => "docs/adr/accepted-elsewhere.md"),
-          gate_count: 1,
-          predicate: :catalog_decision_record
-        },
-        "catalog ADR-CAND-008 gate duplicated" => {
-          source: source,
-          gate: adr_0009_gate,
-          gate_count: 2,
-          predicate: :catalog_gate_unique
-        },
-        "comment-hidden composite with visible contradictions" => {
-          source: comment_hidden_composite,
-          gate: adr_0009_gate,
-          gate_count: 1,
-          predicate: :hidden_governance_substitution
-        },
-        "fence-hidden composite with visible contradictions" => {
-          source: fence_hidden_composite,
-          gate: adr_0009_gate,
-          gate_count: 1,
-          predicate: :hidden_governance_substitution
-        },
-        "comment-hidden owner line with visible contradiction" => {
-          source: source.sub(ADR_0009_OWNER_APPROVAL_LINE, "<!--\n#{ADR_0009_OWNER_APPROVAL_LINE}\n-->\n#{weakened_owner_line}"),
-          gate: adr_0009_gate,
-          gate_count: 1,
-          predicate: :hidden_governance_substitution
-        },
-        "fence-hidden owner line with visible contradiction" => {
-          source: source.sub(ADR_0009_OWNER_APPROVAL_LINE, "~~~text\n#{ADR_0009_OWNER_APPROVAL_LINE}\n~~~\n#{weakened_owner_line}"),
-          gate: adr_0009_gate,
-          gate_count: 1,
-          predicate: :hidden_governance_substitution
-        },
-        "comment-hidden supersession with visible contradiction" => {
-          source: source.sub(ADR_0009_SUPERSESSION_LINE, "<!--\n#{ADR_0009_SUPERSESSION_LINE}\n-->\n#{weakened_supersession_line}"),
-          gate: adr_0009_gate,
-          gate_count: 1,
-          predicate: :hidden_governance_substitution
-        },
-        "fence-hidden supersession with visible contradiction" => {
-          source: source.sub(ADR_0009_SUPERSESSION_LINE, "~~~text\n#{ADR_0009_SUPERSESSION_LINE}\n~~~\n#{weakened_supersession_line}"),
-          gate: adr_0009_gate,
-          gate_count: 1,
-          predicate: :hidden_governance_substitution
-        },
-        "comment-hidden immutable-SHA paragraph with visible contradiction" => {
-          source: source.sub(ADR_0009_APPROVAL_PARAGRAPH, "<!--\n#{ADR_0009_APPROVAL_PARAGRAPH}\n-->\n#{weakened_approval_paragraph}"),
-          gate: adr_0009_gate,
-          gate_count: 1,
-          predicate: :hidden_governance_substitution
-        },
-        "fence-hidden immutable-SHA paragraph with visible contradiction" => {
-          source: source.sub(ADR_0009_APPROVAL_PARAGRAPH, "~~~text\n#{ADR_0009_APPROVAL_PARAGRAPH}\n~~~\n#{weakened_approval_paragraph}"),
-          gate: adr_0009_gate,
-          gate_count: 1,
-          predicate: :hidden_governance_substitution
-        },
-        "comment-hidden project-owner row with visible contradiction" => {
-          source: source.sub(ADR_0009_PROJECT_OWNER_REVIEW_LINE, "<!--\n#{ADR_0009_PROJECT_OWNER_REVIEW_LINE}\n-->\n#{weakened_project_owner_row}"),
-          gate: adr_0009_gate,
-          gate_count: 1,
-          predicate: :hidden_governance_substitution
-        },
-        "fence-hidden project-owner row with visible contradiction" => {
-          source: source.sub(ADR_0009_PROJECT_OWNER_REVIEW_LINE, "~~~text\n#{ADR_0009_PROJECT_OWNER_REVIEW_LINE}\n~~~\n#{weakened_project_owner_row}"),
-          gate: adr_0009_gate,
-          gate_count: 1,
-          predicate: :hidden_governance_substitution
-        },
-        "duplicate conflicting owner metadata" => {
-          source: source.sub(ADR_0009_OWNER_APPROVAL_LINE, "#{ADR_0009_OWNER_APPROVAL_LINE}\n#{weakened_owner_line}"),
-          gate: adr_0009_gate,
-          gate_count: 1,
-          predicate: :metadata_duplicates_conflicts
-        },
-        "duplicate conflicting supersession metadata" => {
-          source: source.sub(ADR_0009_SUPERSESSION_LINE, "#{ADR_0009_SUPERSESSION_LINE}\n#{weakened_supersession_line}"),
-          gate: adr_0009_gate,
-          gate_count: 1,
-          predicate: :metadata_duplicates_conflicts
-        },
-        "misplaced owner metadata" => {
-          source: source.sub("#{ADR_0009_OWNER_APPROVAL_LINE}\n", "").sub("## Context and decision scope", "## Context and decision scope\n\n#{ADR_0009_OWNER_APPROVAL_LINE}"),
-          gate: adr_0009_gate,
-          gate_count: 1,
-          predicate: :metadata_duplicates_conflicts
-        },
-        "misplaced supersession metadata" => {
-          source: source.sub("#{ADR_0009_SUPERSESSION_LINE}\n", "").sub("## Context and decision scope", "## Context and decision scope\n\n#{ADR_0009_SUPERSESSION_LINE}"),
-          gate: adr_0009_gate,
-          gate_count: 1,
-          predicate: :metadata_duplicates_conflicts
-        },
-        "misplaced immutable-SHA sentence" => {
-          source: source.sub(ADR_0009_APPROVAL_PARAGRAPH, weakened_approval_paragraph).sub("## Reviews and approvals", "#{ADR_0009_EXACT_SHA_APPROVAL_SENTENCE}\n\n## Reviews and approvals"),
-          gate: adr_0009_gate,
-          gate_count: 1,
-          predicate: :exact_sha_approval_placement
-        },
-        "misplaced project-owner review row" => {
-          source: source.sub("#{ADR_0009_PROJECT_OWNER_REVIEW_LINE}\n", "").sub("## Reviews and approvals", "#{ADR_0009_PROJECT_OWNER_REVIEW_LINE}\n\n## Reviews and approvals"),
-          gate: adr_0009_gate,
-          gate_count: 1,
-          predicate: :project_owner_row
-        },
-        "duplicate conflicting project-owner review row" => {
-          source: source.sub(ADR_0009_PROJECT_OWNER_REVIEW_LINE, "#{ADR_0009_PROJECT_OWNER_REVIEW_LINE}\n#{weakened_project_owner_row}"),
-          gate: adr_0009_gate,
-          gate_count: 1,
-          predicate: :review_duplicates_conflicts
-        },
-        "Reviews table hidden in HTML comment" => {
-          source: source.sub(review_table, "<!--\n#{review_table}\n-->\n#{weakened_review_table}"),
-          gate: adr_0009_gate,
-          gate_count: 1,
-          predicate: :review_layout
-        },
-        "Reviews table hidden in fenced code" => {
-          source: source.sub(review_table, "~~~text\n#{review_table}\n~~~\n#{weakened_review_table}"),
-          gate: adr_0009_gate,
-          gate_count: 1,
-          predicate: :review_layout
-        },
-        "Reviews section hidden in type-one raw HTML" => {
-          source: source.sub("## Reviews and approvals\n", "<pre\n>\n## Reviews and approvals\n") + "</pre>\n",
-          gate: adr_0009_gate,
-          gate_count: 1,
-          predicate: :review_layout
-        },
-        "Reviews heading hidden in type-six raw HTML" => {
-          source: source.sub("## Reviews and approvals\n", "<div>\n## Reviews and approvals\n") + "</div>\n",
-          gate: adr_0009_gate,
-          gate_count: 1,
-          predicate: :review_layout
-        },
-        "Reviews heading hidden in type-seven raw HTML" => {
-          source: source.sub("## Reviews and approvals\n", "<stead-contract>\n## Reviews and approvals\n") + "</stead-contract>\n",
-          gate: adr_0009_gate,
-          gate_count: 1,
-          predicate: :review_layout
-        },
-        "Project-owner review row hidden in type-one raw HTML" => {
-          source: source.sub(
-            "#{ADR_0009_PROJECT_OWNER_REVIEW_LINE}\n",
-            "<pre\n>\n#{ADR_0009_PROJECT_OWNER_REVIEW_LINE}\n</pre>\n"
-          ),
-          gate: adr_0009_gate,
-          gate_count: 1,
-          predicate: :project_owner_row
-        }
-      }
-      actual_governance_inventory = governance_mutations.transform_values { |mutation| mutation.fetch(:predicate) }
-      unless actual_governance_inventory == ADR_0009_EXPECTED_GOVERNANCE_MUTATIONS
-        failures << "ADR-0009 governance mutation inventory/mapping differs from the pinned inventory"
-      end
-      governance_payloads = governance_mutations.values.map do |mutation|
-        [mutation.fetch(:source), mutation.fetch(:gate), mutation.fetch(:gate_count)]
-      end
-      unless governance_payloads.uniq.length == governance_mutations.length
-        failures << "ADR-0009 governance mutations must have unique source/catalog payloads"
-      end
-      governance_mutations.each do |label, mutation|
-        adr_0009_governance_mutation_count += 1
-        unchanged = mutation.fetch(:source) == source &&
-                    mutation.fetch(:gate) == adr_0009_gate &&
-                    mutation.fetch(:gate_count) == 1
-        expected_predicate = mutation.fetch(:predicate)
-        mutation_failures = adr_0009_governance_predicate_failures(
-          source: mutation.fetch(:source),
-          gate: mutation.fetch(:gate),
-          gate_count: mutation.fetch(:gate_count)
-        )
-        if unchanged || !mutation_failures.include?(expected_predicate)
-          adr_0009_governance_mutation_survivors <<
-            "#{label} (expected #{expected_predicate}; got #{mutation_failures.to_a.sort.join(', ')})"
-        end
-      end
-
-      markdown_controls = {
-        "closed type-one raw HTML after protected sections" =>
-          source + "\n<pre\n>\nBenign operator example.\n</pre>\n",
-        "closed type-six raw HTML after protected sections" =>
-          source + "\n<aside>\nBenign operator example.\n</aside>\n\n",
-        "closed type-seven raw HTML after protected sections" =>
-          source + "\n<stead-note>\nBenign operator example.\n</stead-note>\n\n",
-        "inline-code comment opener outside protected sections" =>
-          source + "\nBenign literal `<!--` remains inline code.\n",
-        "fenced HTML-like example outside protected sections" =>
-          source + "\n```text\n<!-- benign example without a closer\n## Example heading\n```\n",
-        "closed HTML comment outside protected sections" =>
-          source + "\n<!-- benign operator note -->\n"
-      }
-      unless markdown_controls.keys == ADR_0009_EXPECTED_MARKDOWN_CONTROLS
-        failures << "ADR-0009 benign Markdown control inventory differs from the pinned inventory"
-      end
-      unless markdown_controls.values.uniq.length == markdown_controls.length &&
-             markdown_controls.values.none? { |control_source| control_source == source }
-        failures << "ADR-0009 benign Markdown controls must be unique source-changing cases"
-      end
-      markdown_controls.each do |label, control_source|
-        adr_0009_markdown_control_count += 1
-        control_failures = adr_0009_decision_body_failures(control_source)
-        control_failures.concat(adr_0009_semantic_contract_failures(control_source))
-        control_failures.concat(
-          adr_0009_governance_gate_failures(
-            source: control_source,
-            gate: adr_0009_gate,
-            gate_count: 1
-          )
-        )
-        unless control_failures.empty?
-          adr_0009_markdown_control_failures << "#{label} (#{control_failures.join('; ')})"
-        end
-      end
-    end
+    source = current_adr_0009_source
   end
 
-  if expected.fetch(:state) == "ACCEPTED"
+  if expected_state == "ACCEPTED"
     failures << "docs/adr/INDEX.md: missing #{basename}" unless adr_index.include?("./#{basename}")
     failures << "docs/governance/adr-candidate-index.md: missing #{basename}" unless candidate_index.include?("../adr/#{basename}")
     failures << "docs/adr/unresolved-implementation-choices.md: missing #{basename}" unless choice_queue.include?("./#{basename}")
-  elsif expected.fetch(:state) == "PROPOSED"
+  elsif expected_state == "PROPOSED"
     failures << "docs/adr/INDEX.md: missing proposed #{basename}" unless adr_index.include?("./#{basename}")
     failures << "docs/governance/adr-candidate-index.md: missing proposed #{basename}" unless candidate_index.include?("../adr/#{basename}")
     failures << "docs/adr/unresolved-implementation-choices.md: missing proposed #{basename}" unless choice_queue.include?("./#{basename}")
@@ -3910,7 +3892,11 @@ paths.each do |path|
   failures << "implementation issue catalog: #{candidate} decision_record must be #{relative}" unless gate["decision_record"] == relative
   failures << "implementation issue catalog: #{candidate} project-owner flag mismatch" unless gate["project_owner_approval_required"] == expected.fetch(:owner_approval)
 
-  acceptance = number == "0008" ? adr_0008_acceptance_metadata : ACCEPTED_RECORD_METADATA[number]
+  acceptance = case number
+               when "0008" then adr_0008_acceptance_metadata
+               when "0009" then adr_0009_acceptance_metadata
+               else ACCEPTED_RECORD_METADATA[number]
+               end
   unless acceptance
     premature_fields = %w[immutable_revision accepted_at approval_record approval_records].select { |field| gate.key?(field) }
     failures << "implementation issue catalog: proposed #{candidate} carries premature acceptance fields #{premature_fields.join(', ')}" unless premature_fields.empty?
@@ -3964,6 +3950,283 @@ if adr_0008_acceptance_metadata && adr_0008_source
     failures << "#{ADR_0008_APPROVAL_RECORD_PATH}: accepted ADR-0008 approval record is missing"
   end
   failures.concat(adr_0008_live_acceptance_history_failures(adr_0008_acceptance_metadata))
+end
+
+if adr_0009_acceptance_metadata && adr_0009_source && adr_0009_proposed_fixture_source
+  approval_record_path = ROOT.join(ADR_0009_APPROVAL_RECORD_PATH)
+  if approval_record_path.file? && !approval_record_path.symlink?
+    approval_record = approval_record_path.read(encoding: "UTF-8")
+    failures.concat(
+      adr_0009_acceptance_surface_failures(
+        current_adr_source: adr_0009_source,
+        proposed_adr_source: adr_0009_proposed_fixture_source,
+        gate: adr_gates["ADR-CAND-008"],
+        approval_record: approval_record,
+        metadata: adr_0009_acceptance_metadata
+      )
+    )
+  else
+    failures << "#{ADR_0009_APPROVAL_RECORD_PATH}: accepted ADR-0009 approval record is missing"
+  end
+  failures.concat(adr_0009_live_acceptance_history_failures(adr_0009_acceptance_metadata))
+end
+
+# Exercise ADR-0009's future mechanical acceptance seam while the live record
+# remains Proposed. These fixtures never mutate repository state.
+adr_0009_acceptance_mutation_survivors = []
+adr_0009_acceptance_mutation_names = []
+if adr_0009_proposed_fixture_source && adr_0009_proposed_fixture_catalog_source && adr_0009_proposed_fixture_gate
+  future_metadata = {
+    immutable_revision: "0123456789abcdef0123456789abcdef01234567",
+    accepted_at: "2026-09-04",
+    approval_record_path: ADR_0009_APPROVAL_RECORD_PATH,
+    approval_records: [
+      { "role" => "WS-03-provider-reconciliation", "identity" => "/root/adr0009_fixture_contract_review", "disposition" => "APPROVED" },
+      { "role" => "WS-01-architecture", "identity" => "/root/adr0009_fixture_arch_review", "disposition" => "APPROVED" },
+      { "role" => "WS-02-canonical-transaction", "identity" => "/root/adr0009_fixture_transaction_review", "disposition" => "APPROVED" },
+      { "role" => "WS-06-authorization-classification", "identity" => "/root/adr0009_fixture_authorization_review", "disposition" => "APPROVED" },
+      { "role" => "WS-07-event-audit", "identity" => "/root/adr0009_fixture_audit_review", "disposition" => "APPROVED" },
+      { "role" => "WS-12-deployment-operations", "identity" => "/root/adr0009_fixture_operations_review", "disposition" => "APPROVED" },
+      { "role" => "WS-13-independent-qa", "identity" => "/root/adr0009_fixture_qa_review", "disposition" => "APPROVED" },
+      { "role" => "WS-13-independent-security", "identity" => "/root/adr0009_fixture_security_review", "disposition" => "APPROVED" },
+      { "role" => "project-owner", "identity" => "explicit 2026-09-03 project-owner approval", "disposition" => "APPROVED" }
+    ].map(&:freeze).freeze
+  }.freeze
+  accepted_gate = adr_0009_proposed_fixture_gate.merge(
+    "state" => "ACCEPTED",
+    "immutable_revision" => future_metadata.fetch(:immutable_revision),
+    "accepted_at" => future_metadata.fetch(:accepted_at),
+    "approval_record" => future_metadata.fetch(:approval_record_path),
+    "approval_records" => future_metadata.fetch(:approval_records)
+  )
+  accepted_adr = adr_0009_accepted_adr_fixture(adr_0009_proposed_fixture_source, future_metadata)
+  approval_record = adr_0009_approval_record_fixture(future_metadata)
+  positive_metadata, positive_metadata_failures = adr_0009_acceptance_metadata_from_gate(accepted_gate)
+  failures << "ADR-0009 future accepted metadata fixture failed: #{positive_metadata_failures.join('; ')}" unless positive_metadata == future_metadata && positive_metadata_failures.empty?
+  positive_surface_failures = adr_0009_acceptance_surface_failures(
+    current_adr_source: accepted_adr,
+    proposed_adr_source: adr_0009_proposed_fixture_source,
+    gate: accepted_gate,
+    approval_record: approval_record,
+    metadata: future_metadata
+  )
+  failures << "ADR-0009 future accepted surface fixture failed: #{positive_surface_failures.join('; ')}" unless positive_surface_failures.empty?
+  accepted_catalog_source, accepted_catalog_failures = adr_0009_accepted_catalog_source_fixture(
+    adr_0009_proposed_fixture_catalog_source,
+    future_metadata
+  )
+  failures.concat(accepted_catalog_failures)
+  if accepted_catalog_source
+    transition_failures = adr_0009_catalog_transition_failures(
+      parent_source: adr_0009_proposed_fixture_catalog_source,
+      child_source: accepted_catalog_source,
+      metadata: future_metadata
+    )
+    failures << "ADR-0009 future accepted catalog fixture failed: #{transition_failures.join('; ')}" unless transition_failures.empty?
+  end
+  [ADR_0009_ADR_INDEX_PATH, ADR_0009_CHOICE_QUEUE_PATH, ADR_0009_CANDIDATE_INDEX_PATH].each do |path|
+    expected_source, index_failures = adr_0009_expected_index_transition(
+      path: path,
+      parent_source: ROOT.join(path).read(encoding: "UTF-8"),
+      metadata: future_metadata
+    )
+    failures << "ADR-0009 future accepted #{path} fixture failed: #{index_failures.join('; ')}" unless expected_source && index_failures.empty?
+  end
+
+  decision_revision = "a" * 40
+  acceptance_revision = "b" * 40
+  side_revision = "c" * 40
+  merge_revision = "d" * 40
+  positive_graph = {
+    decision_revision => [],
+    acceptance_revision => [decision_revision],
+    side_revision => [decision_revision],
+    merge_revision => [acceptance_revision, side_revision]
+  }
+  positive_graph_failures = adr_0009_acceptance_graph_failures(
+    immutable_revision: decision_revision,
+    repository_available: true,
+    shallow: false,
+    head_revision: merge_revision,
+    commits: positive_graph,
+    acceptance_transitions: [acceptance_revision]
+  )
+  failures << "ADR-0009 future acceptance graph must allow later normal merges: #{positive_graph_failures.join('; ')}" unless positive_graph_failures.empty?
+
+  record_mutation = lambda do |name, killed|
+    adr_0009_acceptance_mutation_names << name
+    adr_0009_acceptance_mutation_survivors << name unless killed
+  end
+
+  missing_revision_gate = accepted_gate.reject { |key, _value| key == "immutable_revision" }
+  _metadata, mutation_failures = adr_0009_acceptance_metadata_from_gate(missing_revision_gate)
+  record_mutation.call("accepted gate missing immutable revision", mutation_failures.any? { |failure| failure.include?("omits acceptance fields") })
+
+  missing_owner_metadata = future_metadata.merge(
+    approval_records: future_metadata.fetch(:approval_records).reject { |record| record.fetch("role") == "project-owner" }
+  )
+  record_mutation.call(
+    "accepted gate missing project-owner approval",
+    adr_0009_acceptance_metadata_failures(missing_owner_metadata).any? { |failure| failure.include?("omit roles: project-owner") }
+  )
+
+  wrong_owner_records = future_metadata.fetch(:approval_records).map do |record|
+    record.fetch("role") == "project-owner" ? record.merge("disposition" => "NOT_REQUIRED") : record
+  end
+  record_mutation.call(
+    "accepted gate wrong project-owner disposition",
+    adr_0009_acceptance_metadata_failures(future_metadata.merge(approval_records: wrong_owner_records)).any? do |failure|
+      failure.include?("project-owner disposition must be APPROVED")
+    end
+  )
+
+  invalid_owner_records = future_metadata.fetch(:approval_records).map do |record|
+    record.fetch("role") == "project-owner" ? record.merge("identity" => "implicit owner approval") : record
+  end
+  record_mutation.call(
+    "accepted gate invalid project-owner identity",
+    adr_0009_acceptance_metadata_failures(future_metadata.merge(approval_records: invalid_owner_records)).any? do |failure|
+      failure.include?("must name one explicit bounded project-owner identity")
+    end
+  )
+
+  duplicate_owner_records = future_metadata.fetch(:approval_records) + [future_metadata.fetch(:approval_records).last]
+  record_mutation.call(
+    "accepted gate duplicate project-owner approval",
+    adr_0009_acceptance_metadata_failures(future_metadata.merge(approval_records: duplicate_owner_records)).any? do |failure|
+      failure.include?("duplicate roles: project-owner")
+    end
+  )
+
+  wrong_revision = "f" * 40
+  mixed_adr = accepted_adr.sub(
+    "| Contract owner (WS-03) | `/root/adr0009_fixture_contract_review` | `#{future_metadata.fetch(:immutable_revision)}` |",
+    "| Contract owner (WS-03) | `/root/adr0009_fixture_contract_review` | `#{wrong_revision}` |"
+  )
+  record_mutation.call(
+    "accepted gate mixed reviewer revision surface",
+    adr_0009_acceptance_surface_failures(
+      current_adr_source: mixed_adr,
+      proposed_adr_source: adr_0009_proposed_fixture_source,
+      gate: accepted_gate,
+      approval_record: approval_record,
+      metadata: future_metadata
+    ).any? { |failure| failure.include?("records-only transition") }
+  )
+
+  owner_row = ADR_0009_ACCEPTED_REVIEW_ROLES.last
+  owner_record = future_metadata.fetch(:approval_records).last
+  canonical_owner_line = "| #{owner_row.fetch(:label)} | `#{owner_record.fetch('identity')}` | `#{future_metadata.fetch(:immutable_revision)}` | #{owner_record.fetch('disposition')} | #{owner_row.fetch(:evidence)} |\n"
+  record_mutation.call(
+    "approval record missing project-owner row",
+    adr_0009_acceptance_surface_failures(
+      current_adr_source: accepted_adr,
+      proposed_adr_source: adr_0009_proposed_fixture_source,
+      gate: accepted_gate,
+      approval_record: approval_record.sub(canonical_owner_line, ""),
+      metadata: future_metadata
+    ).any? { |failure| failure.include?("approval record must exactly match") }
+  )
+  record_mutation.call(
+    "approval record wrong project-owner revision",
+    adr_0009_acceptance_surface_failures(
+      current_adr_source: accepted_adr,
+      proposed_adr_source: adr_0009_proposed_fixture_source,
+      gate: accepted_gate,
+      approval_record: approval_record.sub(canonical_owner_line, canonical_owner_line.sub(future_metadata.fetch(:immutable_revision), wrong_revision)),
+      metadata: future_metadata
+    ).any? { |failure| failure.include?("approval record must exactly match") }
+  )
+  record_mutation.call(
+    "approval record mixed non-owner revision",
+    adr_0009_acceptance_surface_failures(
+      current_adr_source: accepted_adr,
+      proposed_adr_source: adr_0009_proposed_fixture_source,
+      gate: accepted_gate,
+      approval_record: approval_record.sub(future_metadata.fetch(:immutable_revision), wrong_revision),
+      metadata: future_metadata
+    ).any? { |failure| failure.include?("approval record must exactly match") }
+  )
+
+  canonical_changes = ADR_0009_ACCEPTANCE_TRANSITION_CHANGES.dup
+  record_mutation.call(
+    "acceptance change adds implementation path",
+    adr_0009_acceptance_transition_change_failures(canonical_changes.merge("providers/gitea/client.go" => "A")).any? do |failure|
+      failure.include?("outside the closed approval/gate/review allowlist")
+    end
+  )
+  record_mutation.call(
+    "acceptance change omits required record path",
+    adr_0009_acceptance_transition_change_failures(canonical_changes.reject { |path, _status| path == ADR_0009_APPROVAL_RECORD_PATH }).any? do |failure|
+      failure.include?("omits required record paths")
+    end
+  )
+  record_mutation.call(
+    "acceptance change uses wrong path status",
+    adr_0009_acceptance_transition_change_failures(canonical_changes.merge(ADR_0009_APPROVAL_RECORD_PATH => "M")).any? do |failure|
+      failure.include?("noncanonical record changes")
+    end
+  )
+
+  graph_check = lambda do |commits, transitions, head = merge_revision|
+    adr_0009_acceptance_graph_failures(
+      immutable_revision: decision_revision,
+      repository_available: true,
+      shallow: false,
+      head_revision: head,
+      commits: commits,
+      acceptance_transitions: transitions
+    )
+  end
+  record_mutation.call(
+    "history omits acceptance transition",
+    graph_check.call(positive_graph, []).any? { |failure| failure.include?("exactly one reachable") }
+  )
+  intermediate_revision = "e" * 40
+  non_direct_graph = {
+    decision_revision => [],
+    intermediate_revision => [decision_revision],
+    acceptance_revision => [intermediate_revision]
+  }
+  record_mutation.call(
+    "history uses non-direct acceptance descendant",
+    graph_check.call(non_direct_graph, [acceptance_revision], acceptance_revision).any? { |failure| failure.include?("single-parent immediate child") }
+  )
+  merge_child_graph = {
+    decision_revision => [],
+    side_revision => [decision_revision],
+    acceptance_revision => [decision_revision, side_revision]
+  }
+  record_mutation.call(
+    "history uses merge acceptance child",
+    graph_check.call(merge_child_graph, [acceptance_revision], acceptance_revision).any? { |failure| failure.include?("single-parent immediate child") }
+  )
+  second_acceptance_revision = "e" * 40
+  multiple_graph = positive_graph.merge(
+    second_acceptance_revision => [decision_revision],
+    merge_revision => [acceptance_revision, second_acceptance_revision]
+  )
+  record_mutation.call(
+    "history contains multiple acceptance transitions",
+    graph_check.call(multiple_graph, [acceptance_revision, second_acceptance_revision]).any? { |failure| failure.include?("exactly one reachable") }
+  )
+  unreachable_graph = {
+    decision_revision => [],
+    acceptance_revision => [decision_revision],
+    side_revision => [],
+    merge_revision => [side_revision]
+  }
+  record_mutation.call(
+    "history decision revision is not reachable",
+    graph_check.call(unreachable_graph, [acceptance_revision]).any? { |failure| failure.include?("not an ancestor") }
+  )
+end
+
+unless adr_0009_acceptance_mutation_names == ADR_0009_EXPECTED_ACCEPTANCE_MUTATION_NAMES
+  failures << "ADR-0009 acceptance mutation inventory differs from the pinned inventory"
+end
+unless adr_0009_acceptance_mutation_survivors.empty?
+  failures << "ADR-0009 acceptance mutation survivors: #{adr_0009_acceptance_mutation_survivors.join(', ')}"
 end
 
 adr_0008_proposed_fixture_source = adr_0008_source
@@ -5165,8 +5428,8 @@ adr_0009_traceability_failures = adr_requirement_traceability_failures(
 failures.concat(adr_0009_traceability_failures)
 
 adr_0009_expected_edges = expected_adr_requirement_test_edges(EXPECTED_REQUIREMENT_TEST_LINKS.fetch("0009")).freeze
-unless adr_0009_expected_edges.length == 44
-  failures << "ADR-0009 closed requirement mapping must contain exactly 44 edges, found #{adr_0009_expected_edges.length}"
+unless adr_0009_expected_edges.length == 49
+  failures << "ADR-0009 closed requirement mapping must contain exactly 49 edges, found #{adr_0009_expected_edges.length}"
 end
 failures.concat(
   exact_adr_requirement_mapping_failures(
@@ -5198,38 +5461,17 @@ end
 unless adr_0009_mutation_survivors.empty?
   failures << "ADR-0009 exact-mapping mutation survivors: #{adr_0009_mutation_survivors.join(', ')}"
 end
-unless ADR_0009_EXPECTED_REVIEW_MUTATIONS.length == ADR_0009_EXPECTED_REVIEW_MUTATION_COUNT
-  failures << "ADR-0009 pinned review-separation mutation inventory constant must contain exactly #{ADR_0009_EXPECTED_REVIEW_MUTATION_COUNT} cases"
+unless adr_0009_adr_mutation_count == ADR_0009_EXPECTED_ADR_MUTATIONS.length
+  failures << "ADR-0009 bounded ADR mutation inventory must contain exactly #{ADR_0009_EXPECTED_ADR_MUTATIONS.length} cases"
 end
-unless adr_0009_review_mutation_count == ADR_0009_EXPECTED_REVIEW_MUTATION_COUNT
-  failures << "ADR-0009 review-separation mutation inventory must contain exactly #{ADR_0009_EXPECTED_REVIEW_MUTATION_COUNT} cases, found #{adr_0009_review_mutation_count}"
+unless adr_0009_adr_mutation_survivors.empty?
+  failures << "ADR-0009 bounded ADR mutation survivors: #{adr_0009_adr_mutation_survivors.join(', ')}"
 end
-unless adr_0009_review_mutation_survivors.empty?
-  failures << "ADR-0009 review-separation mutation survivors: #{adr_0009_review_mutation_survivors.join(', ')}"
+unless adr_0009_spec_mutation_count == ADR_0009_SPEC_EXPECTATIONS.length + ADR_0009_SPEC_SECTION_DIGESTS.length + 1
+  failures << "ADR-0009 structured-spec mutation inventory count changed"
 end
-unless ADR_0009_EXPECTED_SEMANTIC_MUTATIONS.length == ADR_0009_EXPECTED_SEMANTIC_MUTATION_COUNT
-  failures << "ADR-0009 pinned semantic-security mutation inventory constant must contain exactly #{ADR_0009_EXPECTED_SEMANTIC_MUTATION_COUNT} cases"
-end
-unless adr_0009_security_mutation_count == ADR_0009_EXPECTED_SEMANTIC_MUTATION_COUNT
-  failures << "ADR-0009 semantic-security mutation inventory must contain exactly #{ADR_0009_EXPECTED_SEMANTIC_MUTATION_COUNT} cases, found #{adr_0009_security_mutation_count}"
-end
-unless adr_0009_security_mutation_survivors.empty?
-  failures << "ADR-0009 semantic-security mutation survivors: #{adr_0009_security_mutation_survivors.join(', ')}"
-end
-unless ADR_0009_EXPECTED_GOVERNANCE_MUTATIONS.length == ADR_0009_EXPECTED_GOVERNANCE_MUTATION_COUNT
-  failures << "ADR-0009 pinned governance mutation inventory constant must contain exactly #{ADR_0009_EXPECTED_GOVERNANCE_MUTATION_COUNT} cases"
-end
-unless adr_0009_governance_mutation_count == ADR_0009_EXPECTED_GOVERNANCE_MUTATION_COUNT
-  failures << "ADR-0009 supersession/owner-gate mutation inventory must contain exactly #{ADR_0009_EXPECTED_GOVERNANCE_MUTATION_COUNT} cases, found #{adr_0009_governance_mutation_count}"
-end
-unless adr_0009_governance_mutation_survivors.empty?
-  failures << "ADR-0009 supersession/owner-gate mutation survivors: #{adr_0009_governance_mutation_survivors.join(', ')}"
-end
-unless adr_0009_markdown_control_count == ADR_0009_EXPECTED_MARKDOWN_CONTROL_COUNT
-  failures << "ADR-0009 benign Markdown control inventory must contain exactly #{ADR_0009_EXPECTED_MARKDOWN_CONTROL_COUNT} cases, found #{adr_0009_markdown_control_count}"
-end
-unless adr_0009_markdown_control_failures.empty?
-  failures << "ADR-0009 benign Markdown control failures: #{adr_0009_markdown_control_failures.join(', ')}"
+unless adr_0009_spec_mutation_survivors.empty?
+  failures << "ADR-0009 structured-spec mutation survivors: #{adr_0009_spec_mutation_survivors.join(', ')}"
 end
 
 security_issue = issues["STEAD-P1-006"]
@@ -5767,6 +6009,7 @@ adr_0009_gate = adr_gates["ADR-CAND-008"]
 adr_0009_expected_dependents = %w[
   STEAD-P1-002
   STEAD-P1-003
+  STEAD-P1-006
   STEAD-P1-011
   STEAD-P1-012
   STEAD-P2-001
@@ -5778,7 +6021,9 @@ end
 
 provider_issue = issues["STEAD-P1-003"]
 provider_requirements = Array(provider_issue&.fetch("requirement_ids", nil)).to_set
-missing_provider_requirements = requirements_by_number.fetch("0009", []).to_set - provider_requirements
+security_requirements = Array(issues["STEAD-P1-006"]&.fetch("requirement_ids", nil)).to_set
+missing_provider_requirements = requirements_by_number.fetch("0009", []).to_set -
+                                (provider_requirements | security_requirements)
 unless missing_provider_requirements.empty?
   failures << "STEAD-P1-003 requirement IDs omit ADR-0009 provider obligations: #{missing_provider_requirements.to_a.sort.join(', ')}"
 end
@@ -6096,6 +6341,10 @@ implementation_assignments = {
       T-ADR-0009-AMBIGUOUS-MUTATION
     ],
     "STEAD-P1-003" => tests_by_number.fetch("0009", []),
+    "STEAD-P1-006" => %w[
+      T-ADR-0009-AMBIGUOUS-MUTATION
+      T-ADR-0009-FULL-RECONCILIATION
+    ],
     "STEAD-P1-011" => %w[
       T-ADR-0009-WEBHOOK-IDEMPOTENCY
       T-ADR-0009-PERMISSION-DRIFT
@@ -6257,10 +6506,9 @@ if failures.empty?
   puts "ADR-0008 pinned-CBI-source guard: PASS (baseline=#{ADR_0008_CLASSIFICATION_BYPASS_SOURCE_BYTES} bytes, #{ADR_0008_CBI_SOURCE_MUTATION_NAMES.length}/#{ADR_0008_CBI_SOURCE_MUTATION_NAMES.length} adversarial mutations killed)"
   puts "ADR-0008 security-contract mutation guard: PASS (#{adr_0008_security_mutations.length}/#{adr_0008_security_mutations.length} mutations killed across #{adr_0008_security_mutation_groups.length} gap groups)"
   puts "ADR-0009 exact-mapping mutation guard: PASS (#{adr_0009_killed_mutations}/#{adr_0009_expected_edges.length} required edge deletions killed)"
-  puts "ADR-0009 review-separation mutation guard: PASS (#{adr_0009_review_mutation_count}/#{ADR_0009_EXPECTED_REVIEW_MUTATION_COUNT} mutations killed)"
-  puts "ADR-0009 semantic-security mutation guard: PASS (#{adr_0009_security_mutation_count}/#{ADR_0009_EXPECTED_SEMANTIC_MUTATION_COUNT} mutations killed)"
-  puts "ADR-0009 supersession/owner-gate mutation guard: PASS (#{adr_0009_governance_mutation_count}/#{ADR_0009_EXPECTED_GOVERNANCE_MUTATION_COUNT} mutations killed)"
-  puts "ADR-0009 benign Markdown controls: PASS (#{adr_0009_markdown_control_count}/#{ADR_0009_EXPECTED_MARKDOWN_CONTROL_COUNT})"
+  puts "ADR-0009 bounded ADR mutation guard: PASS (#{adr_0009_adr_mutation_count}/#{ADR_0009_EXPECTED_ADR_MUTATIONS.length} mutations killed)"
+  puts "ADR-0009 structured reconciliation mutation guard: PASS (#{adr_0009_spec_mutation_count}/#{adr_0009_spec_mutation_count} mutations killed)"
+  puts "ADR-0009 acceptance-state/history mutation guard: PASS (#{adr_0009_acceptance_mutation_names.length}/#{ADR_0009_EXPECTED_ACCEPTANCE_MUTATION_NAMES.length} mutations killed; later normal merge allowed)"
   puts "ADR traceability validation: PASS (records=#{paths.length}, requirements=#{known_requirement_ids.length}, tests=#{all_test_owners.length})"
 else
   warn "ADR traceability validation: FAIL (#{failures.length} issue#{failures.length == 1 ? '' : 's'})"

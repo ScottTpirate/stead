@@ -32,6 +32,15 @@ common_contract:
     capability_negotiation: versioned_startup_and_health_probe_fail_closed
     reconciliation: checkpointed_idempotent_drift_detection_and_repair
     webhooks: authenticated_replay_protected_deduplicated_then_reconciled
+reconciliation_contracts:
+  - id: P-SCM-RECONCILIATION-GITEA-V1
+    owner: WS-03
+    status: governed_by_adr_0009
+    source: specs/provider-reconciliation/gitea-v1.yaml
+    provider: gitea
+    authorization_scope_owner: WS-06
+    ordinary_ui_synchronous_provider_calls: 0
+    activation_gate: ADR-CAND-008_ACCEPTED_AT_EXACT_IMMUTABLE_SHA
 interfaces:
   - {id: RepositoryProvider, owner: WS-03, applicability: internal_work_or_docs_backing_and_optional_scm, user_facing_when: scm_active, consumers: [project, scm, work, knowledge], operations: [capabilities, provision, get, list, update, archive, reconcile], prohibited: [gitea_database, undocumented_api, canonical_provider_locator]}
   - {id: GitProvider, owner: WS-03, applicability: internal_docs_backing_and_optional_scm, user_facing_when: scm_active, consumers: [scm, knowledge], operations: [capabilities, fetch, push, compare, reconcile], prohibited: [unscoped_credentials, policy_bypass]}

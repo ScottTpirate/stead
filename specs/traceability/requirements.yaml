@@ -455,8 +455,8 @@ requirements:
     title: "Combined authorization architecture"
     implementation_modules: ["modules/identity", "modules/authorization", "policies/openfga", "policies/policy-decision", "providers/identity-oidc", "providers/identity-scim"]
     issue_ids: ["STEAD-P0-007", "STEAD-P1-006"]
-    test_ids: ["T-AUTH-002-ACCEPTANCE"]
-    documentation: ["docs/architecture/authorization-contract.md", "docs/operator/identity-and-trusted-attributes.md"]
+    test_ids: ["T-AUTH-002-ACCEPTANCE", "T-ADR-0009-AMBIGUOUS-MUTATION", "T-ADR-0009-FULL-RECONCILIATION"]
+    documentation: ["docs/architecture/authorization-contract.md", "docs/operator/identity-and-trusted-attributes.md", "docs/adr/0009-gitea-provider-reconciliation-precedence-and-conflict-handling.md"]
     status: DEPENDENCY_BLOCKED_PHASE_1
     release: "phase-1"
   - requirement_id: "AUTH-003"
@@ -487,8 +487,8 @@ requirements:
     title: "Agent, service, and group principals"
     implementation_modules: ["modules/identity", "modules/authorization", "modules/agent", "policies/openfga", "policies/policy-decision", "providers/agent-a2a"]
     issue_ids: ["STEAD-P0-007", "STEAD-P0-009", "STEAD-P0-015", "STEAD-P1-006", "STEAD-P2-006"]
-    test_ids: ["T-AUTH-006-ACCEPTANCE"]
-    documentation: ["docs/architecture/authorization-contract.md", "docs/architecture/agent-ready-compatibility.md"]
+    test_ids: ["T-AUTH-006-ACCEPTANCE", "T-ADR-0009-FULL-RECONCILIATION"]
+    documentation: ["docs/architecture/authorization-contract.md", "docs/architecture/agent-ready-compatibility.md", "docs/adr/0009-gitea-provider-reconciliation-precedence-and-conflict-handling.md"]
     status: DEPENDENCY_BLOCKED_PHASE_1
     release: "phase-1"
   - requirement_id: "CLS-001"
@@ -510,9 +510,9 @@ requirements:
   - requirement_id: "CLS-003"
     title: "Deployment security domain"
     implementation_modules: ["modules/classification", "modules/authorization", "policies/policy-decision", "policies/security-label-profiles", "policies/deployment-domains"]
-    issue_ids: ["STEAD-P0-007", "STEAD-P1-006", "STEAD-P2-004", "STEAD-P3-002"]
-    test_ids: ["T-CLS-003-ACCEPTANCE"]
-    documentation: ["docs/architecture/security-label-lattice.md", "docs/architecture/deployment-profiles.md", "docs/security/classification-bypass-inventory.md"]
+    issue_ids: ["STEAD-P0-007", "STEAD-P1-003", "STEAD-P1-006", "STEAD-P2-004", "STEAD-P3-002"]
+    test_ids: ["T-CLS-003-ACCEPTANCE", "T-ADR-0009-FULL-RECONCILIATION"]
+    documentation: ["docs/architecture/security-label-lattice.md", "docs/architecture/deployment-profiles.md", "docs/security/classification-bypass-inventory.md", "docs/adr/0009-gitea-provider-reconciliation-precedence-and-conflict-handling.md"]
     status: DEPENDENCY_BLOCKED_PHASE_1
     release: "phase-1"
   - requirement_id: "CLS-004"
@@ -887,8 +887,8 @@ requirements:
     title: "Set-oriented authorization and bounded synchronous work"
     implementation_modules: ["apps/core", "modules/authorization", "modules/audit", "policies/openfga", "policies/policy-decision", "tests/performance"]
     issue_ids: ["STEAD-P1-006", "STEAD-P1-007", "STEAD-P1-008", "STEAD-P1-012", "STEAD-P1-015"]
-    test_ids: ["T-PERF-004-ACCEPTANCE", "T-ADR-0007-CROSS-MODULE-READS", "T-ADR-0007-DURABLE-EFFECTS", "T-ADR-0007-OBSERVABILITY-PERFORMANCE", "T-ADR-0008-ASYNC-PERFORMANCE"]
-    documentation: ["docs/architecture/MASTER_BUILD_DIRECTIVE.md", "docs/architecture/authorization-contract.md", "docs/architecture/audit-model.md"]
+    test_ids: ["T-PERF-004-ACCEPTANCE", "T-ADR-0007-CROSS-MODULE-READS", "T-ADR-0007-DURABLE-EFFECTS", "T-ADR-0007-OBSERVABILITY-PERFORMANCE", "T-ADR-0008-ASYNC-PERFORMANCE", "T-ADR-0009-FULL-RECONCILIATION"]
+    documentation: ["docs/architecture/MASTER_BUILD_DIRECTIVE.md", "docs/architecture/authorization-contract.md", "docs/architecture/audit-model.md", "docs/adr/0009-gitea-provider-reconciliation-precedence-and-conflict-handling.md"]
     status: DEPENDENCY_BLOCKED_PHASE_1
     release: "phase-1"
   - requirement_id: "PERF-005"
