@@ -406,6 +406,18 @@ ADR_0008_EXPECTED_RECORD_MUTATION_NAMES = [
   "missing acceptance-metadata role",
   "duplicate acceptance-metadata role"
 ].freeze
+ADR_0008_EXPECTED_APPROVAL_RECORD_MUTATION_NAMES = [
+  "post-table level-three contradictory amendment",
+  "post-table prose",
+  "post-table raw HTML",
+  "post-table HTML comment",
+  "post-table blank tail",
+  "pre-table addition",
+  "duplicate approval row",
+  "foreign approval row",
+  "missing approval row",
+  "mixed approval-row revision"
+].freeze
 ADR_0008_EXPECTED_HISTORY_MUTATION_NAMES = [
   "unavailable Git history",
   "shallow Git history",
@@ -1119,36 +1131,6 @@ def adr_0008_index_transition_failures(path:, parent_source:, child_source:, met
   ["ADR-0008 acceptance transition changes unrelated #{path} content or omits exact accepted wording"]
 end
 
-def adr_0008_approval_table_rows(source)
-  lines = source.lines
-  header_indices = lines.each_index.select { |index| lines[index] == ADR_0008_ACCEPTED_REVIEW_HEADER }
-  return [[], ["ADR-0008 approval record must contain exactly one canonical review table header"]] unless header_indices.length == 1
-
-  header_index = header_indices.first
-  unless lines[header_index + 1] == ADR_0008_ACCEPTED_REVIEW_DELIMITER
-    return [[], ["ADR-0008 approval record review table must use the canonical delimiter"]]
-  end
-
-  rows = []
-  lines[(header_index + 2)..].to_a.each do |line|
-    break unless line.start_with?("|")
-
-    cells = line.chomp.split("|", -1)[1...-1].to_a.map(&:strip)
-    unless cells.length == 5
-      return [[], ["ADR-0008 approval record review rows must contain exactly five columns"]]
-    end
-    rows << cells
-  end
-
-  [rows, []]
-end
-
-def adr_0008_unquote_table_cell(value)
-  return value[1...-1] if value.start_with?("`") && value.end_with?("`") && value.length >= 2
-
-  value
-end
-
 def adr_0008_acceptance_surface_failures(adr_source:, gate:, approval_record:, metadata:)
   failures = adr_0008_acceptance_metadata_failures(metadata)
   return failures unless failures.empty?
@@ -1178,43 +1160,9 @@ def adr_0008_acceptance_surface_failures(adr_source:, gate:, approval_record:, m
     failures << "ADR-0008 accepted approval record must exist"
     return failures
   end
-  immutable_header = "- **Immutable decision revision:** `#{immutable_revision}`\n"
-  unless approval_record.lines.count(immutable_header) == 1
-    failures << "ADR-0008 approval record must name the exact metadata-derived immutable revision once"
-  end
-
-  revision_tokens = approval_record.scan(/(?<![0-9A-Fa-f])[0-9A-Fa-f]{40}(?![0-9A-Fa-f])/)
-  if revision_tokens.empty?
-    failures << "ADR-0008 approval record must contain the immutable decision revision"
-  elsif revision_tokens.any? { |revision| revision != immutable_revision }
-    failures << "ADR-0008 approval record contains a mixed, uppercase, or foreign decision revision"
-  end
-
-  approval_rows, table_failures = adr_0008_approval_table_rows(approval_record)
-  failures.concat(table_failures)
-  unless table_failures.empty?
-    return failures
-  end
-
-  records_by_role = metadata.fetch(:approval_records).to_h { |record| [record.fetch("role"), record] }
-  ADR_0008_ACCEPTED_REVIEW_ROLES.each do |definition|
-    record = records_by_role.fetch(definition.fetch(:role))
-    matching_rows = approval_rows.select do |cells|
-      cells[0] == definition.fetch(:label) &&
-        adr_0008_unquote_table_cell(cells[1]) == record.fetch("identity") &&
-        cells[2] == "`#{immutable_revision}`" &&
-        cells[3] == record.fetch("disposition")
-    end
-    unless matching_rows.length == 1
-      failures << "ADR-0008 approval record must derive the exact #{definition.fetch(:role)} row from acceptance metadata"
-    end
-  end
-
-  foreign_table_revisions = approval_rows.filter_map do |cells|
-    adr_0008_unquote_table_cell(cells[2]) unless cells[2] == "`#{immutable_revision}`"
-  end
-  unless foreign_table_revisions.empty?
-    failures << "ADR-0008 approval record review table contains a foreign decision revision"
+  canonical_approval_record = adr_0008_approval_record_fixture(metadata)
+  unless approval_record == canonical_approval_record
+    failures << "ADR-0008 approval record must exactly match the metadata-derived canonical document and end after its final row"
   end
 
   failures
@@ -1308,7 +1256,7 @@ def adr_0008_approval_record_fixture(metadata)
   ADR_0008_ACCEPTED_REVIEW_ROLES.each do |definition|
     record = records_by_role.fetch(definition.fetch(:role))
     source << "| #{definition.fetch(:label)} | `#{record.fetch('identity')}` | `#{immutable_revision}` | " \
-              "#{record.fetch('disposition')} | Fixture exact-revision evidence |\n"
+              "#{record.fetch('disposition')} | #{definition.fetch(:evidence)} |\n"
   end
   source
 end
@@ -2739,6 +2687,7 @@ end
 # embedding this still-Proposed candidate's eventual commit ID. The synthetic
 # graph includes a later descendant and a normal merge so acceptance remains
 # valid after integration while the original transition edge stays immutable.
+adr_0008_approval_record_mutations = []
 adr_0008_history_mutations = []
 if adr_0008_proposed_fixture_source && defined?(accepted_fixture) && accepted_fixture
   fixture_revision = adr_0008_future_acceptance_metadata.fetch(:immutable_revision)
@@ -2884,6 +2833,47 @@ if adr_0008_proposed_fixture_source && defined?(accepted_fixture) && accepted_fi
     changes: ADR_0008_ACCEPTANCE_TRANSITION_CHANGES,
     indexes: fixture_indexes
   }
+  approval_security_row = fixture_approval.lines.find do |line|
+    line.start_with?("| Independent security (WS-13) |")
+  end
+  approval_qa_row = fixture_approval.lines.find do |line|
+    line.start_with?("| Independent QA (WS-13) |")
+  end
+  if approval_security_row && approval_qa_row
+    approval_mutation_sources = {
+      "post-table level-three contradictory amendment" =>
+        fixture_approval + "\n### Acceptance amendment\n\nIndependent security: REVISE; not approved.\n",
+      "post-table prose" => fixture_approval + "Unexpected post-table approval prose.\n",
+      "post-table raw HTML" => fixture_approval + "<aside>Unexpected approval text.</aside>\n",
+      "post-table HTML comment" => fixture_approval + "<!-- unexpected approval amendment -->\n",
+      "post-table blank tail" => fixture_approval + "\n",
+      "pre-table addition" => fixture_approval.sub(
+        "## Exact-revision dispositions\n",
+        "Unexpected pre-table approval prose.\n\n## Exact-revision dispositions\n"
+      ),
+      "duplicate approval row" => fixture_approval.sub(approval_qa_row, approval_qa_row * 2),
+      "foreign approval row" => fixture_approval.sub(
+        approval_security_row,
+        approval_security_row +
+          "| Foreign reviewer | `/root/foreign_review` | `#{fixture_revision}` | APPROVED | Foreign evidence |\n"
+      ),
+      "missing approval row" => fixture_approval.sub(approval_qa_row, ""),
+      "mixed approval-row revision" => fixture_approval.sub(
+        approval_security_row,
+        approval_security_row.sub(fixture_revision, fixture_nonexistent)
+      )
+    }
+    approval_mutation_sources.each do |name, source|
+      adr_0008_approval_record_mutations << {
+        name: name,
+        surface: canonical_surface.merge(approval: source),
+        baseline: fixture_approval,
+        expected_failure_fragment: "approval record must exactly match the metadata-derived canonical document"
+      }
+    end
+  else
+    failures << "ADR-0008 canonical approval-record fixture omits required adversarial mutation rows"
+  end
   canonical_graph = {
     immutable_revision: fixture_revision,
     repository_available: true,
@@ -2978,6 +2968,36 @@ if adr_0008_proposed_fixture_source && defined?(accepted_fixture) && accepted_fi
     graph: canonical_graph,
     expected_failure_fragment: "outside the closed approval/gate/review allowlist"
   }
+end
+
+actual_approval_record_mutation_names = adr_0008_approval_record_mutations.map do |mutation|
+  mutation.fetch(:name)
+end
+unless actual_approval_record_mutation_names == ADR_0008_EXPECTED_APPROVAL_RECORD_MUTATION_NAMES
+  failures << "ADR-0008 approval-record mutation inventory changed: expected " \
+              "#{ADR_0008_EXPECTED_APPROVAL_RECORD_MUTATION_NAMES.inspect}, found #{actual_approval_record_mutation_names.inspect}"
+end
+unless adr_0008_approval_record_mutations.map { |mutation| mutation.fetch(:surface).fetch(:approval) }.uniq.length ==
+       adr_0008_approval_record_mutations.length &&
+       adr_0008_approval_record_mutations.all? do |mutation|
+         mutation.fetch(:surface).fetch(:approval) != mutation.fetch(:baseline)
+       end
+  failures << "ADR-0008 approval-record mutations must be independent non-no-op fixtures"
+end
+adr_0008_approval_record_mutation_survivors = adr_0008_approval_record_mutations.filter_map do |mutation|
+  surface = mutation.fetch(:surface)
+  mutation_failures = adr_0008_acceptance_surface_failures(
+    adr_source: surface.fetch(:source),
+    gate: surface.fetch(:gate),
+    approval_record: surface.fetch(:approval),
+    metadata: surface.fetch(:metadata)
+  )
+  expected = mutation.fetch(:expected_failure_fragment)
+  mutation.fetch(:name) unless mutation_failures.any? { |failure| failure.include?(expected) }
+end
+unless adr_0008_approval_record_mutation_survivors.empty?
+  failures << "ADR-0008 approval-record mutation survivors: " \
+              "#{adr_0008_approval_record_mutation_survivors.join(', ')}"
 end
 
 actual_history_mutation_names = adr_0008_history_mutations.map { |mutation| mutation.fetch(:name) }
@@ -4504,6 +4524,7 @@ if failures.empty?
   puts "ADR-0007 exact-mapping mutation guard: PASS (#{adr_0007_killed_mutations}/#{adr_0007_expected_edges.length} required edge deletions killed)"
   puts "ADR-0008 exact-mapping mutation guard: PASS (#{adr_0008_killed_mutations}/#{adr_0008_expected_edges.length} required edge deletions killed)"
   puts "ADR-0008 record-state mutation guard: PASS (#{adr_0008_record_mutations.length}/#{ADR_0008_EXPECTED_RECORD_MUTATION_NAMES.length} mutations killed; proposed and future-accepted controls pass)"
+  puts "ADR-0008 approval-record grammar mutation guard: PASS (#{adr_0008_approval_record_mutations.length}/#{ADR_0008_EXPECTED_APPROVAL_RECORD_MUTATION_NAMES.length} mutations killed; canonical metadata-derived document enforced)"
   puts "ADR-0008 acceptance-history mutation guard: PASS (#{adr_0008_history_mutations.length}/#{ADR_0008_EXPECTED_HISTORY_MUTATION_NAMES.length} mutations killed; exact-parent descendant/merge fixture passes)"
   puts "ADR-0008 real acceptance-history integration guard: PASS (immediate child, later descendant, normal merge)" if adr_0008_real_history_probe_ran
   puts "ADR-0008 pinned-CBI-source guard: PASS (baseline=#{ADR_0008_CLASSIFICATION_BYPASS_SOURCE_BYTES} bytes, #{ADR_0008_CBI_SOURCE_MUTATION_NAMES.length}/#{ADR_0008_CBI_SOURCE_MUTATION_NAMES.length} adversarial mutations killed)"
