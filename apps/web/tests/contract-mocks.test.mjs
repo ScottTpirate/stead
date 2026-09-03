@@ -158,7 +158,7 @@ test("contract mocks enforce generated headers, media type, and request body sch
   assert.equal(mocks.requestCount(), 2);
 });
 
-test("contract mocks reject missing or undeclared browser transport headers", async () => {
+test("contract mocks reject missing headers and every altered effective transport", async () => {
   const mocks = createContractMockFetch();
   const path = `/api/v1/projects/${VALID_UUID}`;
   for (const init of [
@@ -170,8 +170,23 @@ test("contract mocks reject missing or undeclared browser transport headers", as
     requestInit("GET", { Authorization: "Bearer provider-token" }),
     { ...requestInit("GET"), credentials: "include" },
     { ...requestInit("GET"), redirect: "follow" },
+    { ...requestInit("GET"), cache: "no-store" },
+    { ...requestInit("GET"), mode: "same-origin" },
+    { ...requestInit("GET"), referrer: "https://stead.invalid/protected" },
+    { ...requestInit("GET"), referrerPolicy: "unsafe-url" },
+    { ...requestInit("GET"), integrity: "sha256-deadbeef" },
+    { ...requestInit("GET"), keepalive: true },
   ]) {
     await assert.rejects(mocks.fetch(path, init), /Contract mock rejected request/u);
   }
+  await assert.rejects(
+    mocks.fetch(
+      new Request(`https://stead.invalid${path}`, {
+        ...requestInit("GET"),
+        cache: "reload",
+      }),
+    ),
+    /Contract mock rejected request/u,
+  );
   assert.equal(mocks.requestCount(), 0);
 });

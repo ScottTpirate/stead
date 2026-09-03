@@ -9,7 +9,12 @@ import {
   recordLazyCapabilityChunkCount,
 } from "./performance";
 import { platformContractVersion } from "./platform";
-import { primaryNavigation, type PrimaryRouteId, type RouteMatch } from "./routes";
+import {
+  internalNavigationHref,
+  primaryNavigation,
+  type PrimaryRouteId,
+  type RouteMatch,
+} from "./routes";
 import { ThemeControl } from "./ThemeControl";
 
 interface AppShellProps {
@@ -88,10 +93,11 @@ export function AppShell({ route, navigate }: AppShellProps) {
           <nav className="primary-navigation" aria-label="Primary navigation">
             {primaryNavigation.map((item) => {
               const active = item.id === activeRoute;
+              const href = internalNavigationHref(item.href);
               return (
                 <a
                   key={item.id}
-                  href={item.href}
+                  href={href}
                   aria-current={active ? "page" : undefined}
                   onClick={(event) => {
                     if (
@@ -104,7 +110,7 @@ export function AppShell({ route, navigate }: AppShellProps) {
                       return;
                     }
                     event.preventDefault();
-                    navigate(item.href);
+                    navigate(href);
                   }}
                 >
                   <NavigationGlyph route={item.id} />

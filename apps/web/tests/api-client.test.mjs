@@ -206,10 +206,17 @@ test("browser transport calls one generated same-origin Platform operation", asy
     "//provider.invalid/api/v1",
     "/\\\\provider.invalid/api/v1",
     "/%5cevil.invalid/api/v1",
+    "/shadow/api/v1",
     "/../api/v1",
     "/api/./v1",
     "/api/v1?redirect=//provider.invalid",
     "/api/v1#provider.invalid",
+    null,
+    new String("/api/v1"),
+    {
+      split: () => ["", "api", "v1"],
+      [Symbol.toPrimitive]: () => "https://provider.invalid/api/v1",
+    },
   ]) {
     assert.throws(
       () => createPlatformClient({ basePath }),
@@ -701,6 +708,24 @@ test("authorization context is an immutable closed snapshot", async () => {
   context.session = "session-b";
   store.setAuthorizationContext(context);
   assert.equal(store.getSnapshot("protected").status, "idle");
+  store.optimisticallySet("protected", { principal: "principal-b-secret" });
+
+  let snapshotDuringValidation;
+  const proxyContextTarget = {
+    principal: "principal-c",
+    session: "session-c",
+    securityDomain: "domain-a",
+  };
+  const proxyContext = new Proxy(proxyContextTarget, {
+    getPrototypeOf(target) {
+      snapshotDuringValidation = store.getSnapshot("protected");
+      return Reflect.getPrototypeOf(target);
+    },
+  });
+  store.setAuthorizationContext(proxyContext);
+  assert.equal(snapshotDuringValidation.status, "idle");
+  assert.equal(store.getSnapshot("protected").status, "idle");
+  store.optimisticallySet("protected", { principal: "principal-c-secret" });
 
   const accessorContext = {};
   let accessorReads = 0;
@@ -708,11 +733,11 @@ test("authorization context is an immutable closed snapshot", async () => {
     enumerable: true,
     get() {
       accessorReads += 1;
-      return "principal-c";
+      return "principal-d";
     },
   });
   Object.defineProperties(accessorContext, {
-    session: { enumerable: true, value: "session-c" },
+    session: { enumerable: true, value: "session-d" },
     securityDomain: { enumerable: true, value: "domain-a" },
   });
   assert.throws(
@@ -720,6 +745,7 @@ test("authorization context is an immutable closed snapshot", async () => {
     /closed plain own-data object/u,
   );
   assert.equal(accessorReads, 0);
+  assert.equal(store.getSnapshot("protected").status, "idle");
   assert.throws(
     () =>
       store.setAuthorizationContext({
@@ -729,6 +755,11 @@ test("authorization context is an immutable closed snapshot", async () => {
         constructor: "unexpected",
       }),
     /closed plain own-data object/u,
+  );
+  assert.equal(store.getSnapshot("protected").status, "idle");
+  await assert.rejects(
+    store.load("protected", async () => ({ principal: "must-not-load" })),
+    /authorization context must be set/u,
   );
 });
 

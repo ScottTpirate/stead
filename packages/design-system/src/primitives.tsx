@@ -14,9 +14,47 @@ function joinClassNames(
   return classNames.filter(Boolean).join(" ");
 }
 
+const FORBIDDEN_FORWARDED_DOM_PROPERTIES = new Set([
+  "action",
+  "background",
+  "backgroundimage",
+  "codebase",
+  "csstext",
+  "dangerouslysetinnerhtml",
+  "data",
+  "formaction",
+  "href",
+  "innerhtml",
+  "outerhtml",
+  "ping",
+  "poster",
+  "src",
+  "srcdoc",
+  "srcset",
+  "style",
+]);
+
+function governedDomProperties<TProperties extends object>(
+  properties: TProperties,
+): TProperties {
+  for (const name of Reflect.ownKeys(properties)) {
+    if (
+      typeof name !== "string" ||
+      FORBIDDEN_FORWARDED_DOM_PROPERTIES.has(name.toLowerCase())
+    ) {
+      throw new Error("resource-loading DOM properties are not supported");
+    }
+  }
+  return properties;
+}
+
 export type ButtonVariant = "primary" | "secondary" | "quiet" | "danger";
 
-export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+export interface ButtonProps
+  extends Omit<
+    ButtonHTMLAttributes<HTMLButtonElement>,
+    "dangerouslySetInnerHTML" | "formAction" | "style"
+  > {
   readonly variant?: ButtonVariant;
   readonly pending?: boolean;
   readonly pendingLabel?: string;
@@ -37,7 +75,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
 ) {
   return (
     <button
-      {...properties}
+      {...governedDomProperties(properties)}
       ref={reference}
       className={joinClassNames("stead-button", `stead-button--${variant}`, className)}
       type={type}
@@ -50,7 +88,11 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
   );
 });
 
-export interface TextFieldProps extends InputHTMLAttributes<HTMLInputElement> {
+export interface TextFieldProps
+  extends Omit<
+    InputHTMLAttributes<HTMLInputElement>,
+    "dangerouslySetInnerHTML" | "formAction" | "src" | "style"
+  > {
   readonly label: string;
   readonly description?: string;
   readonly error?: string;
@@ -77,7 +119,7 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(
           </span>
         ) : null}
         <input
-          {...properties}
+          {...governedDomProperties(properties)}
           ref={reference}
           id={inputId}
           className={joinClassNames("stead-field__control", className)}
@@ -94,7 +136,8 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(
   },
 );
 
-export interface SurfaceProps extends HTMLAttributes<HTMLElement> {
+export interface SurfaceProps
+  extends Omit<HTMLAttributes<HTMLElement>, "dangerouslySetInnerHTML" | "style"> {
   readonly children: ReactNode;
   readonly elevated?: boolean;
 }
@@ -107,7 +150,7 @@ export function Surface({
 }: SurfaceProps) {
   return (
     <section
-      {...properties}
+      {...governedDomProperties(properties)}
       className={joinClassNames(
         "stead-surface",
         elevated && "stead-surface--elevated",

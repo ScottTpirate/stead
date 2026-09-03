@@ -40,6 +40,16 @@ export const primaryNavigation = [
 export type PrimaryRouteId = (typeof primaryNavigation)[number]["id"];
 export type PrimaryRoute = (typeof primaryNavigation)[number];
 
+export function internalNavigationHref(value: unknown): string {
+  if (
+    typeof value !== "string" ||
+    !primaryNavigation.some((candidate) => candidate.href === value)
+  ) {
+    throw new Error("navigation target is outside the canonical primary routes");
+  }
+  return value;
+}
+
 export interface MatchedPrimaryRoute {
   readonly kind: "primary";
   readonly route: PrimaryRoute;

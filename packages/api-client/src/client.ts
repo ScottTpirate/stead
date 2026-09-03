@@ -151,21 +151,13 @@ const REQUEST_OPTION_KEYS = new Set([
   "signal",
 ]);
 
-function assertCanonicalBasePath(basePath: string): void {
-  const segments = basePath.split("/");
-  const canonicalSegments =
-    segments.length >= 3 &&
-    segments[0] === "" &&
-    segments.at(-2) === "api" &&
-    segments.at(-1) === "v1" &&
-    segments.slice(1).every(
-      (segment) =>
-        segment.length > 0 &&
-        segment !== "." &&
-        segment !== ".." &&
-        /^[A-Za-z0-9._~-]+$/u.test(segment),
-    );
-  if (!canonicalSegments) {
+function assertCanonicalBasePath(
+  basePath: unknown,
+): asserts basePath is typeof PLATFORM_API_BASE_PATH {
+  if (
+    typeof basePath !== "string" ||
+    basePath !== PLATFORM_API_BASE_PATH
+  ) {
     throw new Error(
       "The browser client may call only the same-origin Stead /api/v1 boundary.",
     );
@@ -764,7 +756,9 @@ function bodyCorrelationId(body: unknown): string | undefined {
 export function createPlatformClient(
   options: PlatformClientOptions = {},
 ): PlatformClient {
-  const basePath = options.basePath ?? PLATFORM_API_BASE_PATH;
+  const configuredBasePath: unknown = options.basePath;
+  const basePath =
+    configuredBasePath === undefined ? PLATFORM_API_BASE_PATH : configuredBasePath;
   assertCanonicalBasePath(basePath);
   const fetchImplementation = options.fetchImplementation ?? globalThis.fetch;
   if (!fetchImplementation) throw new Error("fetch is unavailable");

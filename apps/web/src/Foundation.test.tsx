@@ -2,6 +2,11 @@ import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it } from "vitest";
 
+import {
+  Button,
+  type ButtonProps,
+} from "../../../packages/design-system/src/index";
+
 import { Foundation } from "./Foundation";
 
 const forbiddenCapabilityLinks = () =>
@@ -43,6 +48,13 @@ describe("Foundation", () => {
     render(<Foundation />);
 
     expect(forbiddenCapabilityLinks()).toHaveLength(0);
+
+    const unsafeProperties = {
+      formAction: "//outside.invalid/submit",
+    } as unknown as ButtonProps;
+    expect(() =>
+      render(<Button {...unsafeProperties}>Blocked action</Button>),
+    ).toThrow(/resource-loading DOM properties are not supported/u);
   });
 
   it("detects duplicate forbidden-capability mutations", () => {

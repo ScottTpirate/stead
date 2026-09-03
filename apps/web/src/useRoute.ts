@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { beginPerformanceSpan, recordRouteNavigation } from "./performance";
-import { matchRoute } from "./routes";
+import { internalNavigationHref, matchRoute } from "./routes";
 
 export function useRoute() {
   const [pathname, setPathname] = useState(() => window.location.pathname);
@@ -13,10 +13,11 @@ export function useRoute() {
   }, []);
 
   const navigate = useCallback((href: string) => {
-    if (window.location.pathname === href) return;
+    const target = internalNavigationHref(href);
+    if (window.location.pathname === target) return;
     beginPerformanceSpan("route-useful-content");
     recordRouteNavigation();
-    window.history.pushState(null, "", href);
+    window.history.pushState(null, "", target);
     setPathname(window.location.pathname);
   }, []);
 

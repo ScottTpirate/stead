@@ -11,9 +11,13 @@ import {
 } from "node:fs/promises";
 import { dirname, extname, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import { isDeepStrictEqual } from "node:util";
 import { gzipSync } from "node:zlib";
 
-import { parseGovernedHtmlEdges } from "./browser-source-graph.mjs";
+import {
+  findBrowserArtifactBoundaryViolations,
+  parseGovernedHtmlEdges,
+} from "./browser-source-graph.mjs";
 
 export const REQUIRED_LAZY_BOUNDARIES = {
   docs_editor: "src/capabilities/docs-editor.ts",
@@ -56,6 +60,9 @@ function manifestEdges(chunk, edge, key) {
   if (!Array.isArray(values) || values.some((value) => typeof value !== "string")) {
     throw new Error(`manifest ${key}.${edge} must be an array of chunk keys`);
   }
+  if (new Set(values).size !== values.length) {
+    throw new Error(`manifest ${key}.${edge} contains duplicate chunk keys`);
+  }
   return values;
 }
 
@@ -75,8 +82,25 @@ function validateManifest(manifest) {
       if (!Array.isArray(chunk.css) || chunk.css.some((file) => typeof file !== "string")) {
         throw new Error(`manifest ${key}.css must be an array of files`);
       }
+      if (new Set(chunk.css).size !== chunk.css.length) {
+        throw new Error(`manifest ${key}.css contains duplicate files`);
+      }
       for (const file of chunk.css) {
         governedDistributionPath(file, `manifest ${key} CSS file`);
+      }
+    }
+    if (chunk.assets !== undefined) {
+      if (
+        !Array.isArray(chunk.assets) ||
+        chunk.assets.some((file) => typeof file !== "string")
+      ) {
+        throw new Error(`manifest ${key}.assets must be an array of files`);
+      }
+      if (new Set(chunk.assets).size !== chunk.assets.length) {
+        throw new Error(`manifest ${key}.assets contains duplicate files`);
+      }
+      for (const file of chunk.assets) {
+        governedDistributionPath(file, `manifest ${key} asset file`);
       }
     }
     const prior = files.get(chunk.file);
@@ -110,6 +134,9 @@ export function buildBundleMembership(
     throw new Error(`expected one browser entry, found ${entries.length}`);
   }
   const entryKey = entries[0][0];
+  if (entryKey !== "index.html") {
+    throw new Error(`browser entry must be index.html, found ${entryKey}`);
+  }
   const eagerKeys = visitGraph(manifest, entryKey, ["imports"]);
   const requiredBoundaryKeys = [...new Set(Object.values(requiredBoundaries))].sort();
   if (requiredBoundaryKeys.length !== Object.keys(requiredBoundaries).length) {
@@ -137,6 +164,7 @@ export function buildBundleMembership(
   }
   const capabilityKeys = {};
   const ownersByKey = new Map();
+  const governedKeys = new Set(eagerKeys);
 
   for (const [name, source] of Object.entries(requiredBoundaries)) {
     const boundary = manifest[source];
@@ -144,6 +172,7 @@ export function buildBundleMembership(
       throw new Error(`${name} is not a separate lazy JavaScript chunk`);
     }
     const keys = visitGraph(manifest, source, ["imports", "dynamicImports"]);
+    for (const key of keys) governedKeys.add(key);
     const lazyKeys = [...keys]
       .filter(
         (key) => !eagerKeys.has(key) && isExecutableJavaScript(manifest[key].file),
@@ -157,17 +186,12 @@ export function buildBundleMembership(
     }
   }
 
-  const ungovernedLazyKeys = Object.keys(manifest)
-    .filter(
-      (key) =>
-        isExecutableJavaScript(manifest[key].file) &&
-        !eagerKeys.has(key) &&
-        !ownersByKey.has(key),
-    )
+  const ungovernedKeys = Object.keys(manifest)
+    .filter((key) => !governedKeys.has(key))
     .sort();
-  if (ungovernedLazyKeys.length > 0) {
+  if (ungovernedKeys.length > 0) {
     throw new Error(
-      `lazy JavaScript is outside required capability graphs: ${ungovernedLazyKeys.join(", ")}`,
+      `manifest chunks are outside required capability graphs: ${ungovernedKeys.join(", ")}`,
     );
   }
 
@@ -243,6 +267,14 @@ async function readGovernedDistributionFile(distributionRoot, file) {
       throw new Error(`distribution file changed during governed read: ${file}`);
     }
     const bytes = await handle.readFile();
+    const postReadStat = await lstat(absolutePath);
+    if (
+      !postReadStat.isFile() ||
+      postReadStat.dev !== openedStat.dev ||
+      postReadStat.ino !== openedStat.ino
+    ) {
+      throw new Error(`distribution file changed during governed read: ${file}`);
+    }
     const postReadPath = await realpath(absolutePath);
     if (postReadPath !== absolutePath) {
       throw new Error(`distribution file path changed during governed read: ${file}`);
@@ -287,11 +319,34 @@ function htmlDistributionFile(specifier) {
   return governedDistributionPath(withoutDot, "HTML distribution resource");
 }
 
+function decodeUtf8Artifact(file, bytes) {
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    throw new Error(`browser text artifact is not valid UTF-8: ${file}`);
+  }
+}
+
+function artifactRecord(file, bytes) {
+  return {
+    file,
+    sha256: createHash("sha256").update(bytes).digest("hex"),
+    uncompressed_bytes: bytes.byteLength,
+  };
+}
+
 export async function validateDistributionArtifacts({
   distributionRoot,
   manifest,
-  membership = buildBundleMembership(manifest),
+  membership: suppliedMembership,
 }) {
+  const membership = buildBundleMembership(manifest);
+  if (
+    suppliedMembership !== undefined &&
+    !isDeepStrictEqual(suppliedMembership, membership)
+  ) {
+    throw new Error("supplied bundle membership differs from the manifest graph");
+  }
   const root = await canonicalDistributionRoot(distributionRoot);
   validateManifest(manifest);
   const inventory = await distributionInventory(root);
@@ -305,29 +360,69 @@ export async function validateDistributionArtifacts({
     );
   }
   const manifestFiles = new Set();
-  const manifestExecutableFiles = new Set();
   for (const chunk of Object.values(manifest)) {
     manifestFiles.add(chunk.file);
-    if (isExecutableJavaScript(chunk.file)) manifestExecutableFiles.add(chunk.file);
     for (const file of chunk.css ?? []) manifestFiles.add(file);
+    for (const file of chunk.assets ?? []) manifestFiles.add(file);
   }
 
-  const ungovernedExecutables = inventory.filter(
-    (file) => isExecutableJavaScript(file) && !manifestExecutableFiles.has(file),
+  const expectedFiles = new Set([
+    ".vite/manifest.json",
+    "index.html",
+    ...manifestFiles,
+  ]);
+  const ungovernedArtifacts = inventory.filter(
+    (file) => !expectedFiles.has(file),
   );
-  if (ungovernedExecutables.length > 0) {
+  if (ungovernedArtifacts.length > 0) {
     throw new Error(
-      `executable files are outside the Vite manifest: ${ungovernedExecutables.join(", ")}`,
+      `distribution files are outside the Vite manifest and governed entries: ${ungovernedArtifacts.join(", ")}`,
     );
   }
-  for (const file of manifestFiles) {
+  const artifactBytes = new Map();
+  for (const file of [...expectedFiles].sort()) {
     if (!inventorySet.has(file)) {
-      throw new Error(`manifest output is absent from the distribution: ${file}`);
+      throw new Error(`governed output is absent from the distribution: ${file}`);
     }
-    await readGovernedDistributionFile(root, file);
+    artifactBytes.set(file, await readGovernedDistributionFile(root, file));
   }
 
-  const html = (await readGovernedDistributionFile(root, "index.html")).toString("utf8");
+  const onDiskManifestSource = decodeUtf8Artifact(
+    ".vite/manifest.json",
+    artifactBytes.get(".vite/manifest.json"),
+  );
+  let onDiskManifest;
+  try {
+    onDiskManifest = JSON.parse(onDiskManifestSource);
+  } catch {
+    throw new Error("distribution Vite manifest is invalid JSON");
+  }
+  if (!isDeepStrictEqual(onDiskManifest, manifest)) {
+    throw new Error("distribution Vite manifest differs from the validated manifest");
+  }
+
+  for (const [file, bytes] of artifactBytes) {
+    const extension = extname(file).toLowerCase();
+    if (isExecutableJavaScript(file)) {
+      const source = decodeUtf8Artifact(file, bytes);
+      if (/sourceMappingURL\s*=/iu.test(source)) {
+        throw new Error(`browser JavaScript source-map loading is not governed: ${file}`);
+      }
+      continue;
+    }
+    if (![".css", ".html", ".json"].includes(extension)) {
+      throw new Error(`browser artifact type is not governed: ${file}`);
+    }
+    const source = decodeUtf8Artifact(file, bytes);
+    const violations = findBrowserArtifactBoundaryViolations(file, source);
+    if (violations.length > 0) {
+      throw new Error(
+        `browser artifact violates boundary rules (${violations.join(", ")}): ${file}`,
+      );
+    }
+  }
+
+  const html = decodeUtf8Artifact("index.html", artifactBytes.get("index.html"));
   const edges = parseGovernedHtmlEdges("dist/index.html", html);
   const eagerFiles = new Set(
     membership.eagerKeys
@@ -341,7 +436,6 @@ export async function validateDistributionArtifacts({
     if (!inventorySet.has(file)) {
       throw new Error(`HTML references an absent distribution file: ${file}`);
     }
-    await readGovernedDistributionFile(root, file);
     if (edge.kind === "script") {
       if (!isExecutableJavaScript(file) || !eagerFiles.has(file)) {
         throw new Error(`HTML script is not in the eager manifest graph: ${file}`);
@@ -373,7 +467,13 @@ export async function validateDistributionArtifacts({
       `HTML does not load eager manifest stylesheets: ${missingEagerStyles.join(", ")}`,
     );
   }
-  return { files: inventory, htmlEdges: edges };
+  return {
+    artifacts: [...artifactBytes]
+      .map(([file, bytes]) => artifactRecord(file, bytes))
+      .sort((left, right) => left.file.localeCompare(right.file)),
+    files: inventory,
+    htmlEdges: edges,
+  };
 }
 
 async function measureFile(distributionRoot, source, file) {
@@ -396,7 +496,11 @@ async function main() {
     ),
   );
   const membership = buildBundleMembership(manifest);
-  await validateDistributionArtifacts({ distributionRoot, manifest, membership });
+  const distribution = await validateDistributionArtifacts({
+    distributionRoot,
+    manifest,
+    membership,
+  });
   const measurements = new Map();
   for (const key of [...new Set([...membership.eagerKeys, ...membership.lazyUniqueKeys])]) {
     const file = manifest[key].file;
@@ -446,18 +550,19 @@ async function main() {
   const baseline = 60_808;
   const budget = 250 * 1024;
   const evidence = {
-    schema_version: "1.1",
+    schema_version: "1.2",
     issue: "P1-005-FE-FOUNDATION",
     contract: "PERF-005",
     generated_by: "apps/web/scripts/measure-bundle.mjs",
     measurement_method:
-      "Exact uncompressed file bytes plus Node zlib level 9 over closed Vite manifest JavaScript graphs with SHA-256 digests and stable shared-chunk attribution",
+      "Exact inventory and SHA-256 binding for every browser artifact plus uncompressed file bytes and Node zlib level 9 over closed Vite manifest JavaScript graphs with stable shared-chunk attribution",
     scope: "Wave 0 original non-import foundation",
     mature_interface_perf005_complete: false,
     lazy_boundaries_are_placeholders: true,
     minimal_foundation_baseline_bytes_gzip: baseline,
     budget_bytes_gzip: budget,
     eager_dynamic_frontier: membership.dynamicFrontierKeys,
+    distribution_artifacts: distribution.artifacts,
     eager_javascript: {
       uncompressed_bytes: eagerUncompressedBytes,
       gzip_bytes: eagerBytes,

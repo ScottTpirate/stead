@@ -134,28 +134,24 @@ function isCancellation(error: unknown, signal: AbortSignal): boolean {
   }
 }
 
-function sameContext(
-  left: AuthorizationContext | undefined,
-  right: AuthorizationContext,
-): boolean {
-  return (
-    left?.principal === right.principal &&
-    left.session === right.session &&
-    left.securityDomain === right.securityDomain
-  );
-}
-
 export class QueryStore {
   private readonly entries = new Map<string, QueryEntry<unknown>>();
   private context?: AuthorizationContext;
   private contextRevision = 0;
 
   setAuthorizationContext(context: AuthorizationContext): void {
-    const snapshot = snapshotAuthorizationContext(context);
-    if (sameContext(this.context, snapshot)) return;
-    this.context = snapshot;
-    this.contextRevision += 1;
+    // Invalidating first keeps proxy traps and descriptor inspection from
+    // observing presentation state authorized by the previous context.
+    this.context = undefined;
+    const transitionRevision = this.contextRevision + 1;
+    this.contextRevision = transitionRevision;
     this.clear();
+
+    const snapshot = snapshotAuthorizationContext(context);
+    if (this.contextRevision !== transitionRevision) {
+      throw new Error("authorization context changed during validation");
+    }
+    this.context = snapshot;
   }
 
   clearAuthorizationContext(): void {

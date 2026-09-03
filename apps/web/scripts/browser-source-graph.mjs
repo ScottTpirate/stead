@@ -1,3 +1,4 @@
+import { Buffer } from "node:buffer";
 import { constants } from "node:fs";
 import { lstat, open, realpath } from "node:fs/promises";
 import { dirname, extname, relative, resolve, sep } from "node:path";
@@ -9,12 +10,15 @@ const PROVIDER_OR_INFRASTRUCTURE =
   /gitea|commonplace|openfga|\bnats\b|\/api\/v1\/repos/iu;
 const DIRECT_BROWSER_NETWORK =
   /\bfetch\s*\(|\bXMLHttpRequest\b|\bWebSocket\s*\(|\bEventSource\s*\(|\bsendBeacon\s*\(/iu;
-const NETWORK_URL = /https?:\/\//iu;
 const DEVLANE_ONTOLOGY =
   /\bModules\b|\bEpics\b|\bPages\b|\bBoard\b|\bIntake\b|\bArchives\b|\bDrafts\b/iu;
 const DIRECT_NETWORK_IDENTIFIERS = new Set([
+  "Audio",
   "EventSource",
+  "Image",
+  "RTCPeerConnection",
   "SharedWorker",
+  "WebTransport",
   "WebSocket",
   "Worker",
   "XMLHttpRequest",
@@ -23,13 +27,80 @@ const DIRECT_NETWORK_IDENTIFIERS = new Set([
   "sendBeacon",
 ]);
 const DYNAMIC_CODE_IDENTIFIERS = new Set(["Function", "eval"]);
+const DYNAMIC_CODE_PROPERTIES = new Set(["__proto__", "constructor"]);
+const DYNAMIC_STRING_IDENTIFIERS = new Set([
+  "atob",
+  "decodeURI",
+  "decodeURIComponent",
+  "unescape",
+]);
+const BROWSER_GLOBAL_IDENTIFIERS = new Set([
+  "document",
+  "globalThis",
+  "location",
+  "navigator",
+  "self",
+  "window",
+]);
+const RESOURCE_PROPERTY_NAMES = new Set([
+  "action",
+  "background",
+  "backgroundImage",
+  "codeBase",
+  "cssText",
+  "data",
+  "formAction",
+  "href",
+  "innerHTML",
+  "outerHTML",
+  "ping",
+  "poster",
+  "src",
+  "srcdoc",
+  "srcset",
+]);
+const RESOURCE_METHOD_NAMES = new Set([
+  "addModule",
+  "cloneElement",
+  "createElement",
+  "insertAdjacentHTML",
+  "insertRule",
+  "navigate",
+  "parseFromString",
+  "register",
+  "registerProtocolHandler",
+  "requestSubmit",
+  "setAttribute",
+  "setAttributeNS",
+  "submit",
+]);
+const RESOURCE_JSX_ELEMENTS = new Set([
+  "audio",
+  "embed",
+  "form",
+  "iframe",
+  "img",
+  "link",
+  "object",
+  "script",
+  "source",
+  "track",
+  "video",
+]);
 const HTML_RESOURCE_ATTRIBUTES = new Set([
   "action",
+  "background",
+  "codebase",
+  "data",
   "formaction",
   "href",
+  "imagesrcset",
+  "manifest",
+  "ping",
   "poster",
   "src",
   "srcset",
+  "xlink:href",
 ]);
 const FORBIDDEN_HTML_ELEMENTS = new Set([
   "applet",
@@ -42,6 +113,12 @@ const FORBIDDEN_HTML_ELEMENTS = new Set([
   "style",
 ]);
 const MAX_STATIC_STRING_LENGTH = 16_384;
+
+function containsExternalDestination(value) {
+  return /(?:^|[\s=(:,;'"])(?:(?:https?|wss?|ftp):|\/\/|data:|blob:|file:|javascript:|mailto:|tel:|vbscript:)/iu.test(
+    value,
+  );
+}
 
 function insideRoot(path, root) {
   const relation = relative(root, path);
@@ -122,6 +199,14 @@ async function existingGovernedFile(path, root) {
       throw new Error(`browser module changed during governed read: ${absolutePath}`);
     }
     const source = await handle.readFile({ encoding: "utf8" });
+    const postReadStat = await lstat(absolutePath);
+    if (
+      !postReadStat.isFile() ||
+      postReadStat.dev !== openedStat.dev ||
+      postReadStat.ino !== openedStat.ino
+    ) {
+      throw new Error(`browser module path changed during governed read: ${absolutePath}`);
+    }
     const postReadPath = await realpath(absolutePath);
     if (postReadPath !== canonicalPath) {
       throw new Error(`browser module path changed during governed read: ${absolutePath}`);
@@ -192,6 +277,59 @@ function cssImports(path, source) {
     }
   }
   return imports;
+}
+
+function jsonStrings(value, values = []) {
+  if (typeof value === "string") {
+    values.push(value);
+  } else if (Array.isArray(value)) {
+    for (const item of value) jsonStrings(item, values);
+  } else if (value && typeof value === "object") {
+    for (const [key, item] of Object.entries(value)) {
+      values.push(key);
+      jsonStrings(item, values);
+    }
+  }
+  return values;
+}
+
+export function findBrowserArtifactBoundaryViolations(path, source) {
+  const extension = extname(path).toLowerCase();
+  let analyzedValues;
+  if (extension === ".css") {
+    const imports = cssImports(path, source);
+    if (imports.length > 0) {
+      throw new Error(`built CSS imports are not governed in ${path}`);
+    }
+    analyzedValues = [source];
+  } else if (extension === ".html") {
+    parseGovernedHtmlEdges(path, source);
+    analyzedValues = [source];
+  } else if (extension === ".json") {
+    let parsed;
+    try {
+      parsed = JSON.parse(source);
+    } catch {
+      throw new Error(`browser JSON is invalid in ${path}`);
+    }
+    analyzedValues = jsonStrings(parsed);
+  } else {
+    throw new Error(`browser artifact type is not governed: ${path}`);
+  }
+
+  const analyzedText = analyzedValues.join("\n");
+  const rules = new Set();
+  if (PROVIDER_OR_INFRASTRUCTURE.test(analyzedText)) {
+    rules.add("provider-or-infrastructure");
+  }
+  if (
+    DIRECT_BROWSER_NETWORK.test(analyzedText) ||
+    analyzedValues.some(containsExternalDestination)
+  ) {
+    rules.add("direct-browser-network");
+  }
+  if (DEVLANE_ONTOLOGY.test(analyzedText)) rules.add("devlane-ontology");
+  return [...rules].sort();
 }
 
 function parseHtmlAttributes(path, rawAttributes) {
@@ -305,6 +443,11 @@ function governedHtmlSpecifier(path, value) {
 }
 
 export function parseGovernedHtmlEdges(path, source) {
+  if (source.includes("&")) {
+    throw new Error(
+      `HTML character references are not governed browser content in ${path}`,
+    );
+  }
   const tokens = tokenizeHtml(path, source);
   const edges = [];
   let openScript;
@@ -327,6 +470,11 @@ export function parseGovernedHtmlEdges(path, source) {
     for (const [name] of token.attributes) {
       if (name.startsWith("on") || name === "srcdoc" || name === "style") {
         throw new Error(`HTML attribute ${name} is not governed in ${path}`);
+      }
+    }
+    for (const value of token.attributes.values()) {
+      if (typeof value === "string" && containsExternalDestination(value)) {
+        throw new Error(`external HTML destination is not governed in ${path}`);
       }
     }
     if (
@@ -435,6 +583,55 @@ function staticString(node, bindings = new Map(), seen = new Set()) {
   if (
     ts.isCallExpression(node) &&
     ts.isPropertyAccessExpression(node.expression) &&
+    ts.isIdentifier(node.expression.expression) &&
+    node.expression.expression.text === "String" &&
+    ["fromCharCode", "fromCodePoint"].includes(node.expression.name.text)
+  ) {
+    const values = node.arguments.map((argument) =>
+      staticNumber(argument, bindings, seen),
+    );
+    if (values.some((value) => value === undefined)) return undefined;
+    try {
+      const value = String[node.expression.name.text](...values);
+      return value.length <= MAX_STATIC_STRING_LENGTH ? value : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+  if (
+    ts.isCallExpression(node) &&
+    ts.isIdentifier(node.expression) &&
+    DYNAMIC_STRING_IDENTIFIERS.has(node.expression.text) &&
+    node.arguments.length === 1
+  ) {
+    const input = staticString(node.arguments[0], bindings, seen);
+    if (input === undefined) return undefined;
+    try {
+      let value;
+      if (node.expression.text === "atob") {
+        if (
+          !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/u.test(
+            input,
+          )
+        ) {
+          return undefined;
+        }
+        value = Buffer.from(input, "base64").toString("latin1");
+      } else if (node.expression.text === "decodeURI") {
+        value = decodeURI(input);
+      } else if (node.expression.text === "decodeURIComponent") {
+        value = decodeURIComponent(input);
+      } else {
+        value = unescape(input);
+      }
+      return value.length <= MAX_STATIC_STRING_LENGTH ? value : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+  if (
+    ts.isCallExpression(node) &&
+    ts.isPropertyAccessExpression(node.expression) &&
     node.expression.name.text === "concat"
   ) {
     const receiver = staticString(node.expression.expression, bindings, seen);
@@ -451,20 +648,124 @@ function staticString(node, bindings = new Map(), seen = new Set()) {
     ts.isCallExpression(node) &&
     ts.isPropertyAccessExpression(node.expression) &&
     node.expression.name.text === "join" &&
-    ts.isArrayLiteralExpression(node.expression.expression) &&
     node.arguments.length <= 1
   ) {
-    const elements = node.expression.expression.elements.map((element) =>
-      staticString(element, bindings, seen),
+    const elements = staticStringArray(
+      node.expression.expression,
+      bindings,
+      seen,
     );
     const separator = node.arguments.length === 0
       ? ","
       : staticString(node.arguments[0], bindings, seen);
-    if (separator === undefined || elements.some((value) => value === undefined)) {
+    if (separator === undefined || elements === undefined) {
       return undefined;
     }
     const value = elements.join(separator);
     return value.length <= MAX_STATIC_STRING_LENGTH ? value : undefined;
+  }
+  if (
+    ts.isCallExpression(node) &&
+    ts.isPropertyAccessExpression(node.expression)
+  ) {
+    const receiver = staticString(node.expression.expression, bindings, seen);
+    if (receiver === undefined) return undefined;
+    const name = node.expression.name.text;
+    const stringArguments = node.arguments.map((argument) =>
+      staticString(argument, bindings, seen),
+    );
+    const numericArguments = node.arguments.map((argument) =>
+      staticNumber(argument, bindings, seen),
+    );
+    try {
+      let value;
+      if (
+        [
+          "toLowerCase",
+          "toLocaleLowerCase",
+          "toUpperCase",
+          "toLocaleUpperCase",
+        ].includes(name) &&
+        node.arguments.length === 0
+      ) {
+        value = receiver[name]();
+      } else if (
+        ["slice", "substring", "substr", "repeat"].includes(name) &&
+        numericArguments.every((argument) => argument !== undefined)
+      ) {
+        value = receiver[name](...numericArguments);
+      } else if (
+        ["replace", "replaceAll"].includes(name) &&
+        stringArguments.every((argument) => argument !== undefined)
+      ) {
+        value = receiver[name](...stringArguments);
+      }
+      return typeof value === "string" && value.length <= MAX_STATIC_STRING_LENGTH
+        ? value
+        : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+  return undefined;
+}
+
+function staticNumber(node, bindings = new Map(), seen = new Set()) {
+  if (ts.isNumericLiteral(node)) return Number(node.text);
+  if (ts.isIdentifier(node) && bindings.has(node.text) && !seen.has(node.text)) {
+    return staticNumber(
+      bindings.get(node.text),
+      bindings,
+      new Set([...seen, node.text]),
+    );
+  }
+  if (
+    ts.isParenthesizedExpression(node) ||
+    ts.isAsExpression(node) ||
+    ts.isTypeAssertionExpression(node) ||
+    ts.isNonNullExpression(node)
+  ) {
+    return staticNumber(node.expression, bindings, seen);
+  }
+  if (ts.isPrefixUnaryExpression(node)) {
+    const value = staticNumber(node.operand, bindings, seen);
+    if (value === undefined) return undefined;
+    if (node.operator === ts.SyntaxKind.PlusToken) return value;
+    if (node.operator === ts.SyntaxKind.MinusToken) return -value;
+  }
+  return undefined;
+}
+
+function staticStringArray(node, bindings = new Map(), seen = new Set()) {
+  if (ts.isIdentifier(node) && bindings.has(node.text) && !seen.has(node.text)) {
+    return staticStringArray(
+      bindings.get(node.text),
+      bindings,
+      new Set([...seen, node.text]),
+    );
+  }
+  if (
+    ts.isParenthesizedExpression(node) ||
+    ts.isAsExpression(node) ||
+    ts.isTypeAssertionExpression(node) ||
+    ts.isNonNullExpression(node)
+  ) {
+    return staticStringArray(node.expression, bindings, seen);
+  }
+  if (ts.isArrayLiteralExpression(node)) {
+    const values = node.elements.map((element) =>
+      staticString(element, bindings, seen),
+    );
+    return values.some((value) => value === undefined) ? undefined : values;
+  }
+  if (
+    ts.isCallExpression(node) &&
+    ts.isPropertyAccessExpression(node.expression) &&
+    ["reverse", "toReversed"].includes(node.expression.name.text) &&
+    node.arguments.length === 0
+  ) {
+    const values = staticStringArray(node.expression.expression, bindings, seen);
+    return values ? [...values].reverse() : undefined;
   }
   return undefined;
 }
@@ -514,6 +815,12 @@ function scriptImports(path, source) {
 
   const imports = [];
   const visit = (node) => {
+    if (
+      ts.isMetaProperty(node) &&
+      node.keywordToken === ts.SyntaxKind.ImportKeyword
+    ) {
+      throw new Error(`Vite import.meta APIs are not governed browser edges in ${path}`);
+    }
     if (
       (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
       node.moduleSpecifier
@@ -579,7 +886,117 @@ function moduleImports(path, source) {
     return parseGovernedHtmlEdges(path, source).map(({ specifier }) => specifier);
   }
   if (path.endsWith(".css")) return cssImports(path, source);
-  return scriptImports(path, source);
+  if ([".ts", ".tsx", ".js", ".jsx", ".mjs"].includes(extname(path))) {
+    return scriptImports(path, source);
+  }
+  throw new Error(`browser module type is not governed: ${path}`);
+}
+
+function memberName(node, bindings) {
+  if (ts.isPropertyAccessExpression(node)) return node.name.text;
+  if (ts.isElementAccessExpression(node)) {
+    return staticString(node.argumentExpression, bindings);
+  }
+  return undefined;
+}
+
+function unwrappedExpression(node, bindings, seen = new Set()) {
+  if (ts.isIdentifier(node) && bindings.has(node.text) && !seen.has(node.text)) {
+    return unwrappedExpression(
+      bindings.get(node.text),
+      bindings,
+      new Set([...seen, node.text]),
+    );
+  }
+  if (
+    ts.isParenthesizedExpression(node) ||
+    ts.isAsExpression(node) ||
+    ts.isTypeAssertionExpression(node) ||
+    ts.isNonNullExpression(node)
+  ) {
+    return unwrappedExpression(node.expression, bindings, seen);
+  }
+  return node;
+}
+
+function isBrowserGlobalExpression(node, bindings) {
+  const unwrapped = unwrappedExpression(node, bindings);
+  if (ts.isIdentifier(unwrapped)) {
+    return BROWSER_GLOBAL_IDENTIFIERS.has(unwrapped.text);
+  }
+  if (
+    (ts.isPropertyAccessExpression(unwrapped) ||
+      ts.isElementAccessExpression(unwrapped)) &&
+    isBrowserGlobalExpression(unwrapped.expression, bindings)
+  ) {
+    const property = memberName(unwrapped, bindings);
+    return property !== undefined && BROWSER_GLOBAL_IDENTIFIERS.has(property);
+  }
+  return false;
+}
+
+function isReflectExpression(node, bindings) {
+  const unwrapped = unwrappedExpression(node, bindings);
+  return ts.isIdentifier(unwrapped) && unwrapped.text === "Reflect";
+}
+
+function hasNamedImport(sourceFile, moduleName, importedName) {
+  return sourceFile.statements.some(
+    (statement) =>
+      ts.isImportDeclaration(statement) &&
+      ts.isStringLiteral(statement.moduleSpecifier) &&
+      statement.moduleSpecifier.text === moduleName &&
+      statement.importClause?.namedBindings &&
+      ts.isNamedImports(statement.importClause.namedBindings) &&
+      statement.importClause.namedBindings.elements.some(
+        (element) =>
+          (element.propertyName?.text ?? element.name.text) === importedName &&
+          element.name.text === importedName,
+      ),
+  );
+}
+
+function isAssignmentOperator(kind) {
+  return (
+    kind >= ts.SyntaxKind.FirstAssignment && kind <= ts.SyntaxKind.LastAssignment
+  );
+}
+
+function jsxAttributeValue(attribute, bindings) {
+  if (!attribute.initializer) return "";
+  if (ts.isStringLiteral(attribute.initializer)) return attribute.initializer.text;
+  if (
+    ts.isJsxExpression(attribute.initializer) &&
+    attribute.initializer.expression
+  ) {
+    return staticString(attribute.initializer.expression, bindings);
+  }
+  return undefined;
+}
+
+function isDynamicStringConstruction(node, bindings) {
+  if (
+    ts.isIdentifier(node) &&
+    DYNAMIC_STRING_IDENTIFIERS.has(node.text) &&
+    !(
+      ts.isCallExpression(node.parent) &&
+      node.parent.expression === node &&
+      staticString(node.parent, bindings) !== undefined
+    )
+  ) {
+    return true;
+  }
+  return (
+    ts.isPropertyAccessExpression(node) &&
+    ts.isIdentifier(node.expression) &&
+    node.expression.text === "String" &&
+    ["fromCharCode", "fromCodePoint"].includes(node.name.text) &&
+    !(
+      ts.isCallExpression(node.parent) &&
+      node.parent.expression === node &&
+      staticString(node.parent, bindings) !== undefined
+    )
+  );
 }
 
 function scriptBoundaryRules(path, source) {
@@ -587,6 +1004,29 @@ function scriptBoundaryRules(path, source) {
   const bindings = staticConstBindings(sourceFile);
   const staticValues = [];
   let directNetwork = false;
+  let dynamicBoundaryConstruction = false;
+  const approvedInternalNavigationImport =
+    path.endsWith(
+      [sep, "apps", sep, "web", sep, "src", sep, "AppShell.tsx"].join(""),
+    ) && hasNamedImport(sourceFile, "./routes", "internalNavigationHref");
+  const approvedGovernedDomSpread =
+    path.endsWith(
+      [
+        sep,
+        "packages",
+        sep,
+        "design-system",
+        sep,
+        "src",
+        sep,
+        "primitives.tsx",
+      ].join(""),
+    ) &&
+    sourceFile.statements.some(
+      (statement) =>
+        ts.isFunctionDeclaration(statement) &&
+        statement.name?.text === "governedDomProperties",
+    );
   const approvedPlatformFetchReference = (node) =>
     path.endsWith(`${sep}packages${sep}api-client${sep}src${sep}client.ts`) &&
     ts.isPropertyAccessExpression(node) &&
@@ -594,12 +1034,55 @@ function scriptBoundaryRules(path, source) {
     node.name.text === "fetch" &&
     node.parent?.getText(sourceFile) ===
       "options.fetchImplementation ?? globalThis.fetch";
+  const approvedInternalNavigationReference = (attribute) => {
+    if (
+      !approvedInternalNavigationImport ||
+      !attribute.initializer ||
+      !ts.isJsxExpression(attribute.initializer) ||
+      !attribute.initializer.expression
+    ) {
+      return false;
+    }
+    const expression = unwrappedExpression(
+      attribute.initializer.expression,
+      bindings,
+    );
+    return (
+      ts.isCallExpression(expression) &&
+      expression.arguments.length === 1 &&
+      ts.isIdentifier(expression.expression) &&
+      expression.expression.text === "internalNavigationHref"
+    );
+  };
+  const approvedDomSpreadReference = (attribute) => {
+    if (!approvedGovernedDomSpread || !ts.isJsxSpreadAttribute(attribute)) {
+      return false;
+    }
+    const expression = unwrappedExpression(attribute.expression, bindings);
+    return (
+      ts.isCallExpression(expression) &&
+      expression.arguments.length === 1 &&
+      ts.isIdentifier(expression.expression) &&
+      expression.expression.text === "governedDomProperties"
+    );
+  };
   const visit = (node) => {
     const value = staticString(node, bindings);
     if (value !== undefined) staticValues.push(value);
+    if (isDynamicStringConstruction(node, bindings)) {
+      dynamicBoundaryConstruction = true;
+    }
     if (
       ts.isIdentifier(node) &&
       DYNAMIC_CODE_IDENTIFIERS.has(node.text)
+    ) {
+      directNetwork = true;
+    }
+    if (
+      ts.isVariableDeclaration(node) &&
+      ts.isObjectBindingPattern(node.name) &&
+      node.initializer &&
+      isBrowserGlobalExpression(node.initializer, bindings)
     ) {
       directNetwork = true;
     }
@@ -617,30 +1100,122 @@ function scriptBoundaryRules(path, source) {
     }
     if (
       ts.isPropertyAccessExpression(node) &&
-      DIRECT_NETWORK_IDENTIFIERS.has(node.name.text) &&
-      !approvedPlatformFetchReference(node)
+      (DYNAMIC_CODE_PROPERTIES.has(node.name.text) ||
+        (DIRECT_NETWORK_IDENTIFIERS.has(node.name.text) &&
+          !approvedPlatformFetchReference(node)))
     ) {
       directNetwork = true;
     }
     if (ts.isElementAccessExpression(node)) {
       const property = staticString(node.argumentExpression, bindings);
       if (
-        property !== undefined &&
-        (DIRECT_NETWORK_IDENTIFIERS.has(property) ||
-          DYNAMIC_CODE_IDENTIFIERS.has(property))
+        isBrowserGlobalExpression(node.expression, bindings) ||
+        (property !== undefined &&
+          (DIRECT_NETWORK_IDENTIFIERS.has(property) ||
+            DYNAMIC_CODE_IDENTIFIERS.has(property) ||
+            DYNAMIC_CODE_PROPERTIES.has(property) ||
+            RESOURCE_PROPERTY_NAMES.has(property)))
+      ) {
+        directNetwork = true;
+      }
+    }
+    if (
+      ts.isBinaryExpression(node) &&
+      isAssignmentOperator(node.operatorToken.kind)
+    ) {
+      const property = memberName(node.left, bindings);
+      if (
+        (ts.isIdentifier(node.left) && node.left.text === "location") ||
+        property === "location" ||
+        (property !== undefined && RESOURCE_PROPERTY_NAMES.has(property))
       ) {
         directNetwork = true;
       }
     }
     if (ts.isCallExpression(node) || ts.isNewExpression(node)) {
       const expression = node.expression;
+      const calledName = memberName(expression, bindings);
       if (
         (ts.isIdentifier(expression) &&
-          DIRECT_NETWORK_IDENTIFIERS.has(expression.text)) ||
-        (ts.isPropertyAccessExpression(expression) &&
-          DIRECT_NETWORK_IDENTIFIERS.has(expression.name.text))
+          (DIRECT_NETWORK_IDENTIFIERS.has(expression.text) ||
+            expression.text === "open")) ||
+        (calledName !== undefined &&
+          (DIRECT_NETWORK_IDENTIFIERS.has(calledName) ||
+            calledName === "open" ||
+            RESOURCE_METHOD_NAMES.has(calledName)))
       ) {
         directNetwork = true;
+      }
+      if (
+        ts.isCallExpression(node) &&
+        (ts.isPropertyAccessExpression(expression) ||
+          ts.isElementAccessExpression(expression))
+      ) {
+        const receiver = expression.expression;
+        if (
+          ((calledName === "get" || calledName === "set") &&
+            isReflectExpression(receiver, bindings)) ||
+          ([
+            "apply",
+            "construct",
+            "defineProperty",
+            "deleteProperty",
+            "getOwnPropertyDescriptor",
+            "getPrototypeOf",
+            "has",
+            "isExtensible",
+            "ownKeys",
+            "preventExtensions",
+            "setPrototypeOf",
+          ].includes(calledName ?? "") &&
+            isReflectExpression(receiver, bindings) &&
+            node.arguments[0] &&
+            isBrowserGlobalExpression(node.arguments[0], bindings)) ||
+          (["getOwnPropertyDescriptor", "getOwnPropertyDescriptors"].includes(
+            calledName ?? "",
+          ) &&
+            ts.isIdentifier(receiver) &&
+            receiver.text === "Object" &&
+            node.arguments[0] &&
+            isBrowserGlobalExpression(node.arguments[0], bindings)) ||
+          (["assign", "replace", "reload"].includes(calledName ?? "") &&
+            (isBrowserGlobalExpression(receiver, bindings) ||
+              memberName(receiver, bindings) === "location")) ||
+          (["write", "writeln"].includes(calledName ?? "") &&
+            isBrowserGlobalExpression(receiver, bindings))
+        ) {
+          directNetwork = true;
+        }
+      }
+    }
+    if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
+      const tag = node.tagName.getText(sourceFile);
+      if (/^[a-z]/u.test(tag) && RESOURCE_JSX_ELEMENTS.has(tag.toLowerCase())) {
+        directNetwork = true;
+      }
+      for (const attribute of node.attributes.properties) {
+        if (!ts.isJsxAttribute(attribute)) {
+          if (!approvedDomSpreadReference(attribute)) directNetwork = true;
+          continue;
+        }
+        const name = attribute.name.getText(sourceFile);
+        const normalizedName = name.toLowerCase();
+        const attributeValue = jsxAttributeValue(attribute, bindings);
+        if (
+          name === "dangerouslySetInnerHTML" ||
+          name === "style" ||
+          (HTML_RESOURCE_ATTRIBUTES.has(normalizedName) &&
+            !(
+              tag.toLowerCase() === "a" &&
+              normalizedName === "href" &&
+              (attributeValue !== undefined ||
+                approvedInternalNavigationReference(attribute))
+            )) ||
+          (attributeValue !== undefined &&
+            containsExternalDestination(attributeValue))
+        ) {
+          directNetwork = true;
+        }
       }
     }
     ts.forEachChild(node, visit);
@@ -653,7 +1228,7 @@ function scriptBoundaryRules(path, source) {
   );
   const hasExecutableNetworkUrl = staticValues.some(
     (value) =>
-      NETWORK_URL.test(value) &&
+      containsExternalDestination(value) &&
       !generatedContractData &&
       value !== "https://stead.invalid",
   );
@@ -668,6 +1243,7 @@ function scriptBoundaryRules(path, source) {
   ) {
     rules.add("direct-browser-network");
   }
+  if (dynamicBoundaryConstruction) rules.add("dynamic-boundary-construction");
   if (DEVLANE_ONTOLOGY.test(analyzedText)) rules.add("devlane-ontology");
   return rules;
 }

@@ -66,6 +66,44 @@ interface CapturedRequest {
 const GENERIC_CORRELATION_ID = "mock-correlation-0001";
 const TRUSTED_ORIGIN = "https://stead.invalid";
 const CONTROL_OR_BACKSLASH = /[\u0000-\u001f\u007f\\]/u;
+const REQUEST_CONTENT_FIELDS = new Set([
+  "body",
+  "bodyUsed",
+  "headers",
+  "signal",
+  "url",
+]);
+const EFFECTIVE_TRANSPORT_FIELDS = Object.freeze([
+  ...new Set([
+    // Keep the standard fields explicit for auditability, then include any
+    // additional native Request getters exposed by the pinned runtime.
+    "attribute",
+    "cache",
+    "credentials",
+    "destination",
+    "duplex",
+    "integrity",
+    "isHistoryNavigation",
+    "isReloadNavigation",
+    "keepalive",
+    "method",
+    "mode",
+    "priority",
+    "redirect",
+    "referrer",
+    "referrerPolicy",
+    ...Object.getOwnPropertyNames(Request.prototype).filter((field) => {
+      const descriptor = Object.getOwnPropertyDescriptor(
+        Request.prototype,
+        field,
+      );
+      return (
+        !REQUEST_CONTENT_FIELDS.has(field) &&
+        typeof descriptor?.get === "function"
+      );
+    }),
+  ]),
+]);
 
 const GENERATED_OPERATIONS = operationDefinitions as unknown as Readonly<
   Record<PlatformOperationId, OperationDefinition>
@@ -231,6 +269,7 @@ async function requestOptions(
   const mutable = {
     path: match.pathValues,
     query: queryOptions(url, match.definition.request.query),
+    signal: request.signal,
   } as Record<string, unknown>;
 
   for (const [optionName, header] of Object.entries(
@@ -289,6 +328,15 @@ function headersMatch(actual: Headers, expected: Headers): boolean {
   );
 }
 
+function effectiveTransportMatches(actual: Request, expected: Request): boolean {
+  return (
+    EFFECTIVE_TRANSPORT_FIELDS.every(
+      (field) => Reflect.get(actual, field) === Reflect.get(expected, field),
+    ) &&
+    actual.signal.aborted === expected.signal.aborted
+  );
+}
+
 async function validateRequest(
   input: RequestInfo | URL,
   init?: RequestInit,
@@ -299,6 +347,11 @@ async function validateRequest(
   const { options, body } = await requestOptions(request, url, match);
   const generated = await generatedRequest(match.operationId, options);
   const generatedUrl = new URL(generated.input.toString(), TRUSTED_ORIGIN);
+  const generatedEffectiveRequest = await effectiveRequest(
+    generated.input,
+    generated.init,
+    generatedUrl,
+  );
   const generatedHeaders = new Headers(generated.init?.headers);
 
   if (
@@ -307,7 +360,8 @@ async function validateRequest(
     request.credentials !== generated.init?.credentials ||
     request.redirect !== generated.init?.redirect ||
     body !== generated.init?.body ||
-    !headersMatch(request.headers, generatedHeaders)
+    !headersMatch(request.headers, generatedHeaders) ||
+    !effectiveTransportMatches(request, generatedEffectiveRequest)
   ) {
     throw contractError("wire request differs from the generated client contract");
   }

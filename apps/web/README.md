@@ -21,10 +21,13 @@ npm run measure:bundle --workspace=@stead/web
 for the closed eager entry graph and the complete transitive Docs editor, Code, Delivery,
 Administration, Migration, and analytics graphs. The eager static graph must expose exactly
 those six roots as its dynamic frontier. Shared lazy chunks appear in every consuming
-capability and exactly once in the stable unique total. Any JavaScript outside those
-governed graphs fails the check. The eager gzip delta is measured against the merged
-60,808-byte minimal shell baseline; each newly introduced lazy boundary has a zero-byte
-gzip baseline. The 250 KiB eager gzip ceiling remains an absolute failure.
+capability and exactly once in the stable unique total. It also binds the exact distribution
+inventory, including HTML, Vite metadata, JavaScript, CSS, and any manifest-declared data
+asset. Undeclared files, manifest chunks outside the governed graphs, unsupported binary or
+source-map artifacts, and ungoverned HTML/CSS/JSON content fail the check. The eager gzip
+delta is measured against the merged 60,808-byte minimal shell baseline; each newly
+introduced lazy boundary has a zero-byte gzip baseline. The 250 KiB eager gzip ceiling
+remains an absolute failure.
 
 The `stead:performance` browser event contains only an allowlisted metric name, numeric
 value, and unit. It never contains a route, resource ID, query, title, body, token, policy

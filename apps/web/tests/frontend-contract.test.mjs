@@ -36,6 +36,20 @@ test("primary navigation preserves the canonical order and omits blocked capabil
   );
   const serialized = JSON.stringify(routes.primaryNavigation);
   assert.doesNotMatch(serialized, /Code|Delivery|Administration|Migration/u);
+  for (const route of routes.primaryNavigation) {
+    assert.equal(routes.internalNavigationHref(route.href), route.href);
+  }
+  for (const destination of [
+    "//outside.invalid",
+    "https://outside.invalid",
+    "/projects?redirect=//outside.invalid",
+    "#main-content",
+  ]) {
+    assert.throws(
+      () => routes.internalNavigationHref(destination),
+      /outside the canonical primary routes/u,
+    );
+  }
 });
 
 test("shell includes keyboard, screen-reader, and stable-state hooks", async () => {
@@ -121,7 +135,7 @@ test("lazy bundle graphs include transitive and shared chunks exactly once", () 
     () =>
       buildBundleMembership({
         ...manifest,
-        orphan: { file: "assets/ungoverned.mjs" },
+        orphan: { file: "assets/ungoverned.json" },
       }),
     /outside required capability graphs.*orphan/u,
   );
@@ -228,7 +242,7 @@ test("a newly imported forbidden network module cannot escape the graph gate", a
   }
 });
 
-test("statically composed network, provider, and source-ontology tokens cannot evade the graph gate", async () => {
+test("computed and runtime-composed browser boundaries cannot evade the graph gate", async () => {
   const fixtureParent =
     process.env.STEAD_TEST_TMPDIR ?? join(homedir(), ".cache", "stead-test-tmp");
   await mkdir(fixtureParent, { recursive: true });
@@ -239,12 +253,13 @@ test("statically composed network, provider, and source-ontology tokens cannot e
       [
         'const networkName = "fe" + "tch";',
         "const request = globalThis[networkName];",
+        "const reflectedRequest = Reflect.get(globalThis, networkName);",
         'const protocol = "https:";',
-        'const providerName = ["gi", "tea"].join("");',
+        "const providerName = String.fromCodePoint(103, 105, 116, 101, 97);",
         'const provider = protocol + "//" + providerName + ".invalid/api/v1/repos";',
-        'const nounSuffix = "ules";',
-        'const forbiddenNoun = "Mod" + nounSuffix;',
-        "export const bypass = () => request(provider + forbiddenNoun);",
+        "const forbiddenNoun = String.fromCharCode(77, 111, 100, 117, 108, 101, 115);",
+        "export const opaque = (codes: number[]) => String.fromCharCode(...codes);",
+        "export const bypass = () => reflectedRequest(provider + forbiddenNoun) ?? request(provider);",
       ].join("\n"),
       "utf8",
     );
@@ -257,8 +272,42 @@ test("statically composed network, provider, and source-ontology tokens cannot e
       [
         "devlane-ontology",
         "direct-browser-network",
+        "dynamic-boundary-construction",
         "provider-or-infrastructure",
       ],
+    );
+  } finally {
+    await rm(fixtureRoot, { recursive: true, force: true });
+  }
+});
+
+test("navigation, resource-loading, and external-destination sinks fail closed", async () => {
+  const fixtureParent =
+    process.env.STEAD_TEST_TMPDIR ?? join(homedir(), ".cache", "stead-test-tmp");
+  await mkdir(fixtureParent, { recursive: true });
+  const fixtureRoot = await mkdtemp(join(fixtureParent, "stead-resource-sinks-"));
+  try {
+    await writeFile(
+      join(fixtureRoot, "entry.tsx"),
+      [
+        'const destination = "//outside.invalid/resource";',
+        'const image = document.createElement("img");',
+        'image["src"] = destination;',
+        'location.assign("/unapproved-navigation");',
+        "window.open(destination);",
+        "export const Link = ({ href }: { href: string }) => <a href={href}>go</a>;",
+        "export const Spread = ({ properties }: { properties: object }) => <a {...properties}>go</a>;",
+        "export const Resource = () => <img src={destination} />;",
+      ].join("\n"),
+      "utf8",
+    );
+    const graph = await collectBrowserSourceGraph({
+      entryPath: join(fixtureRoot, "entry.tsx"),
+      repositoryRoot: fixtureRoot,
+    });
+    assert.deepEqual(
+      findBrowserBoundaryViolations(graph).map(({ rule }) => rule),
+      ["direct-browser-network"],
     );
   } finally {
     await rm(fixtureRoot, { recursive: true, force: true });
@@ -300,7 +349,19 @@ test("HTML-loaded scripts and styles are governed while external or inline execu
         entryPath: join(fixtureRoot, "index.html"),
         repositoryRoot: fixtureRoot,
       }),
-      /external or modified HTML resource URL/u,
+      /external HTML destination|external or modified HTML resource URL/u,
+    );
+
+    await writeFile(
+      join(fixtureRoot, "index.html"),
+      '<script type="module" src="&#x2f;&#x2f;outside.invalid/app.js"></script>\n',
+    );
+    await assert.rejects(
+      collectBrowserSourceGraph({
+        entryPath: join(fixtureRoot, "index.html"),
+        repositoryRoot: fixtureRoot,
+      }),
+      /HTML character references are not governed browser content/u,
     );
 
     await writeFile(
@@ -319,7 +380,7 @@ test("HTML-loaded scripts and styles are governed while external or inline execu
   }
 });
 
-test("built artifact inventory rejects orphan executable files, unknown HTML edges, and symlinks", async () => {
+test("every built artifact is manifest-bound, content-scanned, and symlink-safe", async () => {
   const fixtureParent =
     process.env.STEAD_TEST_TMPDIR ?? join(homedir(), ".cache", "stead-test-tmp");
   await mkdir(fixtureParent, { recursive: true });
@@ -366,9 +427,94 @@ test("built artifact inventory rejects orphan executable files, unknown HTML edg
     await writeFile(join(fixtureRoot, "assets/ungoverned.mjs"), "export {};\n");
     await assert.rejects(
       validateDistributionArtifacts({ distributionRoot: fixtureRoot, manifest }),
-      /executable files are outside the Vite manifest.*ungoverned\.mjs/u,
+      /distribution files are outside.*ungoverned\.mjs/u,
     );
     await rm(join(fixtureRoot, "assets/ungoverned.mjs"));
+
+    await writeFile(
+      join(fixtureRoot, "assets/provider-config.json"),
+      '{"endpoint":"//outside.invalid/api"}\n',
+    );
+    await assert.rejects(
+      validateDistributionArtifacts({ distributionRoot: fixtureRoot, manifest }),
+      /distribution files are outside.*provider-config\.json/u,
+    );
+    await rm(join(fixtureRoot, "assets/provider-config.json"));
+
+    manifest["index.html"].assets = ["assets/runtime-config.json"];
+    await writeFile(
+      join(fixtureRoot, "assets/runtime-config.json"),
+      '{"theme":"system"}\n',
+    );
+    await writeFile(
+      join(fixtureRoot, ".vite/manifest.json"),
+      `${JSON.stringify(manifest)}\n`,
+    );
+    const boundResult = await validateDistributionArtifacts({
+      distributionRoot: fixtureRoot,
+      manifest,
+    });
+    assert.ok(
+      boundResult.artifacts.some(
+        ({ file, sha256 }) =>
+          file === "assets/runtime-config.json" && /^[a-f0-9]{64}$/u.test(sha256),
+      ),
+    );
+
+    await writeFile(
+      join(fixtureRoot, "assets/runtime-config.json"),
+      '{"endpoint":"https://gitea.invalid/api/v1/repos"}\n',
+    );
+    await assert.rejects(
+      validateDistributionArtifacts({ distributionRoot: fixtureRoot, manifest }),
+      /browser artifact violates boundary rules.*runtime-config\.json/u,
+    );
+    await writeFile(
+      join(fixtureRoot, "assets/runtime-config.json"),
+      '{"theme":"system"}\n',
+    );
+
+    await writeFile(
+      join(fixtureRoot, "assets/index.css"),
+      ":root { background-image: url(//outside.invalid/pixel); }\n",
+    );
+    await assert.rejects(
+      validateDistributionArtifacts({ distributionRoot: fixtureRoot, manifest }),
+      /unsupported CSS asset URL outside @import/u,
+    );
+    await writeFile(join(fixtureRoot, "assets/index.css"), ":root {}\n");
+
+    for (const [file, contents] of [
+      ["assets/runtime.wasm", new Uint8Array([0, 97, 115, 109])],
+      ["assets/index.js.map", '{"version":3,"sources":[]}\n'],
+    ]) {
+      manifest["index.html"].assets.push(file);
+      await writeFile(join(fixtureRoot, file), contents);
+      await writeFile(
+        join(fixtureRoot, ".vite/manifest.json"),
+        `${JSON.stringify(manifest)}\n`,
+      );
+      await assert.rejects(
+        validateDistributionArtifacts({ distributionRoot: fixtureRoot, manifest }),
+        new RegExp(`browser artifact type is not governed: ${file.replace(".", "\\.")}$`, "u"),
+      );
+      manifest["index.html"].assets.pop();
+      await rm(join(fixtureRoot, file));
+    }
+    await writeFile(
+      join(fixtureRoot, ".vite/manifest.json"),
+      `${JSON.stringify(manifest)}\n`,
+    );
+
+    await writeFile(
+      join(fixtureRoot, "assets/code.js"),
+      "export {};\n//# sourceMappingURL=code.js.map\n",
+    );
+    await assert.rejects(
+      validateDistributionArtifacts({ distributionRoot: fixtureRoot, manifest }),
+      /JavaScript source-map loading is not governed.*code\.js/u,
+    );
+    await writeFile(join(fixtureRoot, "assets/code.js"), "export {};\n");
 
     await writeFile(
       join(fixtureRoot, "unreviewed.html"),
@@ -422,6 +568,37 @@ test("Vite glob and CSS asset edges cannot bypass the browser graph", async () =
         repositoryRoot: globRoot,
       }),
       /Vite import\.meta\.glob is not a governed browser edge/u,
+    );
+
+    await writeFile(
+      join(globRoot, "entry.ts"),
+      'export const modules = import.meta["glob"]("./hidden/*.ts");\n',
+      "utf8",
+    );
+    await assert.rejects(
+      collectBrowserSourceGraph({
+        entryPath: join(globRoot, "entry.ts"),
+        repositoryRoot: globRoot,
+      }),
+      /Vite import\.meta APIs are not governed browser edges/u,
+    );
+
+    await writeFile(
+      join(globRoot, "entry.ts"),
+      'import "./runtime-config.json";\n',
+      "utf8",
+    );
+    await writeFile(
+      join(globRoot, "runtime-config.json"),
+      '{"providerParts":["gi","tea"]}\n',
+      "utf8",
+    );
+    await assert.rejects(
+      collectBrowserSourceGraph({
+        entryPath: join(globRoot, "entry.ts"),
+        repositoryRoot: globRoot,
+      }),
+      /browser module type is not governed.*runtime-config\.json/u,
     );
 
     await writeFile(cssRoot + "/entry.ts", 'import "./styles.css";\n', "utf8");
