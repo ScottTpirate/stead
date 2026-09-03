@@ -311,6 +311,29 @@ test("request validation and serialization share one closed own-data snapshot", 
   );
   assert.equal(pathAccessorReads, 0);
   assert.equal(sentBodies.length, 1);
+
+  let optionAccessorReads = 0;
+  const accessorOptions = {};
+  Object.defineProperty(accessorOptions, "path", {
+    enumerable: true,
+    get() {
+      optionAccessorReads += 1;
+      return { project_id: VALID_UUID };
+    },
+  });
+  for (const options of [
+    accessorOptions,
+    Object.assign(Object.create({ inherited: true }), validOperationOptions.getProject),
+    { ...validOperationOptions.getProject, undeclared: "secret" },
+    { ...validOperationOptions.getProject, signal: {} },
+  ]) {
+    await assert.rejects(
+      client.request("getProject", options),
+      /request options must be a closed plain own-data object/u,
+    );
+    assert.equal(sentBodies.length, 1);
+  }
+  assert.equal(optionAccessorReads, 0);
 });
 
 test("response envelope rejects unsafe metadata and media before reading the body", async () => {
@@ -328,6 +351,16 @@ test("response envelope rejects unsafe metadata and media before reading the bod
       "content-type": "application/json",
       "stead-schema-version": "1.0",
       "x-correlation-id": `a${"x".repeat(128)}`,
+    },
+    {
+      "content-type": "application/json",
+      "stead-schema-version": "1.0",
+      etag: 'W/"1"',
+    },
+    {
+      "content-type": "application/json",
+      "stead-schema-version": "1.0",
+      etag: "<script>alert(1)</script>",
     },
   ]) {
     let reads = 0;
@@ -354,6 +387,41 @@ test("response envelope rejects unsafe metadata and media before reading the bod
         assert.doesNotMatch(error.message, /protected|script|garbage/u);
         return true;
       },
+    );
+    assert.equal(reads, 0);
+  }
+
+  for (const [operationId, headers] of [
+    [
+      "getPrincipal",
+      { "content-type": "application/json", "stead-schema-version": "1.0" },
+    ],
+    [
+      "listTeams",
+      {
+        "content-type": "application/json",
+        "stead-schema-version": "1.0",
+        etag: '"1"',
+      },
+    ],
+  ]) {
+    let reads = 0;
+    const client = createPlatformClient({
+      fetchImplementation: async () => ({
+        ok: true,
+        status: 200,
+        headers: new Headers(headers),
+        body: {
+          getReader() {
+            reads += 1;
+            throw new Error("undeclared metadata must fail before body read");
+          },
+        },
+      }),
+    });
+    await assert.rejects(
+      client.request(operationId, validOperationOptions[operationId]),
+      (error) => error instanceof PlatformApiError && error.status === 502,
     );
     assert.equal(reads, 0);
   }

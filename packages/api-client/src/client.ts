@@ -111,6 +111,10 @@ interface ResponseDefinition {
     readonly required: boolean;
     readonly schema: JsonSchema;
   } | null;
+  readonly etag: {
+    readonly schema: JsonSchema;
+    readonly strongEtag: boolean;
+  } | null;
 }
 
 interface OperationDefinition {
@@ -127,6 +131,14 @@ const STRONG_ETAG_PATTERN = /^"[\x21\x23-\x7e]*"$/u;
 const GENERIC_SCHEMA_VERSION_PATTERN = /^[1-9][0-9]*\.[0-9]+$/u;
 const MAX_REQUEST_JSON_DEPTH = 100;
 const JSON_STRINGIFY = JSON.stringify;
+const REQUEST_OPTION_KEYS = new Set([
+  "path",
+  "query",
+  "body",
+  "ifMatch",
+  "idempotencyKey",
+  "signal",
+]);
 
 function assertCanonicalBasePath(basePath: string): void {
   if (
@@ -425,6 +437,49 @@ function appendQuery(path: string, query: Readonly<Record<string, unknown>>): st
   return encoded ? `${path}?${encoded}` : path;
 }
 
+function snapshotRequestOptions(rawOptions: unknown): PlatformRequestOptions {
+  try {
+    if (
+      rawOptions === null ||
+      typeof rawOptions !== "object" ||
+      Array.isArray(rawOptions)
+    ) {
+      throw new Error("request options are not an object");
+    }
+    const prototype = Reflect.getPrototypeOf(rawOptions);
+    if (prototype !== Object.prototype && prototype !== null) {
+      throw new Error("request options are not plain");
+    }
+
+    const snapshot = Object.create(null) as Record<string, unknown>;
+    for (const key of Reflect.ownKeys(rawOptions)) {
+      if (typeof key !== "string" || !REQUEST_OPTION_KEYS.has(key)) {
+        throw new Error("unexpected request option");
+      }
+      const descriptor = Reflect.getOwnPropertyDescriptor(rawOptions, key);
+      if (!descriptor || !("value" in descriptor) || !descriptor.enumerable) {
+        throw new Error("request option is not own enumerable data");
+      }
+      if (
+        key === "signal" &&
+        descriptor.value !== undefined &&
+        (typeof AbortSignal === "undefined" || !(descriptor.value instanceof AbortSignal))
+      ) {
+        throw new Error("request signal is not an AbortSignal");
+      }
+      Object.defineProperty(snapshot, key, {
+        value: descriptor.value,
+        enumerable: true,
+        configurable: false,
+        writable: false,
+      });
+    }
+    return Object.freeze(snapshot) as PlatformRequestOptions;
+  } catch {
+    throw new Error("request options must be a closed plain own-data object");
+  }
+}
+
 function validateRequest(
   definition: OperationDefinition,
   options: PlatformRequestOptions,
@@ -508,11 +563,26 @@ function validatedSchemaVersion(
     throw new PlatformApiError(502);
   }
   if (value === null) return undefined;
+  if (!response.ok || !contract) throw new PlatformApiError(502);
   if (!GENERIC_SCHEMA_VERSION_PATTERN.test(value)) throw new PlatformApiError(502);
-  if (contract && !schemaMatches(value, contract.schema)) {
+  if (!schemaMatches(value, contract.schema)) {
     throw new PlatformApiError(502);
   }
   if (Number(value.split(".", 1)[0]) !== definition.compatibleSchemaMajor) {
+    throw new PlatformApiError(502);
+  }
+  return value;
+}
+
+function validatedEtag(
+  response: Response,
+  definition: ResponseDefinition,
+): string | undefined {
+  const value = response.headers.get("etag");
+  if (value === null) return undefined;
+  if (!response.ok || !definition.etag) throw new PlatformApiError(502);
+  if (!schemaMatches(value, definition.etag.schema)) throw new PlatformApiError(502);
+  if (definition.etag.strongEtag && !STRONG_ETAG_PATTERN.test(value)) {
     throw new PlatformApiError(502);
   }
   return value;
@@ -594,7 +664,11 @@ export function createPlatformClient(
       requestOptions: PlatformRequestOptions = {},
     ): Promise<PlatformResponse<TData>> {
       const definition = operationDefinitions[operationId] as OperationDefinition;
-      const validated = validateRequest(definition, requestOptions);
+      if (!definition) throw new Error("unknown generated Platform operation");
+      const validated = validateRequest(
+        definition,
+        snapshotRequestOptions(requestOptions),
+      );
       const operationPath = replacePathParameters(definition.path, validated.path);
       const url = appendQuery(`${basePath}${operationPath}`, validated.query);
 
@@ -615,6 +689,7 @@ export function createPlatformClient(
         throw new PlatformApiError(502);
       }
       const schemaVersion = validatedSchemaVersion(response, definition.response);
+      const etag = validatedEtag(response, definition.response);
       const headerCorrelationId = validatedCorrelationId(
         response.headers.get("x-correlation-id"),
       );
@@ -631,7 +706,6 @@ export function createPlatformClient(
       });
       if (!response.ok) throw new PlatformApiError(response.status, correlationId);
 
-      const etag = response.headers.get("etag");
       return {
         data: body as TData,
         status: response.status,

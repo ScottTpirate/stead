@@ -125,17 +125,126 @@ async function resolveLocalImport(importer, specifier, root) {
   throw new Error(`unresolved local browser import ${specifier} from ${importer}`);
 }
 
-function cssImports(source) {
-  return [...source.matchAll(/@import\s+(?:url\(\s*)?["']([^"']+)["']/gu)].map(
-    (match) => match[1],
+function cssImports(path, source) {
+  const scanned = source.replace(/\/\*[\s\S]*?\*\//gu, (comment) =>
+    " ".repeat(comment.length),
   );
+  if (scanned.includes("\\")) {
+    throw new Error(`CSS escapes are not governed browser edges in ${path}`);
+  }
+  if (/\b(?:-webkit-)?image-set\s*\(/iu.test(scanned)) {
+    throw new Error(`CSS image-set assets are not governed browser edges in ${path}`);
+  }
+  const importRanges = [];
+  const imports = [];
+  for (const match of scanned.matchAll(/@import\b/giu)) {
+    const tail = scanned.slice(match.index);
+    const parsed = /^@import\s+(?:"([^"\\\r\n]+)"|'([^'\\\r\n]+)'|url\(\s*(?:"([^"\\\r\n]+)"|'([^'\\\r\n]+)'|([^"'()\\\s]+))\s*\))/iu.exec(
+      tail,
+    );
+    if (!parsed) {
+      throw new Error(`unsupported CSS import syntax in ${path}`);
+    }
+    const specifier = parsed.slice(1).find((value) => value !== undefined);
+    if (!specifier) throw new Error(`empty CSS import in ${path}`);
+    imports.push(specifier);
+    importRanges.push([match.index, match.index + parsed[0].length]);
+  }
+
+  for (const match of scanned.matchAll(/\burl\s*\(/giu)) {
+    if (
+      !importRanges.some(
+        ([start, end]) => match.index >= start && match.index < end,
+      )
+    ) {
+      throw new Error(`unsupported CSS asset URL outside @import in ${path}`);
+    }
+  }
+  return imports;
+}
+
+function scriptImports(path, source) {
+  const scriptKind = path.endsWith(".tsx") || path.endsWith(".jsx")
+    ? ts.ScriptKind.TSX
+    : path.endsWith(".js") || path.endsWith(".mjs")
+      ? ts.ScriptKind.JS
+      : ts.ScriptKind.TS;
+  const sourceFile = ts.createSourceFile(
+    path,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    scriptKind,
+  );
+  if (sourceFile.parseDiagnostics.length > 0) {
+    throw new Error(`browser module has TypeScript parse errors: ${path}`);
+  }
+
+  const imports = [];
+  const visit = (node) => {
+    if (
+      (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
+      node.moduleSpecifier
+    ) {
+      if (!ts.isStringLiteral(node.moduleSpecifier)) {
+        throw new Error(`non-literal browser module edge in ${path}`);
+      }
+      imports.push(node.moduleSpecifier.text);
+    }
+    if (ts.isImportEqualsDeclaration(node)) {
+      throw new Error(`TypeScript import-equals is not a governed browser edge in ${path}`);
+    }
+    if (ts.isCallExpression(node)) {
+      if (node.expression.kind === ts.SyntaxKind.ImportKeyword) {
+        if (node.arguments.length !== 1 || !ts.isStringLiteral(node.arguments[0])) {
+          throw new Error(`non-literal dynamic browser import in ${path}`);
+        }
+        imports.push(node.arguments[0].text);
+      }
+      if (
+        ts.isIdentifier(node.expression) &&
+        node.expression.text === "require"
+      ) {
+        throw new Error(`CommonJS require is not a governed browser edge in ${path}`);
+      }
+      if (
+        ts.isPropertyAccessExpression(node.expression) &&
+        ts.isMetaProperty(node.expression.expression) &&
+        node.expression.expression.keywordToken === ts.SyntaxKind.ImportKeyword &&
+        ["glob", "globEager"].includes(node.expression.name.text)
+      ) {
+        throw new Error(`Vite import.meta.${node.expression.name.text} is not a governed browser edge in ${path}`);
+      }
+      if (
+        ts.isPropertyAccessExpression(node.expression) &&
+        node.expression.name.text === "register" &&
+        node.expression.expression.getText(sourceFile).replaceAll(/\s/gu, "").endsWith(".serviceWorker")
+      ) {
+        throw new Error(`service-worker registration is not a governed browser edge in ${path}`);
+      }
+    }
+    if (ts.isNewExpression(node) && ts.isIdentifier(node.expression)) {
+      if (["Worker", "SharedWorker"].includes(node.expression.text)) {
+        throw new Error(`${node.expression.text} is not a governed browser edge in ${path}`);
+      }
+      if (
+        node.expression.text === "URL" &&
+        node.arguments?.some((argument) =>
+          argument.getText(sourceFile).replaceAll(/\s/gu, "").includes("import.meta.url"),
+        )
+      ) {
+        throw new Error(`import.meta.url asset loading is not a governed browser edge in ${path}`);
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return imports;
 }
 
 function moduleImports(path, source) {
-  if (path.endsWith(".css")) return cssImports(source);
-  return ts
-    .preProcessFile(source, true, true)
-    .importedFiles.map((entry) => entry.fileName);
+  if (path.endsWith(".css")) return cssImports(path, source);
+  return scriptImports(path, source);
 }
 
 function packageName(specifier) {

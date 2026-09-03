@@ -204,6 +204,60 @@ test("a newly imported forbidden network module cannot escape the graph gate", a
   }
 });
 
+test("Vite glob and CSS asset edges cannot bypass the browser graph", async () => {
+  const fixtureParent =
+    process.env.STEAD_TEST_TMPDIR ?? join(homedir(), ".cache", "stead-test-tmp");
+  await mkdir(fixtureParent, { recursive: true });
+  const globRoot = await mkdtemp(join(fixtureParent, "stead-browser-glob-"));
+  const cssRoot = await mkdtemp(join(fixtureParent, "stead-browser-css-"));
+  try {
+    await writeFile(
+      join(globRoot, "entry.ts"),
+      'export const modules = import.meta.glob("./hidden/*.ts");\n',
+      "utf8",
+    );
+    await assert.rejects(
+      collectBrowserSourceGraph({
+        entryPath: join(globRoot, "entry.ts"),
+        repositoryRoot: globRoot,
+      }),
+      /Vite import\.meta\.glob is not a governed browser edge/u,
+    );
+
+    await writeFile(cssRoot + "/entry.ts", 'import "./styles.css";\n', "utf8");
+    await writeFile(cssRoot + "/styles.css", "@IMPORT url(./hidden.css);\n", "utf8");
+    await writeFile(
+      cssRoot + "/hidden.css",
+      ":root { --unapproved-provider: gitea; }\n",
+      "utf8",
+    );
+    const graph = await collectBrowserSourceGraph({
+      entryPath: join(cssRoot, "entry.ts"),
+      repositoryRoot: cssRoot,
+    });
+    assert.deepEqual(
+      findBrowserBoundaryViolations(graph).map(({ rule }) => rule),
+      ["provider-or-infrastructure"],
+    );
+
+    await writeFile(
+      cssRoot + "/styles.css",
+      "body { background-image: url(./untracked.svg); }\n",
+      "utf8",
+    );
+    await assert.rejects(
+      collectBrowserSourceGraph({
+        entryPath: join(cssRoot, "entry.ts"),
+        repositoryRoot: cssRoot,
+      }),
+      /unsupported CSS asset URL outside @import/u,
+    );
+  } finally {
+    await rm(globRoot, { recursive: true, force: true });
+    await rm(cssRoot, { recursive: true, force: true });
+  }
+});
+
 test("browser source paths reject symlinks, realpath escapes, and special components", async () => {
   const fixtureParent =
     process.env.STEAD_TEST_TMPDIR ?? join(homedir(), ".cache", "stead-test-tmp");

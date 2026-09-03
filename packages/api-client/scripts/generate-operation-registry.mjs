@@ -238,6 +238,23 @@ async function responseDefinition(operation) {
       `${operation.operationId}.response.Stead-Schema-Version`,
     );
   }
+  const etagHeaders = successes.map((response) => response.headers?.ETag);
+  const declaresEtag = etagHeaders.every(Boolean);
+  if (!declaresEtag && etagHeaders.some(Boolean)) {
+    throw new Error(`operation ${operation.operationId} inconsistently declares ETag`);
+  }
+  const etag = declaresEtag
+    ? {
+        schema: (await dereference(etagHeaders[0])).schema,
+        strongEtag: /strong/iu.test(etagHeaders[0].description ?? ""),
+      }
+    : null;
+  if (etag) {
+    assertSupportedRequestSchema(
+      etag.schema,
+      `${operation.operationId}.response.ETag`,
+    );
+  }
   const compatibleSchemaMajor =
     contract["x-stead-versioning"]?.compatible_schema_major;
   if (!Number.isInteger(compatibleSchemaMajor)) {
@@ -247,6 +264,7 @@ async function responseDefinition(operation) {
     successMediaTypes,
     errorMediaTypes,
     schemaVersion,
+    etag,
     compatibleSchemaMajor,
   };
 }
