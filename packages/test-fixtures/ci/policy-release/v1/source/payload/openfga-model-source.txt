@@ -1,0 +1,1 @@
+fixture-only OpenFGA 1.1 canonical source digest input; not an executable authorization model
