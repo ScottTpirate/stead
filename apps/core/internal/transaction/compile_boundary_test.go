@@ -122,7 +122,7 @@ func TestForeignModulesAndCallersCannotCompileForbiddenCapabilities(t *testing.T
 	if err := decoder.Decode(&trailing); err != io.EOF {
 		t.Fatal("compile-fail inventory contains trailing data")
 	}
-	if inventory.Scope != "P1-015-CORE-PORTS compile-time negative boundaries" || len(inventory.Cases) != 15 {
+	if inventory.Scope != "P1-015-CORE-PORTS compile-time negative boundaries" || len(inventory.Cases) != 16 {
 		t.Fatalf("compile-fail inventory drifted: %q cases=%d", inventory.Scope, len(inventory.Cases))
 	}
 	seen := make(map[string]struct{}, len(inventory.Cases))

@@ -68,13 +68,20 @@ type PlanTemplate struct {
 // one PlanTemplate. Its fields are opaque, so a caller cannot replace or
 // reorder participants. Bind accepts no template key, owner, or operation.
 type PlanContract[T any] struct {
-	definition *templateDefinition
-	operations []RegisteredOperation[T]
+	definition       *templateDefinition
+	operations       []RegisteredOperation[T]
+	snapshotProfile  invocationSnapshotProfile
+	coordinatorOwned bool
 }
 
 // NewPlanContract freezes a typed plan registration before the registry can
-// serve. Mutating the caller's slices afterward cannot affect it.
+// serve. Mutating the caller's slices afterward cannot affect it. Invocation
+// snapshots are contract-owned: callers cannot provide a copier or codec.
 func NewPlanContract[T any](contractVersion, key string, participants []TypedParticipant[T], policy OutboxPolicy) (PlanTemplate, PlanContract[T], error) {
+	snapshotProfile, err := newInvocationSnapshotProfile[T]()
+	if err != nil {
+		return PlanTemplate{}, PlanContract[T]{}, err
+	}
 	definitions := make([]typedParticipantDefinition[T], len(participants))
 	for index, participant := range participants {
 		definitions[index] = typedParticipantDefinition[T]{
@@ -84,7 +91,7 @@ func NewPlanContract[T any](contractVersion, key string, participants []TypedPar
 			operation:     participant.Operation,
 		}
 	}
-	return newPlanContract(contractVersion, key, definitions, policy)
+	return newPlanContract(contractVersion, key, definitions, policy, snapshotProfile, false)
 }
 
 type typedParticipantDefinition[T any] struct {
@@ -96,7 +103,11 @@ type typedParticipantDefinition[T any] struct {
 	durableEffectHandoff      bool
 }
 
-func newPlanContract[T any](contractVersion, key string, participants []typedParticipantDefinition[T], policy OutboxPolicy) (PlanTemplate, PlanContract[T], error) {
+func newCoordinatorPlanContract[T any](contractVersion, key string, participants []typedParticipantDefinition[T], policy OutboxPolicy) (PlanTemplate, PlanContract[T], error) {
+	return newPlanContract(contractVersion, key, participants, policy, invocationSnapshotProfile{}, true)
+}
+
+func newPlanContract[T any](contractVersion, key string, participants []typedParticipantDefinition[T], policy OutboxPolicy, snapshotProfile invocationSnapshotProfile, coordinatorOwned bool) (PlanTemplate, PlanContract[T], error) {
 	definition := &templateDefinition{
 		seal:            &templateSeal{},
 		contractVersion: contractVersion,
@@ -127,8 +138,10 @@ func newPlanContract[T any](contractVersion, key string, participants []typedPar
 		return PlanTemplate{}, PlanContract[T]{}, err
 	}
 	return PlanTemplate{definition: cloneTemplateDefinition(definition)}, PlanContract[T]{
-		definition: cloneTemplateDefinition(definition),
-		operations: slices.Clone(operations),
+		definition:       cloneTemplateDefinition(definition),
+		operations:       slices.Clone(operations),
+		snapshotProfile:  snapshotProfile,
+		coordinatorOwned: coordinatorOwned,
 	}, nil
 }
 
@@ -270,7 +283,7 @@ type Plan struct {
 	templateKey  string
 	participants []runtimeParticipant
 	outboxPolicy OutboxPolicy
-	intent       func() *outbox.ValidatedIntent
+	intent       func() (*outbox.ValidatedIntent, error)
 	state        *planState
 }
 
@@ -284,16 +297,41 @@ type runtimeParticipant struct {
 
 // Bind accepts only the exact Registry containing this contract's immutable
 // template, the contract's static invocation type T, and an optional validated
-// intent. It accepts no key, owner, participant, operation, or ordering input.
+// intent. It accepts no key, owner, participant, operation, ordering, snapshot,
+// or codec input. Reference-bearing invocations are bounded and snapshotted;
+// every participant receives a separately decoded view.
 func (contract PlanContract[T]) Bind(registry Registry, invocation T, intent *outbox.ValidatedIntent) (Plan, error) {
-	return contract.bind(registry, invocation, intent, nil)
+	return contract.bindImmutable(registry, invocation, intent, nil)
 }
 
-func (contract PlanContract[T]) bind(registry Registry, invocation T, intent *outbox.ValidatedIntent, deferredIntent func(T) *outbox.ValidatedIntent) (Plan, error) {
+func (contract PlanContract[T]) bindImmutable(registry Registry, invocation T, intent *outbox.ValidatedIntent, deferredIntent func(T) *outbox.ValidatedIntent) (Plan, error) {
+	if contract.coordinatorOwned {
+		return Plan{}, fail(CodeInvalidPlan)
+	}
+	snapshot, err := captureImmutableInvocation(contract.snapshotProfile, invocation)
+	if err != nil {
+		return Plan{}, fail(CodeInvalidPlan)
+	}
+	return contract.bindView(registry, snapshot.view, intent, deferredIntent)
+}
+
+// bindCoordinatorOwned is reserved for coordinator-created result carriers.
+// The coordinator transfers exclusive ownership of invocation and does not
+// expose it until Execute returns. Public request plans always use Bind's
+// immutable, independently decoded snapshot views.
+func (contract PlanContract[T]) bindCoordinatorOwned(registry Registry, invocation T, deferredIntent func(T) *outbox.ValidatedIntent) (Plan, error) {
+	if !contract.coordinatorOwned || isNil(invocation) {
+		return Plan{}, fail(CodeInvalidPlan)
+	}
+	view := func() (T, error) { return invocation, nil }
+	return contract.bindView(registry, view, nil, deferredIntent)
+}
+
+func (contract PlanContract[T]) bindView(registry Registry, invocationView func() (T, error), intent *outbox.ValidatedIntent, deferredIntent func(T) *outbox.ValidatedIntent) (Plan, error) {
 	if contract.definition == nil || contract.definition.seal == nil || registry.seal == nil || len(contract.operations) == 0 {
 		return Plan{}, fail(CodeInvalidPlan)
 	}
-	if isNil(invocation) {
+	if invocationView == nil {
 		return Plan{}, fail(CodeInvalidPlan)
 	}
 	registered, exists := registry.templates[contract.definition.key]
@@ -318,6 +356,10 @@ func (contract PlanContract[T]) bind(registry Registry, invocation T, intent *ou
 			logicalAuthorizationAudit: definition.logicalAuthorizationAudit,
 			durableEffectHandoff:      definition.durableEffectHandoff,
 			operation: func(ctx context.Context, session *sessionState) error {
+				invocation, err := invocationView()
+				if err != nil || isNil(invocation) {
+					return fail(CodeParticipantFailed)
+				}
 				return typedOperation.run(ctx, session, invocation)
 			},
 		}
@@ -336,15 +378,19 @@ func (contract PlanContract[T]) bind(registry Registry, invocation T, intent *ou
 	if registered.definition.outboxPolicy == OutboxRequired && intentCopy == nil && deferredIntent == nil {
 		return Plan{}, fail(CodeInvalidPlan)
 	}
-	intentSource := func() *outbox.ValidatedIntent {
+	intentSource := func() (*outbox.ValidatedIntent, error) {
 		if deferredIntent != nil {
-			return deferredIntent(invocation)
+			invocation, err := invocationView()
+			if err != nil || isNil(invocation) {
+				return nil, fail(CodeOutboxFailed)
+			}
+			return deferredIntent(invocation), nil
 		}
 		if intentCopy == nil {
-			return nil
+			return nil, nil
 		}
 		value := *intentCopy
-		return &value
+		return &value, nil
 	}
 	return Plan{
 		registry:     registry.seal,

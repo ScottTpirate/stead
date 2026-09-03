@@ -242,7 +242,7 @@ type participantControl struct {
 }
 
 type testInvocation struct {
-	prefix string
+	Prefix string
 }
 
 func registeredOperationForTest[T any](backend *fakeBackend, owner string, execute func(context.Context, Session, T) error, invoke func(context.Context, OperationPort[T], T) error) RegisteredOperation[T] {
@@ -286,7 +286,7 @@ func registeredTestPlan(backend *fakeBackend, controls []participantControl, pol
 			DeclaresWrite: true,
 		}
 		backendOperation, err := NewBackendOperation(backend.backendContract(), owner, func(ctx context.Context, session Session, invocation testInvocation) error {
-			return backend.stage(ctx, session, owner, invocation.prefix+key)
+			return backend.stage(ctx, session, owner, invocation.Prefix+key)
 		})
 		if err != nil {
 			panic(err)

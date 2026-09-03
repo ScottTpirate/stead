@@ -43,6 +43,12 @@ type benchmarkResponse struct{}
 func (benchmarkResponse) Release(context.Context) error { return nil }
 func (benchmarkResponse) Suppress()                     {}
 
+type benchmarkReferenceInvocation struct {
+	ResourceID string
+	Items      []string
+	Attributes map[string]string
+}
+
 func benchmarkRegistry(b testing.TB) (BackendContract, Registry, PlanContract[struct{}]) {
 	b.Helper()
 	backend, err := NewBackendContract(benchmarkBackend{})
@@ -106,6 +112,61 @@ func BenchmarkExecuteClosedPlan(b *testing.B) {
 	b.ResetTimer()
 	for range b.N {
 		plan, err := contract.Bind(registry, struct{}{}, &intent)
+		if err != nil {
+			b.Fatal(err)
+		}
+		if _, err := coordinator.Execute(context.Background(), plan); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkExecuteReferenceSnapshotPlan(b *testing.B) {
+	backendValue := benchmarkBackend{}
+	backend, err := NewBackendContract(backendValue)
+	if err != nil {
+		b.Fatal(err)
+	}
+	operation := func(owner string) RegisteredOperation[*benchmarkReferenceInvocation] {
+		backendOperation, err := NewBackendOperation(backend, owner, func(context.Context, Session, *benchmarkReferenceInvocation) error { return nil })
+		if err != nil {
+			b.Fatal(err)
+		}
+		registered, err := NewRegisteredOperation(backendOperation, func(ctx context.Context, port OperationPort[*benchmarkReferenceInvocation], _ *benchmarkReferenceInvocation) error {
+			return port.Execute(ctx)
+		})
+		if err != nil {
+			b.Fatal(err)
+		}
+		return registered
+	}
+	template, contract, err := NewPlanContract(
+		ContractVersionV1,
+		"benchmark_reference_snapshot",
+		[]TypedParticipant[*benchmarkReferenceInvocation]{
+			{Key: "authorization", DeclaresWrite: true, Operation: operation("authorization")},
+			{Key: "domain", After: []string{"authorization"}, DeclaresWrite: true, Operation: operation("domain")},
+		},
+		OutboxRequired,
+	)
+	if err != nil {
+		b.Fatal(err)
+	}
+	registry, err := NewRegistry([]PlanTemplate{template})
+	if err != nil {
+		b.Fatal(err)
+	}
+	coordinator := benchmarkCoordinator(b, backend, registry, nil)
+	intent := testIntent()
+	invocation := &benchmarkReferenceInvocation{
+		ResourceID: "stead:workitem:01JTESTREFERENCE000000000001",
+		Items:      []string{"first", "second", "third"},
+		Attributes: map[string]string{"scope": "project", "version": "7"},
+	}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for range b.N {
+		plan, err := contract.Bind(registry, invocation, &intent)
 		if err != nil {
 			b.Fatal(err)
 		}

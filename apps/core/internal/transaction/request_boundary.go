@@ -150,7 +150,7 @@ func (coordinator *Coordinator) FinalizeRead(ctx context.Context) (BoundRevision
 		return BoundRevision{}, Report{}, fail(CodeBoundaryDenied)
 	}
 	invocation := &FinalAuthorizationAuditOperation{}
-	plan, err := coordinator.finalReadContract.bind(coordinator.registry, invocation, nil, func(value *FinalAuthorizationAuditOperation) *outbox.ValidatedIntent {
+	plan, err := coordinator.finalReadContract.bindCoordinatorOwned(coordinator.registry, invocation, func(value *FinalAuthorizationAuditOperation) *outbox.ValidatedIntent {
 		return value.intent()
 	})
 	if err != nil {

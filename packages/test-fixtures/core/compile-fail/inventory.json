@@ -13,6 +13,7 @@
     {"id": "forge_durable_receipt", "placement": "apps_core", "source": "forge_durable_receipt.go.txt", "expected": "unknown field Opaque"},
     {"id": "raw_outbox_table", "placement": "apps_core", "source": "raw_outbox_table.go.txt", "expected": "scope.Exec undefined"},
     {"id": "wrong_invocation_type", "placement": "apps_core", "source": "wrong_invocation_type.go.txt", "expected": "cannot use \"wrong invocation type\""},
+    {"id": "caller_snapshotter", "placement": "apps_core", "source": "caller_snapshotter.go.txt", "expected": "contract.BindWithSnapshot undefined"},
     {"id": "dynamic_participant", "placement": "apps_core", "source": "dynamic_participant.go.txt", "expected": "unknown field Participants"},
     {"id": "separable_validity", "placement": "apps_core", "source": "separable_validity.go.txt", "expected": "port.ValidFor undefined"},
     {"id": "owner_session_access", "placement": "apps_core", "source": "owner_session_access.go.txt", "expected": "port.Session undefined"}

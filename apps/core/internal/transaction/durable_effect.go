@@ -129,7 +129,7 @@ func (coordinator *Coordinator) PrepareDurableEffect(ctx context.Context) (Durab
 		return DurableEffectReceipt{}, Report{}, fail(CodeDurableHandoffFail)
 	}
 	invocation := &DurableEffectOperation{}
-	plan, err := coordinator.durableEffectContract.bind(coordinator.registry, invocation, nil, func(value *DurableEffectOperation) *outbox.ValidatedIntent {
+	plan, err := coordinator.durableEffectContract.bindCoordinatorOwned(coordinator.registry, invocation, func(value *DurableEffectOperation) *outbox.ValidatedIntent {
 		return value.intent()
 	})
 	if err != nil {

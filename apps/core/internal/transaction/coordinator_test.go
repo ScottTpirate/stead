@@ -438,12 +438,20 @@ func TestCancellationBeforeBeginAndDeadlineFailClosed(t *testing.T) {
 
 func TestConcurrentSessionsInterleaveAndKeepCommitRollbackOutboxIndependent(t *testing.T) {
 	type invocation struct {
-		label   string
+		label string
+		fail  bool
+	}
+	type invocationControl struct {
 		entered chan struct{}
 		proceed chan struct{}
-		fail    bool
 	}
 	backend := &fakeBackend{}
+	aEntered, bEntered := make(chan struct{}), make(chan struct{})
+	aProceed, bProceed := make(chan struct{}), make(chan struct{})
+	controls := map[string]invocationControl{
+		"a": {entered: aEntered, proceed: aProceed},
+		"b": {entered: bEntered, proceed: bProceed},
+	}
 	participants := []TypedParticipant[invocation]{
 		{Key: "first", DeclaresWrite: true, Operation: passthroughOperationForTest(backend, "owner", func(value invocation) string { return value.label + ":first" })},
 		{Key: "second", After: []string{"first"}, DeclaresWrite: true, Operation: registeredOperationForTest(
@@ -453,8 +461,9 @@ func TestConcurrentSessionsInterleaveAndKeepCommitRollbackOutboxIndependent(t *t
 				return backend.stage(ctx, session, "owner", value.label+":second")
 			},
 			func(ctx context.Context, port OperationPort[invocation], value invocation) error {
-				close(value.entered)
-				<-value.proceed
+				control := controls[value.label]
+				close(control.entered)
+				<-control.proceed
 				if err := port.Execute(ctx); err != nil {
 					return err
 				}
@@ -476,13 +485,11 @@ func TestConcurrentSessionsInterleaveAndKeepCommitRollbackOutboxIndependent(t *t
 	appender := &fakeAppender{backend: backend}
 	coordinator := newTestCoordinator(backend, registry, appender, nil, nil)
 	intent := testIntent()
-	aEntered, bEntered := make(chan struct{}), make(chan struct{})
-	aProceed, bProceed := make(chan struct{}), make(chan struct{})
-	planA, err := contract.Bind(registry, invocation{label: "a", entered: aEntered, proceed: aProceed}, &intent)
+	planA, err := contract.Bind(registry, invocation{label: "a"}, &intent)
 	if err != nil {
 		t.Fatal(err)
 	}
-	planB, err := contract.Bind(registry, invocation{label: "b", entered: bEntered, proceed: bProceed, fail: true}, &intent)
+	planB, err := contract.Bind(registry, invocation{label: "b", fail: true}, &intent)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -658,7 +665,7 @@ func TestCrossSwappedLiveOutboxScopesFailExactReceiptVerification(t *testing.T) 
 	intent := testIntent()
 	plans := make([]Plan, 2)
 	for index, label := range []string{"a:", "b:"} {
-		plans[index], err = contract.Bind(registry, testInvocation{prefix: label}, &intent)
+		plans[index], err = contract.Bind(registry, testInvocation{Prefix: label}, &intent)
 		if err != nil {
 			t.Fatal(err)
 		}

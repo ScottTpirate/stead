@@ -106,7 +106,7 @@ func (coordinator *Coordinator) reservedTemplates(finalOperation BackendOperatio
 	if err != nil {
 		return nil, err
 	}
-	finalTemplate, finalContract, err := newPlanContract(
+	finalTemplate, finalContract, err := newCoordinatorPlanContract(
 		ContractVersionV1,
 		finalReadTemplateKey,
 		[]typedParticipantDefinition[*FinalAuthorizationAuditOperation]{
@@ -133,7 +133,7 @@ func (coordinator *Coordinator) reservedTemplates(finalOperation BackendOperatio
 	if err != nil {
 		return nil, err
 	}
-	durableTemplate, durableContract, err := newPlanContract(
+	durableTemplate, durableContract, err := newCoordinatorPlanContract(
 		ContractVersionV1,
 		durableEffectTemplateKey,
 		[]typedParticipantDefinition[*DurableEffectOperation]{
@@ -265,16 +265,19 @@ func (coordinator *Coordinator) Execute(ctx context.Context, plan Plan) (Report,
 		plan:         plan.state,
 		participants: slicesCloneParticipants(plan.participants),
 		outboxPolicy: plan.outboxPolicy,
-		intent: func() *outbox.ValidatedIntent {
+		intent: func() (*outbox.ValidatedIntent, error) {
 			if plan.intent == nil {
-				return nil
+				return nil, nil
 			}
-			intent := plan.intent()
+			intent, err := plan.intent()
+			if err != nil {
+				return nil, err
+			}
 			if intent == nil {
-				return nil
+				return nil, nil
 			}
 			value := *intent
-			return &value
+			return &value, nil
 		},
 	}
 	return coordinator.run(ctx, specification)
@@ -291,7 +294,7 @@ type executionSpecification struct {
 	plan         *planState
 	participants []runtimeParticipant
 	outboxPolicy OutboxPolicy
-	intent       func() *outbox.ValidatedIntent
+	intent       func() (*outbox.ValidatedIntent, error)
 }
 
 func (coordinator *Coordinator) run(ctx context.Context, specification executionSpecification) (report Report, resultErr error) {
@@ -439,14 +442,14 @@ func safeAppend(ctx context.Context, appender outbox.AppendPort[SessionBinding, 
 	return appender.Append(ctx, scope, intent)
 }
 
-func safeIntent(source func() *outbox.ValidatedIntent) (intent *outbox.ValidatedIntent, err error) {
+func safeIntent(source func() (*outbox.ValidatedIntent, error)) (intent *outbox.ValidatedIntent, err error) {
 	defer func() {
 		if recover() != nil {
 			intent = nil
 			err = fail(CodeOutboxFailed)
 		}
 	}()
-	return source(), nil
+	return source()
 }
 
 func safeCommit(ctx context.Context, session Session) (err error) {

@@ -104,6 +104,7 @@ type operationPortState[T any] struct {
 	invocation T
 	execute    func(context.Context, Session, T) error
 	call       *operationCallSeal
+	context    context.Context
 	done       chan struct{}
 	state      atomic.Uint32
 }
@@ -117,21 +118,24 @@ type OperationPort[T any] struct {
 }
 
 // Execute synchronously invokes only the repository operation fixed during
-// registration. The invocation, owner, and session cannot be supplied or
-// replaced by the caller. Copied, swapped, concurrent, retained, and late
+// registration. The invocation, owner, session, and execution context cannot
+// be supplied or replaced by the caller. Only the exact coordinator-created
+// call context is accepted; derived contexts cannot remove its cancellation,
+// deadline, or trusted values. Copied, swapped, concurrent, retained, and late
 // ports fail before the backend executor runs.
 func (port OperationPort[T]) Execute(ctx context.Context) error {
 	state := port.state
 	if state == nil || state.session == nil || state.backend == nil || state.operation == nil ||
-		state.execute == nil || state.call == nil || state.done == nil || ctx == nil || ctx.Err() != nil ||
-		ctx.Value(operationContextKey{}) != state.call || state.session.backend != state.backend ||
+		state.execute == nil || state.call == nil || state.context == nil || state.done == nil || ctx == nil ||
+		ctx != state.context || state.context.Err() != nil || state.context.Value(operationContextKey{}) != state.call ||
+		state.session.backend != state.backend ||
 		state.session.registry == nil || state.session.plan == nil || !state.session.active.Load() ||
 		state.session.plan.state.Load() != planRunning ||
 		!state.state.CompareAndSwap(operationFresh, operationRunning) {
 		return fail(CodeParticipantFailed)
 	}
 
-	err := safeBackendOperation(ctx, state.execute, state.session.session, state.invocation)
+	err := safeBackendOperation(state.context, state.execute, state.session.session, state.invocation)
 	completed := operationConsumed
 	if err != nil {
 		completed = operationFailed
@@ -163,6 +167,7 @@ func (operation RegisteredOperation[T]) run(ctx context.Context, session *sessio
 		return fail(CodeParticipantFailed)
 	}
 	call := &operationCallSeal{}
+	callContext := context.WithValue(ctx, operationContextKey{}, call)
 	state := &operationPortState[T]{
 		session:    session,
 		backend:    definition.backend,
@@ -171,10 +176,10 @@ func (operation RegisteredOperation[T]) run(ctx context.Context, session *sessio
 		invocation: invocation,
 		execute:    definition.execute,
 		call:       call,
+		context:    callContext,
 		done:       make(chan struct{}),
 	}
 	port := OperationPort[T]{state: state}
-	callContext := context.WithValue(ctx, operationContextKey{}, call)
 	err := safeOwnerOperation(callContext, definition.invoke, port, invocation)
 	for {
 		switch state.state.Load() {
