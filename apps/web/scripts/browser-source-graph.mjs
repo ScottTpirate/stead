@@ -376,6 +376,8 @@ export function findBrowserArtifactBoundaryViolations(path, source) {
   if (
     (!javascriptCapabilities && DIRECT_BROWSER_NETWORK.test(analyzedText)) ||
     javascriptCapabilities?.unsafeExternalDestinations.length > 0 ||
+    javascriptCapabilities?.unsafeIndirectNetworkAccesses > 0 ||
+    javascriptCapabilities?.unsafeIndirectResourceAccesses > 0 ||
     javascriptCapabilities?.unsafeStaticResourceTargets.length > 0 ||
     javascriptCapabilities?.unsafeStaticNetworkTargets.length > 0 ||
     (!javascriptCapabilities && analyzedValues.some(containsExternalDestination))
@@ -948,6 +950,7 @@ function moduleImports(path, source) {
 }
 
 function memberName(node, bindings) {
+  if (!node) return undefined;
   if (ts.isPropertyAccessExpression(node)) return node.name.text;
   if (ts.isElementAccessExpression(node)) {
     return staticString(node.argumentExpression, bindings);
@@ -956,6 +959,7 @@ function memberName(node, bindings) {
 }
 
 function unwrappedExpression(node, bindings, seen = new Set()) {
+  if (!node) return undefined;
   if (ts.isIdentifier(node) && bindings.has(node.text) && !seen.has(node.text)) {
     return unwrappedExpression(
       bindings.get(node.text),
@@ -976,6 +980,7 @@ function unwrappedExpression(node, bindings, seen = new Set()) {
 
 function isBrowserGlobalExpression(node, bindings) {
   const unwrapped = unwrappedExpression(node, bindings);
+  if (!unwrapped) return false;
   if (ts.isIdentifier(unwrapped)) {
     return BROWSER_GLOBAL_IDENTIFIERS.has(unwrapped.text);
   }
@@ -1356,23 +1361,30 @@ function approvedBuiltResourceTarget(value) {
   );
 }
 
-function staticResourceCallTarget(node, calledName, bindings) {
+function staticResourceCallTarget(arguments_, calledName, bindings) {
   if (LOCATION_METHOD_NAMES.has(calledName)) {
-    return { isSink: true, value: staticString(node.arguments?.[0], bindings) };
+    return { isSink: true, value: staticString(arguments_[0], bindings) };
   }
   if (calledName === "setAttribute") {
-    const attribute = staticString(node.arguments?.[0], bindings)?.toLowerCase();
+    const attribute = staticString(arguments_[0], bindings)?.toLowerCase();
     return HTML_RESOURCE_ATTRIBUTES.has(attribute)
-      ? { isSink: true, value: staticString(node.arguments?.[1], bindings) }
+      ? { isSink: true, value: staticString(arguments_[1], bindings) }
       : { isSink: false };
   }
   if (calledName === "setAttributeNS") {
-    const attribute = staticString(node.arguments?.[1], bindings)?.toLowerCase();
+    const attribute = staticString(arguments_[1], bindings)?.toLowerCase();
     return HTML_RESOURCE_ATTRIBUTES.has(attribute)
-      ? { isSink: true, value: staticString(node.arguments?.[2], bindings) }
+      ? { isSink: true, value: staticString(arguments_[2], bindings) }
       : { isSink: false };
   }
   return { isSink: false };
+}
+
+function staticCallArguments(node, index, bindings) {
+  const argumentList = unwrappedExpression(node.arguments?.[index], bindings);
+  return argumentList && ts.isArrayLiteralExpression(argumentList)
+    ? [...argumentList.elements]
+    : [];
 }
 
 export function classifyBrowserJavaScriptCapabilities(path, source) {
@@ -1382,6 +1394,8 @@ export function classifyBrowserJavaScriptCapabilities(path, source) {
   const staticResourceTargets = new Set();
   const staticNetworkTargets = new Set();
   let dynamicNetworkCalls = 0;
+  let indirectNetworkAccesses = 0;
+  let indirectResourceAccesses = 0;
   let networkCalls = 0;
   let resourceMethodCalls = 0;
 
@@ -1406,12 +1420,71 @@ export function classifyBrowserJavaScriptCapabilities(path, source) {
     }
     if (ts.isCallExpression(node) || ts.isNewExpression(node)) {
       const expression = unwrappedExpression(node.expression, bindings);
-      const calledName = memberName(expression, bindings) ??
+      let calledName = memberName(expression, bindings) ??
         (ts.isIdentifier(expression) ? expression.text : undefined);
+      let callArguments = [...(node.arguments ?? [])];
+      let indirect = false;
+      if (
+        ts.isCallExpression(node) &&
+        (ts.isPropertyAccessExpression(expression) ||
+          ts.isElementAccessExpression(expression)) &&
+        !isReflectExpression(expression.expression, bindings) &&
+        CALL_THROUGH_METHODS.has(calledName ?? "")
+      ) {
+        const callThroughMethod = calledName;
+        const target = unwrappedExpression(expression.expression, bindings);
+        calledName = memberName(target, bindings) ??
+          (ts.isIdentifier(target) ? target.text : undefined);
+        callArguments = callThroughMethod === "apply"
+          ? staticCallArguments(node, 1, bindings)
+          : callArguments.slice(1);
+        indirect = true;
+      } else if (
+        ts.isCallExpression(node) &&
+        (ts.isPropertyAccessExpression(expression) ||
+          ts.isElementAccessExpression(expression)) &&
+        isReflectExpression(expression.expression, bindings) &&
+        ["apply", "construct"].includes(calledName ?? "")
+      ) {
+        const target = unwrappedExpression(node.arguments[0], bindings);
+        calledName = memberName(target, bindings) ??
+          (ts.isIdentifier(target) ? target.text : undefined);
+        callArguments = staticCallArguments(node, 2, bindings);
+        indirect = true;
+      } else if (
+        ts.isCallExpression(node) &&
+        (ts.isPropertyAccessExpression(expression) ||
+          ts.isElementAccessExpression(expression)) &&
+        isReflectExpression(expression.expression, bindings) &&
+        calledName === "get"
+      ) {
+        const reflectedName = staticString(node.arguments[1], bindings);
+        if (
+          node.arguments[0] &&
+          isBrowserGlobalExpression(node.arguments[0], bindings) &&
+          reflectedName &&
+          DIRECT_NETWORK_IDENTIFIERS.has(reflectedName)
+        ) {
+          networkCalls += 1;
+          dynamicNetworkCalls += 1;
+          indirectNetworkAccesses += 1;
+        } else if (
+          reflectedName &&
+          (RESOURCE_PROPERTY_NAMES.has(reflectedName) ||
+            RESOURCE_METHOD_NAMES.has(reflectedName) ||
+            LOCATION_METHOD_NAMES.has(reflectedName))
+        ) {
+          resourceMethodCalls += 1;
+          dynamicResourceTargets += 1;
+          indirectResourceAccesses += 1;
+        }
+        calledName = undefined;
+      }
       if (calledName && DIRECT_NETWORK_IDENTIFIERS.has(calledName)) {
         networkCalls += 1;
-        const target = node.arguments?.[0]
-          ? staticString(node.arguments[0], bindings)
+        if (indirect) indirectNetworkAccesses += 1;
+        const target = callArguments[0]
+          ? staticString(callArguments[0], bindings)
           : undefined;
         if (target === undefined) dynamicNetworkCalls += 1;
         else staticNetworkTargets.add(target);
@@ -1422,7 +1495,12 @@ export function classifyBrowserJavaScriptCapabilities(path, source) {
           LOCATION_METHOD_NAMES.has(calledName))
       ) {
         resourceMethodCalls += 1;
-        const target = staticResourceCallTarget(node, calledName, bindings);
+        if (indirect) indirectResourceAccesses += 1;
+        const target = staticResourceCallTarget(
+          callArguments,
+          calledName,
+          bindings,
+        );
         if (target.isSink) {
           if (target.value === undefined) dynamicResourceTargets += 1;
           else staticResourceTargets.add(target.value);
@@ -1446,11 +1524,15 @@ export function classifyBrowserJavaScriptCapabilities(path, source) {
     dynamicResourceTargets,
     dynamicNetworkCalls,
     externalDestinations,
+    indirectNetworkAccesses,
+    indirectResourceAccesses,
     networkCalls,
     resourceMethodCalls,
     staticResourceTargets: sortedStaticResourceTargets,
     staticNetworkTargets: sortedStaticNetworkTargets,
     unsafeExternalDestinations: externalDestinations,
+    unsafeIndirectNetworkAccesses: indirectNetworkAccesses,
+    unsafeIndirectResourceAccesses: indirectResourceAccesses,
     unsafeStaticResourceTargets: sortedStaticResourceTargets.filter(
       (value) =>
         containsExternalDestination(value) && !approvedBuiltResourceTarget(value),

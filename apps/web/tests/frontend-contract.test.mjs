@@ -460,11 +460,15 @@ test("every built artifact is manifest-bound, content-scanned, and symlink-safe"
         dynamicNetworkCalls: 0,
         dynamicResourceTargets: 0,
         externalDestinations: [],
+        indirectNetworkAccesses: 0,
+        indirectResourceAccesses: 0,
         networkCalls: 0,
         resourceMethodCalls: 0,
         staticNetworkTargets: [],
         staticResourceTargets: [],
         unsafeExternalDestinations: [],
+        unsafeIndirectNetworkAccesses: 0,
+        unsafeIndirectResourceAccesses: 0,
         unsafeStaticNetworkTargets: [],
         unsafeStaticResourceTargets: [],
       },
@@ -583,6 +587,11 @@ test("every built artifact is manifest-bound, content-scanned, and symlink-safe"
       'fetch("/unapproved-data-route");\n',
       'const image = {}; image.src = "https://outside.invalid/pixel";\n',
       'document.createElement("img").setAttribute("src", "//outside.invalid/pixel");\n',
+      'const request = Reflect.get(globalThis, "fetch"); request("/api/v1");\n',
+      'Reflect.apply(fetch, globalThis, ["/api/v1"]);\n',
+      'fetch.call(globalThis, "/api/v1");\n',
+      'Location.prototype.replace.call(location, "/api/v1");\n',
+      'Element.prototype.setAttribute.call(document.body, "src", "/api/v1");\n',
     ]) {
       await writeFile(join(fixtureRoot, "assets/index.js"), source);
       await assert.rejects(
