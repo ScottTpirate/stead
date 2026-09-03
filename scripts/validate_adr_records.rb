@@ -110,7 +110,7 @@ EXPECTED_REQUIREMENT_TEST_LINKS = {
 # Close the complete ADR-0009 Decision body as a separate integrity guard.
 # Semantic mutation self-tests below never use this digest as their oracle.
 ADR_0009_DECISION_BODY_SHA256 =
-  "59b7e4a73994a426f189680a33187a3d1a16b20f33195b2cb0eaa0bdaf03c678".freeze
+  "23ea099cb6927464210f1b097000dd38af9f83041fd2af0a6aab919da68c9eb5".freeze
 ADR_0009_OWNER_APPROVAL_LINE =
   "- **Project-owner approval required:** yes; this proposal narrowly changes locked per-provider-HTTP-call durable-permit clauses in the Master Build Directive's CLS-003/CLS-007 rules, constitution section 4.6, ADR-0005, and ADR-0007 for one closed bounded internal read plan".freeze
 ADR_0009_SUPERSESSION_LINE =
@@ -139,14 +139,14 @@ ADR_0009_SPEC_TOP_LEVEL_KEYS = %w[
 ADR_0009_SPEC_SECTION_DIGESTS = {
   "authority" => "947858adec5cddd08322e65e8f4ab4f3be623eadc5265166ed0edd2b571f8835",
   "field_classes" => "d7bd40843dca2b1a6f121285cdd0db34ea40b49a5978dd6f411d45b2bab94ea1",
-  "authorization_scope" => "c3f6ab60891983798f828fd93cf73090e05960d47ef723f1663b9543108f0b55",
+  "authorization_scope" => "6fb464dbfe0a18b31d22a0e60a538ddd663ae01257d93cdda2d226242f649540",
   "snapshot_and_change_proof" => "c672ab550b3daa59e083785fd0a1f514fa27931ec4966270729452672f443378",
   "webhook" => "689ea3cfbae79f23cccf842ed28ab11f757dad81f008824ec88fe956fbfded26",
   "reconciliation" => "b340a9ea20d0f7164ac97e1d5dfcdb35c1740649c0c7d0a6dffa80c0fc9fd5ae",
   "provider_mutation" => "04d003d64cbe5cc58f23e14d26e22a936d2a9f8c1ad1b089973b1f9fbb8d2e13",
   "compatibility_profile" => "dfd004f9311eba2574f0bc213ca1d31801c55fe1e8cb2d86294cbf3bb83a57f5",
-  "privacy_and_observability" => "c6c75030fc0ae3c9af8a012f26da04e341d9460aa211976600d0db9d25fe6fc7",
-  "verification" => "c01f888f62cd3e25ba8c24943b9af30e1cba2a8aa94ae0d89c63a3cfa840adff"
+  "privacy_and_observability" => "0b61aca3546e0f1c9088a9543798925f098bd3f2de1cff8c366c4005dd7cb265",
+  "verification" => "9cf2f70d90f5134877d6b4cb2369683534ccd65d39c7fb0db0f1f63ce6831eac"
 }.freeze
 ADR_0009_SPEC_EXPECTATIONS = {
   "schema_version" => "1.0",
@@ -227,22 +227,124 @@ ADR_0009_SPEC_EXPECTATIONS = {
   "authorization_scope.persistence.start_transaction" => %w[
     immutable_scope_identity_and_bindings conservative_whole_plan_envelope
     atomic_one_time_execution_claim_activation
-    logical_audit_intent_reference_only_not_append_only_audit_record
+    reserved_terminal_audit_event_intent_reference_and_preassigned_uuidv7_audit_record_id_only_not_outbox_or_audit_row
   ],
   "authorization_scope.persistence.per_eligible_read_writes" => 0,
   "authorization_scope.persistence.per_eligible_page_writes" => 0,
   "authorization_scope.persistence.accounting_during_execution" => "process_local_monotonic_counters",
   "authorization_scope.persistence.uncertain_dispatch" => "consumes_local_attempt_and_allowance",
   "authorization_scope.persistence.terminalization" =>
-    "permanent_claim_transition_and_exactly_one_append_only_logical_audit_record",
-  "authorization_scope.persistence.logical_audit_record_cardinality" =>
-    "exactly_one_per_scope_written_only_by_terminalization_or_expiry_recovery",
-  "authorization_scope.persistence.clean_completion" => "one_logical_audit_with_exact_attempt_call_page_item_byte_counts",
-  "authorization_scope.persistence.interrupted_completion" => "one_logical_audit_with_reserved_upper_bounds_and_abandoned_or_crash_result",
+    "permanent_claim_transition_and_exactly_one_validated_ws07_owned_audit_event_intent_through_ws02_core_outbox_port",
+  "authorization_scope.persistence.terminal_transaction.coordinator" => "WS-02_WithinTransaction",
+  "authorization_scope.persistence.terminal_transaction.participant_plan" => %w[
+    WS-03_scm_reconciliation_terminalize_writes_only_scm_state
+    WS-02_core_outbox_append_validated_intent_is_final_write_participant
+  ],
+  "authorization_scope.persistence.terminal_transaction.atomicity" =>
+    "claim_accounting_terminal_evidence_and_intent_commit_together_or_none",
+  "authorization_scope.persistence.terminal_transaction.failure_behavior" =>
+    "any_participant_failure_lost_commit_response_or_clean_expiry_race_is_resolved_by_cas_and_exact_intent_identity_without_partial_state",
+  "authorization_scope.persistence.terminal_transaction.external_calls_inside_transaction" =>
+    "prohibited_including_gitea_nats_openfga_and_evidence_resolution",
+  "authorization_scope.persistence.terminal_transaction.audit_table_write" => "prohibited",
+  "authorization_scope.persistence.terminal_intent_cardinality" =>
+    "exactly_one_per_scope_appended_only_by_successful_terminalization_or_expiry_recovery",
+  "authorization_scope.persistence.clean_completion" =>
+    "one_terminal_intent_with_exact_attempt_call_page_item_byte_counts",
+  "authorization_scope.persistence.interrupted_completion" =>
+    "one_terminal_intent_with_reserved_upper_bounds_and_abandoned_or_crash_result",
   "authorization_scope.persistence.page_count_growth" =>
-    "constant_scope_claim_accounting_and_logical_audit_control_write_count",
+    "constant_scope_claim_accounting_and_terminal_intent_control_write_count",
+  "authorization_scope.persistence.audit_materialization.owner" => "WS-07",
+  "authorization_scope.persistence.audit_materialization.source" =>
+    "exact_ws07_validated_canonical_event_bytes_from_ws02_core_outbox_before_transfer_or_immutable_ws07_successor_bindings_after_transfer",
+  "authorization_scope.persistence.audit_materialization.event_lookup_reference" =>
+    "logical_operation_id_is_the_only_protected_operation_reference_and_is_correlation_not_authority_or_provider_locator",
+  "authorization_scope.persistence.audit_materialization.authorization" =>
+    "fresh_central_decision_for_ws07_service_principal_per_bounded_set_oriented_resolution_batch",
+  "authorization_scope.persistence.audit_materialization.resolution_port_owner" => "WS-03",
+  "authorization_scope.persistence.audit_materialization.resolution_port_mode" =>
+    "authenticated_authorized_typed_bounded_set_oriented_read",
+  "authorization_scope.persistence.audit_materialization.resolution_request_bindings" => %w[
+    event_source event_id canonical_event_digest organization_id security_domain_id
+    canonical_container_and_resource_scope logical_operation_id
+  ],
+  "authorization_scope.persistence.audit_materialization.resolution_response" =>
+    "immutable_closed_audit_v1_1_ready_projection_sufficient_for_every_owgp_audit_field_and_provider_extension",
+  "authorization_scope.persistence.audit_materialization.original_authorization_revisions" =>
+    "historical_evidence_only_not_reused_authority",
+  "authorization_scope.persistence.audit_materialization.prohibited_resolution_output" => %w[
+    provider_table_or_protected_backing_record raw_provider_payload raw_call_plan provider_path
+    provider_resource_key pagination_cursor credential
+  ],
+  "authorization_scope.persistence.audit_materialization.write_semantics" =>
+    "append_only_insert_or_exact_identity_and_digest_match_never_update_or_rewriting_upsert",
+  "authorization_scope.persistence.audit_materialization.stable_identity" =>
+    "preassigned_uuidv7_audit_record_id_plus_logical_operation_id",
+  "authorization_scope.persistence.audit_materialization.mismatch" =>
+    "identity_digest_event_binding_or_domain_mismatch_quarantines_and_never_overwrites",
+  "authorization_scope.persistence.audit_materialization.consumer_completion.successful" =>
+    "only_after_exact_audit_record_is_durable",
+  "authorization_scope.persistence.audit_materialization.consumer_completion.minimized_terminal" =>
+    "only_after_closed_failure_successor_obligation_and_dlq_failure_audit_intents_are_durable_in_one_transaction",
+  "authorization_scope.persistence.audit_materialization.consumer_completion.original_audit_obligation" =>
+    "remains_open_until_exact_audit_record_is_durable",
+  "authorization_scope.persistence.audit_materialization.duplicate_replay_restart_out_of_order" =>
+    "exactly_one_logical_audit_record",
+  "authorization_scope.persistence.audit_materialization.unavailable_or_malformed_evidence" =>
+    "retry_or_quarantine_fail_closed_without_successful_completion",
+  "authorization_scope.persistence.audit_materialization.generic_terminal_or_dlq_substitution" =>
+    "prohibited_without_same_transaction_successor_obligation_transfer",
+  "authorization_scope.persistence.audit_materialization.deadline_terminal_transaction.coordinator" =>
+    "WS-02_WithinTransaction",
+  "authorization_scope.persistence.audit_materialization.deadline_terminal_transaction.participant_plan" => %w[
+    WS-07_audit_consumer_terminalize_and_create_successor_obligation_writes_only_ws07_state
+    WS-02_core_outbox_append_minimized_dlq_and_failure_audit_intents_is_final_write_participant
+  ],
+  "authorization_scope.persistence.audit_materialization.deadline_terminal_transaction.atomicity" =>
+    "closed_failure_terminal_evidence_successor_obligation_and_intents_commit_together_or_none",
+  "authorization_scope.persistence.audit_materialization.deadline_terminal_transaction.original_outbox_retirement" =>
+    "denied_until_this_transfer_commits",
+  "authorization_scope.persistence.audit_materialization.deadline_terminal_transaction.external_calls_inside_transaction" =>
+    "prohibited_including_gitea_nats_openfga_evidence_resolution_and_other_network_io",
+  "authorization_scope.persistence.audit_materialization.phase1_successor_recovery_source.owner" =>
+    "WS-07",
+  "authorization_scope.persistence.audit_materialization.phase1_successor_recovery_source.selection" =>
+    "required_real_failure_path_when_adr0008_application_deadline_closes_before_materialization",
+  "authorization_scope.persistence.audit_materialization.phase1_successor_recovery_source.stable_identity" =>
+    "preassigned_audit_record_id_plus_logical_operation_id",
+  "authorization_scope.persistence.audit_materialization.phase1_successor_recovery_source.immutable_contents" => %w[
+    preassigned_audit_record_id event_source event_id canonical_event_digest organization_id
+    security_domain_id canonical_container_and_resource_scope logical_operation_id
+  ],
+  "authorization_scope.persistence.audit_materialization.phase1_successor_recovery_source.owner_written_fenced_monotonic_recovery_state" => %w[
+    status fencing_token attempt_count next_attempt_at last_closed_failure_code
+    materialized_audit_digest
+  ],
+  "authorization_scope.persistence.audit_materialization.phase1_successor_recovery_source.allowed_state_progression" =>
+    "open_to_claimed_to_retry_wait_or_repair_required_then_exact_materialized",
+  "authorization_scope.persistence.audit_materialization.phase1_successor_recovery_source.prohibited_contents" => %w[
+    provider_binding_evidence_ref call_plan_evidence_ref raw_provider_payload raw_call_plan
+    provider_path provider_resource_key pagination_cursor credential
+  ],
+  "authorization_scope.persistence.audit_materialization.phase1_successor_recovery_source.immutable_binding_creation" =>
+    "insert_or_exact_identity_and_digest_match_never_rewrite_immutable_fields",
+  "authorization_scope.persistence.audit_materialization.phase1_successor_recovery_source.lifecycle_writes" =>
+    "fenced_monotonic_owner_state_transitions_only",
+  "authorization_scope.persistence.audit_materialization.phase1_successor_recovery_source.duplicate_deadline_race" =>
+    "exact_match_is_idempotent_and_identity_digest_or_binding_collision_quarantines_and_prevents_original_source_retirement",
+  "authorization_scope.persistence.audit_materialization.phase1_successor_recovery_source.authority" =>
+    "recovery_obligation_only_not_authorization",
+  "authorization_scope.persistence.audit_materialization.phase1_successor_recovery_source.retirement" =>
+    "only_after_exact_original_audit_record_is_durable",
+  "authorization_scope.persistence.audit_materialization.phase1_successor_recovery_source.backup_restore_and_rollback" =>
+    "preserve_open_and_completed_obligations_with_exact_identity_and_digest",
+  "authorization_scope.persistence.audit_materialization.protected_evidence_retention" =>
+    "immutable_digest_bound_backed_up_restored_and_resolvable_until_exact_audit_record_is_durable_then_for_its_full_audit_retention_and_reference_resolution_window",
+  "authorization_scope.persistence.page_independent_async_audit_writes" =>
+    "exactly_one_on_success_with_deadline_transfer_measured_separately_as_failure_recovery",
   "authorization_scope.persistence.changed_resource_writes" =>
-    "measured_batched_set_oriented_and_may_scale_only_with_actual_projection_domain_outbox_or_quarantine_changes",
+    "measured_batched_set_oriented_and_may_scale_only_with_actual_projection_domain_unrelated_outbox_or_quarantine_changes",
   "authorization_scope.before_local_outcome_commit.mode" => "read_only_validation_plus_owner_transaction_fence",
   "authorization_scope.before_local_outcome_commit.checks" => %w[
     all_before_call_checks final_execution_local_totals_within_whole_plan_envelope
@@ -269,13 +371,20 @@ ADR_0009_SPEC_EXPECTATIONS = {
   "provider_mutation.ambiguous_result" => "reconciling_until_terminal_proof",
   "provider_mutation.blind_retry" => "prohibited",
   "verification.T-ADR-0009-AMBIGUOUS-MUTATION.owners" => %w[WS-03 WS-06],
-  "verification.T-ADR-0009-FULL-RECONCILIATION.owners" => %w[WS-03 WS-06 WS-12],
+  "verification.T-ADR-0009-FULL-RECONCILIATION.owners" => %w[WS-02 WS-03 WS-06 WS-07 WS-12],
   "verification.T-ADR-0009-FULL-RECONCILIATION.cases" => %w[
     every_scope_binding_omitted_or_swapped call_plan_widen_or_reorder cross_scope_reuse
     atomic_one_time_execution_claim same_scope_fork stale_holder post_terminal_replay
     claim_deadline permanent_terminal_invalidation process_loss bounded_inventory
-    zero_per_page_control_writes exactly_one_append_only_logical_audit_record
-    exact_or_conservative_audit_counts constant_control_writes_as_pages_grow
+    zero_per_page_control_writes ws03_then_ws02_terminal_participant_order
+    cross_owner_write_denial terminal_claim_and_intent_atomicity_at_each_crash_boundary
+    lost_commit_response clean_expiry_race exactly_one_terminal_intent
+    exact_or_conservative_terminal_counts constant_control_writes_as_pages_grow
+    fresh_ws07_service_authorization swapped_event_operation_domain_resource_or_digest_denied
+    set_oriented_resolution_bounds
+    exactly_one_ws07_audit_materialization_under_duplicate_out_of_order_replay_restart_and_nats_outage
+    application_deadline_atomic_successor_obligation_transfer
+    deadline_transfer_no_external_call_and_each_crash_boundary_atomic
     changed_resource_writes_measured_separately
   ],
   "privacy_and_observability.propagation_surfaces" => %w[
@@ -343,11 +452,17 @@ ADR_0009_SPEC_EXPECTATIONS = {
     "prohibited",
   "privacy_and_observability.canonical_composition.canonical_event.compatibility" =>
     "registered_consumer_first_closed_specialization_preserves_all_common_event_fields",
+  "privacy_and_observability.canonical_composition.canonical_event.protected_operation_lookup_reference" =>
+    "logical_operation_id_only_correlation_not_authority_or_provider_locator",
   "privacy_and_observability.canonical_composition.canonical_outbox.owner" => "WS-02",
   "privacy_and_observability.canonical_composition.canonical_outbox.representation" =>
     "exact_serialized_bytes_and_digest_of_the_registered_canonical_event",
   "privacy_and_observability.canonical_composition.canonical_outbox.additional_provider_metadata_or_reserialization" =>
     "prohibited",
+  "privacy_and_observability.canonical_composition.canonical_outbox.terminal_transaction_participant" =>
+    "final_write_after_ws03_scm_terminalization",
+  "privacy_and_observability.canonical_composition.canonical_outbox.audit_materialization_recovery" =>
+    "retain_until_ws07_exact_record_durable_or_obligation_atomically_transferred",
   "privacy_and_observability.canonical_composition.minimized_dead_letter_event.predecessor_data_contract" =>
     "packages/event-schemas/stead/stead-event-v0.1.schema.json",
   "privacy_and_observability.canonical_composition.minimized_dead_letter_event.emission_data_contract" =>
@@ -411,11 +526,26 @@ ADR_0009_SPEC_EXPECTATIONS = {
     response_byte_count started_at finished_at
   ],
   "privacy_and_observability.canonical_event_provider_evidence.closed_schema" => true,
-  "privacy_and_observability.canonical_event_provider_evidence.allowed_fields" => %w[
-    schema_version logical_operation_id operation_class outcome_code activation_revision
-    authorization_revision provider_enforcement_revision resource_revision compatibility_profile_id
-    count_mode attempt_count provider_call_count page_count item_count response_byte_count
+  "privacy_and_observability.canonical_event_provider_evidence.required_fields" => %w[
+    schema_version logical_operation_id
   ],
+  "privacy_and_observability.canonical_event_provider_evidence.allowed_fields" => %w[
+    schema_version logical_operation_id
+  ],
+  "privacy_and_observability.canonical_event_provider_evidence.field_constraints.schema_version.type" =>
+    "string",
+  "privacy_and_observability.canonical_event_provider_evidence.field_constraints.schema_version.const" =>
+    "1.0",
+  "privacy_and_observability.canonical_event_provider_evidence.field_constraints.logical_operation_id.type" =>
+    "string",
+  "privacy_and_observability.canonical_event_provider_evidence.field_constraints.logical_operation_id.format" =>
+    "uuid",
+  "privacy_and_observability.canonical_event_provider_evidence.field_constraints.logical_operation_id.pattern" =>
+    "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+  "privacy_and_observability.canonical_event_provider_evidence.field_constraints.logical_operation_id.min_length" =>
+    36,
+  "privacy_and_observability.canonical_event_provider_evidence.field_constraints.logical_operation_id.max_length" =>
+    36,
   "privacy_and_observability.dead_letter_provider_evidence.closed_schema" => true,
   "privacy_and_observability.dead_letter_provider_evidence.allowed_fields" => %w[
     schema_version logical_operation_id source_event_id consumer_class_id operation_class
@@ -493,12 +623,16 @@ ADR_0009_SPEC_EXPECTATIONS = {
     audit_v1_0_and_v1_1_dual_read specialized_cloudevent_data_composition
     event_data_schema_version_0_1_to_1_0
     exact_source_type_dataschema_discrimination
-    generic_v0_1_route_rejects_provider_reconciliation_types exact_outbox_canonical_bytes
-    minimized_dead_letter_composition
+    generic_v0_1_route_rejects_provider_reconciliation_types
+    canonical_event_reconciliation_evidence_requires_exact_schema_version_and_logical_operation_id_fields
+    exact_outbox_canonical_bytes minimized_dead_letter_composition
     named_versioned_schema_ownership consumer_first_schema_activation schema_rollback_coexistence
     closed_operational_surface_profiles closed_nested_provider_evidence_fields
+    typed_ws03_audit_evidence_resolution
     provider_binding_opaque_reference_only call_plan_opaque_reference_only
-    opaque_references_logical_audit_only low_entropy_offline_guessing_denied
+    opaque_references_materialized_logical_audit_only
+    unavailable_evidence_retry_without_terminal_success audit_identity_digest_collision_quarantine
+    low_entropy_offline_guessing_denied
     cross_event_provider_plan_reference_correlation_denied raw_body_canary parsed_body_canary
     request_header_canary query_string_canary raw_call_plan_canary provider_api_path_canary
     provider_resource_key_canary pagination_cursor_canary webhook_secret_canary
@@ -506,6 +640,11 @@ ADR_0009_SPEC_EXPECTATIONS = {
     work_title_canary comment_canary document_body_canary authorization_input_canary policy_input_canary
     exception_text_canary stack_trace_canary
     every_canary_across_every_base_envelope_nested_evidence_and_propagation_surface
+  ],
+  "verification.T-ADR-0009-UPGRADE-ROLLBACK.cases" => %w[
+    support_matrix unknown_capability preflight shadow_read full_scan compatible_rollback
+    forward_recovery nonterminal_operation_preservation
+    backup_restore_preserves_reference_resolution_and_successor_obligations
   ]
 }.transform_values(&:freeze).freeze
 ADR_0009_SPEC_VERIFICATION_OWNERS = {
@@ -517,7 +656,7 @@ ADR_0009_SPEC_VERIFICATION_OWNERS = {
   "T-ADR-0009-PERMISSION-DRIFT" => %w[WS-03 WS-06],
   "T-ADR-0009-PROVIDER-OUTAGE" => %w[WS-03 WS-12],
   "T-ADR-0009-AMBIGUOUS-MUTATION" => %w[WS-03 WS-06],
-  "T-ADR-0009-FULL-RECONCILIATION" => %w[WS-03 WS-06 WS-12],
+  "T-ADR-0009-FULL-RECONCILIATION" => %w[WS-02 WS-03 WS-06 WS-07 WS-12],
   "T-ADR-0009-AUDIT-MINIMIZATION" => %w[WS-01 WS-03 WS-07],
   "T-ADR-0009-UPGRADE-ROLLBACK" => %w[WS-01 WS-03 WS-07 WS-12]
 }.transform_values(&:freeze).freeze
@@ -540,9 +679,11 @@ ADR_0009_CANONICAL_COMPOSITION_RECORD_KEYS = {
     schema_owner predecessor_compatibility provider_evidence_property provider_evidence_contract
     envelope_common_attributes_contract envelope_contract message_contract channel_binding source
     type dataschema generic_v0_1_data_route_for_same_type compatibility
+    protected_operation_lookup_reference
   ],
   "canonical_outbox" => %w[
     owner representation additional_provider_metadata_or_reserialization
+    terminal_transaction_participant audit_materialization_recovery
   ],
   "minimized_dead_letter_event" => %w[
     predecessor_data_contract emission_data_contract emission_data_contract_id schema_version
@@ -560,6 +701,13 @@ ADR_0009_NESTED_PROVIDER_EVIDENCE_CONTRACTS = %w[
   logical_audit_provider_evidence canonical_event_provider_evidence
   dead_letter_provider_evidence
 ].freeze
+ADR_0009_NESTED_PROVIDER_EVIDENCE_KEYS = {
+  "logical_audit_provider_evidence" => %w[closed_schema allowed_fields],
+  "canonical_event_provider_evidence" => %w[
+    closed_schema required_fields allowed_fields field_constraints
+  ],
+  "dead_letter_provider_evidence" => %w[closed_schema allowed_fields]
+}.transform_values(&:freeze).freeze
 ADR_0009_OPERATIONAL_PROFILE_NAMES = %w[
   correlated_operation_v1 bounded_metric_v1 support_summary_v1
 ].freeze
@@ -617,6 +765,10 @@ ADR_0009_FORBIDDEN_PROPAGATED_FIELD_MUTANTS = {
   stack_traces: "stack_trace"
 }.freeze
 ADR_0009_REQUIRED_AUDIT_CANARY_CASES = %w[
+  canonical_event_reconciliation_evidence_requires_exact_schema_version_and_logical_operation_id_fields
+  typed_ws03_audit_evidence_resolution
+  opaque_references_materialized_logical_audit_only
+  unavailable_evidence_retry_without_terminal_success audit_identity_digest_collision_quarantine
   low_entropy_offline_guessing_denied cross_event_provider_plan_reference_correlation_denied
   raw_body_canary parsed_body_canary request_header_canary query_string_canary
   raw_call_plan_canary provider_api_path_canary provider_resource_key_canary
@@ -625,17 +777,39 @@ ADR_0009_REQUIRED_AUDIT_CANARY_CASES = %w[
   authorization_input_canary policy_input_canary exception_text_canary stack_trace_canary
   every_canary_across_every_base_envelope_nested_evidence_and_propagation_surface
 ].freeze
-ADR_0009_EXPECTED_SPEC_CUSTOM_MUTATIONS = 42
+ADR_0009_REQUIRED_FULL_RECONCILIATION_CASES = %w[
+  ws03_then_ws02_terminal_participant_order cross_owner_write_denial
+  terminal_claim_and_intent_atomicity_at_each_crash_boundary lost_commit_response clean_expiry_race
+  exactly_one_terminal_intent exact_or_conservative_terminal_counts
+  fresh_ws07_service_authorization swapped_event_operation_domain_resource_or_digest_denied
+  set_oriented_resolution_bounds
+  exactly_one_ws07_audit_materialization_under_duplicate_out_of_order_replay_restart_and_nats_outage
+  application_deadline_atomic_successor_obligation_transfer
+  deadline_transfer_no_external_call_and_each_crash_boundary_atomic
+].freeze
+ADR_0009_REQUIRED_UPGRADE_ROLLBACK_CASES = %w[
+  backup_restore_preserves_reference_resolution_and_successor_obligations
+].freeze
+ADR_0009_EXPECTED_SPEC_CUSTOM_MUTATIONS = 52
 ADR_0009_DECISION_FRAGMENT_PREDICATES = {
   process_bound_holder: "The holder binding covers replica boot identity, current PID/start identity, and a fresh process nonce; every dispatch rechecks the current process identity.",
   fork_rekeys_scope: "A keyed process-local single-flight guard prevents same-holder concurrency, while a fork or clone inherits an invalid parent binding and must rekey under a new scope.",
   scope_and_local_accounting: "Before every dispatch and local outcome commit, WS-03 proves that the claim remains active for that exact process-instance holder and fencing token and is before its deadline, then invokes the WS-06 read-only scope/fence validator and enforces execution-local monotonic counters.",
   terminal_no_handoff: "Claim handoff, takeover, renewal, and resume are prohibited; completion, abandonment, or expiry is a permanent compare-and-swap terminal transition, and recovery requires a new scope.",
-  zero_page_control_writes: "The operation performs one atomic start/claim transaction and one terminal transaction that appends exactly one logical audit record, but zero durable reservation, permit, audit-record, claim-renewal, or accounting writes per eligible call or page.",
-  audit_intent_only: "The start transaction persists only an operation-state audit-intent reference; it does not create or mutate an append-only audit record.",
-  constant_control_write_accounting: "Scope, claim, accounting, and logical-audit control writes therefore remain constant as page count grows.",
-  changed_resource_write_accounting: "Batched projection, domain, outbox, and quarantine writes are measured separately and may grow only with actual changed resources.",
-  schema_ownership: "WS-01 owns the versioned canonical `AuditRecord` schema; WS-07 owns its audit-store consumption, the versioned event/dead-letter schemas, schema registration, AsyncAPI, and delivery.",
+  zero_page_control_writes: "The operation performs one atomic start/claim transaction and one terminal transaction, but zero durable reservation, permit, audit-record, claim-renewal, or accounting writes per eligible call or page.",
+  reserved_intent_only: "The start transaction persists only a reserved terminal audit/event-intent reference and preassigned UUIDv7 audit identity in WS-03 operation state; it creates neither a `core_outbox` row nor an append-only audit record.",
+  terminal_participant_order: "The terminal transaction uses the predeclared WS-03 `scm.reconciliation_terminalize` claim/accounting participant, which writes only `scm.*`, followed by the WS-02 `core_outbox.append_validated_intent` participant as its final writer.",
+  terminal_atomicity: "It commits the permanent claim transition, durable closed audit-materialization evidence, and exactly one validated immutable WS-07-owned audit/event intent together, or commits none of them; WS-03 never writes an `audit.*` table.",
+  event_minimization: "The canonical terminal event retains every required EVT-003/base-schema field; its additional reconciliation evidence is exactly `schema_version` and `logical_operation_id`.",
+  ws07_append_only_materialization: "Materialization is insert-or-exact-identity-and-digest-match, never an update or rewriting upsert; an identity/digest collision quarantines.",
+  fresh_authorized_resolver: "For each bounded set-oriented resolution batch, WS-07 obtains a fresh central authorization for its service principal and invokes an authenticated typed WS-03 read port bound to the exact event source, event ID, canonical digest, Organization, security domain, container/resource scope, and logical operation.",
+  no_generic_dlq_substitution: "A generic minimized terminal/DLQ outcome cannot silently substitute for the required reconciliation `AuditRecord`",
+  deadline_successor_atomicity: "If the ADR-0008 application deadline closes first, one predeclared transaction runs the WS-07 terminal-state/successor-obligation participant, which writes only WS-07-owned state, followed by the WS-02 `core_outbox` append participant as the final writer.",
+  successor_recovery_authority: "Phase 1 implements this real failure path in WS-07-owned state; the successor becomes the recovery authority and cannot retire until the exact original `AuditRecord` is durable.",
+  local_transaction_only: "Neither the reconciliation-terminal transaction nor the deadline-transfer transaction performs Gitea, NATS, OpenFGA, evidence-resolution, or other network I/O; each failure boundary rolls back its complete predeclared local participant plan.",
+  constant_control_write_accounting: "Scope, claim, accounting, and terminal-intent control writes remain constant as page count grows; successful asynchronous audit materialization is exactly one write independent of page count, while the deadline-transfer write is measured separately as failure recovery.",
+  changed_resource_write_accounting: "Batched projection, domain, unrelated outbox, and quarantine writes are measured separately and may grow only with actual changed resources.",
+  schema_ownership: "WS-01 owns the versioned canonical `AuditRecord` schema. WS-07 owns the audit/event intent semantics, idempotent audit-store materialization and consumer completion, the versioned event/dead-letter schemas, schema registration, AsyncAPI, and delivery.",
   process_loss_fresh_scope: "Recovery starts from the last trusted job cursor only after the old claim is terminal and a fresh decision creates a new scope.",
   excluded_effect_permits: "Each such effect retains its own fresh decision, durable one-use `AuthorizationEffectPermit`",
   effective_principal: "Before canonical state accepts provider-originated data, Stead performs a separate fresh central decision for the effective provider principal",
@@ -650,15 +824,55 @@ ADR_0009_CROSS_FILE_REQUIRED_FRAGMENTS = {
     "`P-SCM-RECONCILIATION-GITEA-V1`",
     "`/specs/provider-reconciliation/gitea-v1.yaml`",
     "scope issuance/validation remains WS-06-owned",
+    "execution-claim and protected audit-evidence state plus its authenticated/authorized typed resolution port remain WS-03-owned",
+    "`core_outbox` persistence/append remains WS-02-owned",
     "common resource-envelope and canonical AuditRecord schemas remain WS-01-owned",
-    "event/DLQ/audit consumption remains WS-07-owned"
+    "event/DLQ consumption and idempotent audit materialization/completion remain WS-07-owned",
+    "audit records are append-only insert-or-exact-match",
+    "deadline recovery atomically creates a real immutable successor obligation before source retirement",
+    "ADR-0009 source cannot retire before exact WS-07 audit materialization or atomic deadline transfer to the real WS-07 recovery obligation"
   ],
   "specs/provider-interfaces.yaml" => [
     "id: P-SCM-RECONCILIATION-GITEA-V1",
     "authorization_scope_owner: WS-06",
+    "protected_audit_evidence_resolution_port: authenticated_authorized_typed_bounded_set_oriented_read",
+    "core_outbox_owner: WS-02",
+    "audit_record_materialization_owner: WS-07",
+    "terminal_transaction: predeclared_ws03_scm_then_ws02_core_outbox_final_participant_atomic_state_and_intent",
+    "audit_recovery: adr0008_deadline_atomically_transfers_to_real_ws07_successor_obligation_before_core_outbox_retirement",
     "activation_gate: ADR-CAND-008_ACCEPTED_AT_EXACT_IMMUTABLE_SHA"
+  ],
+  "docs/planning/epic-issue-hierarchy.md" => [
+    "STEAD-P1-007",
+    "accepted ADR-CAND-008",
+    "ADR-0009 idempotent audit materialization and atomic deadline transfer to a real successor obligation"
   ]
 }.transform_values(&:freeze).freeze
+ADR_0009_PROVIDER_INTERFACE_NEW_FIELDS = %w[
+  protected_audit_evidence_owner protected_audit_evidence_resolution_port
+  protected_audit_evidence_consumer core_outbox_owner audit_record_materialization_owner
+  audit_record_materialization propagated_evidence terminal_transaction audit_recovery
+].freeze
+ADR_0009_P1_007_REQUIRED_TESTS = %w[
+  T-ADR-0009-FULL-RECONCILIATION T-ADR-0009-AUDIT-MINIMIZATION
+  T-ADR-0009-UPGRADE-ROLLBACK
+].freeze
+ADR_0009_P1_007_MATERIALIZATION_FRAGMENTS = [
+  "additional reconciliation event evidence contains exactly `schema_version` and the correlation-only `logical_operation_id`",
+  "fresh central authorization for the WS-07 service principal",
+  "bounded set-oriented immutable audit-v1.1-ready projection through the authenticated WS-03 typed port",
+  "Append exactly one canonical AuditRecord",
+  "insert-or-exact-stable-UUIDv7-identity-and-digest-match semantics",
+  "never update or rewriting-upsert an audit row",
+  "Successful materialization completion occurs only after the row is durable",
+  "A generic terminal/DLQ result cannot substitute for the record",
+  "predeclared WS-07 terminal-state participant followed by the WS-02 core_outbox final participant",
+  "real immutable WS-07-owned successor materialization obligation",
+  "only then may terminal consumer completion and original-source retirement occur",
+  "without protected provider references",
+  "retain the successor until the exact original AuditRecord is durable"
+].freeze
+ADR_0009_EXPECTED_CROSS_CONTRACT_MUTATIONS = 26
 ADR_0009_EXPECTED_ADR_MUTATIONS = %i[
   decision_digest
   owner_metadata
@@ -1785,7 +1999,8 @@ def adr_0009_spec_failures(spec_source:, spec:)
 
     nested_field_sets = ADR_0009_NESTED_PROVIDER_EVIDENCE_CONTRACTS.to_h do |name|
       record = privacy[name]
-      unless record.is_a?(Hash) && record.keys == %w[closed_schema allowed_fields] &&
+      expected_keys = ADR_0009_NESTED_PROVIDER_EVIDENCE_KEYS.fetch(name)
+      unless record.is_a?(Hash) && record.keys == expected_keys &&
              record["closed_schema"] == true && record["allowed_fields"].is_a?(Array) &&
              !record["allowed_fields"].empty? && record["allowed_fields"].uniq == record["allowed_fields"] &&
              record["allowed_fields"].all? { |field| field.is_a?(String) } &&
@@ -1795,6 +2010,18 @@ def adr_0009_spec_failures(spec_source:, spec:)
       else
         [name, record.fetch("allowed_fields")]
       end
+    end
+
+    canonical_event_evidence = privacy["canonical_event_provider_evidence"]
+    unless canonical_event_evidence.is_a?(Hash) &&
+           canonical_event_evidence["required_fields"] == canonical_event_evidence["allowed_fields"] &&
+           canonical_event_evidence["allowed_fields"] == %w[schema_version logical_operation_id] &&
+           canonical_event_evidence["field_constraints"].is_a?(Hash) &&
+           canonical_event_evidence["field_constraints"].keys == %w[schema_version logical_operation_id] &&
+           canonical_event_evidence.dig("field_constraints", "schema_version")&.keys == %w[type const] &&
+           canonical_event_evidence.dig("field_constraints", "logical_operation_id")&.keys ==
+             %w[type format pattern min_length max_length]
+      failures << "ADR-0009 canonical event reconciliation evidence must require exactly const schema_version and bounded UUIDv7 logical_operation_id"
     end
 
     operational_field_sets = {}
@@ -1875,6 +2102,16 @@ def adr_0009_spec_failures(spec_source:, spec:)
     unless audit_cases.is_a?(Array) &&
            (ADR_0009_REQUIRED_AUDIT_CANARY_CASES - audit_cases).empty?
       failures << "ADR-0009 audit minimization must cover every forbidden-value canary across every base envelope, nested evidence object, and propagation surface"
+    end
+    full_reconciliation_cases = verification.dig("T-ADR-0009-FULL-RECONCILIATION", "cases")
+    unless full_reconciliation_cases.is_a?(Array) &&
+           (ADR_0009_REQUIRED_FULL_RECONCILIATION_CASES - full_reconciliation_cases).empty?
+      failures << "ADR-0009 full reconciliation must cover terminal ownership, atomic intent, recovery, and exactly-once WS-07 audit materialization"
+    end
+    upgrade_rollback_cases = verification.dig("T-ADR-0009-UPGRADE-ROLLBACK", "cases")
+    unless upgrade_rollback_cases.is_a?(Array) &&
+           (ADR_0009_REQUIRED_UPGRADE_ROLLBACK_CASES - upgrade_rollback_cases).empty?
+      failures << "ADR-0009 upgrade and rollback must preserve protected-evidence resolution and successor obligations across backup/restore"
     end
   end
   failures
@@ -4521,6 +4758,186 @@ if adr_0009_spec.is_a?(Hash)
   )
     adr_0009_spec_mutation_survivors << "missing base-envelope/nested-evidence/surface canary cross-product"
   end
+
+  adr_0009_spec_mutation_count += 1
+  reordered_terminal_participants_spec = Marshal.load(Marshal.dump(adr_0009_spec))
+  reordered_terminal_participants_spec
+    .fetch("authorization_scope")
+    .fetch("persistence")
+    .fetch("terminal_transaction")
+    .fetch("participant_plan")
+    .reverse!
+  reordered_terminal_participants_failures = adr_0009_spec_failures(
+    spec_source: adr_0009_spec_source,
+    spec: reordered_terminal_participants_spec
+  )
+  unless reordered_terminal_participants_failures.include?(
+    "ADR-0009 structured reconciliation spec invariant failed: authorization_scope.persistence.terminal_transaction.participant_plan"
+  )
+    adr_0009_spec_mutation_survivors << "reordered WS-03 then WS-02 terminal participant plan"
+  end
+
+  adr_0009_spec_mutation_count += 1
+  expanded_event_evidence_spec = Marshal.load(Marshal.dump(adr_0009_spec))
+  expanded_event_evidence_spec
+    .fetch("privacy_and_observability")
+    .fetch("canonical_event_provider_evidence")
+    .fetch("allowed_fields") << "operation_class"
+  expanded_event_evidence_failures = adr_0009_spec_failures(
+    spec_source: adr_0009_spec_source,
+    spec: expanded_event_evidence_spec
+  )
+  unless expanded_event_evidence_failures.include?(
+    "ADR-0009 structured reconciliation spec invariant failed: privacy_and_observability.canonical_event_provider_evidence.allowed_fields"
+  )
+    adr_0009_spec_mutation_survivors << "expanded canonical event reconciliation evidence"
+  end
+
+  adr_0009_spec_mutation_count += 1
+  missing_terminal_atomicity_case_spec = Marshal.load(Marshal.dump(adr_0009_spec))
+  missing_terminal_atomicity_case_spec
+    .fetch("verification")
+    .fetch("T-ADR-0009-FULL-RECONCILIATION")
+    .fetch("cases")
+    .delete("terminal_claim_and_intent_atomicity_at_each_crash_boundary")
+  missing_terminal_atomicity_case_failures = adr_0009_spec_failures(
+    spec_source: adr_0009_spec_source,
+    spec: missing_terminal_atomicity_case_spec
+  )
+  unless missing_terminal_atomicity_case_failures.include?(
+    "ADR-0009 full reconciliation must cover terminal ownership, atomic intent, recovery, and exactly-once WS-07 audit materialization"
+  )
+    adr_0009_spec_mutation_survivors << "missing terminal claim and intent atomicity case"
+  end
+
+  adr_0009_spec_mutation_count += 1
+  missing_typed_resolution_case_spec = Marshal.load(Marshal.dump(adr_0009_spec))
+  missing_typed_resolution_case_spec
+    .fetch("verification")
+    .fetch("T-ADR-0009-AUDIT-MINIMIZATION")
+    .fetch("cases")
+    .delete("typed_ws03_audit_evidence_resolution")
+  missing_typed_resolution_case_failures = adr_0009_spec_failures(
+    spec_source: adr_0009_spec_source,
+    spec: missing_typed_resolution_case_spec
+  )
+  unless missing_typed_resolution_case_failures.include?(
+    "ADR-0009 audit minimization must cover every forbidden-value canary across every base envelope, nested evidence object, and propagation surface"
+  )
+    adr_0009_spec_mutation_survivors << "missing typed WS-03 audit-evidence resolution case"
+  end
+
+  adr_0009_spec_mutation_count += 1
+  missing_event_required_field_spec = Marshal.load(Marshal.dump(adr_0009_spec))
+  missing_event_required_field_spec
+    .fetch("privacy_and_observability")
+    .fetch("canonical_event_provider_evidence")
+    .fetch("required_fields")
+    .delete("logical_operation_id")
+  missing_event_required_field_failures = adr_0009_spec_failures(
+    spec_source: adr_0009_spec_source,
+    spec: missing_event_required_field_spec
+  )
+  unless missing_event_required_field_failures.include?(
+    "ADR-0009 canonical event reconciliation evidence must require exactly const schema_version and bounded UUIDv7 logical_operation_id"
+  )
+    adr_0009_spec_mutation_survivors << "optional canonical event logical operation identifier"
+  end
+
+  adr_0009_spec_mutation_count += 1
+  weakened_event_uuid_spec = Marshal.load(Marshal.dump(adr_0009_spec))
+  weakened_event_uuid_spec
+    .fetch("privacy_and_observability")
+    .fetch("canonical_event_provider_evidence")
+    .fetch("field_constraints")
+    .fetch("logical_operation_id")["pattern"] = "^.*$"
+  weakened_event_uuid_failures = adr_0009_spec_failures(
+    spec_source: adr_0009_spec_source,
+    spec: weakened_event_uuid_spec
+  )
+  unless weakened_event_uuid_failures.include?(
+    "ADR-0009 structured reconciliation spec invariant failed: privacy_and_observability.canonical_event_provider_evidence.field_constraints.logical_operation_id.pattern"
+  )
+    adr_0009_spec_mutation_survivors << "weakened canonical event UUIDv7 constraint"
+  end
+
+  adr_0009_spec_mutation_count += 1
+  reordered_deadline_participants_spec = Marshal.load(Marshal.dump(adr_0009_spec))
+  reordered_deadline_participants_spec
+    .fetch("authorization_scope")
+    .fetch("persistence")
+    .fetch("audit_materialization")
+    .fetch("deadline_terminal_transaction")
+    .fetch("participant_plan")
+    .reverse!
+  reordered_deadline_participants_failures = adr_0009_spec_failures(
+    spec_source: adr_0009_spec_source,
+    spec: reordered_deadline_participants_spec
+  )
+  unless reordered_deadline_participants_failures.include?(
+    "ADR-0009 structured reconciliation spec invariant failed: authorization_scope.persistence.audit_materialization.deadline_terminal_transaction.participant_plan"
+  )
+    adr_0009_spec_mutation_survivors << "reordered WS-07 then WS-02 deadline participant plan"
+  end
+
+  adr_0009_spec_mutation_count += 1
+  mutable_successor_binding_spec = Marshal.load(Marshal.dump(adr_0009_spec))
+  successor_source = mutable_successor_binding_spec
+    .fetch("authorization_scope")
+    .fetch("persistence")
+    .fetch("audit_materialization")
+    .fetch("phase1_successor_recovery_source")
+  successor_source.fetch("immutable_contents").delete("canonical_event_digest")
+  successor_source.fetch("owner_written_fenced_monotonic_recovery_state") << "canonical_event_digest"
+  mutable_successor_binding_failures = adr_0009_spec_failures(
+    spec_source: adr_0009_spec_source,
+    spec: mutable_successor_binding_spec
+  )
+  immutable_path =
+    "authorization_scope.persistence.audit_materialization.phase1_successor_recovery_source.immutable_contents"
+  lifecycle_path =
+    "authorization_scope.persistence.audit_materialization.phase1_successor_recovery_source.owner_written_fenced_monotonic_recovery_state"
+  unless mutable_successor_binding_failures.include?(
+    "ADR-0009 structured reconciliation spec invariant failed: #{immutable_path}"
+  ) && mutable_successor_binding_failures.include?(
+    "ADR-0009 structured reconciliation spec invariant failed: #{lifecycle_path}"
+  )
+    adr_0009_spec_mutation_survivors << "mutable successor event digest binding"
+  end
+
+  adr_0009_spec_mutation_count += 1
+  missing_deadline_atomicity_case_spec = Marshal.load(Marshal.dump(adr_0009_spec))
+  missing_deadline_atomicity_case_spec
+    .fetch("verification")
+    .fetch("T-ADR-0009-FULL-RECONCILIATION")
+    .fetch("cases")
+    .delete("deadline_transfer_no_external_call_and_each_crash_boundary_atomic")
+  missing_deadline_atomicity_case_failures = adr_0009_spec_failures(
+    spec_source: adr_0009_spec_source,
+    spec: missing_deadline_atomicity_case_spec
+  )
+  unless missing_deadline_atomicity_case_failures.include?(
+    "ADR-0009 full reconciliation must cover terminal ownership, atomic intent, recovery, and exactly-once WS-07 audit materialization"
+  )
+    adr_0009_spec_mutation_survivors << "missing no-external-call deadline crash-boundary case"
+  end
+
+  adr_0009_spec_mutation_count += 1
+  missing_successor_restore_case_spec = Marshal.load(Marshal.dump(adr_0009_spec))
+  missing_successor_restore_case_spec
+    .fetch("verification")
+    .fetch("T-ADR-0009-UPGRADE-ROLLBACK")
+    .fetch("cases")
+    .delete("backup_restore_preserves_reference_resolution_and_successor_obligations")
+  missing_successor_restore_case_failures = adr_0009_spec_failures(
+    spec_source: adr_0009_spec_source,
+    spec: missing_successor_restore_case_spec
+  )
+  unless missing_successor_restore_case_failures.include?(
+    "ADR-0009 upgrade and rollback must preserve protected-evidence resolution and successor obligations across backup/restore"
+  )
+    adr_0009_spec_mutation_survivors << "missing successor-obligation backup/restore case"
+  end
 end
 
 ADR_0009_CROSS_FILE_REQUIRED_FRAGMENTS.each do |relative_path, fragments|
@@ -4529,6 +4946,9 @@ ADR_0009_CROSS_FILE_REQUIRED_FRAGMENTS.each do |relative_path, fragments|
     failures << "#{relative_path}: omits ADR-0009 cross-file contract #{fragment.inspect}" unless cross_source.include?(fragment)
   end
 end
+
+adr_0009_cross_contract_mutation_count = 0
+adr_0009_cross_contract_mutation_survivors = []
 
 provider_interfaces = load_yaml("specs/provider-interfaces.yaml")
 reconciliation_records = Array(provider_interfaces["reconciliation_contracts"])
@@ -4540,7 +4960,14 @@ expected_reconciliation_record = {
   "provider" => "gitea",
   "authorization_scope_owner" => "WS-06",
   "execution_claim_owner" => "WS-03",
+  "protected_audit_evidence_owner" => "WS-03",
+  "protected_audit_evidence_resolution_port" =>
+    "authenticated_authorized_typed_bounded_set_oriented_read",
+  "protected_audit_evidence_consumer" => "WS-07",
+  "core_outbox_owner" => "WS-02",
   "audit_record_schema_owner" => "WS-01",
+  "audit_record_materialization_owner" => "WS-07",
+  "audit_record_materialization" => "append_only_insert_or_exact_identity_and_digest_match",
   "audit_resource_envelope_contract" =>
     "packages/domain-schemas/common/resource-envelope/resource-envelope-v1.1.schema.json",
   "audit_record_contract" =>
@@ -4577,12 +5004,31 @@ expected_reconciliation_record = {
   ],
   "execution_scope" => "atomic_process_instance_single_holder",
   "propagated_evidence" =>
-    "canonical_envelopes_with_closed_nested_provider_evidence_opaque_ws03_audit_references_only",
+    "canonical_event_uses_only_logical_operation_id_as_protected_lookup_and_opaque_ws03_references_exist_in_materialized_audit_only",
+  "terminal_transaction" =>
+    "predeclared_ws03_scm_then_ws02_core_outbox_final_participant_atomic_state_and_intent",
+  "audit_recovery" =>
+    "adr0008_deadline_atomically_transfers_to_real_ws07_successor_obligation_before_core_outbox_retirement",
   "ordinary_ui_synchronous_provider_calls" => 0,
   "activation_gate" => "ADR-CAND-008_ACCEPTED_AT_EXACT_IMMUTABLE_SHA"
 }
-unless reconciliation_records == [expected_reconciliation_record]
-  failures << "specs/provider-interfaces.yaml: ADR-0009 reconciliation registry must match the exact owner/source/schema/activation contract"
+reconciliation_registry_failures = lambda do |records|
+  if records == [expected_reconciliation_record]
+    []
+  else
+    ["specs/provider-interfaces.yaml: ADR-0009 reconciliation registry must match the exact owner/source/schema/activation contract"]
+  end
+end
+failures.concat(reconciliation_registry_failures.call(reconciliation_records))
+
+ADR_0009_PROVIDER_INTERFACE_NEW_FIELDS.each do |field|
+  adr_0009_cross_contract_mutation_count += 1
+  mutated_records = Marshal.load(Marshal.dump(reconciliation_records))
+  removed = mutated_records.first&.delete(field)
+  mutation_failures = reconciliation_registry_failures.call(mutated_records)
+  if removed.nil? || mutation_failures.empty?
+    adr_0009_cross_contract_mutation_survivors << "provider interface #{field} deletion"
+  end
 end
 
 p1_003 = issues["STEAD-P1-003"]
@@ -4610,18 +5056,56 @@ if p1_003 && p1_006 && p1_007
     packages/event-schemas/stead/provider-reconciliation-dead-letter-v1.schema.json
   ]
   p1_003_acceptance = Array(p1_003["acceptance_criteria"]).join("\n")
-  unless p1_003_acceptance.include?("Consume, but do not own or emit before readiness of")
-    failures << "STEAD-P1-003 must consume, but not own or prematurely emit, all named ADR-0009 evidence schemas"
+  unless p1_003_acceptance.include?("Consume, but do not own or emit before readiness of") &&
+         p1_003_acceptance.include?("predeclared WS-03 then WS-02 terminal transaction") &&
+         p1_003_acceptance.include?("WS-03 never writes `audit.*`") &&
+         p1_003_acceptance.include?("authenticated, fresh-authorized, bounded set-oriented typed read port") &&
+         p1_003_acceptance.include?("event's additional reconciliation evidence is exactly `schema_version` and `logical_operation_id`")
+    failures << "STEAD-P1-003 must own the WS-03 terminal/evidence-resolver seam and consume, but not prematurely emit, the closed ADR-0009 evidence schemas"
   end
 
   p1_007_acceptance = Array(p1_007["acceptance_criteria"]).join("\n")
+  p1_007_materialization_failures = lambda do |issue|
+    acceptance = Array(issue["acceptance_criteria"]).join("\n")
+    tests = Array(issue["automated_tests"])
+    next [] if ADR_0009_P1_007_REQUIRED_TESTS.all? { |test_id| tests.include?(test_id) } &&
+               ADR_0009_P1_007_MATERIALIZATION_FRAGMENTS.all? do |fragment|
+                 acceptance.include?(fragment)
+               end
+
+    ["STEAD-P1-007 must own ADR-0009 full-reconciliation, audit-minimization, and upgrade/rollback tests plus the exact audit-materialization and successor-obligation acceptance"]
+  end
   unless p1_007["owner"] == "WS-07" &&
          p1_007["contributors"] == %w[WS-01 WS-02 WS-03 WS-06 WS-12 WS-13] &&
          schema_contract_paths.all? { |path| p1_007_acceptance.include?(path) } &&
          p1_007_acceptance.include?("Activate emission only after all named schemas are registered and validated") &&
          p1_007_acceptance.include?("audit v1.0/v1.1 and both specialized events are consumer-readable") &&
-         p1_007_acceptance.include?("rollback stops new emission while old and new readers remain available")
-    failures << "STEAD-P1-007 must preserve exact ADR-0009 schema ownership, consumer-first activation, and compatible rollback"
+         p1_007_acceptance.include?("rollback stops new emission while old and new readers remain available") &&
+         p1_007_materialization_failures.call(p1_007).empty?
+    failures << "STEAD-P1-007 must preserve exact ADR-0009 schema ownership, tests, event minimization, fresh-authorized evidence resolution, append-only idempotent audit materialization, recovery, and compatible rollback"
+  end
+
+  ADR_0009_P1_007_REQUIRED_TESTS.each do |test_id|
+    adr_0009_cross_contract_mutation_count += 1
+    mutated_issue = Marshal.load(Marshal.dump(p1_007))
+    removed = mutated_issue.fetch("automated_tests").delete(test_id)
+    if removed.nil? || p1_007_materialization_failures.call(mutated_issue).empty?
+      adr_0009_cross_contract_mutation_survivors << "P1-007 #{test_id} deletion"
+    end
+  end
+  ADR_0009_P1_007_MATERIALIZATION_FRAGMENTS.each do |fragment|
+    adr_0009_cross_contract_mutation_count += 1
+    mutated_issue = Marshal.load(Marshal.dump(p1_007))
+    changed = false
+    mutated_issue.fetch("acceptance_criteria").map! do |criterion|
+      next criterion unless criterion.include?(fragment)
+
+      changed = true
+      criterion.sub(fragment, "mutated ADR-0009 materialization clause")
+    end
+    if !changed || p1_007_materialization_failures.call(mutated_issue).empty?
+      adr_0009_cross_contract_mutation_survivors << "P1-007 acceptance fragment #{fragment.inspect}"
+    end
   end
 else
   failures << "implementation issue catalog must contain STEAD-P1-003, STEAD-P1-006, and STEAD-P1-007"
@@ -6962,13 +7446,33 @@ adr_0009_expected_dependents = %w[
   STEAD-P1-002
   STEAD-P1-003
   STEAD-P1-006
+  STEAD-P1-007
   STEAD-P1-011
   STEAD-P1-012
   STEAD-P2-001
 ].to_set
-adr_0009_actual_dependents = Array(adr_0009_gate&.fetch("dependent_issues", nil)).to_set
-unless adr_0009_actual_dependents == adr_0009_expected_dependents
-  failures << "implementation issue catalog: ADR-CAND-008 exact dependent issues must be #{adr_0009_expected_dependents.to_a.sort.join(', ')}, found #{adr_0009_actual_dependents.to_a.sort.join(', ')}"
+adr_0009_gate_dependency_failures = lambda do |gate|
+  actual = Array(gate&.fetch("dependent_issues", nil)).to_set
+  if actual == adr_0009_expected_dependents
+    []
+  else
+    ["implementation issue catalog: ADR-CAND-008 exact dependent issues must be #{adr_0009_expected_dependents.to_a.sort.join(', ')}, found #{actual.to_a.sort.join(', ')}"]
+  end
+end
+failures.concat(adr_0009_gate_dependency_failures.call(adr_0009_gate))
+
+adr_0009_cross_contract_mutation_count += 1
+mutated_adr_0009_gate = Marshal.load(Marshal.dump(adr_0009_gate))
+removed_p1_007_gate = mutated_adr_0009_gate&.fetch("dependent_issues", [])&.delete("STEAD-P1-007")
+if removed_p1_007_gate.nil? || adr_0009_gate_dependency_failures.call(mutated_adr_0009_gate).empty?
+  adr_0009_cross_contract_mutation_survivors << "ADR-CAND-008 P1-007 dependent deletion"
+end
+
+unless adr_0009_cross_contract_mutation_count == ADR_0009_EXPECTED_CROSS_CONTRACT_MUTATIONS
+  failures << "ADR-0009 cross-contract mutation inventory must contain exactly #{ADR_0009_EXPECTED_CROSS_CONTRACT_MUTATIONS} cases"
+end
+unless adr_0009_cross_contract_mutation_survivors.empty?
+  failures << "ADR-0009 cross-contract mutation survivors: #{adr_0009_cross_contract_mutation_survivors.join(', ')}"
 end
 
 provider_issue = issues["STEAD-P1-003"]
@@ -7299,7 +7803,9 @@ implementation_assignments = {
       T-ADR-0009-FULL-RECONCILIATION
     ],
     "STEAD-P1-007" => %w[
+      T-ADR-0009-FULL-RECONCILIATION
       T-ADR-0009-AUDIT-MINIMIZATION
+      T-ADR-0009-UPGRADE-ROLLBACK
     ],
     "STEAD-P1-011" => %w[
       T-ADR-0009-WEBHOOK-IDEMPOTENCY
@@ -7466,6 +7972,7 @@ if failures.empty?
   puts "ADR-0009 exact-mapping mutation guard: PASS (#{adr_0009_killed_mutations}/#{adr_0009_expected_edges.length} required edge deletions killed)"
   puts "ADR-0009 bounded ADR mutation guard: PASS (#{adr_0009_adr_mutation_count}/#{ADR_0009_EXPECTED_ADR_MUTATIONS.length} mutations killed)"
   puts "ADR-0009 structured reconciliation mutation guard: PASS (#{adr_0009_spec_mutation_count}/#{adr_0009_spec_mutation_count} mutations killed)"
+  puts "ADR-0009 cross-contract mutation guard: PASS (#{adr_0009_cross_contract_mutation_count}/#{ADR_0009_EXPECTED_CROSS_CONTRACT_MUTATIONS} mutations killed)"
   puts "ADR-0009 acceptance-state/history mutation guard: PASS (#{adr_0009_acceptance_mutation_names.length}/#{ADR_0009_EXPECTED_ACCEPTANCE_MUTATION_NAMES.length} mutations killed; later normal merge allowed)"
   puts "ADR traceability validation: PASS (records=#{paths.length}, requirements=#{known_requirement_ids.length}, tests=#{all_test_owners.length})"
 else

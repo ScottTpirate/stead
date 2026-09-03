@@ -3,7 +3,7 @@ schema_version: '1.0'
 directive:
   path: docs/architecture/MASTER_BUILD_DIRECTIVE.md
   version: '0.2'
-  sha256: 6ef071bac5eb7f7233d78011886ef3377bb21d70e68d46071b9e04c8df800636
+  sha256: 0e63d882319cb945e8c6fe362e1da24dde9aa118300027fec09574aece1c8d50
   named_requirement_count: 134
 requirement_ids:
 - ACT-001
