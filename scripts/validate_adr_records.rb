@@ -205,7 +205,7 @@ ADR_0008_CBI_TABLE_HEADER =
 ADR_0008_CBI_TABLE_DELIMITER = "|---|---|---|---|---|---|---|\n".freeze
 
 ADR_0008_EXPECTED_SECURITY_MUTATION_GROUPS = {
-  topology: 17,
+  topology: 18,
   authorization: 1,
   streams: 1,
   delivery: 2,
@@ -820,7 +820,7 @@ def adr_0008_bypass_inventory_rows(source)
     failures << "classification bypass inventory row #{index + 1} must use canonical CBI table-row syntax"
   end
 
-  visible_cbi_030_lines = lines.filter_map do |line|
+  visible_cbi_030_lines = visible_source.lines.filter_map do |line|
     line if markdown_visible_security_text(line).include?("CBI-030")
   end
   unless visible_cbi_030_lines.length == 1 && visible_cbi_030_lines.first == rows.grep(/\A\| CBI-030 \|/).first
@@ -1645,6 +1645,21 @@ if canonical_bypass_row
       expected_failure_fragment: "canonical CBI table-row syntax"
     }
   end
+end
+
+if canonical_bypass_table
+  post_boundary_duplicate = classification_bypass_source.sub(
+    "## Common test fixture and oracle\n",
+    "## Common test fixture and oracle\n\n#{canonical_bypass_table}"
+  )
+  adr_0008_security_mutations << {
+    group: :topology,
+    name: "post-boundary duplicate CBI-030 table",
+    adr: adr_0008_source,
+    asyncapi: deep_copy_asyncapi.call,
+    bypass: post_boundary_duplicate,
+    expected_failure_fragment: "render CBI-030 exactly once"
+  }
 end
 
 harmless_escaped_pipe_prose = classification_bypass_source.sub(
