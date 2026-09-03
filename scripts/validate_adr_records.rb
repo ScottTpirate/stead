@@ -1,6 +1,7 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
+require "cgi"
 require "digest"
 require "json"
 require "pathname"
@@ -204,7 +205,7 @@ ADR_0008_CBI_TABLE_HEADER =
 ADR_0008_CBI_TABLE_DELIMITER = "|---|---|---|---|---|---|---|\n".freeze
 
 ADR_0008_EXPECTED_SECURITY_MUTATION_GROUPS = {
-  topology: 14,
+  topology: 17,
   authorization: 1,
   streams: 1,
   delivery: 2,
@@ -714,6 +715,7 @@ def markdown_mask_nonrendered_security_contracts(source)
   visible = +""
   fence = nil
   html_block = nil
+  previous_blank = true
   block_html_tags = %w[
     address article aside base basefont blockquote body caption center col colgroup
     dd details dialog dir div dl dt fieldset figcaption figure footer form frame
@@ -727,6 +729,7 @@ def markdown_mask_nonrendered_security_contracts(source)
       minimum_length = fence.fetch(:length)
       fence = nil if line.match?(/\A {0,3}#{delimiter}{#{minimum_length},}[ \t]*(?:\r?\n)?\z/)
       visible << line.gsub(/[^\r\n]/, " ")
+      previous_blank = line.strip.empty?
       next
     end
 
@@ -734,6 +737,7 @@ def markdown_mask_nonrendered_security_contracts(source)
       terminator = html_block.fetch(:terminator)
       html_block = nil if terminator == :blank ? line.strip.empty? : line.include?(terminator)
       visible << line.gsub(/[^\r\n]/, " ")
+      previous_blank = line.strip.empty?
       next
     end
 
@@ -754,29 +758,36 @@ def markdown_mask_nonrendered_security_contracts(source)
           line.match?(/\A {0,3}<\/?(?:#{block_html_tags})(?:[ \t\/>]|$)/i)
       html_block = { terminator: :blank } unless line.strip.empty?
       visible << line.gsub(/[^\r\n]/, " ")
+    elsif previous_blank && line.match?(
+      /\A {0,3}<\/?[A-Za-z][A-Za-z0-9-]*(?:[ \t]+[A-Za-z_:][A-Za-z0-9_.:-]*(?:[ \t]*=[ \t]*(?:"[^"]*"|'[^']*'|[^ \t\r\n"'=<>`]+))?)*[ \t]*\/?>[ \t]*(?:\r?\n)?\z/
+    )
+      html_block = { terminator: :blank } unless line.strip.empty?
+      visible << line.gsub(/[^\r\n]/, " ")
     else
       visible << line
     end
+    previous_blank = line.strip.empty?
   end
   visible
 end
 
-def gfm_table_cell_count(line, delimiter: false)
-  body = line.sub(/\r?\n\z/, "")
-  return nil unless body.match?(/\A {0,3}\S/) && body.include?("|")
+def markdown_visible_security_text(line)
+  entity_decoded = CGI.unescapeHTML(line)
+  numeric_decoded, invalid_numeric_reference = decode_numeric_character_references(entity_decoded)
+  decoded = invalid_numeric_reference ? entity_decoded : numeric_decoded
 
-  body = body.strip
-  body = body.delete_prefix("|").delete_suffix("|")
-  cells = body.split("|", -1)
-  return nil if cells.empty?
-  if delimiter
-    return nil unless cells.all? { |cell| cell.match?(/\A[ \t]*:?-+:?[ \t]*\z/) }
-  end
-  cells.length
+  decoded.gsub(/<[^>]*>/, "")
+         .gsub(/\\([\\`*{}\[\]()#+\-.!_|>~])/, "\\1")
+         .delete("*_~`[]")
+         .upcase
 end
 
 def adr_0008_bypass_inventory_rows(source)
   failures = []
+  # This is deliberately a closed source grammar rather than a partial GFM
+  # table parser. Non-rendered block contexts are masked first; the one
+  # security table is then byte-exact and blank-delimited, while unrelated
+  # prose and its pipe characters remain outside the grammar.
   visible_source = markdown_mask_nonrendered_security_contracts(source)
   section_heading = "## Complete bypass inventory\n"
   section_end_heading = "## Common test fixture and oracle\n"
@@ -789,18 +800,14 @@ def adr_0008_bypass_inventory_rows(source)
 
   section = visible_source[section_starts.first.end(0)...section_ends.first.begin(0)]
   lines = section.lines
-  table_starts = (1...lines.length).select do |delimiter_index|
-    delimiter_cells = gfm_table_cell_count(lines[delimiter_index], delimiter: true)
-    header_cells = gfm_table_cell_count(lines[delimiter_index - 1])
-    delimiter_cells && header_cells == delimiter_cells
-  end
-  unless table_starts.length == 1
-    return [[], ["classification bypass inventory must contain exactly one operative GFM table"]]
+  header_indices = lines.each_index.select { |index| lines[index] == ADR_0008_CBI_TABLE_HEADER }
+  unless header_indices.length == 1
+    return [[], ["classification bypass inventory must contain exactly one canonical visible complete-inventory table"]]
   end
 
-  delimiter_index = table_starts.first
-  header_index = delimiter_index - 1
-  unless lines[header_index] == ADR_0008_CBI_TABLE_HEADER &&
+  header_index = header_indices.first
+  delimiter_index = header_index + 1
+  unless (header_index.zero? || lines[header_index - 1].strip.empty?) &&
          lines[delimiter_index] == ADR_0008_CBI_TABLE_DELIMITER
     return [[], ["classification bypass inventory must contain the canonical complete-inventory table header"]]
   end
@@ -814,8 +821,7 @@ def adr_0008_bypass_inventory_rows(source)
   end
 
   visible_cbi_030_lines = lines.filter_map do |line|
-    decoded, invalid = decode_numeric_character_references(line)
-    line if !invalid && decoded.include?("CBI-030")
+    line if markdown_visible_security_text(line).include?("CBI-030")
   end
   unless visible_cbi_030_lines.length == 1 && visible_cbi_030_lines.first == rows.grep(/\A\| CBI-030 \|/).first
     failures << "classification bypass inventory must render CBI-030 exactly once in the canonical table"
@@ -1567,19 +1573,31 @@ if canonical_bypass_header_index
   {
     "HTML-comment-hidden complete inventory table" => [
       "<!--\n#{canonical_bypass_table}-->\n",
-      "exactly one operative GFM table"
+      "exactly one canonical visible complete-inventory table"
     ],
     "fenced-code-hidden complete inventory table" => [
       "```text\n#{canonical_bypass_table}```\n",
-      "exactly one operative GFM table"
+      "exactly one canonical visible complete-inventory table"
     ],
     "raw-HTML-hidden complete inventory table" => [
       "<div>\n#{canonical_bypass_table}</div>\n\n",
-      "exactly one operative GFM table"
+      "exactly one canonical visible complete-inventory table"
+    ],
+    "type-seven-inline-HTML-hidden complete inventory table" => [
+      "<span>\n#{canonical_bypass_table}</span>\n\n",
+      "exactly one canonical visible complete-inventory table"
+    ],
+    "type-seven-custom-HTML-hidden complete inventory table" => [
+      "<stead-contract>\n#{canonical_bypass_table}</stead-contract>\n\n",
+      "exactly one canonical visible complete-inventory table"
     ],
     "second complete inventory table after a blank line" => [
       "#{canonical_bypass_table}\n#{canonical_bypass_table}",
-      "exactly one operative GFM table"
+      "exactly one canonical visible complete-inventory table"
+    ],
+    "nested formatted duplicate CBI-030 table" => [
+      "#{canonical_bypass_table}\n#{canonical_bypass_table.lines.map { |line| "> #{line.sub("CBI-030", "CBI-**030**")}" }.join}",
+      "render CBI-030 exactly once"
     ],
     "security-control header meaning changed" => [
       canonical_bypass_table.sub(
@@ -1589,7 +1607,7 @@ if canonical_bypass_header_index
           "Optional preventive/detective guidance"
         )
       ),
-      "canonical complete-inventory table header"
+      "exactly one canonical visible complete-inventory table"
     ]
   }.each do |name, (replacement_table, expected_failure_fragment)|
     mutated_rendered_bypass = classification_bypass_source.sub(
@@ -1627,6 +1645,19 @@ if canonical_bypass_row
       expected_failure_fragment: "canonical CBI table-row syntax"
     }
   end
+end
+
+harmless_escaped_pipe_prose = classification_bypass_source.sub(
+  "Positive controls prove an authorized principal still succeeds.\n",
+  "Positive controls prove an authorized principal still succeeds.\n\nExample literal \\| separator\n---|---\n"
+)
+harmless_escaped_pipe_failures = adr_0008_security_contract_failures(
+  adr_source: adr_0008_source,
+  asyncapi: deep_copy_asyncapi.call,
+  bypass_source: harmless_escaped_pipe_prose
+)
+unless harmless_escaped_pipe_failures.empty?
+  failures << "ADR-0008 closed inventory grammar rejected harmless escaped-pipe prose: #{harmless_escaped_pipe_failures.join('; ')}"
 end
 
 adr_0008_security_mutation_survivors = adr_0008_security_mutations.filter_map do |mutation|
