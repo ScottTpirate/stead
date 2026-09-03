@@ -19,6 +19,7 @@ import {
 import {
   buildBundleMembership,
   REQUIRED_LAZY_BOUNDARIES,
+  validateDistributionArtifacts,
 } from "../scripts/measure-bundle.mjs";
 
 const webSource = new URL("../src/", import.meta.url);
@@ -120,9 +121,18 @@ test("lazy bundle graphs include transitive and shared chunks exactly once", () 
     () =>
       buildBundleMembership({
         ...manifest,
-        orphan: { file: "assets/ungoverned.js" },
+        orphan: { file: "assets/ungoverned.mjs" },
       }),
     /outside required capability graphs.*orphan/u,
+  );
+
+  assert.throws(
+    () =>
+      buildBundleMembership({
+        ...manifest,
+        escaped: { file: "../ungoverned.cjs" },
+      }),
+    /escapes or aliases the distribution root/u,
   );
 
   const disconnectedManifest = structuredClone(manifest);
@@ -161,18 +171,32 @@ test("the complete browser module graph closes network, provider, ontology, and 
     await readFile(new URL("../package.json", import.meta.url), "utf8"),
   );
   const graph = await collectBrowserSourceGraph({
-    entryPath: new URL("../src/main.tsx", import.meta.url).pathname,
+    entryPath: new URL("../index.html", import.meta.url).pathname,
+    repositoryRoot,
+  });
+  const configGraph = await collectBrowserSourceGraph({
+    entryPath: new URL("../vite.config.ts", import.meta.url).pathname,
     repositoryRoot,
   });
   const relativePaths = graph.modules.map((module) =>
     module.path.slice(repositoryRoot.length + 1),
   );
 
+  assert.ok(relativePaths.includes("apps/web/index.html"));
+  assert.ok(relativePaths.includes("apps/web/src/main.tsx"));
+  assert.ok(relativePaths.includes("apps/web/src/styles.css"));
   assert.ok(relativePaths.includes("apps/web/src/capabilities/docs-editor.ts"));
   assert.ok(relativePaths.includes("packages/api-client/src/client.ts"));
   assert.ok(relativePaths.includes("packages/design-system/src/primitives.tsx"));
   assert.deepEqual(findBrowserBoundaryViolations(graph), []);
+  assert.deepEqual(findBrowserBoundaryViolations(configGraph), []);
   assert.deepEqual(undeclaredRuntimePackages(graph, manifest), []);
+  assert.deepEqual(
+    undeclaredRuntimePackages(configGraph, manifest, {
+      includeDevDependencies: true,
+    }),
+    [],
+  );
 });
 
 test("a newly imported forbidden network module cannot escape the graph gate", async () => {
@@ -198,6 +222,182 @@ test("a newly imported forbidden network module cannot escape the graph gate", a
     assert.deepEqual(
       findBrowserBoundaryViolations(graph).map(({ rule }) => rule),
       ["direct-browser-network", "provider-or-infrastructure"],
+    );
+  } finally {
+    await rm(fixtureRoot, { recursive: true, force: true });
+  }
+});
+
+test("statically composed network, provider, and source-ontology tokens cannot evade the graph gate", async () => {
+  const fixtureParent =
+    process.env.STEAD_TEST_TMPDIR ?? join(homedir(), ".cache", "stead-test-tmp");
+  await mkdir(fixtureParent, { recursive: true });
+  const fixtureRoot = await mkdtemp(join(fixtureParent, "stead-static-evasion-"));
+  try {
+    await writeFile(
+      join(fixtureRoot, "entry.ts"),
+      [
+        'const networkName = "fe" + "tch";',
+        "const request = globalThis[networkName];",
+        'const protocol = "https:";',
+        'const providerName = ["gi", "tea"].join("");',
+        'const provider = protocol + "//" + providerName + ".invalid/api/v1/repos";',
+        'const nounSuffix = "ules";',
+        'const forbiddenNoun = "Mod" + nounSuffix;',
+        "export const bypass = () => request(provider + forbiddenNoun);",
+      ].join("\n"),
+      "utf8",
+    );
+    const graph = await collectBrowserSourceGraph({
+      entryPath: join(fixtureRoot, "entry.ts"),
+      repositoryRoot: fixtureRoot,
+    });
+    assert.deepEqual(
+      findBrowserBoundaryViolations(graph).map(({ rule }) => rule),
+      [
+        "devlane-ontology",
+        "direct-browser-network",
+        "provider-or-infrastructure",
+      ],
+    );
+  } finally {
+    await rm(fixtureRoot, { recursive: true, force: true });
+  }
+});
+
+test("HTML-loaded scripts and styles are governed while external or inline execution fails closed", async () => {
+  const fixtureParent =
+    process.env.STEAD_TEST_TMPDIR ?? join(homedir(), ".cache", "stead-test-tmp");
+  await mkdir(fixtureParent, { recursive: true });
+  const fixtureRoot = await mkdtemp(join(fixtureParent, "stead-html-graph-"));
+  try {
+    await mkdir(join(fixtureRoot, "src"));
+    await writeFile(
+      join(fixtureRoot, "index.html"),
+      [
+        '<!doctype html><html><head><link rel="stylesheet" href="/src/app.css" /></head>',
+        '<body><script type="module" src="/src/app.ts"></script></body></html>',
+      ].join(""),
+      "utf8",
+    );
+    await writeFile(join(fixtureRoot, "src/app.css"), ":root { color: black; }\n");
+    await writeFile(join(fixtureRoot, "src/app.ts"), "export const app = true;\n");
+    const graph = await collectBrowserSourceGraph({
+      entryPath: join(fixtureRoot, "index.html"),
+      repositoryRoot: fixtureRoot,
+    });
+    assert.deepEqual(
+      graph.modules.map(({ path }) => path.slice(fixtureRoot.length + 1)),
+      ["index.html", "src/app.css", "src/app.ts"],
+    );
+
+    await writeFile(
+      join(fixtureRoot, "index.html"),
+      '<script type="module" src="https://gitea.invalid/app.js"></script>\n',
+    );
+    await assert.rejects(
+      collectBrowserSourceGraph({
+        entryPath: join(fixtureRoot, "index.html"),
+        repositoryRoot: fixtureRoot,
+      }),
+      /external or modified HTML resource URL/u,
+    );
+
+    await writeFile(
+      join(fixtureRoot, "index.html"),
+      '<script type="module" src="/src/app.ts">globalThis.fetch("/api")</script>\n',
+    );
+    await assert.rejects(
+      collectBrowserSourceGraph({
+        entryPath: join(fixtureRoot, "index.html"),
+        repositoryRoot: fixtureRoot,
+      }),
+      /inline HTML script/u,
+    );
+  } finally {
+    await rm(fixtureRoot, { recursive: true, force: true });
+  }
+});
+
+test("built artifact inventory rejects orphan executable files, unknown HTML edges, and symlinks", async () => {
+  const fixtureParent =
+    process.env.STEAD_TEST_TMPDIR ?? join(homedir(), ".cache", "stead-test-tmp");
+  await mkdir(fixtureParent, { recursive: true });
+  const fixtureRoot = await mkdtemp(join(fixtureParent, "stead-distribution-"));
+  const manifest = {
+    "index.html": {
+      file: "assets/index.js",
+      isEntry: true,
+      css: ["assets/index.css"],
+      dynamicImports: Object.values(REQUIRED_LAZY_BOUNDARIES),
+    },
+    "src/capabilities/docs-editor.ts": { file: "assets/docs.js" },
+    "src/capabilities/code.ts": { file: "assets/code.js" },
+    "src/capabilities/delivery.ts": { file: "assets/delivery.js" },
+    "src/capabilities/administration.ts": { file: "assets/admin.js" },
+    "src/capabilities/migration.ts": { file: "assets/migration.js" },
+    "src/capabilities/analytics.ts": { file: "assets/analytics.js" },
+  };
+  try {
+    await mkdir(join(fixtureRoot, "assets"));
+    await mkdir(join(fixtureRoot, ".vite"));
+    for (const chunk of Object.values(manifest)) {
+      await writeFile(join(fixtureRoot, chunk.file), "export {};\n");
+    }
+    await writeFile(join(fixtureRoot, "assets/index.css"), ":root {}\n");
+    await writeFile(
+      join(fixtureRoot, ".vite/manifest.json"),
+      `${JSON.stringify(manifest)}\n`,
+    );
+    await writeFile(
+      join(fixtureRoot, "index.html"),
+      [
+        '<link rel="stylesheet" href="/assets/index.css" />',
+        '<script type="module" src="/assets/index.js"></script>',
+      ].join("\n"),
+    );
+
+    const result = await validateDistributionArtifacts({
+      distributionRoot: fixtureRoot,
+      manifest,
+    });
+    assert.ok(result.files.includes("assets/index.js"));
+
+    await writeFile(join(fixtureRoot, "assets/ungoverned.mjs"), "export {};\n");
+    await assert.rejects(
+      validateDistributionArtifacts({ distributionRoot: fixtureRoot, manifest }),
+      /executable files are outside the Vite manifest.*ungoverned\.mjs/u,
+    );
+    await rm(join(fixtureRoot, "assets/ungoverned.mjs"));
+
+    await writeFile(
+      join(fixtureRoot, "unreviewed.html"),
+      '<script type="module" src="/assets/index.js"></script>\n',
+    );
+    await assert.rejects(
+      validateDistributionArtifacts({ distributionRoot: fixtureRoot, manifest }),
+      /HTML entry set must be exactly index\.html.*unreviewed\.html/u,
+    );
+    await rm(join(fixtureRoot, "unreviewed.html"));
+
+    await writeFile(
+      join(fixtureRoot, "index.html"),
+      '<script type="module" src="/assets/unknown.js"></script>\n',
+    );
+    await assert.rejects(
+      validateDistributionArtifacts({ distributionRoot: fixtureRoot, manifest }),
+      /HTML references an absent distribution file/u,
+    );
+
+    await writeFile(
+      join(fixtureRoot, "index.html"),
+      '<script type="module" src="/assets/index.js"></script>\n',
+    );
+    await rm(join(fixtureRoot, "assets/code.js"));
+    await symlink("delivery.js", join(fixtureRoot, "assets/code.js"));
+    await assert.rejects(
+      validateDistributionArtifacts({ distributionRoot: fixtureRoot, manifest }),
+      /distribution path contains a symbolic link.*code\.js/u,
     );
   } finally {
     await rm(fixtureRoot, { recursive: true, force: true });

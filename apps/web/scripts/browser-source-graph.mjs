@@ -11,6 +11,36 @@ const DIRECT_BROWSER_NETWORK =
   /\bfetch\s*\(|\bXMLHttpRequest\b|\bWebSocket\s*\(|\bEventSource\s*\(|\bsendBeacon\s*\(|https?:\/\//iu;
 const DEVLANE_ONTOLOGY =
   /\bModules\b|\bEpics\b|\bPages\b|\bBoard\b|\bIntake\b|\bArchives\b|\bDrafts\b/iu;
+const DIRECT_NETWORK_IDENTIFIERS = new Set([
+  "EventSource",
+  "SharedWorker",
+  "WebSocket",
+  "Worker",
+  "XMLHttpRequest",
+  "fetch",
+  "importScripts",
+  "sendBeacon",
+]);
+const DYNAMIC_CODE_IDENTIFIERS = new Set(["Function", "eval"]);
+const HTML_RESOURCE_ATTRIBUTES = new Set([
+  "action",
+  "formaction",
+  "href",
+  "poster",
+  "src",
+  "srcset",
+]);
+const FORBIDDEN_HTML_ELEMENTS = new Set([
+  "applet",
+  "base",
+  "embed",
+  "frame",
+  "iframe",
+  "object",
+  "portal",
+  "style",
+]);
+const MAX_STATIC_STRING_LENGTH = 16_384;
 
 function insideRoot(path, root) {
   const relation = relative(root, path);
@@ -163,7 +193,303 @@ function cssImports(path, source) {
   return imports;
 }
 
-function scriptImports(path, source) {
+function parseHtmlAttributes(path, rawAttributes) {
+  const attributes = new Map();
+  let cursor = 0;
+  while (cursor < rawAttributes.length) {
+    while (/\s/u.test(rawAttributes[cursor] ?? "")) cursor += 1;
+    if (cursor >= rawAttributes.length) break;
+
+    const nameMatch = /^[A-Za-z_:][A-Za-z0-9_.:-]*/u.exec(
+      rawAttributes.slice(cursor),
+    );
+    if (!nameMatch) throw new Error(`unsupported HTML attribute syntax in ${path}`);
+    const name = nameMatch[0].toLowerCase();
+    if (attributes.has(name)) {
+      throw new Error(`duplicate HTML attribute ${name} in ${path}`);
+    }
+    cursor += nameMatch[0].length;
+    while (/\s/u.test(rawAttributes[cursor] ?? "")) cursor += 1;
+
+    let value = true;
+    if (rawAttributes[cursor] === "=") {
+      cursor += 1;
+      while (/\s/u.test(rawAttributes[cursor] ?? "")) cursor += 1;
+      const quote = rawAttributes[cursor];
+      if (quote !== '"' && quote !== "'") {
+        throw new Error(`unquoted HTML attribute ${name} in ${path}`);
+      }
+      cursor += 1;
+      const valueStart = cursor;
+      while (cursor < rawAttributes.length && rawAttributes[cursor] !== quote) {
+        cursor += 1;
+      }
+      if (cursor >= rawAttributes.length) {
+        throw new Error(`unterminated HTML attribute ${name} in ${path}`);
+      }
+      value = rawAttributes.slice(valueStart, cursor);
+      cursor += 1;
+    }
+    attributes.set(name, value);
+  }
+  return attributes;
+}
+
+function tokenizeHtml(path, source) {
+  const tokens = [];
+  let cursor = 0;
+  while (cursor < source.length) {
+    const open = source.indexOf("<", cursor);
+    if (open < 0) break;
+    if (source.startsWith("<!--", open)) {
+      const close = source.indexOf("-->", open + 4);
+      if (close < 0) throw new Error(`unterminated HTML comment in ${path}`);
+      cursor = close + 3;
+      continue;
+    }
+    if (/^<!doctype\s+html\s*>/iu.test(source.slice(open))) {
+      const close = source.indexOf(">", open + 2);
+      cursor = close + 1;
+      continue;
+    }
+
+    let close = open + 1;
+    let quote;
+    for (; close < source.length; close += 1) {
+      const character = source[close];
+      if (quote) {
+        if (character === quote) quote = undefined;
+      } else if (character === '"' || character === "'") {
+        quote = character;
+      } else if (character === ">") {
+        break;
+      }
+    }
+    if (close >= source.length || quote) {
+      throw new Error(`unterminated HTML tag in ${path}`);
+    }
+
+    let rawTag = source.slice(open + 1, close).trim();
+    const closing = rawTag.startsWith("/");
+    if (closing) rawTag = rawTag.slice(1).trim();
+    const selfClosing = !closing && rawTag.endsWith("/");
+    if (selfClosing) rawTag = rawTag.slice(0, -1).trimEnd();
+    const nameMatch = /^[A-Za-z][A-Za-z0-9:-]*/u.exec(rawTag);
+    if (!nameMatch) throw new Error(`unsupported HTML tag syntax in ${path}`);
+    const name = nameMatch[0].toLowerCase();
+    const attributes = parseHtmlAttributes(path, rawTag.slice(nameMatch[0].length));
+    if (closing && (attributes.size > 0 || selfClosing)) {
+      throw new Error(`unsupported HTML closing tag syntax in ${path}`);
+    }
+    tokens.push({ attributes, closing, end: close + 1, name, selfClosing, start: open });
+    cursor = close + 1;
+  }
+  return tokens;
+}
+
+function governedHtmlSpecifier(path, value) {
+  if (typeof value !== "string" || value.length === 0 || value !== value.trim()) {
+    throw new Error(`empty or non-canonical HTML resource URL in ${path}`);
+  }
+  if (
+    value.includes("\\") ||
+    value.includes("%") ||
+    value.includes("?") ||
+    value.includes("#") ||
+    /^(?:[A-Za-z][A-Za-z0-9+.-]*:|\/\/)/u.test(value)
+  ) {
+    throw new Error(`external or modified HTML resource URL is not governed in ${path}`);
+  }
+  return value.startsWith("/") ? `.${value}` : value;
+}
+
+export function parseGovernedHtmlEdges(path, source) {
+  const tokens = tokenizeHtml(path, source);
+  const edges = [];
+  let openScript;
+
+  for (const token of tokens) {
+    if (openScript) {
+      if (!token.closing || token.name !== "script") {
+        throw new Error(`nested or unterminated HTML script in ${path}`);
+      }
+      if (source.slice(openScript.end, token.start).trim().length > 0) {
+        throw new Error(`inline HTML script is not a governed browser edge in ${path}`);
+      }
+      openScript = undefined;
+      continue;
+    }
+    if (token.closing) continue;
+    if (FORBIDDEN_HTML_ELEMENTS.has(token.name)) {
+      throw new Error(`HTML ${token.name} is not a governed browser edge in ${path}`);
+    }
+    for (const [name] of token.attributes) {
+      if (name.startsWith("on") || name === "srcdoc" || name === "style") {
+        throw new Error(`HTML attribute ${name} is not governed in ${path}`);
+      }
+    }
+    if (
+      token.name === "meta" &&
+      String(token.attributes.get("http-equiv") ?? "").toLowerCase() === "refresh"
+    ) {
+      throw new Error(`HTML refresh is not a governed browser edge in ${path}`);
+    }
+
+    if (token.name === "script") {
+      if (token.selfClosing) throw new Error(`self-closing HTML script in ${path}`);
+      if (
+        token.attributes.get("type") !== "module" ||
+        !token.attributes.has("src")
+      ) {
+        throw new Error(`only external module scripts are governed in ${path}`);
+      }
+      const allowed = new Set(["crossorigin", "src", "type"]);
+      for (const [name] of token.attributes) {
+        if (!allowed.has(name)) {
+          throw new Error(`unsupported HTML script attribute ${name} in ${path}`);
+        }
+      }
+      edges.push({
+        kind: "script",
+        specifier: governedHtmlSpecifier(path, token.attributes.get("src")),
+      });
+      openScript = token;
+      continue;
+    }
+
+    if (token.name === "link") {
+      const relation = String(token.attributes.get("rel") ?? "").toLowerCase();
+      if (!["modulepreload", "stylesheet"].includes(relation)) {
+        throw new Error(`unsupported HTML link relation in ${path}`);
+      }
+      if (!token.attributes.has("href")) {
+        throw new Error(`HTML link has no href in ${path}`);
+      }
+      const allowed = new Set(["crossorigin", "href", "rel"]);
+      for (const [name] of token.attributes) {
+        if (!allowed.has(name)) {
+          throw new Error(`unsupported HTML link attribute ${name} in ${path}`);
+        }
+      }
+      edges.push({
+        kind: relation === "stylesheet" ? "style" : "script",
+        specifier: governedHtmlSpecifier(path, token.attributes.get("href")),
+      });
+      continue;
+    }
+
+    for (const [name] of token.attributes) {
+      if (HTML_RESOURCE_ATTRIBUTES.has(name)) {
+        throw new Error(
+          `unsupported HTML resource attribute ${token.name}.${name} in ${path}`,
+        );
+      }
+    }
+  }
+  if (openScript) throw new Error(`unterminated HTML script in ${path}`);
+  return edges;
+}
+
+function staticString(node, bindings = new Map(), seen = new Set()) {
+  if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) {
+    return node.text;
+  }
+  if (ts.isIdentifier(node) && bindings.has(node.text) && !seen.has(node.text)) {
+    return staticString(
+      bindings.get(node.text),
+      bindings,
+      new Set([...seen, node.text]),
+    );
+  }
+  if (ts.isParenthesizedExpression(node)) {
+    return staticString(node.expression, bindings, seen);
+  }
+  if (
+    ts.isAsExpression(node) ||
+    ts.isTypeAssertionExpression(node) ||
+    ts.isNonNullExpression(node)
+  ) {
+    return staticString(node.expression, bindings, seen);
+  }
+  if (
+    ts.isBinaryExpression(node) &&
+    node.operatorToken.kind === ts.SyntaxKind.PlusToken
+  ) {
+    const left = staticString(node.left, bindings, seen);
+    const right = staticString(node.right, bindings, seen);
+    if (left === undefined || right === undefined) return undefined;
+    const value = left + right;
+    return value.length <= MAX_STATIC_STRING_LENGTH ? value : undefined;
+  }
+  if (ts.isTemplateExpression(node)) {
+    let value = node.head.text;
+    for (const span of node.templateSpans) {
+      const expression = staticString(span.expression, bindings, seen);
+      if (expression === undefined) return undefined;
+      value += expression + span.literal.text;
+      if (value.length > MAX_STATIC_STRING_LENGTH) return undefined;
+    }
+    return value;
+  }
+  if (
+    ts.isCallExpression(node) &&
+    ts.isPropertyAccessExpression(node.expression) &&
+    node.expression.name.text === "concat"
+  ) {
+    const receiver = staticString(node.expression.expression, bindings, seen);
+    const arguments_ = node.arguments.map((argument) =>
+      staticString(argument, bindings, seen),
+    );
+    if (receiver === undefined || arguments_.some((value) => value === undefined)) {
+      return undefined;
+    }
+    const value = receiver + arguments_.join("");
+    return value.length <= MAX_STATIC_STRING_LENGTH ? value : undefined;
+  }
+  if (
+    ts.isCallExpression(node) &&
+    ts.isPropertyAccessExpression(node.expression) &&
+    node.expression.name.text === "join" &&
+    ts.isArrayLiteralExpression(node.expression.expression) &&
+    node.arguments.length <= 1
+  ) {
+    const elements = node.expression.expression.elements.map((element) =>
+      staticString(element, bindings, seen),
+    );
+    const separator = node.arguments.length === 0
+      ? ","
+      : staticString(node.arguments[0], bindings, seen);
+    if (separator === undefined || elements.some((value) => value === undefined)) {
+      return undefined;
+    }
+    const value = elements.join(separator);
+    return value.length <= MAX_STATIC_STRING_LENGTH ? value : undefined;
+  }
+  return undefined;
+}
+
+function staticConstBindings(sourceFile) {
+  const declarations = new Map();
+  const duplicates = new Set();
+  const visit = (node) => {
+    if (
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      node.initializer &&
+      ts.isVariableDeclarationList(node.parent) &&
+      (node.parent.flags & ts.NodeFlags.Const) !== 0
+    ) {
+      if (declarations.has(node.name.text)) duplicates.add(node.name.text);
+      declarations.set(node.name.text, node.initializer);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  for (const duplicate of duplicates) declarations.delete(duplicate);
+  return declarations;
+}
+
+function scriptSourceFile(path, source) {
   const scriptKind = path.endsWith(".tsx") || path.endsWith(".jsx")
     ? ts.ScriptKind.TSX
     : path.endsWith(".js") || path.endsWith(".mjs")
@@ -179,6 +505,11 @@ function scriptImports(path, source) {
   if (sourceFile.parseDiagnostics.length > 0) {
     throw new Error(`browser module has TypeScript parse errors: ${path}`);
   }
+  return sourceFile;
+}
+
+function scriptImports(path, source) {
+  const sourceFile = scriptSourceFile(path, source);
 
   const imports = [];
   const visit = (node) => {
@@ -243,8 +574,88 @@ function scriptImports(path, source) {
 }
 
 function moduleImports(path, source) {
+  if (path.endsWith(".html")) {
+    return parseGovernedHtmlEdges(path, source).map(({ specifier }) => specifier);
+  }
   if (path.endsWith(".css")) return cssImports(path, source);
   return scriptImports(path, source);
+}
+
+function scriptBoundaryRules(path, source) {
+  const sourceFile = scriptSourceFile(path, source);
+  const bindings = staticConstBindings(sourceFile);
+  const staticValues = [];
+  let directNetwork = false;
+  const approvedPlatformFetchReference = (node) =>
+    path.endsWith(`${sep}packages${sep}api-client${sep}src${sep}client.ts`) &&
+    ts.isPropertyAccessExpression(node) &&
+    node.expression.getText(sourceFile) === "globalThis" &&
+    node.name.text === "fetch" &&
+    node.parent?.getText(sourceFile) ===
+      "options.fetchImplementation ?? globalThis.fetch";
+  const visit = (node) => {
+    const value = staticString(node, bindings);
+    if (value !== undefined) staticValues.push(value);
+    if (
+      ts.isIdentifier(node) &&
+      DYNAMIC_CODE_IDENTIFIERS.has(node.text)
+    ) {
+      directNetwork = true;
+    }
+    if (
+      ts.isIdentifier(node) &&
+      DIRECT_NETWORK_IDENTIFIERS.has(node.text) &&
+      !ts.isTypeQueryNode(node.parent) &&
+      !(
+        ts.isPropertyAccessExpression(node.parent) &&
+        node.parent.name === node &&
+        approvedPlatformFetchReference(node.parent)
+      )
+    ) {
+      directNetwork = true;
+    }
+    if (
+      ts.isPropertyAccessExpression(node) &&
+      DIRECT_NETWORK_IDENTIFIERS.has(node.name.text) &&
+      !approvedPlatformFetchReference(node)
+    ) {
+      directNetwork = true;
+    }
+    if (ts.isElementAccessExpression(node)) {
+      const property = staticString(node.argumentExpression, bindings);
+      if (
+        property !== undefined &&
+        (DIRECT_NETWORK_IDENTIFIERS.has(property) ||
+          DYNAMIC_CODE_IDENTIFIERS.has(property))
+      ) {
+        directNetwork = true;
+      }
+    }
+    if (ts.isCallExpression(node) || ts.isNewExpression(node)) {
+      const expression = node.expression;
+      if (
+        (ts.isIdentifier(expression) &&
+          DIRECT_NETWORK_IDENTIFIERS.has(expression.text)) ||
+        (ts.isPropertyAccessExpression(expression) &&
+          DIRECT_NETWORK_IDENTIFIERS.has(expression.name.text))
+      ) {
+        directNetwork = true;
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+
+  const analyzedText = [source, ...staticValues].join("\n");
+  const rules = new Set();
+  if (PROVIDER_OR_INFRASTRUCTURE.test(analyzedText)) {
+    rules.add("provider-or-infrastructure");
+  }
+  if (DIRECT_BROWSER_NETWORK.test(analyzedText) || directNetwork) {
+    rules.add("direct-browser-network");
+  }
+  if (DEVLANE_ONTOLOGY.test(analyzedText)) rules.add("devlane-ontology");
+  return rules;
 }
 
 function packageName(specifier) {
@@ -291,12 +702,19 @@ export async function collectBrowserSourceGraph({ entryPath, repositoryRoot }) {
 export function findBrowserBoundaryViolations(graph) {
   const violations = [];
   for (const module of graph.modules) {
-    for (const [rule, pattern] of [
-      ["provider-or-infrastructure", PROVIDER_OR_INFRASTRUCTURE],
-      ["direct-browser-network", DIRECT_BROWSER_NETWORK],
-      ["devlane-ontology", DEVLANE_ONTOLOGY],
-    ]) {
-      if (pattern.test(module.source)) violations.push({ path: module.path, rule });
+    const rules = module.path.endsWith(".css") || module.path.endsWith(".html")
+      ? new Set(
+          [
+            ["provider-or-infrastructure", PROVIDER_OR_INFRASTRUCTURE],
+            ["direct-browser-network", DIRECT_BROWSER_NETWORK],
+            ["devlane-ontology", DEVLANE_ONTOLOGY],
+          ]
+            .filter(([, pattern]) => pattern.test(module.source))
+            .map(([rule]) => rule),
+        )
+      : scriptBoundaryRules(module.path, module.source);
+    for (const rule of rules) {
+      violations.push({ path: module.path, rule });
     }
   }
   return violations.sort(
@@ -305,7 +723,16 @@ export function findBrowserBoundaryViolations(graph) {
   );
 }
 
-export function undeclaredRuntimePackages(graph, packageManifest) {
-  const dependencies = new Set(Object.keys(packageManifest.dependencies ?? {}));
+export function undeclaredRuntimePackages(
+  graph,
+  packageManifest,
+  { includeDevDependencies = false } = {},
+) {
+  const dependencies = new Set([
+    ...Object.keys(packageManifest.dependencies ?? {}),
+    ...(includeDevDependencies
+      ? Object.keys(packageManifest.devDependencies ?? {})
+      : []),
+  ]);
   return graph.externalPackages.filter((name) => !dependencies.has(name));
 }
