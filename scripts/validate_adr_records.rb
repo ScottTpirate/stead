@@ -144,7 +144,23 @@ ADR_0008_LOGICAL_PRODUCER_SOURCES = {
 ADR_0008_LOGICAL_PRODUCER_SOURCE_PATTERN =
   "^urn:stead:producer:(organization|identity|authorization|classification|project|workitem|comment|document|scm|ci|artifact|attachment|storage|search_graph|notification|audit|migration|operations|dead_letter)$"
 
+ADR_0008_SERVERS = {
+  "nats" => {
+    "host" => "nats:4222",
+    "protocol" => "nats",
+    "x-production-transport" => "verified-mutual-tls",
+    "x-tls-handshake-first" => "required-no-fallback"
+  }
+}.freeze
+
 ADR_0008_DELIVERY_CONTRACT = {
+  "delivery" => "at-least-once",
+  "producer" => "transactional-outbox",
+  "consumer" => "idempotent",
+  "ordering" => "per-resource-only",
+  "replay" => "authorized-and-audited",
+  "dlq" => "required",
+  "protected-body-payloads" => "prohibited",
   "logical-producer-source" => "closed-asyncapi-channel-registry",
   "account-topology" => "one-application-account-per-deployment-security-domain",
   "organization-broker-provisioning" => "forbidden",
@@ -172,10 +188,17 @@ ADR_0008_DELIVERY_CONTRACT = {
   "broker-max-deliver" => "unlimited-until-durable-terminal-outcome",
   "terminal-attempt-authority" => "consumer-owner-postgresql",
   "production-transport" => "verified-mutual-tls-no-fallback",
+  "jetstream-at-rest-encryption" => "required-secretprovider-reference",
   "broker-manifest" => "closed-version-pinned-complete-readback",
   "manifest-owner" => "ws-12-renders-pins-validates-ws-07-registry",
   "failure-evidence" => "closed-minimized-postgresql-and-backup"
 }.freeze
+
+# CBI-030 is a security control, not free-form traceability prose. Pinning its
+# complete row prevents an additive contradiction from surviving while the
+# required positive fragments remain present.
+ADR_0008_CBI_030_SHA256 =
+  "25b5d8e6e7c32b572635a02622e8c429b54de8bbfed876b220d16e05da851082".freeze
 
 ADR_0008_REQUIRED_DECISION_CLAUSES = {
   topology: [
@@ -672,10 +695,14 @@ def adr_0008_security_contract_failures(adr_source:, asyncapi:, bypass_source:)
     end
   end
 
-  nats_server = asyncapi.dig("servers", "nats") || {}
+  servers = asyncapi.fetch("servers", {})
+  nats_server = servers.fetch("nats", {})
   unless nats_server["x-production-transport"] == "verified-mutual-tls" &&
          nats_server["x-tls-handshake-first"] == "required-no-fallback"
     failures << "AsyncAPI NATS server must require verified mutual TLS and a no-fallback TLS-first handshake"
+  end
+  unless servers == ADR_0008_SERVERS
+    failures << "AsyncAPI servers must match the exact closed ADR-0008 NATS transport contract"
   end
 
   channels = asyncapi.fetch("channels", {})
@@ -711,12 +738,18 @@ def adr_0008_security_contract_failures(adr_source:, asyncapi:, bypass_source:)
   ADR_0008_DELIVERY_CONTRACT.each do |field, expected|
     failures << "AsyncAPI x-delivery-contract #{field} must equal #{expected}" unless delivery_contract[field] == expected
   end
+  unless delivery_contract == ADR_0008_DELIVERY_CONTRACT
+    failures << "AsyncAPI x-delivery-contract must match the exact closed ADR-0008 delivery contract"
+  end
 
   bypass_rows = bypass_source.lines.grep(/^\| CBI-030 \|/)
   if bypass_rows.length != 1
     failures << "classification bypass inventory must contain exactly one CBI-030 row"
   else
     bypass_row = bypass_rows.first
+    unless Digest::SHA256.hexdigest(bypass_row) == ADR_0008_CBI_030_SHA256
+      failures << "CBI-030 must match the exact closed ADR-0008 security control row"
+    end
     {
       topology: "One Stead application account per deployment security domain",
       lifecycle: "Organization creation creates no broker resource",
@@ -1246,20 +1279,9 @@ adr_0008_security_mutations << {
   expected_failure_fragment: "x-delivery-contract required-consumers"
 }
 
-{
-  "canonical-event" => "reserialized-on-retry",
-  "publication-generation" => "unfenced-worker-counter",
-  "nats-message-id" => "random-per-publish-call",
-  "ambiguous-publish-retry" => "new-message-id-on-every-retry",
-  "recovery-publication" => "new-canonical-event-on-generation-advance",
-  "duplicate-true" => "sufficient-from-puback-alone",
-  "missing-readback" => "retry-same-message-id-forever",
-  "mismatched-readback" => "accept-and-retire",
-  "direct-read" => "allow-direct-enabled",
-  "duplicate-window" => "equal-to-maxage"
-}.each do |field, unsafe_value|
+ADR_0008_DELIVERY_CONTRACT.each_key do |field|
   mutated_delivery_asyncapi = deep_copy_asyncapi.call
-  mutated_delivery_asyncapi.fetch("x-delivery-contract")[field] = unsafe_value
+  mutated_delivery_asyncapi.fetch("x-delivery-contract")[field] = "unsafe-mutant-#{field}"
   adr_0008_security_mutations << {
     group: :retention_recovery,
     name: "unsafe #{field} contract",
@@ -1268,7 +1290,76 @@ adr_0008_security_mutations << {
     bypass: classification_bypass_source,
     expected_failure_fragment: "x-delivery-contract #{field}"
   }
+
+  missing_delivery_asyncapi = deep_copy_asyncapi.call
+  missing_delivery_asyncapi.fetch("x-delivery-contract").delete(field)
+  adr_0008_security_mutations << {
+    group: :retention_recovery,
+    name: "missing #{field} contract",
+    adr: adr_0008_source,
+    asyncapi: missing_delivery_asyncapi,
+    bypass: classification_bypass_source,
+    expected_failure_fragment: "x-delivery-contract #{field}"
+  }
 end
+
+mutated_additive_delivery_asyncapi = deep_copy_asyncapi.call
+mutated_additive_delivery_asyncapi.fetch("x-delivery-contract")["allow_direct"] = true
+adr_0008_security_mutations << {
+  group: :retention_recovery,
+  name: "unexpected delivery-contract field",
+  adr: adr_0008_source,
+  asyncapi: mutated_additive_delivery_asyncapi,
+  bypass: classification_bypass_source,
+  expected_failure_fragment: "exact closed ADR-0008 delivery contract"
+}
+
+ADR_0008_SERVERS.fetch("nats").each_key do |field|
+  mutated_server_asyncapi = deep_copy_asyncapi.call
+  mutated_server_asyncapi.dig("servers", "nats")[field] = "unsafe-mutant-#{field}"
+  adr_0008_security_mutations << {
+    group: :credentials,
+    name: "unsafe NATS server #{field}",
+    adr: adr_0008_source,
+    asyncapi: mutated_server_asyncapi,
+    bypass: classification_bypass_source,
+    expected_failure_fragment: "exact closed ADR-0008 NATS transport contract"
+  }
+
+  missing_server_asyncapi = deep_copy_asyncapi.call
+  missing_server_asyncapi.dig("servers", "nats").delete(field)
+  adr_0008_security_mutations << {
+    group: :credentials,
+    name: "missing NATS server #{field}",
+    adr: adr_0008_source,
+    asyncapi: missing_server_asyncapi,
+    bypass: classification_bypass_source,
+    expected_failure_fragment: "exact closed ADR-0008 NATS transport contract"
+  }
+end
+
+mutated_additive_server_asyncapi = deep_copy_asyncapi.call
+mutated_additive_server_asyncapi.dig("servers", "nats")["x-plaintext-fallback"] = true
+adr_0008_security_mutations << {
+  group: :credentials,
+  name: "unexpected plaintext fallback field",
+  adr: adr_0008_source,
+  asyncapi: mutated_additive_server_asyncapi,
+  bypass: classification_bypass_source,
+  expected_failure_fragment: "exact closed ADR-0008 NATS transport contract"
+}
+
+mutated_alias_server_asyncapi = deep_copy_asyncapi.call
+mutated_alias_server_asyncapi.fetch("servers")["natsPerOrganization"] =
+  Marshal.load(Marshal.dump(mutated_alias_server_asyncapi.dig("servers", "nats")))
+adr_0008_security_mutations << {
+  group: :topology,
+  name: "per-Organization server alias",
+  adr: adr_0008_source,
+  asyncapi: mutated_alias_server_asyncapi,
+  bypass: classification_bypass_source,
+  expected_failure_fragment: "exact closed ADR-0008 NATS transport contract"
+}
 
 mutated_bypass = classification_bypass_source.sub(
   "Organization creation creates no broker resource",
@@ -1295,6 +1386,25 @@ adr_0008_security_mutations << {
   bypass: mutated_retention_bypass,
   expected_failure_fragment: "CBI-030 omits ADR-0008 retention_recovery"
 }
+
+{
+  tls: ["verified TLS with no fallback", "plaintext fallback permitted"],
+  opaque_receipt: ["opaque receipt and retirement port", "broker-native receipt and retirement port"],
+  additive_contradiction: [
+    "Per-Organization broker accounts remain an unproven later high-isolation option.",
+    "A broker acknowledgement may retire the PostgreSQL source. Per-Organization broker accounts remain an unproven later high-isolation option."
+  ]
+}.each do |group, (from, to)|
+  mutated_closed_bypass = classification_bypass_source.sub(from, to)
+  adr_0008_security_mutations << {
+    group: group,
+    name: "CBI-030 #{group} contradiction",
+    adr: adr_0008_source,
+    asyncapi: deep_copy_asyncapi.call,
+    bypass: mutated_closed_bypass,
+    expected_failure_fragment: "exact closed ADR-0008 security control row"
+  }
+end
 
 adr_0008_security_mutation_survivors = adr_0008_security_mutations.filter_map do |mutation|
   mutation_failures = adr_0008_security_contract_failures(
