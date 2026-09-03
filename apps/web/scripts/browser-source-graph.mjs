@@ -8,7 +8,8 @@ const SOURCE_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".mjs", ".css"];
 const PROVIDER_OR_INFRASTRUCTURE =
   /gitea|commonplace|openfga|\bnats\b|\/api\/v1\/repos/iu;
 const DIRECT_BROWSER_NETWORK =
-  /\bfetch\s*\(|\bXMLHttpRequest\b|\bWebSocket\s*\(|\bEventSource\s*\(|\bsendBeacon\s*\(|https?:\/\//iu;
+  /\bfetch\s*\(|\bXMLHttpRequest\b|\bWebSocket\s*\(|\bEventSource\s*\(|\bsendBeacon\s*\(/iu;
+const NETWORK_URL = /https?:\/\//iu;
 const DEVLANE_ONTOLOGY =
   /\bModules\b|\bEpics\b|\bPages\b|\bBoard\b|\bIntake\b|\bArchives\b|\bDrafts\b/iu;
 const DIRECT_NETWORK_IDENTIFIERS = new Set([
@@ -647,11 +648,24 @@ function scriptBoundaryRules(path, source) {
   visit(sourceFile);
 
   const analyzedText = [source, ...staticValues].join("\n");
+  const generatedContractData = path.endsWith(
+    `${sep}packages${sep}api-client${sep}src${sep}generated${sep}platform-v1.ts`,
+  );
+  const hasExecutableNetworkUrl = staticValues.some(
+    (value) =>
+      NETWORK_URL.test(value) &&
+      !generatedContractData &&
+      value !== "https://stead.invalid",
+  );
   const rules = new Set();
   if (PROVIDER_OR_INFRASTRUCTURE.test(analyzedText)) {
     rules.add("provider-or-infrastructure");
   }
-  if (DIRECT_BROWSER_NETWORK.test(analyzedText) || directNetwork) {
+  if (
+    DIRECT_BROWSER_NETWORK.test(analyzedText) ||
+    directNetwork ||
+    hasExecutableNetworkUrl
+  ) {
     rules.add("direct-browser-network");
   }
   if (DEVLANE_ONTOLOGY.test(analyzedText)) rules.add("devlane-ontology");

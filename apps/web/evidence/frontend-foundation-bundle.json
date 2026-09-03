@@ -18,16 +18,16 @@
     "src/capabilities/migration.ts"
   ],
   "eager_javascript": {
-    "uncompressed_bytes": 222553,
-    "gzip_bytes": 68728,
-    "delta_bytes_gzip": 7920,
+    "uncompressed_bytes": 331360,
+    "gzip_bytes": 72635,
+    "delta_bytes_gzip": 11827,
     "files": [
       {
         "source": "index.html",
-        "file": "assets/index-CFaTnARi.js",
-        "sha256": "a7e315e38acc7c97533b763ffc5277936ac959d866abae6655b3ecbc177df30e",
-        "uncompressed_bytes": 222553,
-        "gzip_bytes": 68728
+        "file": "assets/index-CqKxV3m_.js",
+        "sha256": "1f93cd49d7ae7570825cca27789385fcb3295719dcf2ad861f58f9a1d7725bf4",
+        "uncompressed_bytes": 331360,
+        "gzip_bytes": 72635
       }
     ]
   },
