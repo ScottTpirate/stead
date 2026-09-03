@@ -17,7 +17,7 @@ EXPECTED_RECORDS = {
   "0005" => { candidate: "ADR-CAND-003", state: "ACCEPTED", owner_approval: false },
   "0006" => { candidate: "ADR-CAND-007", state: "ACCEPTED", owner_approval: true },
   "0007" => { candidate: "ADR-CAND-002", state: "ACCEPTED", owner_approval: false },
-  "0009" => { candidate: "ADR-CAND-008", state: "PROPOSED", owner_approval: false }
+  "0009" => { candidate: "ADR-CAND-008", state: "PROPOSED", owner_approval: true }
 }.freeze
 
 EXPECTED_REQUIREMENT_TEST_LINKS = {
@@ -64,6 +64,8 @@ EXPECTED_REQUIREMENT_TEST_LINKS = {
     "CLS-007" => %w[
       T-ADR-0009-PERMISSION-DRIFT
       T-ADR-0009-PROVIDER-OUTAGE
+      T-ADR-0009-AMBIGUOUS-MUTATION
+      T-ADR-0009-FULL-RECONCILIATION
     ],
     "TEST-006" => %w[
       T-ADR-0009-PRECEDENCE
@@ -87,7 +89,37 @@ EXPECTED_REQUIREMENT_TEST_LINKS = {
 # Close the complete ADR-0009 Decision body so a semantic weakening cannot
 # retain valid traceability merely by preserving test names and review rows.
 ADR_0009_DECISION_BODY_SHA256 =
-  "f869f904dfec8ba736e587434894c2e040fe4fb6fe8f01abfd6b9bbbc0a5af06".freeze
+  "9577e0488c7f05a324ae420a8c5722c1820c3b43185ce2d9dcc41299f757d16d".freeze
+ADR_0009_OWNER_APPROVAL_LINE =
+  "- **Project-owner approval required:** yes; this proposal narrowly changes the locked per-provider-HTTP-call durable-permit granularity in ADR-0005, CLS-007, and ADR-0007 for one closed bounded internal read plan, so acceptance requires explicit project-owner approval naming the exact immutable commit SHA".freeze
+ADR_0009_SUPERSESSION_LINE =
+  "- **Supersedes / superseded by:** only on acceptance at an exact immutable commit SHA with explicit project-owner approval, supersedes only ADR-0005, CLS-007, and ADR-0007's per-provider-HTTP-call durable-permit granularity for the one closed bounded internal pagination/snapshot/verification/safe-idempotent-read plan defined here; every other decision and fence remains in force, and any broader exception requires a superseding ADR".freeze
+ADR_0009_PROJECT_OWNER_REVIEW_LINE =
+  "| Project owner | pending explicit approver | pending | must name the exact immutable commit SHA; no approval or acceptance record exists |".freeze
+ADR_0009_EXACT_SHA_APPROVAL_SENTENCE =
+  "Each approval must name the exact immutable commit SHA containing the decision; approval of a branch, tag, pull request, moving head, unspecified revision, or later-mutated text is insufficient.".freeze
+ADR_0009_SCOPE_CONTRACT_FRAGMENTS = {
+  "unique nontransferable scope identity" =>
+    "identified by a unique, nontransferable `scope_id` and `logical_operation_id`",
+  "exact provider and reconciliation binding" =>
+    "exact provider installation UUID and API path plus `ProviderResourceKey`, `ReconciliationGeneration`",
+  "complete activation and consistency binding" =>
+    "the complete immutable ADR-0005 activation snapshot and consistency vector",
+  "closed predeclared call plan" =>
+    "The plan fixes the exact HTTP method/path templates, resource set, cursor derivation rules, call order, retry classes, and maximum attempts/calls/pages/items/response bytes before the first provider call.",
+  "provider output cannot widen" =>
+    "Provider output may supply only a cursor admitted by those rules; it cannot add an endpoint, method, resource, operation class, retry, result field, or budget.",
+  "cross-boundary reuse forbidden" =>
+    "The scope cannot be renewed, transferred, output-widened, or reused across a logical operation, `ReconciliationGeneration`, provider installation, `ProviderResourceKey`, resource, security domain, or compatibility profile.",
+  "earliest temporal expiry" =>
+    "Its expiry is fixed at creation to no later than the earliest bound temporal input in the complete ADR-0005 activation snapshot and consistency vector or the original logical-operation deadline",
+  "crash-safe cumulative accounting" =>
+    "Crash/resume never rolls back, resets, or narrows those cumulative counters to manufacture more budget.",
+  "pre-call and pre-commit revalidation" =>
+    "Immediately before every provider call and immediately before every local outcome commit",
+  "excluded effects retain permits" =>
+    "These categories retain per-effect-call permits; the read scope can neither authorize nor substitute for them."
+}.freeze
 
 EXPECTED_P1_006_ADR_CANDIDATES = %w[
   ADR-CAND-002
@@ -424,6 +456,49 @@ def adr_0009_decision_body_failures(source)
   failures
 end
 
+def adr_0009_scope_contract_failures(source)
+  ADR_0009_SCOPE_CONTRACT_FRAGMENTS.each_with_object([]) do |(label, fragment), failures|
+    unless source.scan(Regexp.new(Regexp.escape(fragment))).length == 1
+      failures << "ADR-0009 must contain exactly one closed scope-contract fragment for #{label}"
+    end
+  end
+end
+
+def adr_0009_governance_gate_failures(source:, gate:)
+  failures = []
+  exact_lines = {
+    "project-owner approval" => ADR_0009_OWNER_APPROVAL_LINE,
+    "narrow supersession" => ADR_0009_SUPERSESSION_LINE,
+    "pending project-owner review" => ADR_0009_PROJECT_OWNER_REVIEW_LINE
+  }
+  exact_lines.each do |label, expected_line|
+    count = source.lines.count { |line| line.chomp == expected_line }
+    failures << "ADR-0009 must contain exactly one exact #{label} line" unless count == 1
+  end
+
+  exact_sha_count = source.scan(Regexp.new(Regexp.escape(ADR_0009_EXACT_SHA_APPROVAL_SENTENCE))).length
+  unless exact_sha_count == 1
+    failures << "ADR-0009 must contain exactly one immutable-SHA approval sentence"
+  end
+
+  if gate.nil?
+    failures << "implementation issue catalog: missing ADR-CAND-008 governance gate"
+    return failures
+  end
+
+  failures << "implementation issue catalog: ADR-CAND-008 governance gate must remain PROPOSED" unless gate["state"] == "PROPOSED"
+  unless gate["project_owner_approval_required"] == true
+    failures << "implementation issue catalog: ADR-CAND-008 governance gate must require project-owner approval"
+  end
+  acceptance_fields = %w[immutable_revision accepted_at approval_record approval_records]
+  present_acceptance_fields = acceptance_fields.select { |field| gate.key?(field) }
+  unless present_acceptance_fields.empty?
+    failures << "implementation issue catalog: proposed ADR-CAND-008 governance gate must not carry acceptance fields: #{present_acceptance_fields.join(', ')}"
+  end
+
+  failures
+end
+
 # The P1-006 approval prerequisite is intentionally a strict raw-source clause,
 # not rendered Markdown. Escapes, entities, formatting delimiters, links, HTML,
 # and cross-item composition cannot stand in for the machine-reviewed wording.
@@ -718,6 +793,8 @@ adr_0009_review_mutation_survivors = []
 adr_0009_review_mutation_count = 0
 adr_0009_security_mutation_survivors = []
 adr_0009_security_mutation_count = 0
+adr_0009_governance_mutation_survivors = []
+adr_0009_governance_mutation_count = 0
 
 paths.each do |path|
   basename = path.basename.to_s
@@ -762,6 +839,9 @@ paths.each do |path|
   if number == "0009"
     failures.concat(adr_0009_review_structure_failures(source))
     failures.concat(adr_0009_decision_body_failures(source))
+    failures.concat(adr_0009_scope_contract_failures(source))
+    adr_0009_gate = adr_gates["ADR-CAND-008"]
+    failures.concat(adr_0009_governance_gate_failures(source: source, gate: adr_0009_gate))
     qa_line = source.lines.find { |line| line.start_with?("| Independent QA and C-QA traceability owner (distinct WS-13 identity) |") }
     security_line = source.lines.find { |line| line.start_with?("| Independent security (distinct WS-13 identity) |") }
     if qa_line && security_line
@@ -806,26 +886,103 @@ paths.each do |path|
         "Without such proof, a complete current snapshot may terminalize success or `failed_without_effect`"
       ),
       "initiating principal omitted from bounded scope" => source.sub(
-        "binding the acting service principal, initiating principal when relevant",
+        "binding the acting service principal, exact initiating principal (including an explicit system initiator for scheduled work)",
         "binding only the acting service principal"
       ),
       "provider output widens read plan" => source.sub(
-        "It cannot be widened or renewed from provider output.",
-        "Provider pagination may widen and renew the scope."
+        "Provider output may supply only a cursor admitted by those rules; it cannot add an endpoint, method, resource, operation class, retry, result field, or budget.",
+        "Provider pagination may add endpoints, resources, retries, fields, and budget."
       ),
       "read scope authorizes mutation" => source.sub(
-        "freshly authorize that effect, commit its own one-use `AuthorizationEffectPermit`",
+        "freshly authorize that exact effect, commit its own durable one-use `AuthorizationEffectPermit`",
         "reuse the read scope as authorization for that effect"
       ),
       "final canonical acceptance fence removed" => source.sub(
         "then compare final activation, authorization, provider-enforcement, resource, and operation revisions inside the owning transaction",
         "then accept the provider result without another revision comparison"
+      ),
+      "required provider and generation binding removed" => source.sub(
+        "exact provider installation UUID and API path plus `ProviderResourceKey`, `ReconciliationGeneration`",
+        "provider family"
+      ),
+      "scope reused across installation and generation" => source.sub(
+        "The scope cannot be renewed, transferred, output-widened, or reused across a logical operation, `ReconciliationGeneration`, provider installation, `ProviderResourceKey`, resource, security domain, or compatibility profile.",
+        "The scope may be reused across generations and provider installations when a worker recognizes it."
+      ),
+      "scope expiry extended after creation" => source.sub(
+        "Its expiry is fixed at creation to no later than the earliest bound temporal input in the complete ADR-0005 activation snapshot and consistency vector or the original logical-operation deadline",
+        "Its expiry may be extended after creation beyond a bound temporal input or the original logical-operation deadline"
+      ),
+      "crash resume resets cumulative accounting" => source.sub(
+        "Crash/resume never rolls back, resets, or narrows those cumulative counters to manufacture more budget.",
+        "Crash/resume may reset cumulative counters and start the budget again."
+      ),
+      "pre-call and final-commit revalidation removed" => source.sub(
+        "Immediately before every provider call and immediately before every local outcome commit",
+        "Only when the authorization scope is first created"
       )
     }
     security_mutations.each do |label, mutated_source|
       adr_0009_security_mutation_count += 1
-      if mutated_source == source || adr_0009_decision_body_failures(mutated_source).empty?
+      mutation_failures = adr_0009_decision_body_failures(mutated_source) +
+                          adr_0009_scope_contract_failures(mutated_source)
+      if mutated_source == source || mutation_failures.empty?
         adr_0009_security_mutation_survivors << label
+      end
+    end
+
+    if adr_0009_gate
+      governance_mutations = {
+        "supersession removed" => {
+          source: source.sub(
+            ADR_0009_SUPERSESSION_LINE,
+            "- **Supersedes / superseded by:** supersedes no accepted decision"
+          ),
+          gate: adr_0009_gate
+        },
+        "supersession broadened beyond read-plan granularity" => {
+          source: source.sub(
+            ADR_0009_SUPERSESSION_LINE,
+            "- **Supersedes / superseded by:** on acceptance supersedes ADR-0005, CLS-007, and ADR-0007 in full"
+          ),
+          gate: adr_0009_gate
+        },
+        "project-owner metadata weakened" => {
+          source: source.sub(
+            ADR_0009_OWNER_APPROVAL_LINE,
+            "- **Project-owner approval required:** no"
+          ),
+          gate: adr_0009_gate
+        },
+        "project-owner review row weakened" => {
+          source: source.sub(
+            ADR_0009_PROJECT_OWNER_REVIEW_LINE,
+            "| Project owner | not required | conforming decision | no approval needed |"
+          ),
+          gate: adr_0009_gate
+        },
+        "immutable-SHA approval weakened" => {
+          source: source.sub(
+            ADR_0009_EXACT_SHA_APPROVAL_SENTENCE,
+            "Approval of the pull request or current branch head is sufficient."
+          ),
+          gate: adr_0009_gate
+        },
+        "catalog project-owner gate weakened" => {
+          source: source,
+          gate: adr_0009_gate.merge("project_owner_approval_required" => false)
+        }
+      }
+      governance_mutations.each do |label, mutation|
+        adr_0009_governance_mutation_count += 1
+        unchanged = mutation.fetch(:source) == source && mutation.fetch(:gate) == adr_0009_gate
+        mutation_failures = adr_0009_governance_gate_failures(
+          source: mutation.fetch(:source),
+          gate: mutation.fetch(:gate)
+        )
+        if unchanged || mutation_failures.empty?
+          adr_0009_governance_mutation_survivors << label
+        end
       end
     end
   end
@@ -954,8 +1111,8 @@ adr_0009_traceability_failures = adr_requirement_traceability_failures(
 failures.concat(adr_0009_traceability_failures)
 
 adr_0009_expected_edges = expected_adr_requirement_test_edges(EXPECTED_REQUIREMENT_TEST_LINKS.fetch("0009")).freeze
-unless adr_0009_expected_edges.length == 42
-  failures << "ADR-0009 closed requirement mapping must contain exactly 42 edges, found #{adr_0009_expected_edges.length}"
+unless adr_0009_expected_edges.length == 44
+  failures << "ADR-0009 closed requirement mapping must contain exactly 44 edges, found #{adr_0009_expected_edges.length}"
 end
 failures.concat(
   exact_adr_requirement_mapping_failures(
@@ -993,11 +1150,17 @@ end
 unless adr_0009_review_mutation_survivors.empty?
   failures << "ADR-0009 review-separation mutation survivors: #{adr_0009_review_mutation_survivors.join(', ')}"
 end
-unless adr_0009_security_mutation_count == 10
-  failures << "ADR-0009 semantic-security mutation inventory must contain exactly 10 cases, found #{adr_0009_security_mutation_count}"
+unless adr_0009_security_mutation_count == 15
+  failures << "ADR-0009 semantic-security mutation inventory must contain exactly 15 cases, found #{adr_0009_security_mutation_count}"
 end
 unless adr_0009_security_mutation_survivors.empty?
   failures << "ADR-0009 semantic-security mutation survivors: #{adr_0009_security_mutation_survivors.join(', ')}"
+end
+unless adr_0009_governance_mutation_count == 6
+  failures << "ADR-0009 supersession/owner-gate mutation inventory must contain exactly 6 cases, found #{adr_0009_governance_mutation_count}"
+end
+unless adr_0009_governance_mutation_survivors.empty?
+  failures << "ADR-0009 supersession/owner-gate mutation survivors: #{adr_0009_governance_mutation_survivors.join(', ')}"
 end
 
 security_issue = issues["STEAD-P1-006"]
@@ -1897,7 +2060,8 @@ if failures.empty?
   puts "ADR-0007 exact-mapping mutation guard: PASS (#{adr_0007_killed_mutations}/#{adr_0007_expected_edges.length} required edge deletions killed)"
   puts "ADR-0009 exact-mapping mutation guard: PASS (#{adr_0009_killed_mutations}/#{adr_0009_expected_edges.length} required edge deletions killed)"
   puts "ADR-0009 review-separation mutation guard: PASS (#{adr_0009_review_mutation_count}/4 mutations killed)"
-  puts "ADR-0009 semantic-security mutation guard: PASS (#{adr_0009_security_mutation_count}/10 mutations killed)"
+  puts "ADR-0009 semantic-security mutation guard: PASS (#{adr_0009_security_mutation_count}/15 mutations killed)"
+  puts "ADR-0009 supersession/owner-gate mutation guard: PASS (#{adr_0009_governance_mutation_count}/6 mutations killed)"
   puts "ADR traceability validation: PASS (records=#{paths.length}, requirements=#{known_requirement_ids.length}, tests=#{all_test_owners.length})"
 else
   warn "ADR traceability validation: FAIL (#{failures.length} issue#{failures.length == 1 ? '' : 's'})"
