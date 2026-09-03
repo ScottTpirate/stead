@@ -418,6 +418,16 @@ ADR_0008_EXPECTED_APPROVAL_RECORD_MUTATION_NAMES = [
   "missing approval row",
   "mixed approval-row revision"
 ].freeze
+ADR_0008_EXPECTED_CATALOG_SOURCE_MUTATION_NAMES = [
+  "duplicate foreign immutable revision before canonical",
+  "alternate acceptance field ordering",
+  "alternate immutable revision quoting",
+  "acceptance inline comment",
+  "acceptance trailing whitespace",
+  "acceptance blank-line addition",
+  "mixed canonical revision",
+  "unrelated top-level raw quoting"
+].freeze
 ADR_0008_EXPECTED_HISTORY_MUTATION_NAMES = [
   "unavailable Git history",
   "shallow Git history",
@@ -951,6 +961,15 @@ end
 
 def adr_0008_catalog_transition_failures(parent_source:, child_source:, metadata:)
   failures = []
+  canonical_child_source, canonical_source_failures = adr_0008_accepted_catalog_source_fixture(
+    parent_source,
+    metadata
+  )
+  failures.concat(canonical_source_failures)
+  if canonical_child_source && child_source != canonical_child_source
+    failures << "ADR-0008 acceptance catalog child must exactly match the metadata-derived canonical source"
+  end
+
   parent_catalog = parse_yaml(parent_source, filename: "ADR-0008 immutable parent catalog fixture")
   child_catalog = parse_yaml(child_source, filename: "ADR-0008 acceptance child catalog fixture")
   parent_gates = parent_catalog.fetch("adr_decision_gates")
@@ -1001,7 +1020,8 @@ def adr_0008_catalog_transition_failures(parent_source:, child_source:, metadata
 
   failures
 rescue KeyError, Psych::Exception, TypeError => error
-  ["ADR-0008 acceptance catalog transition cannot be compared: #{error.class}"]
+  failures << "ADR-0008 acceptance catalog transition cannot be compared: #{error.class}"
+  failures
 end
 
 def adr_0008_acceptance_transition_change_failures(changes)
@@ -2492,6 +2512,7 @@ end
 
 adr_0008_proposed_fixture_source = adr_0008_source
 adr_0008_proposed_fixture_gate = adr_gates["ADR-CAND-006"]
+adr_0008_proposed_fixture_catalog_source = issue_catalog_source
 if adr_0008_acceptance_metadata
   fixture_parent_revision = adr_0008_acceptance_metadata.fetch(:immutable_revision)
   parent_adr_source, parent_adr_error = adr_0008_git_file_at(
@@ -2505,6 +2526,7 @@ if adr_0008_acceptance_metadata
   failures << parent_adr_error if parent_adr_error
   failures << parent_catalog_error if parent_catalog_error
   adr_0008_proposed_fixture_source = parent_adr_source
+  adr_0008_proposed_fixture_catalog_source = parent_catalog_source
   if parent_catalog_source
     parent_gate, parent_gate_failures = adr_0008_catalog_gate_from_source(
       parent_catalog_source,
@@ -2688,8 +2710,11 @@ end
 # graph includes a later descendant and a normal merge so acceptance remains
 # valid after integration while the original transition edge stays immutable.
 adr_0008_approval_record_mutations = []
+adr_0008_catalog_source_mutations = []
 adr_0008_history_mutations = []
-if adr_0008_proposed_fixture_source && defined?(accepted_fixture) && accepted_fixture
+if adr_0008_proposed_fixture_source &&
+   adr_0008_proposed_fixture_catalog_source.is_a?(String) &&
+   defined?(accepted_fixture) && accepted_fixture
   fixture_revision = adr_0008_future_acceptance_metadata.fetch(:immutable_revision)
   fixture_ancestor = "a" * 40
   fixture_acceptance = "1" * 40
@@ -2717,21 +2742,16 @@ if adr_0008_proposed_fixture_source && defined?(accepted_fixture) && accepted_fi
   unless adr_0008_proposed_fixture_gate.is_a?(Hash)
     failures << "ADR-0008 future acceptance fixture Proposed catalog gate is unavailable"
   end
-  fixture_parent_gate = Marshal.load(Marshal.dump(adr_0008_proposed_fixture_gate || {}))
-  fixture_parent_catalog = {
-    "adr_decision_gates" => [fixture_parent_gate],
-    "fixture_sentinel" => { "unchanged" => true }
-  }
-  fixture_parent_catalog_source = JSON.generate(fixture_parent_catalog)
+  fixture_parent_catalog_source = adr_0008_proposed_fixture_catalog_source
   fixture_catalog_child_source = lambda do |metadata|
-    child_gate = fixture_parent_gate.merge(
-      "state" => "ACCEPTED",
-      "immutable_revision" => metadata.fetch(:immutable_revision),
-      "accepted_at" => metadata.fetch(:accepted_at),
-      "approval_record" => metadata.fetch(:approval_record_path),
-      "approval_records" => metadata.fetch(:approval_records)
+    child_source, child_failures = adr_0008_accepted_catalog_source_fixture(
+      fixture_parent_catalog_source,
+      metadata
     )
-    JSON.generate(fixture_parent_catalog.merge("adr_decision_gates" => [child_gate]))
+    unless child_failures.empty?
+      failures << "ADR-0008 canonical catalog fixture generation failed: #{child_failures.join('; ')}"
+    end
+    child_source
   end
   fixture_child_catalog_source = fixture_catalog_child_source.call(adr_0008_future_acceptance_metadata)
   fixture_index_paths = [
@@ -2833,6 +2853,57 @@ if adr_0008_proposed_fixture_source && defined?(accepted_fixture) && accepted_fi
     changes: ADR_0008_ACCEPTANCE_TRANSITION_CHANGES,
     indexes: fixture_indexes
   }
+  catalog_state_line = "    state: ACCEPTED\n"
+  catalog_revision_line = "    immutable_revision: #{JSON.generate(fixture_revision)}\n"
+  catalog_date_line = "    accepted_at: #{JSON.generate(adr_0008_future_acceptance_metadata.fetch(:accepted_at))}\n"
+  if [catalog_state_line, catalog_revision_line, catalog_date_line].all? do |line|
+       fixture_child_catalog_source.include?(line)
+     end
+    catalog_mutation_sources = {
+      "duplicate foreign immutable revision before canonical" => fixture_child_catalog_source.sub(
+        catalog_revision_line,
+        "    immutable_revision: #{JSON.generate(fixture_nonexistent)}\n#{catalog_revision_line}"
+      ),
+      "alternate acceptance field ordering" => fixture_child_catalog_source.sub(
+        catalog_revision_line + catalog_date_line,
+        catalog_date_line + catalog_revision_line
+      ),
+      "alternate immutable revision quoting" => fixture_child_catalog_source.sub(
+        catalog_revision_line,
+        "    immutable_revision: '#{fixture_revision}'\n"
+      ),
+      "acceptance inline comment" => fixture_child_catalog_source.sub(
+        catalog_date_line,
+        catalog_date_line.chomp + " # acceptance date\n"
+      ),
+      "acceptance trailing whitespace" => fixture_child_catalog_source.sub(
+        catalog_revision_line,
+        catalog_revision_line.chomp + "  \n"
+      ),
+      "acceptance blank-line addition" => fixture_child_catalog_source.sub(
+        catalog_state_line,
+        catalog_state_line + "\n"
+      ),
+      "mixed canonical revision" => fixture_child_catalog_source.sub(
+        catalog_revision_line,
+        "    immutable_revision: #{JSON.generate(fixture_nonexistent)}\n"
+      ),
+      "unrelated top-level raw quoting" => fixture_child_catalog_source.sub(
+        "schema_version: \"1.0\"\n",
+        "schema_version: '1.0'\n"
+      )
+    }
+    catalog_mutation_sources.each do |name, source|
+      adr_0008_catalog_source_mutations << {
+        name: name,
+        surface: canonical_surface.merge(child_catalog: source),
+        baseline: fixture_child_catalog_source,
+        expected_failure_fragment: "acceptance catalog child must exactly match the metadata-derived canonical source"
+      }
+    end
+  else
+    failures << "ADR-0008 canonical catalog fixture omits required raw-source mutation anchors"
+  end
   approval_security_row = fixture_approval.lines.find do |line|
     line.start_with?("| Independent security (WS-13) |")
   end
@@ -2930,11 +3001,13 @@ if adr_0008_proposed_fixture_source && defined?(accepted_fixture) && accepted_fi
     graph: canonical_graph,
     expected_failure_fragment: "catalog immutable revision must derive from acceptance metadata"
   }
-  unrelated_catalog = JSON.parse(fixture_child_catalog_source)
-  unrelated_catalog.fetch("fixture_sentinel")["unchanged"] = false
+  unrelated_catalog_source = fixture_child_catalog_source.sub(
+    "scope: phase-1-foundation-complete\n",
+    "scope: phase-1-foundation-mutated\n"
+  )
   adr_0008_history_mutations << {
     name: "unrelated catalog semantics",
-    surface: canonical_surface.merge(child_catalog: JSON.generate(unrelated_catalog)),
+    surface: canonical_surface.merge(child_catalog: unrelated_catalog_source),
     graph: canonical_graph,
     expected_failure_fragment: "changes unrelated catalog semantics"
   }
@@ -2968,6 +3041,35 @@ if adr_0008_proposed_fixture_source && defined?(accepted_fixture) && accepted_fi
     graph: canonical_graph,
     expected_failure_fragment: "outside the closed approval/gate/review allowlist"
   }
+end
+
+actual_catalog_source_mutation_names = adr_0008_catalog_source_mutations.map do |mutation|
+  mutation.fetch(:name)
+end
+unless actual_catalog_source_mutation_names == ADR_0008_EXPECTED_CATALOG_SOURCE_MUTATION_NAMES
+  failures << "ADR-0008 catalog-source mutation inventory changed: expected " \
+              "#{ADR_0008_EXPECTED_CATALOG_SOURCE_MUTATION_NAMES.inspect}, found #{actual_catalog_source_mutation_names.inspect}"
+end
+unless adr_0008_catalog_source_mutations.map { |mutation| mutation.fetch(:surface).fetch(:child_catalog) }.uniq.length ==
+       adr_0008_catalog_source_mutations.length &&
+       adr_0008_catalog_source_mutations.all? do |mutation|
+         mutation.fetch(:surface).fetch(:child_catalog) != mutation.fetch(:baseline)
+       end
+  failures << "ADR-0008 catalog-source mutations must be independent non-no-op fixtures"
+end
+adr_0008_catalog_source_mutation_survivors = adr_0008_catalog_source_mutations.filter_map do |mutation|
+  surface = mutation.fetch(:surface)
+  mutation_failures = adr_0008_catalog_transition_failures(
+    parent_source: surface.fetch(:parent_catalog),
+    child_source: surface.fetch(:child_catalog),
+    metadata: surface.fetch(:metadata)
+  )
+  expected = mutation.fetch(:expected_failure_fragment)
+  mutation.fetch(:name) unless mutation_failures.any? { |failure| failure.include?(expected) }
+end
+unless adr_0008_catalog_source_mutation_survivors.empty?
+  failures << "ADR-0008 catalog-source mutation survivors: " \
+              "#{adr_0008_catalog_source_mutation_survivors.join(', ')}"
 end
 
 actual_approval_record_mutation_names = adr_0008_approval_record_mutations.map do |mutation|
@@ -4525,6 +4627,7 @@ if failures.empty?
   puts "ADR-0008 exact-mapping mutation guard: PASS (#{adr_0008_killed_mutations}/#{adr_0008_expected_edges.length} required edge deletions killed)"
   puts "ADR-0008 record-state mutation guard: PASS (#{adr_0008_record_mutations.length}/#{ADR_0008_EXPECTED_RECORD_MUTATION_NAMES.length} mutations killed; proposed and future-accepted controls pass)"
   puts "ADR-0008 approval-record grammar mutation guard: PASS (#{adr_0008_approval_record_mutations.length}/#{ADR_0008_EXPECTED_APPROVAL_RECORD_MUTATION_NAMES.length} mutations killed; canonical metadata-derived document enforced)"
+  puts "ADR-0008 catalog-source mutation guard: PASS (#{adr_0008_catalog_source_mutations.length}/#{ADR_0008_EXPECTED_CATALOG_SOURCE_MUTATION_NAMES.length} mutations killed; canonical raw acceptance source enforced)"
   puts "ADR-0008 acceptance-history mutation guard: PASS (#{adr_0008_history_mutations.length}/#{ADR_0008_EXPECTED_HISTORY_MUTATION_NAMES.length} mutations killed; exact-parent descendant/merge fixture passes)"
   puts "ADR-0008 real acceptance-history integration guard: PASS (immediate child, later descendant, normal merge)" if adr_0008_real_history_probe_ran
   puts "ADR-0008 pinned-CBI-source guard: PASS (baseline=#{ADR_0008_CLASSIFICATION_BYPASS_SOURCE_BYTES} bytes, #{ADR_0008_CBI_SOURCE_MUTATION_NAMES.length}/#{ADR_0008_CBI_SOURCE_MUTATION_NAMES.length} adversarial mutations killed)"
