@@ -23,6 +23,30 @@ const CROSS_CONTRACT_YAML_LIMITS = Object.freeze({ maxBytes: 512 * 1024, maxDept
 
 export class ContractValidationError extends Error {}
 
+const rejectUnsafeString = (value, filename, location) => {
+  if (value.includes("\ufeff")) {
+    throw new ContractValidationError(`${filename}: BOM characters are prohibited in decoded YAML strings at ${location}`);
+  }
+  if (value.includes("\r")) {
+    throw new ContractValidationError(`${filename}: CR characters are prohibited in decoded YAML strings at ${location}`);
+  }
+  if (/[\u0000-\u001f\u007f-\u009f]/u.test(value)) {
+    throw new ContractValidationError(`${filename}: unsafe control character in decoded YAML string at ${location}`);
+  }
+  if (/[\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/u.test(value)) {
+    throw new ContractValidationError(`${filename}: bidirectional formatting control in decoded YAML string at ${location}`);
+  }
+  for (const character of value) {
+    const codePoint = character.codePointAt(0);
+    if (codePoint >= 0xd800 && codePoint <= 0xdfff) {
+      throw new ContractValidationError(`${filename}: unpaired surrogate in decoded YAML string at ${location}`);
+    }
+    if ((codePoint >= 0xfdd0 && codePoint <= 0xfdef) || (codePoint & 0xffff) >= 0xfffe) {
+      throw new ContractValidationError(`${filename}: Unicode noncharacter in decoded YAML string at ${location}`);
+    }
+  }
+};
+
 const rejectUnsafeText = (bytes, filename, limits) => {
   if (!Buffer.isBuffer(bytes) && !(bytes instanceof Uint8Array)) {
     throw new TypeError(`${filename}: parser input must be bytes`);
@@ -101,6 +125,7 @@ const inspectNode = (node, filename, limits, location = "$", depth = 0, budget =
         throw new ContractValidationError(`${filename}: tagged or anchored keys are prohibited at ${location}`);
       }
       const key = pair.key.value;
+      rejectUnsafeString(key, filename, `${location}.<key>`);
       if (key === "<<") {
         throw new ContractValidationError(`${filename}: YAML merge keys are prohibited at ${location}`);
       }
@@ -115,6 +140,8 @@ const inspectNode = (node, filename, limits, location = "$", depth = 0, budget =
     seen.add(node);
     node.items.forEach((item, index) => inspectNode(item, filename, limits, `${location}[${index}]`, depth + 1, budget, seen));
     seen.delete(node);
+  } else if (isScalar(node) && typeof node.value === "string") {
+    rejectUnsafeString(node.value, filename, location);
   }
 };
 

@@ -59,6 +59,29 @@ for (const [name, input] of rejectedSources) {
   });
 }
 
+const rejectedDecodedStrings = [
+  ["escaped NUL", "\\x00"],
+  ["escaped tab", "\\t"],
+  ["escaped newline", "\\n"],
+  ["escaped CR", "\\r"],
+  ["escaped unit separator", "\\x1f"],
+  ["escaped bidirectional override", "\\u202e"],
+  ["escaped BOM", "\\ufeff"],
+  ["escaped high surrogate", "\\ud800"],
+  ["escaped low surrogate", "\\udfff"],
+  ["escaped supplementary-plane noncharacter", "\\U0010ffff"],
+];
+
+for (const [name, escape] of rejectedDecodedStrings) {
+  test(`strict parser rejects ${name} in a decoded value`, () => {
+    assert.throws(() => parseStrictYaml(bytes(`key: "${escape}"\n`), `${name}-value.yaml`));
+  });
+
+  test(`strict parser rejects ${name} in a decoded key`, () => {
+    assert.throws(() => parseStrictYaml(bytes(`"${escape}": value\n`), `${name}-key.yaml`));
+  });
+}
+
 test("strict parser accepts valid code points adjacent to noncharacter boundaries", () => {
   assert.deepEqual(
     parseStrictYaml(bytes("before_range: \ufdcf\nafter_range: \ufdf0\nbefore_plane_end: \u{1fffd}\n")),
