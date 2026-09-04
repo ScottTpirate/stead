@@ -1,6 +1,6 @@
 # Stead epic and issue hierarchy
 
-Status: Phase 0 baselined; Phase 1 foundation active<br>
+Status: Phase 0 baselined; Phase 1 implementation active<br>
 Normative source: `docs/architecture/MASTER_BUILD_DIRECTIVE.md`
 
 This hierarchy decomposes the directive without changing its locked architecture or fixed ontology. The exhaustive requirement-to-issue mapping is in [the traceability register](../../specs/traceability/requirements.yaml). The complete machine-readable issue contracts are in [the implementation issue catalog](implementation-issue-catalog.yaml).
@@ -9,7 +9,7 @@ Deferred implementation choices are enforced by the [ADR candidate implementatio
 
 ## Controlling rule
 
-Phase 0 contract, architecture, planning, threat-model, test-design, and governance work is baselined at tag `phase0`. ADR-0002 through ADR-0006 are accepted at immutable decision revision `24c74d52ef0a78840ab147da48c3d66589e49e3e`; ADR-0007 is accepted at immutable decision revision `cc3dba0ccd740d18d138be52648fd4dba2008af5`. Decision acceptance does not supply implementation evidence. `STEAD-P1-001` is `COMPLETED_PHASE_1`; later Phase 1 issues remain `DEPENDENCY_BLOCKED` until their exact remaining dependencies and ADR gates pass, and every Phase 2–3 issue is `PHASE_GATED`.
+Phase 0 contract, architecture, planning, threat-model, test-design, and governance work is baselined at tag `phase0`. ADR-0001 is accepted; ADR-0002 through ADR-0006 are accepted at immutable decision revision `24c74d52ef0a78840ab147da48c3d66589e49e3e`; ADR-0007 is accepted at immutable decision revision `cc3dba0ccd740d18d138be52648fd4dba2008af5`; and ADR-0008 is accepted at immutable decision revision `87bd96041234415847d8a4f96ac7c13f3923fe6c`. Decision acceptance does not supply implementation evidence. `STEAD-P1-001` and `STEAD-P1-016` are `COMPLETED_PHASE_1`. `STEAD-P1-015` is `IMPLEMENTATION_IN_PROGRESS`: its catalog-conformance and dependency-free transaction-port slices are merged, but an approved database dependency path and live PostgreSQL integration are still missing. Other Phase 1 issues remain `DEPENDENCY_BLOCKED` until their exact remaining dependencies and ADR gates pass. Phase 2–3 issues are `PHASE_GATED`; the intentionally deferred `STEAD-P1-017` namespace work now sits immediately before the first Phase 2 importer that needs it.
 
 `GATE-P0-APPROVED` is `APPROVED` against tag `phase0`, immutable commit `e24a4d9d05ad6df19c5bcaa9c385ee74fd5d8c31`, with the five dispositions recorded in the closeout packet. The gate opens dependency-ready work only. Any proposed change to a locked decision still requires its own ADR and project-owner approval.
 
@@ -36,7 +36,7 @@ Stead
 │   ├── STEAD-P0-013  Deployment/operations/upgrade/restore contract
 │   └── STEAD-P0-014  Traceability/threat/golden/release-gate package
 ├── GATE-P0-APPROVED  Approved at phase0 / e24a4d9d05ad6df19c5bcaa9c385ee74fd5d8c31
-├── EPIC-P1  Executable vertical slice [FOUNDATION ACTIVE]
+├── EPIC-P1  Executable vertical slice [IMPLEMENTATION ACTIVE]
 ├── EPIC-P2  Pilot/Beta [PHASE GATED]
 └── EPIC-P3  Production 1.0 [PHASE GATED]
 ```
@@ -66,16 +66,16 @@ The rows are topologically ordered. Issues in the same wave may proceed concurre
 
 ## Phase 1 executable vertical slice
 
-`STEAD-P1-001` is complete. All later Phase 1 issues remain dependency/ADR-gated; the ordering deliberately establishes central authorization before any provider-backed protected workflow.
+`STEAD-P1-001` and `STEAD-P1-016` are complete. `STEAD-P1-015` is partially implemented through its merged PostgreSQL catalog-conformance and dependency-free transaction-port slices, but it is not complete: live PostgreSQL migration, repository, transaction, and failure-path evidence awaits an approved database dependency path. The original Stead frontend foundation is also merged, but it supplies only the shell/client boundary and does not complete `STEAD-P1-005` or a walking product path. ADR-0009 remains proposed and unapproved. Other Phase 1 issues remain dependency/ADR-gated; the ordering deliberately establishes central authorization before any provider-backed protected workflow.
 
 The Phase 1 records preserve the approved principal, assignment, authorization, audit/event, API/MCP, scoped-Git, and classification seams. They implement the standard `request_boundary` vertical path, reserve typed `commit_boundary` seams, and establish performance instrumentation before feature expansion. They do not implicitly authorize agent orchestration, prompting, model hosting, agent memory, AgentRun execution, or A2A dispatch.
 
 | Order | Issue | Owner | Direct predecessors | Deliverable |
 |---:|---|---|---|---|
 | 1 | STEAD-P1-001 | WS-01 | GATE-P0-APPROVED | Root manifests, CI and contract-test foundation, schema/API lint, dependency approvals/notices, and Devlane provenance |
-| 2 | STEAD-P1-015 | WS-02, with WS-06/07 handoff | GATE-P0-APPROVED, P1-001, accepted ADR-CAND-002/003/007, and accepted ADR-CAND-006 for only the recovery-port sub-slice | Owner-scoped one-operation request-boundary authorization/audit composition and durable-effect ports; after ADR-CAND-006, provider-neutral `core_outbox` canonical bytes/digest, frozen-registry, fenced claim/generation, opaque-receipt and retirement ports; no NATS types or domain behavior |
-| 2 | STEAD-P1-016 | WS-09 | GATE-P0-APPROVED, P1-001, accepted ADR-CAND-007 | Deterministic policy activation archive, pre-signing evidence, post-signing release attestation, and immutable writer/fixture handoff; no runtime activation authority |
 | 3 | STEAD-P1-006 | WS-06 | P1-001, P1-015, P1-016, accepted security ADRs including ADR-CAND-008 | Bootstrap/OIDC identity; central set-oriented OpenFGA + policy path; signed profile-neutral mode selection; complete `request_boundary`; ADR-0009 bounded provider-read scope issuance/validation; typed `commit_boundary` seam |
+| 2 | STEAD-P1-015 | WS-02, with WS-06/07 handoff | GATE-P0-APPROVED, P1-001, accepted ADR-CAND-002/003/007, and accepted ADR-CAND-006 for only the recovery-port sub-slice | **In progress:** catalog conformance and dependency-free transaction ports are merged; live PostgreSQL integration remains. Owner-scoped one-operation request-boundary authorization/audit composition and provider-neutral outbox recovery ports stay bounded away from NATS types and domain behavior. |
+| 2 | STEAD-P1-016 | WS-09 | GATE-P0-APPROVED, P1-001, accepted ADR-CAND-007 | **Complete:** deterministic policy activation archive, pre-signing evidence, post-signing release attestation, and immutable writer/fixture handoff; no runtime activation authority. |
 | 4 | STEAD-P1-002 | WS-02 | P1-001, P1-006, P1-015, approved core/auth contracts | Canonical modular core, PrincipalRef-based User/Agent Work assignment, PostgreSQL ownership, bounded composed-read queries, optimistic concurrency and atomic outbox |
 | 5 | STEAD-P1-003 | WS-03 | accepted ADR-CAND-008 at an exact immutable SHA with project-owner approval, P1-002, P1-006 | Stock Gitea adapter, hidden tracker/board, provider-neutral Work backing, docs Git, and local rebuildable provider projection; closed accept/reset/quarantine reconciliation with one atomically single-holder bounded internal read scope, closed audit/event evidence, per-effect durable permits outside it, no general code repo, and no ordinary-read provider waterfall |
 | 5 | STEAD-P1-010 | WS-10 | P1-002, P1-006 | Filesystem BlobStore and authorized attachment path |
