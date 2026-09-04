@@ -17,7 +17,7 @@ Reconciliation must settle disagreement among canonical state, managed provider 
 
 Existing locked language requires a durable one-use `AuthorizationEffectPermit` for every provider HTTP call. Applying that transaction lifecycle to every page or verification read would make database writes grow with provider pagination and would turn one logical reconciliation into many durable authorization effects. This proposal preserves a fresh central decision and every security fence while changing only that per-read-call persistence granularity.
 
-The detailed closed values, bindings, bounds, ownership, and test cases live once in the machine-readable [Gitea reconciliation v1 specification](../../specs/provider-reconciliation/gitea-v1.yaml). The ADR selects their semantics; executable fixtures implement the specification rather than duplicating test vectors in this record.
+The focused machine-readable [Gitea reconciliation v1 contract](../../specs/provider-reconciliation/gitea-v1.yaml) records its schema, ownership, and security boundaries. The ADR selects the runtime semantics; executable Go/provider fixtures delivered with `STEAD-P1-003` verify pagination bounds, state transitions, provider-call behavior, and effect-permit behavior rather than turning prose paragraphs into runtime contracts.
 
 This record is non-operative while Proposed. A branch, pull request, moving head, tag, or review of an unspecified revision is not approval.
 
@@ -138,7 +138,7 @@ Accepted ADR-0005 and ADR-0007 remain immutable historical records. On acceptanc
 
 ## Verification
 
-Decision acceptance adopts these future obligations; it does not claim runtime implementation or evidence exists. The structured specification is normative for the closed case lists and ownership.
+Decision acceptance adopts these future obligations; it does not claim runtime implementation or evidence exists. The machine-readable contract is normative for its schema, ownership, and security boundaries. Runtime pagination bounds, state transitions, provider calls, and effect-permit behavior are verified by the Go/provider contract tests delivered with `STEAD-P1-003`.
 
 | Test ID | Required evidence |
 |---|---|
@@ -162,15 +162,15 @@ Because this proposal narrowly supersedes accepted/locked call-granularity rules
 
 | Role | Identity | Disposition | Evidence/date |
 |---|---|---|---|
-| Contract owner (WS-03) | pending non-author reviewer | pending | pending |
-| Architecture and standards (WS-01) | pending | pending | pending |
-| Canonical transaction owner (WS-02) | pending | pending | pending |
-| Authorization/classification owner (WS-06) | pending | pending | pending |
-| Event/audit owner (WS-07) | pending | pending | pending |
-| Deployment/operations owner (WS-12) | pending | pending | pending |
-| Independent QA and C-QA traceability owner (distinct WS-13 identity) | pending non-author reviewer | pending | pending |
-| Independent security (distinct WS-13 identity) | pending non-author reviewer | pending | pending |
-| Project owner | pending explicit approver | pending | must name exact immutable decision SHA |
+| `WS-03-provider-reconciliation` | pending non-author reviewer | pending | pending |
+| `WS-01-architecture` | pending | pending | pending |
+| `WS-02-canonical-transaction` | pending | pending | pending |
+| `WS-06-authorization-classification` | pending | pending | pending |
+| `WS-07-event-audit` | pending | pending | pending |
+| `WS-12-deployment-operations` | pending | pending | pending |
+| `WS-13-independent-qa` | pending non-author reviewer | pending | pending |
+| `WS-13-independent-security` | pending non-author reviewer | pending | pending |
+| `project-owner` | pending explicit approver | pending | must name exact immutable decision SHA |
 
 [^gitea-webhooks]: Gitea, [Webhooks: delivery headers, HMAC validation, events, recent deliveries, and redelivery](https://docs.gitea.com/usage/repository/webhooks/).
 [^gitea-issue-edit]: Gitea, [Edit an issue API: `content_version` optimistic locking for body edits](https://docs.gitea.com/api/operations/issue-edit-issue/).
