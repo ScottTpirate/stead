@@ -67,6 +67,7 @@ authorization:
     renewable: false
     transferable: false
     durable_effect_permits_per_eligible_call_or_page: 0
+    execution_scope: atomic_process_instance_single_holder
     eligible_calls:
       - pagination_read
       - snapshot_read
@@ -89,6 +90,12 @@ authorization:
       - closed_call_plan
       - activation_snapshot
       - authorization_consistency_vector
+      - provider_enforcement_fence
+      - resource_fence
+      - unique_execution_claim
+      - process_instance_holder_identity
+      - monotonic_fencing_token
+      - claim_deadline
       - compatibility_profile_id_version_and_schema_digest
       - original_deadline
       - immutable_earliest_bound_expiry
@@ -131,6 +138,9 @@ persistence:
   core_outbox_owner: WS-02
   audit_schema_owner: WS-01
   audit_materialization_owner: WS-07
+  protected_audit_evidence_owner: WS-03
+  protected_audit_evidence_resolution_port: authenticated_authorized_typed_bounded_set_oriented_read
+  protected_audit_evidence_consumer: WS-07
   deployment_operations_owner: WS-12
   projections_rebuildable: true
   browser_direct_provider_calls: 0

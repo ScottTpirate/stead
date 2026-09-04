@@ -160,6 +160,31 @@ const oneBy = (records, field, value, label) => {
 const sameSet = (left, right) =>
   left.length === right.length && left.every((value) => new Set(right).has(value));
 
+export const validateProviderRegistryBoundaries = (contract, registry) => {
+  const registryBoundaries = {
+    owner: contract.owner,
+    status: contract.status,
+    source: CONTRACT_PATH,
+    provider: "gitea",
+    authorization_scope_owner: contract.authorization.provider_read_scope.owner,
+    execution_claim_owner: contract.persistence.reconciliation_state_owner,
+    execution_scope: contract.authorization.provider_read_scope.execution_scope,
+    protected_audit_evidence_owner: contract.persistence.protected_audit_evidence_owner,
+    protected_audit_evidence_resolution_port: contract.persistence.protected_audit_evidence_resolution_port,
+    protected_audit_evidence_consumer: contract.persistence.protected_audit_evidence_consumer,
+    core_outbox_owner: contract.persistence.core_outbox_owner,
+    audit_record_schema_owner: contract.persistence.audit_schema_owner,
+    audit_record_materialization_owner: contract.persistence.audit_materialization_owner,
+    ordinary_ui_synchronous_provider_calls: contract.authority.ordinary_ui_synchronous_provider_calls,
+    activation_gate: contract.activation_gate,
+  };
+  for (const [field, expected] of Object.entries(registryBoundaries)) {
+    if (registry[field] !== expected) {
+      throw new ContractValidationError(`provider interface registry ${field} must be ${JSON.stringify(expected)}`);
+    }
+  }
+};
+
 export const validateCrossContractBoundaries = async (contract) => {
   const eligibleCalls = new Set(contract.authorization.provider_read_scope.eligible_calls);
   const readEffectOverlap = contract.authorization.effect_permit.required_for.filter((effect) => eligibleCalls.has(effect));
@@ -184,34 +209,19 @@ export const validateCrossContractBoundaries = async (contract) => {
   );
 
   const expectedGate = {
-    state: "PROPOSED",
     decision_record: contract.decision_record,
     project_owner_approval_required: true,
   };
+  if (!["PROPOSED", "ACCEPTED"].includes(gate.state)) {
+    throw new ContractValidationError("ADR-CAND-008 state must be PROPOSED or ACCEPTED");
+  }
   for (const [field, expected] of Object.entries(expectedGate)) {
     if (gate[field] !== expected) {
       throw new ContractValidationError(`ADR-CAND-008 ${field} must be ${JSON.stringify(expected)}`);
     }
   }
 
-  const registryBoundaries = {
-    owner: contract.owner,
-    status: contract.status,
-    source: CONTRACT_PATH,
-    provider: "gitea",
-    authorization_scope_owner: contract.authorization.provider_read_scope.owner,
-    execution_claim_owner: contract.persistence.reconciliation_state_owner,
-    core_outbox_owner: contract.persistence.core_outbox_owner,
-    audit_record_schema_owner: contract.persistence.audit_schema_owner,
-    audit_record_materialization_owner: contract.persistence.audit_materialization_owner,
-    ordinary_ui_synchronous_provider_calls: contract.authority.ordinary_ui_synchronous_provider_calls,
-    activation_gate: contract.activation_gate,
-  };
-  for (const [field, expected] of Object.entries(registryBoundaries)) {
-    if (registry[field] !== expected) {
-      throw new ContractValidationError(`provider interface registry ${field} must be ${JSON.stringify(expected)}`);
-    }
-  }
+  validateProviderRegistryBoundaries(contract, registry);
 
   const ownership = new Map([
     ["STEAD-P1-002", "WS-02"],

@@ -67,13 +67,13 @@
         "derived_projection"
       ],
       "properties": {
-        "canonical_only": { "$ref": "#/$defs/fieldClass" },
-        "provider_content": { "$ref": "#/$defs/fieldClass" },
-        "mapped_value": { "$ref": "#/$defs/fieldClass" },
-        "managed_configuration": { "$ref": "#/$defs/fieldClass" },
-        "central_security": { "$ref": "#/$defs/fieldClass" },
-        "provider_identity": { "$ref": "#/$defs/fieldClass" },
-        "derived_projection": { "$ref": "#/$defs/fieldClass" }
+        "canonical_only": { "$ref": "#/$defs/fieldClass", "type": "object", "properties": { "provider_change": { "const": "reject_or_quarantine" } } },
+        "provider_content": { "$ref": "#/$defs/fieldClass", "type": "object", "properties": { "provider_change": { "const": "accept_only_one_proven_currently_authorized_delta" } } },
+        "mapped_value": { "$ref": "#/$defs/fieldClass", "type": "object", "properties": { "provider_change": { "const": "accept_existing_mapping_or_reset" } } },
+        "managed_configuration": { "$ref": "#/$defs/fieldClass", "type": "object", "properties": { "provider_change": { "const": "reset_verify_or_quarantine" } } },
+        "central_security": { "$ref": "#/$defs/fieldClass", "type": "object", "properties": { "provider_change": { "const": "fence_reset_verify_or_quarantine" } } },
+        "provider_identity": { "$ref": "#/$defs/fieldClass", "type": "object", "properties": { "provider_change": { "const": "map_only_to_authorized_canonical_resource_or_provisioning_operation" } } },
+        "derived_projection": { "$ref": "#/$defs/fieldClass", "type": "object", "properties": { "provider_change": { "const": "rebuild_or_suppress_never_authorize" } } }
       }
     },
     "authorization": {
@@ -93,6 +93,7 @@
             "renewable",
             "transferable",
             "durable_effect_permits_per_eligible_call_or_page",
+            "execution_scope",
             "eligible_calls",
             "required_bindings",
             "bounded_dimensions",
@@ -107,6 +108,7 @@
             "renewable": { "const": false },
             "transferable": { "const": false },
             "durable_effect_permits_per_eligible_call_or_page": { "const": 0 },
+            "execution_scope": { "const": "atomic_process_instance_single_holder" },
             "eligible_calls": {
               "$ref": "#/$defs/nonEmptyStringSet",
               "type": "array",
@@ -124,8 +126,8 @@
             "required_bindings": {
               "$ref": "#/$defs/nonEmptyStringSet",
               "type": "array",
-              "minItems": 19,
-              "maxItems": 19,
+              "minItems": 25,
+              "maxItems": 25,
               "items": {
                 "enum": [
                   "scope_id",
@@ -144,6 +146,12 @@
                   "closed_call_plan",
                   "activation_snapshot",
                   "authorization_consistency_vector",
+                  "provider_enforcement_fence",
+                  "resource_fence",
+                  "unique_execution_claim",
+                  "process_instance_holder_identity",
+                  "monotonic_fencing_token",
+                  "claim_deadline",
                   "compatibility_profile_id_version_and_schema_digest",
                   "original_deadline",
                   "immutable_earliest_bound_expiry"
@@ -259,6 +267,9 @@
         "core_outbox_owner",
         "audit_schema_owner",
         "audit_materialization_owner",
+        "protected_audit_evidence_owner",
+        "protected_audit_evidence_resolution_port",
+        "protected_audit_evidence_consumer",
         "deployment_operations_owner",
         "projections_rebuildable",
         "browser_direct_provider_calls"
@@ -269,6 +280,9 @@
         "core_outbox_owner": { "const": "WS-02" },
         "audit_schema_owner": { "const": "WS-01" },
         "audit_materialization_owner": { "const": "WS-07" },
+        "protected_audit_evidence_owner": { "const": "WS-03" },
+        "protected_audit_evidence_resolution_port": { "const": "authenticated_authorized_typed_bounded_set_oriented_read" },
+        "protected_audit_evidence_consumer": { "const": "WS-07" },
         "deployment_operations_owner": { "const": "WS-12" },
         "projections_rebuildable": { "const": true },
         "browser_direct_provider_calls": { "const": 0 }
