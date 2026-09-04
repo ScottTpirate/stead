@@ -3,8 +3,10 @@
 foundation-check: go-check contract-check
 	scripts/run_pinned_node.sh npm run typecheck
 	scripts/run_pinned_node.sh npm run test:unit --workspace=@stead/web
+	scripts/run_pinned_node.sh npm run test --workspace=@stead/web
 	scripts/run_pinned_node.sh npm run build
 	scripts/run_pinned_node.sh npm run validate:web-bundle
+	scripts/run_pinned_node.sh npm run validate:bundle-evidence --workspace=@stead/web
 	scripts/run_pinned_node.sh npm run validate:schemas
 	scripts/run_pinned_node.sh npm run validate:asyncapi
 	scripts/run_pinned_node.sh npm run validate:openapi
