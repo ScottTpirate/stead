@@ -28,6 +28,16 @@ const rejectedSources = [
   ["invalid UTF-8", Buffer.from([0xff])],
   ["NUL", bytes("key: \u0000\n")],
   ["control character", bytes("key: \u001f\n")],
+  ["Arabic letter mark", bytes("key: \u061cvalue\n")],
+  ["left-to-right mark", bytes("key: \u200evalue\n")],
+  ["bidirectional embedding", bytes("key: \u202avalue\n")],
+  ["bidirectional override", bytes("key: \u202evalue\n")],
+  ["bidirectional isolate", bytes("key: \u2066value\n")],
+  ["bidirectional isolate end", bytes("key: \u2069value\n")],
+  ["BMP noncharacter range start", bytes("key: \ufdd0value\n")],
+  ["BMP noncharacter range end", bytes("key: \ufdefvalue\n")],
+  ["supplementary-plane FFFE noncharacter", bytes("key: \u{1fffe}value\n")],
+  ["supplementary-plane FFFF noncharacter", bytes("key: \u{1ffff}value\n")],
   ["multiple documents", bytes("a: b\n---\nc: d\n")],
   ["directive", bytes("%YAML 1.2\n---\na: b\n")],
   ["custom tag", bytes("a: !custom value\n")],
@@ -48,6 +58,13 @@ for (const [name, input] of rejectedSources) {
     assert.throws(() => parseStrictYaml(input, `${name}.yaml`));
   });
 }
+
+test("strict parser accepts valid code points adjacent to noncharacter boundaries", () => {
+  assert.deepEqual(
+    parseStrictYaml(bytes("before_range: \ufdcf\nafter_range: \ufdf0\nbefore_plane_end: \u{1fffd}\n")),
+    { before_range: "﷏", after_range: "ﷰ", before_plane_end: "🿽" },
+  );
+});
 
 test("schema rejects unknown fields", async () => {
   const contract = parseStrictYaml(await readFile(contractPath), contractPath);
@@ -83,7 +100,21 @@ test("schema rejects provider authority over central-security fields", async () 
   await assert.rejects(() => validateContractDocument(contract), /schema validation failed/i);
 });
 
-for (const field of ["execution_scope", "protected_audit_evidence_resolution_port"]) {
+test("schema rejects moving authorization_tuple out of central_security", async () => {
+  const contract = parseStrictYaml(await readFile(contractPath), contractPath);
+  contract.field_classes.central_security.examples =
+    contract.field_classes.central_security.examples.filter((value) => value !== "authorization_tuple");
+  contract.field_classes.provider_content.examples.push("authorization_tuple");
+  await assert.rejects(() => validateContractDocument(contract), /schema validation failed/i);
+});
+
+test("schema rejects rewriting audit materialization", async () => {
+  const contract = parseStrictYaml(await readFile(contractPath), contractPath);
+  contract.persistence.audit_record_materialization = "rewriting_upsert";
+  await assert.rejects(() => validateContractDocument(contract), /schema validation failed/i);
+});
+
+for (const field of ["execution_scope", "protected_audit_evidence_resolution_port", "audit_record_materialization"]) {
   test(`registry check rejects altered ${field}`, async () => {
     const contract = parseStrictYaml(await readFile(contractPath), contractPath);
     const interfaces = parseStrictYaml(

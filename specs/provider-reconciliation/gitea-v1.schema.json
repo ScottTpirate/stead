@@ -67,13 +67,13 @@
         "derived_projection"
       ],
       "properties": {
-        "canonical_only": { "$ref": "#/$defs/fieldClass", "type": "object", "properties": { "provider_change": { "const": "reject_or_quarantine" } } },
-        "provider_content": { "$ref": "#/$defs/fieldClass", "type": "object", "properties": { "provider_change": { "const": "accept_only_one_proven_currently_authorized_delta" } } },
-        "mapped_value": { "$ref": "#/$defs/fieldClass", "type": "object", "properties": { "provider_change": { "const": "accept_existing_mapping_or_reset" } } },
-        "managed_configuration": { "$ref": "#/$defs/fieldClass", "type": "object", "properties": { "provider_change": { "const": "reset_verify_or_quarantine" } } },
-        "central_security": { "$ref": "#/$defs/fieldClass", "type": "object", "properties": { "provider_change": { "const": "fence_reset_verify_or_quarantine" } } },
-        "provider_identity": { "$ref": "#/$defs/fieldClass", "type": "object", "properties": { "provider_change": { "const": "map_only_to_authorized_canonical_resource_or_provisioning_operation" } } },
-        "derived_projection": { "$ref": "#/$defs/fieldClass", "type": "object", "properties": { "provider_change": { "const": "rebuild_or_suppress_never_authorize" } } }
+        "canonical_only": { "$ref": "#/$defs/fieldClass", "type": "object", "properties": { "examples": { "const": ["canonical_id", "capability", "team_hierarchy", "typed_relationship"] }, "provider_change": { "const": "reject_or_quarantine" } } },
+        "provider_content": { "$ref": "#/$defs/fieldClass", "type": "object", "properties": { "examples": { "const": ["work_content", "comment", "reaction", "active_software_data"] }, "provider_change": { "const": "accept_only_one_proven_currently_authorized_delta" } } },
+        "mapped_value": { "$ref": "#/$defs/fieldClass", "type": "object", "properties": { "examples": { "const": ["work_status", "work_type", "priority", "cycle_milestone", "active_user_assignee"] }, "provider_change": { "const": "accept_existing_mapping_or_reset" } } },
+        "managed_configuration": { "$ref": "#/$defs/fieldClass", "type": "object", "properties": { "examples": { "const": ["hidden_tracker", "board_shape", "labels", "repository_purpose", "webhook_registration"] }, "provider_change": { "const": "reset_verify_or_quarantine" } } },
+        "central_security": { "$ref": "#/$defs/fieldClass", "type": "object", "properties": { "examples": { "const": ["authorization_tuple", "security_domain", "classification", "provider_path_eligibility"] }, "provider_change": { "const": "fence_reset_verify_or_quarantine" } } },
+        "provider_identity": { "$ref": "#/$defs/fieldClass", "type": "object", "properties": { "examples": { "const": ["installation_id", "resource_id", "issue_number", "git_sha", "endpoint_token"] }, "provider_change": { "const": "map_only_to_authorized_canonical_resource_or_provisioning_operation" } } },
+        "derived_projection": { "$ref": "#/$defs/fieldClass", "type": "object", "properties": { "examples": { "const": ["normalized_snapshot", "search_input", "activity_input", "inbox_input"] }, "provider_change": { "const": "rebuild_or_suppress_never_authorize" } } }
       }
     },
     "authorization": {
@@ -267,6 +267,7 @@
         "core_outbox_owner",
         "audit_schema_owner",
         "audit_materialization_owner",
+        "audit_record_materialization",
         "protected_audit_evidence_owner",
         "protected_audit_evidence_resolution_port",
         "protected_audit_evidence_consumer",
@@ -280,6 +281,7 @@
         "core_outbox_owner": { "const": "WS-02" },
         "audit_schema_owner": { "const": "WS-01" },
         "audit_materialization_owner": { "const": "WS-07" },
+        "audit_record_materialization": { "const": "append_only_insert_or_exact_identity_and_digest_match" },
         "protected_audit_evidence_owner": { "const": "WS-03" },
         "protected_audit_evidence_resolution_port": { "const": "authenticated_authorized_typed_bounded_set_oriented_read" },
         "protected_audit_evidence_consumer": { "const": "WS-07" },

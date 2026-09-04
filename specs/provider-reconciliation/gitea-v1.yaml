@@ -138,6 +138,7 @@ persistence:
   core_outbox_owner: WS-02
   audit_schema_owner: WS-01
   audit_materialization_owner: WS-07
+  audit_record_materialization: append_only_insert_or_exact_identity_and_digest_match
   protected_audit_evidence_owner: WS-03
   protected_audit_evidence_resolution_port: authenticated_authorized_typed_bounded_set_oriented_read
   protected_audit_evidence_consumer: WS-07

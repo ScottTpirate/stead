@@ -14,6 +14,20 @@ require "yaml"
 
 ROOT = Pathname.new(__dir__).parent.expand_path
 
+ADR_0009_GOVERNED_CONTRACT_PATHS = %w[
+  specs/provider-reconciliation/gitea-v1.yaml
+  specs/provider-reconciliation/gitea-v1.schema.json
+].freeze
+ADR_0009_APPROVAL_RECORD_PATH = "docs/governance/adr-0009-approval-record.md"
+ADR_0009_ACCEPTANCE_PATHS = Set[
+  "docs/adr/0009-gitea-provider-reconciliation-precedence-and-conflict-handling.md",
+  "docs/planning/implementation-issue-catalog.yaml",
+  "docs/governance/adr-candidate-index.md",
+  "docs/adr/unresolved-implementation-choices.md",
+  ADR_0009_APPROVAL_RECORD_PATH
+].freeze
+ADR_0009_MAX_CATALOG_HISTORY_COMMITS = 4096
+
 EXPECTED_RECORDS = {
   "0001" => { candidate: "ADR-CAND-001", state: "ACCEPTED", owner_approval: false },
   "0002" => { candidate: "ADR-CAND-004", state: "ACCEPTED", owner_approval: true },
@@ -772,7 +786,7 @@ def catalog_managed_adr_0009_failures(source:, gate:, relative:, required_roles:
   rescue Date::Error
     failures << "implementation issue catalog: ADR-CAND-008 accepted_at must be an ISO date"
   end
-  failures << "implementation issue catalog: ADR-CAND-008 approval_record must be a governance Markdown path" unless approval_record.is_a?(String) && approval_record.match?(%r{\Adocs/governance/[a-z0-9._-]+\.md\z})
+  failures << "implementation issue catalog: ADR-CAND-008 approval_record must be #{ADR_0009_APPROVAL_RECORD_PATH}" unless approval_record == ADR_0009_APPROVAL_RECORD_PATH
 
   expected_status = "Accepted at immutable decision revision `#{decision_revision}` on #{accepted_at}"
   failures << "#{relative}: accepted status must bind the catalog decision revision and date" unless source[/^- \*\*Status:\*\*\s*(.+)$/, 1] == expected_status
@@ -844,35 +858,198 @@ def catalog_managed_adr_0009_failures(source:, gate:, relative:, required_roles:
   failures
 end
 
-def adr_0009_decision_source(revision, relative)
+def adr_0009_git_capture(*arguments, root: ROOT)
+  environment = { "GIT_NO_REPLACE_OBJECTS" => "1", "GIT_OPTIONAL_LOCKS" => "0" }
+  stdout, stderr, status = Open3.capture3(
+    environment,
+    "git",
+    "-C",
+    root.to_s,
+    *arguments
+  )
+  { stdout: stdout, stderr: stderr, success: status.success? }
+rescue Errno::ENOENT, SystemCallError => error
+  { stdout: "", stderr: "#{error.class}: #{error.message}", success: false }
+end
+
+def adr_0009_git_blob(revision, relative, root: ROOT)
+  result = adr_0009_git_capture("show", "#{revision}:#{relative}", root: root)
+  return nil unless result.fetch(:success) && result.fetch(:stdout).valid_encoding?
+
+  result.fetch(:stdout)
+end
+
+def adr_0009_git_blob_oid(revision, relative, root: ROOT)
+  result = adr_0009_git_capture("rev-parse", "#{revision}:#{relative}", root: root)
+  return nil unless result.fetch(:success)
+
+  oid = result.fetch(:stdout).strip
+  oid if oid.match?(/\A[0-9a-f]{40,64}\z/)
+end
+
+def adr_0009_decision_source(revision, relative, root: ROOT)
   return nil unless revision.is_a?(String) && revision.match?(/\A[0-9a-f]{40}\z/)
 
-  environment = { "GIT_NO_REPLACE_OBJECTS" => "1", "GIT_OPTIONAL_LOCKS" => "0" }
-  _stdout, _stderr, ancestor = Open3.capture3(
-    environment,
-    "git",
-    "-C",
-    ROOT.to_s,
-    "merge-base",
-    "--is-ancestor",
-    revision,
-    "HEAD"
-  )
-  return nil unless ancestor.success?
+  ancestor = adr_0009_git_capture("merge-base", "--is-ancestor", revision, "HEAD", root: root)
+  return nil unless ancestor.fetch(:success)
 
-  stdout, _stderr, status = Open3.capture3(
-    environment,
-    "git",
-    "-C",
-    ROOT.to_s,
-    "show",
-    "#{revision}:#{relative}"
-  )
-  return nil unless status.success? && stdout.valid_encoding?
+  adr_0009_git_blob(revision, relative, root: root)
+end
 
-  stdout
-rescue Errno::ENOENT, SystemCallError
+def adr_0009_normalized_decision_source(source)
+  normalized = source.sub(/^- \*\*Status:\*\*.*$/, "- **Status:** <acceptance-state>")
+                     .sub(/^- \*\*Resolves(?: on acceptance)?:\*\*.*$/, "- **Resolution:** <acceptance-resolution>")
+  review_start = normalized.index(/^## Reviews and approvals\s*$/)
+  return nil unless review_start
+
+  review_tail = normalized[review_start..]
+  footnote_offset = review_tail.index(/^\[\^[^\]]+\]:/)
+  footnotes = footnote_offset ? review_tail[footnote_offset..] : ""
+  normalized[0...review_start] + "## Reviews and approvals\n<acceptance-review-metadata>\n\n" + footnotes
+end
+
+
+def adr_0009_history_snapshot_failures(snapshot)
+  failures = []
+  decision_revision = snapshot.fetch(:decision_revision)
+  transitions = snapshot.fetch(:catalog_commits).select do |commit|
+    commit.fetch(:state) == "ACCEPTED" && commit.fetch(:parent_states).first != "ACCEPTED"
+  end
+  unless transitions.length == 1
+    failures << "ADR-CAND-008 must have exactly one acceptance transition reachable from HEAD; found #{transitions.length}"
+    return failures
+  end
+
+  transition = transitions.first
+  unless transition.fetch(:parents) == [decision_revision]
+    failures << "ADR-CAND-008 acceptance transition must be a non-merge direct child of the immutable decision revision"
+  end
+  expected_status = /^- \*\*Status:\*\* Accepted at immutable decision revision `#{Regexp.escape(decision_revision)}` on \d{4}-\d{2}-\d{2}$/
+  unless transition.fetch(:adr_source).match?(expected_status)
+    failures << "ADR-CAND-008 acceptance transition ADR status must bind the immutable decision revision"
+  end
+  extra_paths = transition.fetch(:changed_paths).to_set - ADR_0009_ACCEPTANCE_PATHS
+  failures << "ADR-CAND-008 acceptance transition changes paths outside the mechanical allowlist: #{extra_paths.to_a.sort.join(', ')}" unless extra_paths.empty?
+
+  decision_normalized = adr_0009_normalized_decision_source(snapshot.fetch(:decision_source))
+  transition_normalized = adr_0009_normalized_decision_source(transition.fetch(:adr_source))
+  head_normalized = adr_0009_normalized_decision_source(snapshot.fetch(:head_source))
+  unless decision_normalized && transition_normalized && decision_normalized == transition_normalized
+    failures << "ADR-CAND-008 acceptance transition changes ADR content outside status, resolution, or review metadata"
+  end
+  unless decision_normalized && head_normalized && decision_normalized == head_normalized
+    failures << "current ADR-0009 content drifts from the immutable reviewed decision"
+  end
+
+  decision_contracts = snapshot.fetch(:decision_contracts)
+  transition_contracts = transition.fetch(:contract_oids)
+  head_contracts = snapshot.fetch(:head_contracts)
+  ADR_0009_GOVERNED_CONTRACT_PATHS.each do |path|
+    reviewed_oid = decision_contracts[path]
+    unless reviewed_oid && transition_contracts[path] == reviewed_oid && head_contracts[path] == reviewed_oid
+      failures << "#{path}: governed contract blob must match the immutable decision at acceptance and HEAD"
+    end
+  end
+  failures
+end
+
+def adr_0009_catalog_gate_at(revision, root: ROOT)
+  source = adr_0009_git_blob(revision, "docs/planning/implementation-issue-catalog.yaml", root: root)
+  return nil unless source
+
+  catalog = parse_yaml(source, filename: "docs/planning/implementation-issue-catalog.yaml@#{revision}")
+  Array(catalog["adr_decision_gates"]).find { |record| record["adr_id"] == "ADR-CAND-008" }
+rescue Psych::Exception
   nil
+end
+
+def adr_0009_catalog_state_at(revision, root: ROOT)
+  adr_0009_catalog_gate_at(revision, root: root)&.fetch("state", nil)
+end
+
+def adr_0009_acceptance_history_failures(decision_revision:, relative:, root: ROOT)
+  failures = []
+  shallow = adr_0009_git_capture("rev-parse", "--is-shallow-repository", root: root)
+  unless shallow.fetch(:success) && shallow.fetch(:stdout) == "false\n"
+    return ["ADR-CAND-008 acceptance history must be available from a complete non-shallow repository"]
+  end
+  decision = adr_0009_git_capture("rev-parse", "--verify", "#{decision_revision}^{commit}", root: root)
+  unless decision.fetch(:success) && decision.fetch(:stdout) == "#{decision_revision}\n"
+    return ["ADR-CAND-008 immutable decision revision must resolve to the exact available commit"]
+  end
+  ancestor = adr_0009_git_capture("merge-base", "--is-ancestor", decision_revision.to_s, "HEAD", root: root)
+  unless ancestor.fetch(:success)
+    return ["ADR-CAND-008 immutable decision revision is not an ancestor of HEAD"]
+  end
+
+  revision_result = adr_0009_git_capture(
+    "rev-list",
+    "--full-history",
+    "--ancestry-path",
+    "--max-count=#{ADR_0009_MAX_CATALOG_HISTORY_COMMITS + 1}",
+    "#{decision_revision}..HEAD",
+    "--",
+    "docs/planning/implementation-issue-catalog.yaml",
+    root: root
+  )
+  return ["ADR-CAND-008 acceptance history is unavailable"] unless revision_result.fetch(:success)
+
+  revisions = revision_result.fetch(:stdout).lines.map(&:strip).reject(&:empty?)
+  if revisions.length > ADR_0009_MAX_CATALOG_HISTORY_COMMITS
+    return ["ADR-CAND-008 acceptance history exceeds #{ADR_0009_MAX_CATALOG_HISTORY_COMMITS} catalog commits"]
+  end
+
+  catalog_commits = revisions.map do |revision|
+    parents_result = adr_0009_git_capture("show", "-s", "--format=%P", revision, root: root)
+    return ["ADR-CAND-008 acceptance history parent data is unavailable"] unless parents_result.fetch(:success)
+
+    parents = parents_result.fetch(:stdout).split
+    paths_result = if parents.length == 1
+                     adr_0009_git_capture("diff", "--name-only", parents.first, revision, root: root)
+                   else
+                     adr_0009_git_capture("diff-tree", "--no-commit-id", "--name-only", "-r", "-m", revision, root: root)
+                   end
+    return ["ADR-CAND-008 acceptance history path data is unavailable"] unless paths_result.fetch(:success)
+
+    gate = adr_0009_catalog_gate_at(revision, root: root)
+    {
+      revision: revision,
+      parents: parents,
+      gate: gate,
+      state: gate&.fetch("state", nil),
+      parent_states: parents.map { |parent| adr_0009_catalog_state_at(parent, root: root) },
+      changed_paths: paths_result.fetch(:stdout).lines.map(&:strip).reject(&:empty?).uniq,
+      adr_source: adr_0009_git_blob(revision, relative, root: root).to_s,
+      contract_oids: ADR_0009_GOVERNED_CONTRACT_PATHS.to_h { |path| [path, adr_0009_git_blob_oid(revision, path, root: root)] }
+    }
+  end
+
+  snapshot = {
+    decision_revision: decision_revision,
+    decision_source: adr_0009_git_blob(decision_revision, relative, root: root).to_s,
+    head_source: adr_0009_git_blob("HEAD", relative, root: root).to_s,
+    decision_contracts: ADR_0009_GOVERNED_CONTRACT_PATHS.to_h { |path| [path, adr_0009_git_blob_oid(decision_revision, path, root: root)] },
+    head_contracts: ADR_0009_GOVERNED_CONTRACT_PATHS.to_h { |path| [path, adr_0009_git_blob_oid("HEAD", path, root: root)] },
+    catalog_commits: catalog_commits
+  }
+  failures.concat(adr_0009_history_snapshot_failures(snapshot))
+  transitions = catalog_commits.select do |commit|
+    commit.fetch(:state) == "ACCEPTED" && commit.fetch(:parent_states).first != "ACCEPTED"
+  end
+  if transitions.length == 1
+    transition = transitions.first
+    failures.concat(
+      catalog_managed_adr_0009_failures(
+        source: transition.fetch(:adr_source),
+        gate: transition.fetch(:gate) || {},
+        relative: relative,
+        required_roles: EXPECTED_RECORDS.fetch("0009").fetch(:required_approval_roles),
+        approval_record_source: adr_0009_git_blob(transition.fetch(:revision), ADR_0009_APPROVAL_RECORD_PATH, root: root),
+        decision_source: snapshot.fetch(:decision_source)
+      )
+    )
+  end
+  failures
 end
 
 def adr_requirement_traceability_failures(requirements:, adr_number:, claimed_requirement_ids:, declared_test_ids:)
@@ -2682,7 +2859,7 @@ paths.each do |path|
 
   if expected[:catalog_managed_state]
     approval_record_path = gate["approval_record"]
-    approval_record_source = if approval_record_path.is_a?(String) && approval_record_path.match?(%r{\Adocs/governance/[a-z0-9._-]+\.md\z})
+    approval_record_source = if approval_record_path == ADR_0009_APPROVAL_RECORD_PATH
                                candidate_path = ROOT.join(approval_record_path)
                                candidate_path.read(encoding: "UTF-8") if candidate_path.file? && !candidate_path.symlink?
                              end
@@ -2696,6 +2873,14 @@ paths.each do |path|
         decision_source: expected_state == "ACCEPTED" ? adr_0009_decision_source(gate["immutable_revision"], relative) : nil
       )
     )
+    if expected_state == "ACCEPTED"
+      failures.concat(
+        adr_0009_acceptance_history_failures(
+          decision_revision: gate["immutable_revision"],
+          relative: relative
+        )
+      )
+    end
     next
   end
 
@@ -4954,6 +5139,173 @@ adr_0009_metadata_mutations.each do |name, source, gate, approval_record_source,
   failures << "ADR-0009 #{name} metadata mutation survived" unless mutation_failures.any? { |failure| failure.include?(expected_failure) }
 end
 
+adr_0009_history_decision = <<~MARKDOWN
+  # ADR-0009: fixture
+
+  - **Status:** Proposed
+  - **Resolves on acceptance:** `ADR-CAND-008`
+
+  ## Decision
+
+  Stable reviewed semantics.
+
+  ## Reviews and approvals
+
+  Exact-revision review is pending.
+
+  [^fixture]: Stable footnote.
+MARKDOWN
+adr_0009_history_accepted = adr_0009_history_decision
+                              .sub("- **Status:** Proposed", "- **Status:** Accepted at immutable decision revision `#{adr_0009_fixture_revision}` on 2026-09-04")
+                              .sub("- **Resolves on acceptance:**", "- **Resolves:**")
+                              .sub("Exact-revision review is pending.", adr_0009_fixture_table.call(adr_0009_fixture_approvals).sub("## Reviews and approvals\n\n", ""))
+adr_0009_history_contracts = ADR_0009_GOVERNED_CONTRACT_PATHS.each_with_index.to_h do |path, index|
+  [path, (index + 1).to_s * 40]
+end
+adr_0009_history_snapshot = {
+  decision_revision: adr_0009_fixture_revision,
+  decision_source: adr_0009_history_decision,
+  head_source: adr_0009_history_accepted,
+  decision_contracts: adr_0009_history_contracts,
+  head_contracts: adr_0009_history_contracts.dup,
+  catalog_commits: [
+    {
+      revision: "b" * 40,
+      parents: [adr_0009_fixture_revision],
+      state: "ACCEPTED",
+      parent_states: ["PROPOSED"],
+      changed_paths: ADR_0009_ACCEPTANCE_PATHS.to_a,
+      adr_source: adr_0009_history_accepted,
+      contract_oids: adr_0009_history_contracts.dup
+    }
+  ]
+}
+history_baseline = adr_0009_history_snapshot_failures(adr_0009_history_snapshot)
+failures << "ADR-0009 acceptance-history descendant fixture failed: #{history_baseline.join('; ')}" unless history_baseline.empty?
+
+adr_0009_history_mutations = [
+  ["non-direct transition", "non-merge direct child", ->(snapshot) { snapshot.fetch(:catalog_commits).first[:parents] = ["c" * 40] }],
+  ["merge transition", "non-merge direct child", lambda do |snapshot|
+    snapshot.fetch(:catalog_commits).first[:parents] << ("c" * 40)
+    snapshot.fetch(:catalog_commits).first[:parent_states] << "PROPOSED"
+  end],
+  ["multiple transitions", "exactly one acceptance transition", lambda do |snapshot|
+    duplicate = Marshal.load(Marshal.dump(snapshot.fetch(:catalog_commits).first))
+    duplicate[:revision] = "c" * 40
+    snapshot.fetch(:catalog_commits) << duplicate
+  end],
+  ["semantic acceptance drift", "outside status, resolution, or review metadata", lambda do |snapshot|
+    transition = snapshot.fetch(:catalog_commits).first
+    transition[:adr_source] = transition.fetch(:adr_source).sub("\n## Reviews", "\nSemantic drift.\n\n## Reviews")
+  end],
+  ["semantic HEAD drift", "current ADR-0009 content drifts", lambda do |snapshot|
+    snapshot[:head_source] = snapshot.fetch(:head_source).sub("\n## Reviews", "\nSemantic drift.\n\n## Reviews")
+  end],
+  ["governed acceptance contract drift", "governed contract blob", lambda do |snapshot|
+    snapshot.fetch(:catalog_commits).first.fetch(:contract_oids)[ADR_0009_GOVERNED_CONTRACT_PATHS.first] = "f" * 40
+  end],
+  ["governed HEAD contract drift", "governed contract blob", lambda do |snapshot|
+    snapshot.fetch(:head_contracts)[ADR_0009_GOVERNED_CONTRACT_PATHS.first] = "f" * 40
+  end],
+  ["extra acceptance path", "outside the mechanical allowlist", lambda do |snapshot|
+    snapshot.fetch(:catalog_commits).first.fetch(:changed_paths) << "docs/architecture/constitution.md"
+  end]
+]
+adr_0009_history_mutations.each do |name, expected_failure, mutate|
+  snapshot = Marshal.load(Marshal.dump(adr_0009_history_snapshot))
+  mutate.call(snapshot)
+  mutation_failures = adr_0009_history_snapshot_failures(snapshot)
+  failures << "ADR-0009 #{name} history mutation survived" unless mutation_failures.any? { |failure| failure.include?(expected_failure) }
+end
+
+adr_0009_real_history_failures = []
+begin
+  probe_base = Pathname.new(ENV.fetch("STEAD_TEST_TMPDIR", Dir.tmpdir)).expand_path
+  probe_base.mkpath unless probe_base.directory?
+  raise "temporary parent is unavailable" unless probe_base.directory? && probe_base.writable?
+
+  root_real = ROOT.realpath
+  base_real = probe_base.realpath
+  if base_real == root_real || base_real.to_s.start_with?("#{root_real}/")
+    raise "temporary parent must be outside the repository"
+  end
+
+  Dir.mktmpdir("stead-adr0009-history-", base_real.to_s) do |temporary|
+    probe_root = Pathname.new(temporary).join("repository")
+    probe_git = lambda do |*arguments|
+      result = adr_0009_git_capture(*arguments, root: probe_root.directory? ? probe_root : ROOT)
+      raise "git #{arguments.first} failed: #{result.fetch(:stderr).lines.first.to_s.strip}" unless result.fetch(:success)
+
+      result.fetch(:stdout)
+    end
+    probe_git.call("clone", "--quiet", "--no-local", ROOT.to_s, probe_root.to_s)
+    probe_git.call("config", "user.name", "Stead ADR probe")
+    probe_git.call("config", "user.email", "adr-probe@stead.invalid")
+    live_gate = adr_gates.fetch("ADR-CAND-008")
+    probe_base = live_gate["state"] == "ACCEPTED" ? live_gate.fetch("immutable_revision") : "HEAD"
+    probe_git.call("switch", "--detach", probe_base)
+    decision_revision = probe_git.call("rev-parse", "HEAD").strip
+    probe_git.call("switch", "-c", "probe-accepted")
+
+    approvals = adr_0009_fixture_approvals.map { |record| record.merge("decision_revision" => decision_revision) }
+    adr_path = probe_root.join("docs/adr/0009-gitea-provider-reconciliation-precedence-and-conflict-handling.md")
+    proposed_adr = adr_path.read(encoding: "UTF-8")
+    footnotes = proposed_adr[/^\[\^[^\]]+\]:.*\z/m].to_s
+    accepted_adr = proposed_adr
+                   .sub("- **Status:** Proposed", "- **Status:** Accepted at immutable decision revision `#{decision_revision}` on 2026-09-04")
+                   .sub("- **Resolves on acceptance:**", "- **Resolves:**")
+                   .sub(/^## Reviews and approvals.*\z/m, adr_0009_fixture_table.call(approvals) + "\n" + footnotes)
+    adr_path.write(accepted_adr, encoding: "UTF-8")
+
+    catalog_path = probe_root.join("docs/planning/implementation-issue-catalog.yaml")
+    catalog_source = catalog_path.read(encoding: "UTF-8")
+    acceptance_fields = +"  - adr_id: ADR-CAND-008\n    state: ACCEPTED\n"
+    acceptance_fields << "    immutable_revision: #{JSON.generate(decision_revision)}\n"
+    acceptance_fields << "    accepted_at: \"2026-09-04\"\n"
+    acceptance_fields << "    approval_record: #{ADR_0009_APPROVAL_RECORD_PATH}\n"
+    acceptance_fields << "    approval_records:\n"
+    approvals.each do |record|
+      acceptance_fields << "      - {role: #{JSON.generate(record.fetch('role'))}, identity: #{JSON.generate(record.fetch('identity'))}, disposition: APPROVED, decision_revision: #{JSON.generate(decision_revision)}}\n"
+    end
+    catalog_source = catalog_source.sub("  - adr_id: ADR-CAND-008\n    state: PROPOSED\n", acceptance_fields)
+    catalog_path.write(catalog_source, encoding: "UTF-8")
+
+    approval_rows = approvals.map do |record|
+      "| `#{record.fetch('role')}` | `#{record.fetch('identity')}` | `#{decision_revision}` | APPROVED | fixture evidence |"
+    end
+    approval_source = "# ADR-0009 approval record\n\nStatus: **APPROVED**\n\n" \
+                      "- **Decision record:** `docs/adr/0009-gitea-provider-reconciliation-precedence-and-conflict-handling.md`\n" \
+                      "- **Immutable decision revision:** `#{decision_revision}`\n\n" \
+                      "## Exact-revision dispositions\n\n| Role | Identity | Decision revision | Disposition | Evidence |\n" \
+                      "|---|---|---|---|---|\n#{approval_rows.join("\n")}\n"
+    probe_root.join(ADR_0009_APPROVAL_RECORD_PATH).write(approval_source, encoding: "UTF-8")
+    {
+      "docs/governance/adr-candidate-index.md" => ["ADR-CAND-008 is proposed", "ADR-CAND-008 is accepted"],
+      "docs/adr/unresolved-implementation-choices.md" => ["ADR-CAND-008 is proposed", "ADR-CAND-008 is accepted"]
+    }.each do |path, (before, after)|
+      probe_path = probe_root.join(path)
+      probe_path.write(probe_path.read(encoding: "UTF-8").sub(before, after), encoding: "UTF-8")
+    end
+    probe_git.call("add", "--", *ADR_0009_ACCEPTANCE_PATHS.to_a)
+    probe_git.call("commit", "--quiet", "--no-gpg-sign", "-m", "test: accept ADR-0009 fixture")
+    adr_0009_real_history_failures.concat(
+      adr_0009_acceptance_history_failures(decision_revision: decision_revision, relative: adr_path.relative_path_from(probe_root).to_s, root: probe_root)
+    )
+
+    probe_git.call("commit", "--quiet", "--allow-empty", "--no-gpg-sign", "-m", "test: later descendant")
+    probe_git.call("switch", "-c", "probe-side", decision_revision)
+    probe_git.call("commit", "--quiet", "--allow-empty", "--no-gpg-sign", "-m", "test: sibling")
+    probe_git.call("switch", "probe-accepted")
+    probe_git.call("merge", "--quiet", "--no-ff", "--no-gpg-sign", "-m", "test: normal merge", "probe-side")
+    adr_0009_real_history_failures.concat(
+      adr_0009_acceptance_history_failures(decision_revision: decision_revision, relative: adr_path.relative_path_from(probe_root).to_s, root: probe_root)
+    )
+  end
+rescue ArgumentError, Errno::ENOENT, SystemCallError, RuntimeError => error
+  adr_0009_real_history_failures << "ADR-0009 real-history probe failed closed: #{error.class}: #{error.message}"
+end
+failures.concat(adr_0009_real_history_failures)
+
 if failures.empty?
   adr_0007_killed_mutations = adr_0007_expected_edges.length - adr_0007_mutation_survivors.length
   adr_0008_killed_mutations = adr_0008_expected_edges.length - adr_0008_mutation_survivors.length
@@ -4968,6 +5320,8 @@ if failures.empty?
   puts "ADR-0008 pinned-CBI-source guard: PASS (baseline=#{ADR_0008_CLASSIFICATION_BYPASS_SOURCE_BYTES} bytes, #{ADR_0008_CBI_SOURCE_MUTATION_NAMES.length}/#{ADR_0008_CBI_SOURCE_MUTATION_NAMES.length} adversarial mutations killed)"
   puts "ADR-0008 security-contract mutation guard: PASS (#{adr_0008_security_mutations.length}/#{adr_0008_security_mutations.length} mutations killed across #{adr_0008_security_mutation_groups.length} gap groups)"
   puts "ADR-0009 catalog-managed record-state guard: PASS (#{adr_0009_metadata_mutations.length}/#{adr_0009_metadata_mutations.length} focused mutations killed; Proposed and future-Accepted controls pass)"
+  puts "ADR-0009 acceptance-history mutation guard: PASS (#{adr_0009_history_mutations.length}/#{adr_0009_history_mutations.length} focused mutations killed; later descendant/merge fixture passes)"
+  puts "ADR-0009 real acceptance-history integration guard: PASS (immediate child, later descendant, normal merge)"
   puts "ADR traceability validation: PASS (records=#{paths.length}, requirements=#{known_requirement_ids.length}, tests=#{all_test_owners.length})"
 else
   warn "ADR traceability validation: FAIL (#{failures.length} issue#{failures.length == 1 ? '' : 's'})"

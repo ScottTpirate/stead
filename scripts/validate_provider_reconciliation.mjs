@@ -49,6 +49,15 @@ const rejectUnsafeText = (bytes, filename, limits) => {
   if (/[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/u.test(source)) {
     throw new ContractValidationError(`${filename}: unsafe control character`);
   }
+  if (/[\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/u.test(source)) {
+    throw new ContractValidationError(`${filename}: bidirectional formatting controls are prohibited`);
+  }
+  for (const character of source) {
+    const codePoint = character.codePointAt(0);
+    if ((codePoint >= 0xfdd0 && codePoint <= 0xfdef) || (codePoint & 0xffff) >= 0xfffe) {
+      throw new ContractValidationError(`${filename}: Unicode noncharacters are prohibited`);
+    }
+  }
   if (/^%/mu.test(source)) {
     throw new ContractValidationError(`${filename}: YAML directives are prohibited`);
   }
@@ -175,6 +184,7 @@ export const validateProviderRegistryBoundaries = (contract, registry) => {
     core_outbox_owner: contract.persistence.core_outbox_owner,
     audit_record_schema_owner: contract.persistence.audit_schema_owner,
     audit_record_materialization_owner: contract.persistence.audit_materialization_owner,
+    audit_record_materialization: contract.persistence.audit_record_materialization,
     ordinary_ui_synchronous_provider_calls: contract.authority.ordinary_ui_synchronous_provider_calls,
     activation_gate: contract.activation_gate,
   };
