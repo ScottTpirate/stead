@@ -220,17 +220,16 @@ func verifyLocalExecutable(ctx context.Context, repository string, core LocalTem
 		return ErrDenied
 	}
 	toolchain := runtime.GOROOT()
-	for _, arguments := range [][]string{
-		{"build", "-mod=readonly", "-trimpath", "-buildvcs=false", "-pgo=off", "-o", filepath.Join(directory, "stead-api"), "./apps/core"},
-		{"mod", "verify"},
-	} {
-		command := exec.CommandContext(ctx, filepath.Join(toolchain, "bin/go"), arguments...)
-		command.Dir, command.Env = source, localBuildEnvironment(directory, toolchain)
-		var output localGitOutput
-		command.Stdout, command.Stderr = &output, &output
-		if command.Run() != nil {
-			return ErrDenied
-		}
+	// A fresh module cache has no mutable pre-existing unpacked dependencies.
+	// Go verifies each fetched build dependency zip against the exact readonly
+	// go.sum while unpacking it. Do not fetch unrelated historical test graphs
+	// merely to run `go mod verify` over this newly populated compiler cache.
+	command := exec.CommandContext(ctx, filepath.Join(toolchain, "bin/go"), "build", "-mod=readonly", "-trimpath", "-buildvcs=false", "-pgo=off", "-o", filepath.Join(directory, "stead-api"), "./apps/core")
+	command.Dir, command.Env = source, localBuildEnvironment(directory, toolchain)
+	var output localGitOutput
+	command.Stdout, command.Stderr = &output, &output
+	if command.Run() != nil {
+		return ErrDenied
 	}
 	// The module loader is not permitted to change the frozen lock inputs.
 	for _, name := range []string{"go.mod", "go.sum"} {
