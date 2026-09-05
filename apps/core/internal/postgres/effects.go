@@ -222,14 +222,44 @@ func (store *Store) effectProjectSnapshot(ctx context.Context, session *runtimeS
 }
 
 func readEffectRow(ctx context.Context, tx pgx.Tx, id string) (authorization.EffectRecord, classification.Label, error) {
-	var raw, labelRaw []byte
-	var operationID, projectID, sessionID, state string
-	var version uint64
-	err := tx.QueryRow(ctx, `SELECT operation_id::text,project_id::text,session_id::text,state,version,record,label FROM "authorization".effects WHERE id=$1 FOR UPDATE`, id).Scan(&operationID, &projectID, &sessionID, &state, &version, &raw, &labelRaw)
+	record, label, err := scanEffectRow(tx.QueryRow(ctx, `SELECT `+effectRowProjection+` FROM "authorization".effects WHERE id=$1 FOR UPDATE`, id))
 	count(ctx, 1, 0, 0, 0)
+	if err != nil || record.Binding.EffectID != id {
+		return authorization.EffectRecord{}, classification.Label{}, authorization.ErrDenied
+	}
+	return record, label, nil
+}
+
+// Bound each JSON value before it crosses the database connection. The extra
+// byte makes oversize values fail closed, rather than accepting a truncated
+// prefix. The same complete row decoder serves locked CAS and streaming drain.
+const effectRowProjection = `id::text,operation_id::text,project_id::text,session_id::text,state,version,
+ substring(convert_to(record::text,'UTF8') from 1 for 65537),
+ substring(convert_to(label::text,'UTF8') from 1 for 65537)`
+
+func scanEffectRow(row pgx.Row) (authorization.EffectRecord, classification.Label, error) {
+	var stored storedEffectRow
+	if err := row.Scan(&stored.id, &stored.operationID, &stored.projectID, &stored.sessionID, &stored.state, &stored.version, &stored.raw, &stored.labelRaw); err != nil {
+		return authorization.EffectRecord{}, classification.Label{}, authorization.ErrDenied
+	}
+	return stored.decode()
+}
+
+type storedEffectRow struct {
+	id, operationID, projectID, sessionID, state string
+	version                                      uint64
+	raw, labelRaw                                []byte
+}
+
+func (stored storedEffectRow) decode() (authorization.EffectRecord, classification.Label, error) {
 	var record authorization.EffectRecord
 	var label classification.Label
-	if err != nil || strictEffectJSON(raw, &record) != nil || strictEffectJSON(labelRaw, &label) != nil || record.Validate() != nil || record.Binding.EffectID != id || record.Binding.OperationID != operationID || record.Binding.Project.ID != projectID || record.Authorization.SessionID != sessionID || string(record.State) != state || record.Version != version || label.Version != record.Authorization.Revisions.Label {
+	if strictEffectJSON(stored.raw, &record) != nil || strictEffectJSON(stored.labelRaw, &label) != nil || record.Validate() != nil || record.Binding.EffectID != stored.id || record.Binding.OperationID != stored.operationID || record.Binding.Project.ID != stored.projectID || record.Authorization.SessionID != stored.sessionID || string(record.State) != stored.state || record.Version != stored.version || label.Version != record.Authorization.Revisions.Label {
+		return authorization.EffectRecord{}, classification.Label{}, authorization.ErrDenied
+	}
+	// Reuse the WS07-owned label/envelope validation for this fixed native
+	// lifecycle. No event is appended and this shape check grants no authority.
+	if _, err := audit.EffectEvent(stored.id, record, label); err != nil {
 		return authorization.EffectRecord{}, classification.Label{}, authorization.ErrDenied
 	}
 	return record, label, nil
