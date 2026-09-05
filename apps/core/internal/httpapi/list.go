@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
-	"sync"
 
 	"github.com/ScottTpirate/stead/modules/authorization"
 	"github.com/ScottTpirate/stead/modules/identity"
@@ -63,7 +62,7 @@ func pageParameters(raw string) (int, string, error) {
 // discoverPage never returns raw-candidate continuation metadata. The extra
 // eligible ID is a private lookahead; only an authorized returned row can later
 // become next_after, and only after fresh complete response authorization.
-func discoverPage(ctx context.Context, after string, size int, fetch func(context.Context, string, int) ([]string, error), eligible func(context.Context, string) error) ([]string, error) {
+func discoverPage(ctx context.Context, after string, size int, fetch func(context.Context, string, int) ([]string, error), eligible func(context.Context, []string) ([]bool, error)) ([]string, error) {
 	selected := []string{}
 	cursor := after
 	for scanned := 0; scanned < maxCandidateScan; {
@@ -79,14 +78,18 @@ func discoverPage(ctx context.Context, after string, size int, fetch func(contex
 				return nil, errCollectionUnavailable
 			}
 			cursor = id
-			scanned++
-			if err = eligible(ctx, id); err == nil {
+		}
+		allowed, err := eligible(ctx, ids)
+		if err != nil || len(allowed) != len(ids) {
+			return nil, errCollectionUnavailable
+		}
+		scanned += len(ids)
+		for index, id := range ids {
+			if allowed[index] {
 				selected = append(selected, id)
 				if len(selected) > size {
 					return selected, nil
 				}
-			} else if !errors.Is(err, authorization.ErrDenied) {
-				return nil, errCollectionUnavailable
 			}
 			if ctx.Err() != nil {
 				return nil, errCollectionUnavailable
@@ -124,29 +127,45 @@ func (server *Server) list(w http.ResponseWriter, r *http.Request, kind string) 
 	base := authorization.WithoutDecisions(r.Context())
 	parentKind, parentID, parentAction := "organization", r.PathValue("organization_id"), authorization.OrganizationRead
 	if kind == "organization" {
-		parentKind, parentID, parentAction = "instance", server.config.InstanceID, authorization.OrganizationCreate
+		parentKind, parentID, parentAction = "instance", server.config.InstanceID, authorization.OrganizationsList
 	}
-	if _, err = server.config.Authorization.Authorize(base, session, parentAction, authorization.ResourceRef{Kind: parentKind, ID: parentID}); err != nil {
-		problem(w, 404)
-		return
-	}
-	eligible := func(ctx context.Context, id string) error {
-		decision, err := server.config.Authorization.Authorize(ctx, session, readAction(kind), authorization.ResourceRef{Kind: kind, ID: id})
-		if err != nil {
-			return err
+	parent := authorization.ReadAuthorization{Action: parentAction, Target: authorization.ResourceRef{Kind: parentKind, ID: parentID}}
+	inputs := func(ids []string) []authorization.ReadAuthorization {
+		result := make([]authorization.ReadAuthorization, 1, len(ids)+1)
+		result[0] = parent
+		for _, id := range ids {
+			result = append(result, authorization.ReadAuthorization{Action: readAction(kind), Target: authorization.ResourceRef{Kind: kind, ID: id}})
 		}
-		if kind != "organization" && decision.Evidence().OrganizationID != parentID {
-			return authorization.ErrDenied
-		}
-		return nil
+		return result
 	}
 	// A cursor is only a previously visible resource coordinate, not authority.
 	// A revoked, cross-kind, deleted or cross-Organization cursor denies alike.
+	initialIDs := []string{}
 	if after != "" {
-		if err = eligible(base, after); err != nil {
-			problem(w, 404)
-			return
+		initialIDs = append(initialIDs, after)
+	}
+	initial, err := server.config.Authorization.AuthorizeSet(base, session, inputs(initialIDs))
+	if err != nil {
+		problem(w, 503)
+		return
+	}
+	if !allowedPageSet(initial, kind, parentID, len(initialIDs)) {
+		problem(w, 404)
+		return
+	}
+	eligible := func(ctx context.Context, ids []string) ([]bool, error) {
+		if len(ids) == 0 {
+			return []bool{}, nil
 		}
+		decisions, err := server.config.Authorization.AuthorizeSet(ctx, session, inputs(ids))
+		if err != nil || len(decisions) != len(ids)+1 || decisions[0] == nil {
+			return nil, errCollectionUnavailable
+		}
+		allowed := make([]bool, len(ids))
+		for index, decision := range decisions[1:] {
+			allowed[index] = decision != nil && (kind == "organization" || decision.Evidence().OrganizationID == parentID)
+		}
+		return allowed, nil
 	}
 	fetch := func(ctx context.Context, cursor string, limit int) ([]string, error) {
 		switch kind {
@@ -167,7 +186,16 @@ func (server *Server) list(w http.ResponseWriter, r *http.Request, kind string) 
 	if after != "" {
 		freshIDs = append([]string{after}, ids...)
 	}
-	values, decisions, err := server.freshPage(base, session, kind, parentID, freshIDs)
+	decisions, err := server.config.Authorization.AuthorizeSet(base, session, inputs(freshIDs))
+	if err != nil {
+		problem(w, 503)
+		return
+	}
+	if !allowedPageSet(decisions, kind, parentID, len(freshIDs)) {
+		problem(w, 404)
+		return
+	}
+	values, err := server.readPage(base, kind, decisions[1:])
 	if err != nil {
 		domainError(w, err)
 		return
@@ -177,14 +205,6 @@ func (server *Server) list(w http.ResponseWriter, r *http.Request, kind string) 
 		// never duplicate its representation in the new page.
 		values = values[1:]
 	}
-	// Discovery may have lasted longer than a decision lease. Renew the parent
-	// too; no discovery decision is reused for disclosure.
-	parent, err := server.config.Authorization.Authorize(base, session, parentAction, authorization.ResourceRef{Kind: parentKind, ID: parentID})
-	if err != nil {
-		problem(w, 404)
-		return
-	}
-	decisions = append([]*authorization.Decision{parent}, decisions...)
 	page := resourcePage{Items: values}
 	if len(values) > size {
 		page.Items = values[:size]
@@ -193,45 +213,55 @@ func (server *Server) list(w http.ResponseWriter, r *http.Request, kind string) 
 	server.release(w, r, 200, page, decisions)
 }
 
-// freshPage uses bounded parallel central decisions and canonical reads. All
-// buffered bytes are regenerated from those reads, not an earlier discovery
-// snapshot. Failure returns no partial page; finalization rechecks every row,
-// including the authorized lookahead that justifies continuation.
-func (server *Server) freshPage(ctx context.Context, session identity.Authenticated, kind, organization string, ids []string) ([]map[string]any, []*authorization.Decision, error) {
-	values := make([]map[string]any, len(ids))
-	decisions := make([]*authorization.Decision, len(ids))
-	failures := make([]error, len(ids))
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	jobs := make(chan int)
-	var workers sync.WaitGroup
-	for worker := 0; worker < min(4, len(ids)); worker++ {
-		workers.Add(1)
-		go func() {
-			defer workers.Done()
-			for index := range jobs {
-				value, decision, err := server.readResource(ctx, session, kind, ids[index])
-				if err == nil && kind != "organization" && decision.Evidence().OrganizationID != organization {
-					err = authorization.ErrDenied
-				}
-				values[index], decisions[index], failures[index] = value, decision, err
-				if err != nil {
-					cancel()
-				}
-			}
-		}()
+func allowedPageSet(decisions []*authorization.Decision, kind, organization string, rows int) bool {
+	if len(decisions) != rows+1 || decisions[0] == nil {
+		return false
 	}
-	for index := range ids {
-		jobs <- index
-	}
-	close(jobs)
-	workers.Wait()
-	for _, err := range failures {
-		if err != nil {
-			return nil, nil, authorization.ErrDenied
+	for _, decision := range decisions[1:] {
+		if decision == nil || (kind != "organization" && decision.Evidence().OrganizationID != organization) {
+			return false
 		}
 	}
-	return values, decisions, nil
+	return true
+}
+
+// readPage reads one owner set using the fresh shared logical authorization
+// decision. Cursor and authorized lookahead remain part of the final proof;
+// neither discovery snapshots nor individual per-row policy calls are reused.
+func (server *Server) readPage(ctx context.Context, kind string, decisions []*authorization.Decision) ([]map[string]any, error) {
+	values := make([]map[string]any, len(decisions))
+	if len(decisions) == 0 {
+		return values, nil
+	}
+	switch kind {
+	case "organization":
+		rows, err := server.config.Repository.GetOrganizations(ctx, decisions)
+		if err != nil || len(rows) != len(decisions) {
+			return nil, authorization.ErrDenied
+		}
+		for index, row := range rows {
+			values[index] = server.organizationView(row, decisions[index])
+		}
+	case "team":
+		rows, err := server.config.Repository.GetTeams(ctx, decisions)
+		if err != nil || len(rows) != len(decisions) {
+			return nil, authorization.ErrDenied
+		}
+		for index, row := range rows {
+			values[index] = server.teamView(row, decisions[index])
+		}
+	case "project":
+		rows, err := server.config.Repository.GetProjects(ctx, decisions)
+		if err != nil || len(rows) != len(decisions) {
+			return nil, authorization.ErrDenied
+		}
+		for index, row := range rows {
+			values[index] = server.projectView(row, decisions[index])
+		}
+	default:
+		return nil, authorization.ErrDenied
+	}
+	return values, nil
 }
 func (server *Server) listOrganizations(w http.ResponseWriter, r *http.Request) {
 	server.list(w, r, "organization")

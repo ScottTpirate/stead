@@ -12,6 +12,7 @@ import (
 // authoritative PostgreSQL pointer and independently retained host anchor.
 // Its digest is a comparison convenience, never signature authority.
 type ActivationBinding struct {
+	EvidenceKind                     string `json:"evidence_kind,omitempty"`
 	InstallationID                   string `json:"installation_id"`
 	ActivationSetID                  string `json:"activation_set_id"`
 	SignedEnvelopeDigest             string `json:"signed_envelope_digest"`

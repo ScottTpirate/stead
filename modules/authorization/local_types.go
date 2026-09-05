@@ -17,6 +17,8 @@ type LocalCheckRequest struct {
 	SubjectDigest  string
 	SourceRevision string
 	SourceTree     string
+	Files          []policyrelease.File
+	Archive        []byte
 }
 
 // LocalCheckCapture is actual process output captured by the reviewed local
@@ -68,6 +70,8 @@ type LocalTemplateCore struct {
 	SourceRevision       string              `json:"source_revision"`
 	SourceTree           string              `json:"source_tree"`
 	GoVersion            string              `json:"go_version"`
+	GoBinaryDigest       string              `json:"go_binary_digest"`
+	GoCompilerDigest     string              `json:"go_compiler_digest"`
 	DependencyLockDigest string              `json:"dependency_lock_digest"`
 	Files                []LocalTemplateFile `json:"files"`
 	PublicOrigin         string              `json:"public_origin"`
