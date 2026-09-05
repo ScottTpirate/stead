@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"slices"
+	"strconv"
 
 	"github.com/ScottTpirate/stead/modules/identity"
 )
@@ -51,9 +52,12 @@ type profileDocument struct {
 		} `json:"context_requirements"`
 	} `json:"semantics"`
 	Presentation struct {
-		Renderer string `json:"renderer_id"`
-		Version  string `json:"renderer_version"`
-		Text     bool   `json:"text_authoritative"`
+		Renderer string   `json:"renderer_id"`
+		Version  string   `json:"renderer_version"`
+		Text     bool     `json:"text_authoritative"`
+		Color    bool     `json:"color_supplemental_only"`
+		Surfaces []string `json:"required_surfaces"`
+		Warnings []string `json:"action_warnings"`
 		Markings []struct {
 			ID   string `json:"id"`
 			Text string `json:"display_text"`
@@ -82,7 +86,7 @@ func CompileValidatedProfile(profileJSON, domainJSON []byte) (*Evaluator, error)
 		return nil, ErrDenied
 	}
 	p, d := evaluator.profile, evaluator.domain
-	if p.ID == "" || p.Version == "" || p.Purpose == "test_fixture" || d.Purpose == "test_fixture" || len(p.Sensitivity) == 0 || len(d.Ceilings) != 1 || d.Mode != "request_boundary" || len(d.Bridges) != 0 || p.Semantics.Contract != "stead.security-profile-rules.v1" || p.Semantics.Representability != "closed_profile_semantics_v1" || p.Semantics.Unmapped != "deny" || p.Presentation.Renderer != "stead.security_markings.v1" || p.Presentation.Version != "1.0.0" || !p.Presentation.Text {
+	if p.ID == "" || p.Version == "" || p.Purpose == "test_fixture" || d.Purpose == "test_fixture" || len(p.Sensitivity) == 0 || len(d.Ceilings) != 1 || d.Mode != "request_boundary" || len(d.Bridges) != 0 || p.Semantics.Contract != "stead.security-profile-rules.v1" || p.Semantics.Representability != "closed_profile_semantics_v1" || p.Semantics.Unmapped != "deny" || p.Presentation.Renderer != "stead.security_markings.v1" || p.Presentation.Version != "1.0.0" || !p.Presentation.Text || !p.Presentation.Color {
 		return nil, ErrDenied
 	}
 	ceiling, ok := d.Ceilings[p.ID]
@@ -93,8 +97,9 @@ func CompileValidatedProfile(profileJSON, domainJSON []byte) (*Evaluator, error)
 }
 
 type Result struct {
-	Marking     string
-	Obligations []string
+	Marking      string
+	Obligations  []string
+	Presentation SecurityPresentation
 }
 
 func (evaluator *Evaluator) Evaluate(label Label, session identity.SessionRecord) (Result, error) {
@@ -151,7 +156,8 @@ func (evaluator *Evaluator) Evaluate(label Label, session identity.SessionRecord
 	}
 	for _, marking := range evaluator.profile.Presentation.Markings {
 		if marking.ID == label.SensitivityLevel && marking.Text != "" {
-			return Result{Marking: marking.Text, Obligations: []string{"display_marking", "audit_access"}}, nil
+			presentation := SecurityPresentation{ProfileID: evaluator.profile.ID, ProfileVersion: evaluator.profile.Version, LabelRevision: strconv.FormatUint(label.Version, 10), RendererID: evaluator.profile.Presentation.Renderer, RendererVersion: evaluator.profile.Presentation.Version, Markings: []Marking{{Kind: "sensitivity", Text: marking.Text}}, RequiredSurfaces: append([]string{}, evaluator.profile.Presentation.Surfaces...), WarningActions: append([]string{}, evaluator.profile.Presentation.Warnings...), TextAuthoritative: evaluator.profile.Presentation.Text, ColorSupplementalOnly: evaluator.profile.Presentation.Color}
+			return Result{Marking: marking.Text, Obligations: []string{"display_marking", "audit_access"}, Presentation: presentation}, nil
 		}
 	}
 	return Result{}, ErrDenied

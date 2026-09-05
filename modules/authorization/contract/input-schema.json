@@ -1,0 +1,799 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stead.example/policies/policy-decision/input-v0.1.schema.json",
+  "title": "Stead deterministic policy-decision input",
+  "description": "Implementation-neutral input for classification, contextual, handling, information-flow, CI/infrastructure, explicit-deny, and future agent-intersection evaluation.",
+  "type": "object",
+  "required": [
+    "action",
+    "actor",
+    "session",
+    "resource",
+    "authorization",
+    "policy_context"
+  ],
+  "properties": {
+    "action": {
+      "type": "string",
+      "minLength": 1
+    },
+    "actor": {
+      "type": "object",
+      "required": [
+        "principal",
+        "trusted_attributes"
+      ],
+      "properties": {
+        "principal": {
+          "$ref": "../../specs/work-graph-profile/owgp-v0.1.schema.json#/$defs/ActingPrincipalRef"
+        },
+        "requested_by": {
+          "$ref": "../../specs/work-graph-profile/owgp-v0.1.schema.json#/$defs/ActingPrincipalRef"
+        },
+        "delegation": {
+          "type": "object",
+          "required": [
+            "id",
+            "delegator",
+            "authority_revision",
+            "issued_at",
+            "expires_at",
+            "revoked",
+            "revocation_revision"
+          ],
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "delegator": {
+              "$ref": "../../specs/work-graph-profile/owgp-v0.1.schema.json#/$defs/ActingPrincipalRef"
+            },
+            "authority_revision": {
+              "type": "string"
+            },
+            "issued_at": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "expires_at": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "revoked": {
+              "type": "boolean"
+            },
+            "revocation_revision": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "task_scope": {
+          "type": "object",
+          "required": [
+            "id",
+            "resource_ids",
+            "actions",
+            "authority_revision",
+            "expires_at"
+          ],
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "resource_ids": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1,
+              "uniqueItems": true
+            },
+            "actions": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1,
+              "uniqueItems": true
+            },
+            "authority_revision": {
+              "type": "string"
+            },
+            "expires_at": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          "additionalProperties": false
+        },
+        "trusted_attributes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name",
+              "value",
+              "authority",
+              "provenance",
+              "sensitivity",
+              "issued_at",
+              "last_synced_at",
+              "review_or_expires_at",
+              "version",
+              "verified"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "value": {},
+              "authority": {
+                "type": "string"
+              },
+              "provenance": {
+                "type": "string"
+              },
+              "sensitivity": {
+                "enum": [
+                  "public",
+                  "internal",
+                  "protected"
+                ]
+              },
+              "issued_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "last_synced_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "review_or_expires_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "version": {
+                "type": "string"
+              },
+              "verified": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "agent_context": {
+      "type": "object",
+      "required": [
+        "agent_authority_revision",
+        "runtime_identity",
+        "runtime_security_domain",
+        "classification_ceilings",
+        "compartments",
+        "model_provider",
+        "tool_scope",
+        "execution_environment",
+        "attestation",
+        "expires_at",
+        "revoked"
+      ],
+      "properties": {
+        "agent_authority_revision": {
+          "type": "string"
+        },
+        "runtime_identity": {
+          "type": "string"
+        },
+        "runtime_security_domain": {
+          "type": "string"
+        },
+        "classification_ceilings": {
+          "$ref": "../deployment-domains/domain-profile-v0.1.schema.json#/$defs/ProfileCeilingMap"
+        },
+        "compartments": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        },
+        "model_provider": {
+          "type": "string"
+        },
+        "tool_scope": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        },
+        "execution_environment": {
+          "type": "string"
+        },
+        "attestation": {
+          "type": "object",
+          "required": [
+            "authority",
+            "provenance",
+            "issued_at",
+            "expires_at",
+            "version",
+            "verified"
+          ],
+          "properties": {
+            "authority": {
+              "type": "string"
+            },
+            "provenance": {
+              "type": "string"
+            },
+            "issued_at": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "expires_at": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "version": {
+              "type": "string"
+            },
+            "verified": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false
+        },
+        "expires_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "revoked": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "session": {
+      "type": "object",
+      "required": [
+        "authentication_strength",
+        "security_domain",
+        "classification_ceilings",
+        "network_zone",
+        "device_trust",
+        "environment",
+        "expires_at"
+      ],
+      "properties": {
+        "authentication_strength": {
+          "type": "string"
+        },
+        "security_domain": {
+          "type": "string"
+        },
+        "classification_ceilings": {
+          "$ref": "../deployment-domains/domain-profile-v0.1.schema.json#/$defs/ProfileCeilingMap"
+        },
+        "network_zone": {
+          "type": "string"
+        },
+        "device_trust": {
+          "type": "string"
+        },
+        "environment": {
+          "type": "string"
+        },
+        "expires_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "additionalProperties": false
+    },
+    "resource": {
+      "type": "object",
+      "required": [
+        "ref",
+        "container",
+        "effective_security_label",
+        "required_capability",
+        "resource_version",
+        "label_revision"
+      ],
+      "properties": {
+        "ref": {
+          "$ref": "../../specs/work-graph-profile/owgp-v0.1.schema.json#/$defs/ResourceRef"
+        },
+        "container": {
+          "$ref": "../../specs/work-graph-profile/owgp-v0.1.schema.json#/$defs/ContainerRef"
+        },
+        "effective_security_label": {
+          "$ref": "../../specs/work-graph-profile/owgp-v0.1.schema.json#/$defs/SecurityLabelValue"
+        },
+        "required_capability": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "resource_version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "label_revision": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "data_flow_context": {
+      "type": "object",
+      "required": [
+        "operation",
+        "destination",
+        "proposed_label"
+      ],
+      "properties": {
+        "operation": {
+          "enum": [
+            "download",
+            "export",
+            "share",
+            "downgrade",
+            "declassify",
+            "decontrol",
+            "remove_restriction"
+          ]
+        },
+        "destination": {
+          "type": "object",
+          "required": [
+            "security_domain",
+            "label_profile_ceilings",
+            "organization_ids",
+            "releasability_groups",
+            "channel"
+          ],
+          "properties": {
+            "security_domain": {
+              "type": "string"
+            },
+            "label_profile_ceilings": {
+              "$ref": "../deployment-domains/domain-profile-v0.1.schema.json#/$defs/ProfileCeilingMap"
+            },
+            "organization_ids": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "uniqueItems": true
+            },
+            "releasability_groups": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "uniqueItems": true
+            },
+            "channel": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "proposed_label": {
+          "$ref": "../../specs/work-graph-profile/owgp-v0.1.schema.json#/$defs/SecurityLabelValue"
+        },
+        "lowering_request": {
+          "type": "object",
+          "required": [
+            "reason",
+            "source_authority",
+            "approvers"
+          ],
+          "properties": {
+            "reason": {
+              "type": "string",
+              "minLength": 1
+            },
+            "source_authority": {
+              "type": "string",
+              "minLength": 1
+            },
+            "approvers": {
+              "type": "array",
+              "items": {
+                "$ref": "../../specs/work-graph-profile/owgp-v0.1.schema.json#/$defs/ActingPrincipalRef"
+              },
+              "minItems": 1,
+              "uniqueItems": true
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "operation": {
+                "enum": [
+                  "downgrade",
+                  "declassify",
+                  "decontrol",
+                  "remove_restriction"
+                ]
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "lowering_request"
+            ]
+          }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "ci_context": {
+      "type": "object",
+      "required": [
+        "job_id",
+        "runner_pool",
+        "runner_security_domain",
+        "image_digest",
+        "image_approved",
+        "network_zone",
+        "egress_policy",
+        "secret_scope",
+        "artifact_label",
+        "deployment_environment"
+      ],
+      "properties": {
+        "job_id": {
+          "type": "string"
+        },
+        "runner_pool": {
+          "type": "string"
+        },
+        "runner_security_domain": {
+          "type": "string"
+        },
+        "image_digest": {
+          "type": "string"
+        },
+        "image_approved": {
+          "type": "boolean"
+        },
+        "network_zone": {
+          "type": "string"
+        },
+        "egress_policy": {
+          "enum": [
+            "deny_all",
+            "allowlisted",
+            "managed"
+          ]
+        },
+        "secret_scope": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        },
+        "artifact_label": {
+          "$ref": "../../specs/work-graph-profile/owgp-v0.1.schema.json#/$defs/SecurityLabelValue"
+        },
+        "deployment_environment": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "infrastructure_context": {
+      "type": "object",
+      "required": [
+        "operation",
+        "target_domain",
+        "provider",
+        "label_profile_ceilings",
+        "allowed",
+        "encryption_profile",
+        "network_zone"
+      ],
+      "properties": {
+        "operation": {
+          "enum": [
+            "admission",
+            "storage",
+            "backup",
+            "restore",
+            "integration"
+          ]
+        },
+        "target_domain": {
+          "type": "string"
+        },
+        "provider": {
+          "type": "string"
+        },
+        "label_profile_ceilings": {
+          "$ref": "../deployment-domains/domain-profile-v0.1.schema.json#/$defs/ProfileCeilingMap"
+        },
+        "allowed": {
+          "type": "boolean"
+        },
+        "encryption_profile": {
+          "type": "string"
+        },
+        "network_zone": {
+          "type": "string"
+        },
+        "backup_domain": {
+          "type": "string"
+        },
+        "integration_id": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "authorization": {
+      "type": "object",
+      "required": [
+        "relationship",
+        "provider_path",
+        "consistency_fence"
+      ],
+      "properties": {
+        "relationship": {
+          "type": "object",
+          "required": [
+            "allowed",
+            "relation",
+            "model_id",
+            "tuple_revision"
+          ],
+          "properties": {
+            "allowed": {
+              "type": "boolean"
+            },
+            "relation": {
+              "type": "string"
+            },
+            "model_id": {
+              "type": "string"
+            },
+            "tuple_revision": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "provider_path": {
+          "type": "object",
+          "required": [
+            "allowed",
+            "enforced_by",
+            "decision_revision"
+          ],
+          "properties": {
+            "allowed": {
+              "type": "boolean"
+            },
+            "enforced_by": {
+              "type": "string"
+            },
+            "decision_revision": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "agent_intersection": {
+          "type": "object",
+          "required": [
+            "delegator_authority",
+            "agent_authority",
+            "task_scope",
+            "runtime_domain",
+            "session_environment",
+            "resource_handling",
+            "revocation_current"
+          ],
+          "properties": {
+            "delegator_authority": {
+              "type": "boolean"
+            },
+            "agent_authority": {
+              "type": "boolean"
+            },
+            "task_scope": {
+              "type": "boolean"
+            },
+            "runtime_domain": {
+              "type": "boolean"
+            },
+            "session_environment": {
+              "type": "boolean"
+            },
+            "resource_handling": {
+              "type": "boolean"
+            },
+            "revocation_current": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false
+        },
+        "consistency_fence": {
+          "type": "object",
+          "required": [
+            "resource_version",
+            "label_revision",
+            "tuple_revision",
+            "revocation_revision"
+          ],
+          "properties": {
+            "resource_version": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "label_revision": {
+              "type": "string"
+            },
+            "tuple_revision": {
+              "type": "string"
+            },
+            "revocation_revision": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "policy_context": {
+      "type": "object",
+      "required": [
+        "policy_bundle_id",
+        "now",
+        "required_contexts"
+      ],
+      "properties": {
+        "policy_bundle_id": {
+          "type": "string"
+        },
+        "now": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "required_contexts": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "data_flow",
+              "ci",
+              "infrastructure"
+            ]
+          },
+          "uniqueItems": true
+        },
+        "explicit_denies": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "actor": {
+            "properties": {
+              "principal": {
+                "properties": {
+                  "type": {
+                    "const": "agent"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "agent_context"
+        ],
+        "properties": {
+          "actor": {
+            "required": [
+              "requested_by",
+              "delegation",
+              "task_scope"
+            ]
+          },
+          "authorization": {
+            "required": [
+              "agent_intersection"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "policy_context": {
+            "properties": {
+              "required_contexts": {
+                "contains": {
+                  "const": "data_flow"
+                }
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "data_flow_context"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "policy_context": {
+            "properties": {
+              "required_contexts": {
+                "contains": {
+                  "const": "ci"
+                }
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "ci_context"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "policy_context": {
+            "properties": {
+              "required_contexts": {
+                "contains": {
+                  "const": "infrastructure"
+                }
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "infrastructure_context"
+        ]
+      }
+    }
+  ],
+  "additionalProperties": false
+}
+
