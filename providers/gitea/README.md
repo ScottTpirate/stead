@@ -40,11 +40,12 @@ send only body plus version because stock multi-field edits are not atomic.
 Evidence and limits: operations are based on the documented stock REST routes
 in upstream `cf0f4dce72a8799e8afe5307be7470caf6936dba`, the exact successor
 backend SHA-256 `baa9f7f8d3acd4e92e9e009d4e1356377a4371074a16d207a92b309f907eec68`,
-and the retained successful 28-call isolated probe. The probe already showed
-stale Markdown SHA rejection, but **not** stale issue-version rejection. The
+and the retained successful 28-operation isolated stock probe (readiness polling
+excluded). The subsequent actual Stead adapter consumer passed 24 additional
+bounded calls, including stale issue-version 409 and stale Markdown SHA 422. The
 pinned `routers/api/v1/repo/issue.go` and `models/issues/issue_update.go` implement
 the body-only precheck/transactional CAS and increment even on identical content;
-the opt-in consumer adds actual stale-version verification. No upstream source
+the opt-in consumer verifies that stale-version behavior. No upstream source
 was copied/imported. [Official API usage](https://docs.gitea.com/development/api-usage/).
 
 Run the synthetic HTTP contract tests with the pinned Go toolchain:
@@ -65,7 +66,10 @@ and explicit `STEAD_GITEA_CONTRACT=isolated-synthetic-v1`. It uses fixed fresh
 `stead-adapter-tracker`/`stead-adapter-docs` names and never creates credentials,
 launches services, removes repositories, or records response secrets. It logs
 only method/status checks and aggregate call counts. Compiling it is not a live
-provider-contract pass. The consumer has not yet been executed.
+provider-contract pass. Exact source `f04a008e8a4638ef228f8b4b185db2d17c33566b`
+passed the fresh isolated consumer on 2026-09-05; independent QA verified the
+result and shutdown. This is not application authorization, provider activation,
+or a product journey. See the [bounded execution evidence](../../docs/governance/dependency-evidence/gitea-adapter-functional-proof-20260905.json).
 
 This slice does not complete P1-003: hidden Project mappings, board/labels,
 permission sync, durable permits, bounded read scopes/claims, projections,
