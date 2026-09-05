@@ -3,62 +3,77 @@
   "status": "accepted",
   "scope": "Initial synthetic local-development template/compiler/test source only; not an instance artifact, production approval or Phase 1 release.",
   "owner_decision_revision": "83d2bfef6c08227f2d15d465c7ada316c5934a31",
-  "source_revision": "e1514422d61816c2a54eea2c05c388e97beffaf3",
-  "source_tree": "2d2d69b14a6aa72c3647d14debd6e37a62a174de",
-  "core_digest": "sha256:9d1284247d0e18046af226e8b6f6e615ec44641c1a1c557d4e56b65e9f797f20",
+  "source_revision": "5cc1f030c4d4dd81eb188e00ceb9f41ea2b7a498",
+  "source_tree": "385fdaabefbb4a0a7e6ec05a2f3ccb1b106c4383",
+  "core_digest": "sha256:84dc7da7bdc235d5ea9501d12a2595f209a7d975fa6e81388dc05860d1198ab8",
   "reviews": [
     {
       "role": "architecture-contract-owner",
       "reviewer_id": "/root/template_architecture_review",
       "disposition": "accept",
       "independent_non_author": true,
-      "evidence": "Independently reviewed the exact four-file correction and ran all three new transport/fence tests. Collections omit undeclared ETags while individual reads/creates retain strong ETags; identical final authorization fence remains. Ten bound inputs and ordered 32/93/3/1 inventories are unchanged. Independently derived core matches root actual source/self-rebuild inspection. No new locked decision."
+      "evidence": "Independently reviewed the 13-file correction; earlier unchanged-code focused race tests twice and Workspace 6/6 passed. Independently verified ten bound inputs, driver/compiler/full 17,349-entry toolchain, ordered 32/108/3/1 inventories and rates, canonical CoreDigest, ten bundle artifacts and 78,139 gzip bytes. Same-binding monotonic refresh, original two-second deadline, terminal fence and session generation clearing remain intact. No locked-boundary expansion."
     },
     {
       "role": "qa",
       "reviewer_id": "/root/template_qa_daemon_fix",
       "disposition": "accept",
       "independent_non_author": true,
-      "evidence": "Independently verified clean source/tree, ten file hashes, ordered 32/93/3/1 inventories and exact core against actual root inspection. Own HTTP/transaction race and vet passed. Production Go-encoded collection responses pass unchanged generated SDK; old ETag responses fail. Strong resource ETags and failed/zero final-fence suppression pass. Full existing SDK suite 24/24 passed at same-SHA root."
+      "evidence": "Independently verified clean exact source/tree, sole post-9d3 bundle delta, ten bound input hashes, freshly executed ordered inventories, actual inspection/core equality and canonical CoreDigest. Own exact-source bundle check passed; five unchanged-code Go race/vet suites, repeated lock/snapshot regressions, Workspace 6/6 and typecheck passed. Reviewed 104/108 campaign and all four counted survivors; no concrete bypass or unresolved finding. Matching root evidence hashes inspected."
     },
     {
       "role": "security",
-      "reviewer_id": "/root/collection_security_review",
+      "reviewer_id": "/root/parallel_read_security_final",
       "disposition": "accept",
       "independent_non_author": true,
-      "evidence": "Fresh distinct non-author reviewer independently verified exact correction, ten input digests, compiler/driver, full 17,349-entry toolchain digest, ordered inventories and core. Own HTTP/transaction/authorization/core/localdev race tests and SDK 24/24 passed. Authorization, finalization/recheck, single-use release and non-disclosure remain unchanged. Inspected root-attributed actual self-rebuild, foundation and binary scan. No scoped security finding."
+      "evidence": "Fresh distinct non-author independently verified exact source/tree/CoreDigest, ten input digests, 32/108 inventories, unchanged seven exclusions and 90% floor. Own authorization/Postgres race suites three times, transaction/localcheck race suites twice and Workspace 6/6 passed. Verified 100ms context-aware contention-only retry, full binding and monotonic snapshot comparison, original expiry, revocation/rollback/terminal denial, nonauthorizing extracted predicate and committed issuer-bound one-use release. UI generation/401 behavior remains fail closed. Four campaign survivors remain counted; concrete downstream checks deny their error cases. Actual foundation and binary scan evidence inspected; no blocking finding."
     }
   ],
   "evidence": [
     {
-      "path": "/tmp/stead-foundation-collection-header.log",
-      "sha256": "208e95b456a22d11b0edbfac027cc8cc1f2571d3fc92d3b77b3d4ed44c6b04ec",
-      "result": "Full make foundation-check exit 0 at exact source."
+      "path": "/tmp/stead-foundation-parallel-read-final.log",
+      "sha256": "592a51cc831c9315381ebf6fb175fb30ef4caeccb2137333533c7073d9783929",
+      "result": "Root full make foundation-check exit 0 at exact source."
     },
     {
-      "path": "/tmp/stead-api-govulncheck-collection-header.json",
+      "path": "/tmp/stead-dev-check-parallel-read-final.log",
+      "sha256": "4e2774ec4a0a83ad72dcba96053a2e160a0f9b8b0c46ad612c08e4c4ec3244a1",
+      "result": "Root make dev-check exit 0; seven launcher tests and worker race suite passed."
+    },
+    {
+      "path": "/tmp/stead-api-govulncheck-parallel-read-final.json",
       "sha256": "3605e9139d1be9a911536fb413fabad639a3d2a9cf1209137fec194cc01f2aea",
-      "result": "Actual fixed API binary scan, govulncheck v1.7.0, database 2026-09-02T19:12:04Z, exit 0, no findings; binary SBOM included."
+      "result": "Actual fixed API binary scan, govulncheck v1.7.0, database 2026-09-02T19:12:04Z, exit 0, zero findings; binary SBOM included."
     },
     {
-      "path": "/tmp/stead-collection-header-api",
-      "sha256": "ec51fa71ce4de0280fd828b6db57d50f62d0926c02b78d4662d7b1667a508ad6",
-      "result": "Actual fixed-recipe source binary. PATH/LANG-only daemon dev-template-inspect and its independent exact-source executable rebuild passed."
+      "path": "/tmp/stead-parallel-read-api",
+      "sha256": "b39831221bb8e42730c6ca8a32ff974bb2f46fd403dd589076e5b84e4760e3e2",
+      "result": "Actual fixed-recipe source binary. PATH/LANG-only dev-template-inspect at final source and independent exact-source executable rebuild passed."
     },
     {
-      "path": "/tmp/stead-template-core-collection-header.json",
-      "sha256": "775715be50e9125c2edc1b846302c849c2f9de12070c71b711ee41f7f0607356",
-      "result": "Actual source inspection assembled with freshly executed ordered runner inventories; all three reviewers independently match core."
+      "path": "/tmp/stead-template-core-parallel-read-final.json",
+      "sha256": "39187696a7df1e863b71c1422d53d9cadd913a595f44b445e0ed0a710e8d290f",
+      "result": "Actual source inspection assembled with freshly executed ordered inventories; all three reviewers independently match core."
+    },
+    {
+      "path": "/tmp/stead-mutations-parallel-read-final.json",
+      "sha256": "71343988a7e23faef6bae2b2c0f995152eb89295f24f1cc6deda1b4cf41b85d0",
+      "result": "Root actual final-source critical campaign exit 0: 104/108 (96.3%); four survivors counted, seven exclusions unchanged, 90% floor. Empty instance subject: source test evidence only, never an installer receipt."
+    },
+    {
+      "path": "/tmp/stead-conformance-parallel-read-final.json",
+      "sha256": "7d02b8209649a9abff5ca23805effe06794677966f527aa135a61c980117ba30",
+      "result": "Root actual final-source policy campaign exit 0: 32/32. Empty instance subject: source test evidence only, never an installer receipt."
     }
   ],
   "conditions": [
     "Only approved-template.json and this review record may differ from the reviewed source.",
     "Each fresh initial installation must execute actual subject-bound conformance, mutation and dependency checks and completed-archive offline verification; no results here may be copied into receipts.",
-    "Preserve the prior installation and its browser-created Organization, audit/outbox and diagnostic evidence. This source is not approved to upgrade or relabel that activation.",
+    "Preserve the prior installation and its browser-created Organization, parent/child Teams, general Project, audit/outbox and diagnostic evidence. This source is not approved to upgrade or relabel that activation.",
     "Production and nonlocal consumers reject development trust and evidence.",
     "No renewal, rotation, recovery, upgrade, promotion, untrusted data or provider-object use is approved by this record.",
     "Startup catalog inspection uses a transient separate read-only administrative process, not continuous privileged API monitoring."
   ],
-  "supersedes_source_revision": "27c6198c90a658c3e2f46a1fb5858893c3d7a7ac",
-  "correction": "Real Chrome sign-in and Organization creation succeeded, but collection responses carried an ETag not declared by the unchanged Platform contract, so the strict generated client rejected them. The bounded four-file correction omits collection ETags, preserves individual-resource ETags and the shared final fence, and adds Go-encoder/generated-SDK regression tests. No policy, template/compiler, dependency, toolchain, substitution, inventory or threshold change."
+  "supersedes_source_revision": "e1514422d61816c2a54eea2c05c388e97beffaf3",
+  "correction": "A real browser reload produced a parallel Project-list 503. Actual-code reproduction identified immediate exclusive-anchor lock contention and legitimate concurrent host/database high-water advancement. Bounded lock waiting and same-binding post-database snapshots preserve original expiry, rollback/revocation and terminal disclosure fences. Manual UI Refresh retries current collections while retaining generation/401 clearing. Runtime regressions and the extracted helper's actual mutation guard are included; inventory grows from 93 to 108 with the same seven exclusions and 90% threshold. Policy semantics, dependencies, toolchain, substitutions and trust boundaries are unchanged. Bundle measurement and current README summary reflect the real path; no performance or release pass is inferred."
 }
