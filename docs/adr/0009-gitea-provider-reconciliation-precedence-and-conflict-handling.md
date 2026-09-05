@@ -158,7 +158,7 @@ Decision acceptance adopts these future obligations; it does not claim runtime i
 
 ## Reviews and approvals
 
-Because this proposal narrowly supersedes accepted/locked call-granularity rules, every named review and explicit project-owner approval must name the same exact immutable decision SHA. Until the later mechanical acceptance record directly descends from that decision revision and changes only approval/gate/review records, ADR-0009 remains Proposed, `ADR-CAND-008` remains blocking, and no bounded-read exception is authorized.
+Because this proposal narrowly supersedes accepted/locked call-granularity rules, every named review and explicit project-owner approval must name the same exact immutable decision SHA. Until a later mechanical acceptance is validated against and descends from that exact decision revision, ADR-0009 remains Proposed, `ADR-CAND-008` remains blocking, and no bounded-read exception is authorized.
 
 | Role | Identity | Disposition | Evidence/date |
 |---|---|---|---|
