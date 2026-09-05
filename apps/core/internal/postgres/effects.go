@@ -7,6 +7,7 @@ import (
 	"io"
 	"reflect"
 	"time"
+	"unicode/utf8"
 
 	"github.com/ScottTpirate/stead/apps/core/internal/outbox"
 	"github.com/ScottTpirate/stead/apps/core/internal/transaction"
@@ -266,7 +267,7 @@ func (stored storedEffectRow) decode() (authorization.EffectRecord, classificati
 }
 
 func strictEffectJSON(raw []byte, destination any) error {
-	if len(raw) == 0 || len(raw) > 64<<10 {
+	if len(raw) == 0 || len(raw) > 64<<10 || !utf8.Valid(raw) {
 		return authorization.ErrDenied
 	}
 	decoder := json.NewDecoder(bytes.NewReader(raw))
@@ -275,6 +276,29 @@ func strictEffectJSON(raw []byte, destination any) error {
 		return authorization.ErrDenied
 	}
 	if decoder.Decode(new(any)) != io.EOF {
+		return authorization.ErrDenied
+	}
+	// JSONB preserves case-distinct keys, while the Go struct decoder aliases
+	// them. Require exactly the current writer's recursive keys/types/values.
+	// Compare parsed values, not bytes: JSONB may reorder keys and whitespace.
+	// UseNumber preserves integer identity above float64's exact range.
+	parse := func(data []byte) (any, error) {
+		var value any
+		decoder := json.NewDecoder(bytes.NewReader(data))
+		decoder.UseNumber()
+		err := decoder.Decode(&value)
+		return value, err
+	}
+	canonical, err := json.Marshal(destination)
+	if err != nil {
+		return authorization.ErrDenied
+	}
+	actual, err := parse(raw)
+	if err != nil {
+		return authorization.ErrDenied
+	}
+	expected, err := parse(canonical)
+	if err != nil || !reflect.DeepEqual(actual, expected) {
 		return authorization.ErrDenied
 	}
 	return nil

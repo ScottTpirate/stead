@@ -1,6 +1,7 @@
 package postgres
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"reflect"
@@ -123,6 +124,15 @@ func truncatedTerminalRecord(record authorization.EffectRecord) []byte {
 	})
 }
 
+func caseAliasedTerminalRecord(record authorization.EffectRecord) []byte {
+	record.State = authorization.EffectConsumed
+	var value map[string]any
+	_ = json.Unmarshal(encode(record), &value)
+	value["state"] = authorization.EffectTerminal
+	value["terminaloutcome"] = authorization.EffectCanceledBeforeEffect
+	return encode(value)
+}
+
 func TestEffectRowRequiresCompleteRecordIndexesAndLabel(t *testing.T) {
 	r, label := effectStorageFixture(t)
 	r.State, r.TerminalOutcome, r.Version = authorization.EffectTerminal, authorization.EffectCanceledBeforeEffect, 2
@@ -133,13 +143,18 @@ func TestEffectRowRequiresCompleteRecordIndexesAndLabel(t *testing.T) {
 	}
 	for name, mutate := range map[string]func(*storedEffectRow){
 		"truncated_terminal": func(v *storedEffectRow) { v.raw = truncatedTerminalRecord(r) },
-		"wrong_effect":       func(v *storedEffectRow) { v.id = r.Binding.OperationID },
-		"wrong_operation":    func(v *storedEffectRow) { v.operationID = r.Binding.EffectID },
-		"wrong_project":      func(v *storedEffectRow) { v.projectID = r.Binding.EffectID },
-		"wrong_session":      func(v *storedEffectRow) { v.sessionID = r.Binding.EffectID },
-		"wrong_state":        func(v *storedEffectRow) { v.state = string(authorization.EffectIssued) },
-		"wrong_version":      func(v *storedEffectRow) { v.version++ },
-		"truncated_label":    func(v *storedEffectRow) { v.labelRaw = []byte(`{"version":1}`) },
+		"case_aliased_terminal": func(v *storedEffectRow) {
+			consumed := r
+			consumed.TerminalOutcome = ""
+			v.raw = caseAliasedTerminalRecord(consumed)
+		},
+		"wrong_effect":    func(v *storedEffectRow) { v.id = r.Binding.OperationID },
+		"wrong_operation": func(v *storedEffectRow) { v.operationID = r.Binding.EffectID },
+		"wrong_project":   func(v *storedEffectRow) { v.projectID = r.Binding.EffectID },
+		"wrong_session":   func(v *storedEffectRow) { v.sessionID = r.Binding.EffectID },
+		"wrong_state":     func(v *storedEffectRow) { v.state = string(authorization.EffectIssued) },
+		"wrong_version":   func(v *storedEffectRow) { v.version++ },
+		"truncated_label": func(v *storedEffectRow) { v.labelRaw = []byte(`{"version":1}`) },
 		"wrong_label_revision": func(v *storedEffectRow) {
 			changed := label
 			changed.Version++
@@ -159,5 +174,61 @@ func TestEffectRowRequiresCompleteRecordIndexesAndLabel(t *testing.T) {
 				t.Fatal("invalid complete effect row admitted")
 			}
 		})
+	}
+}
+
+func TestEffectStoredJSONExactRecursiveWriterShape(t *testing.T) {
+	r, label := effectStorageFixture(t)
+	// Serialization-only check, not an issuable lifecycle version. Both values
+	// are exactly representable by uint64 but not by float64.
+	r.Version = (1 << 53) + 1
+	r.Process.StartTicks = (1 << 53) + 3
+	var formatted bytes.Buffer
+	if json.Indent(&formatted, encode(r), "", "  ") != nil {
+		t.Fatal("fixture formatting")
+	}
+	var roundtrip authorization.EffectRecord
+	if strictEffectJSON(formatted.Bytes(), &roundtrip) != nil || !reflect.DeepEqual(roundtrip, r) {
+		t.Fatal("JSONB-compatible whitespace or integer identity lost")
+	}
+	var reordered map[string]any
+	decoder := json.NewDecoder(bytes.NewReader(encode(r)))
+	decoder.UseNumber()
+	if decoder.Decode(&reordered) != nil || strictEffectJSON(encode(reordered), &roundtrip) != nil || !reflect.DeepEqual(roundtrip, r) {
+		t.Fatal("JSONB-compatible key reordering changed integer identity")
+	}
+	for name, mutate := range map[string]func(map[string]any){
+		"case_alias": func(v map[string]any) { v["state"] = v["State"] },
+		"case_replacement": func(v map[string]any) {
+			v["state"] = v["State"]
+			delete(v, "State")
+		},
+		"nested_alias": func(v map[string]any) { v["Process"].(map[string]any)["pid"] = json.Number("1") },
+		"nested_actor_alias": func(v map[string]any) {
+			v["Authorization"].(map[string]any)["Actor"].(map[string]any)["Type"] = "user"
+		},
+		"missing_zero_field": func(v map[string]any) { delete(v, "TerminalProofDigest") },
+	} {
+		t.Run(name, func(t *testing.T) {
+			var value map[string]any
+			decoder := json.NewDecoder(bytes.NewReader(encode(r)))
+			decoder.UseNumber()
+			if decoder.Decode(&value) != nil {
+				t.Fatal("fixture decoding")
+			}
+			mutate(value)
+			if strictEffectJSON(encode(value), &roundtrip) == nil {
+				t.Fatal("non-writer recursive field shape accepted")
+			}
+		})
+	}
+	for _, raw := range [][]byte{
+		[]byte(`{"profile_id":"storage-unit","sensitivity_level":"internal","version":1,"Version":1}`),
+		[]byte(`{"profile_id":"storage-unit","sensitivity_level":"internal","version":1,"compartments":null}`),
+		[]byte(`{"profile_id":"storage-unit","sensitivity_level":"internal","version":1,"compartments":[]}`),
+	} {
+		if strictEffectJSON(raw, &label) == nil {
+			t.Fatal("non-writer label alias or omitted dimension accepted")
+		}
 	}
 }

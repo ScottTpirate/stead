@@ -165,6 +165,7 @@ func testEffectStorage(t *testing.T, store *Store, user identity.SessionRecord) 
 			labelJSON []byte
 		}{
 			{"truncated_terminal", truncatedTerminalRecord(terminal), encode(label)},
+			{"case_aliased_terminal", caseAliasedTerminalRecord(r), encode(label)},
 			{"truncated_terminal_label", encode(terminal), []byte(`{"version":1}`)},
 			{"oversize_terminal_record", encode(map[string]any{"State": terminal.State, "Padding": strings.Repeat("x", 65<<10)}), encode(label)},
 		} {
