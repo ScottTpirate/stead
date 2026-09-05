@@ -28,3 +28,17 @@ func TestFreshBootstrapRejectsWrongDatabaseBeforeConnecting(t *testing.T) {
 		t.Fatal("DSN mismatch reached database", err)
 	}
 }
+
+func TestExistingBootstrapCatalogRejectsWrongIdentityBeforeConnecting(t *testing.T) {
+	instance := "019ed5bf-0000-7000-8000-000000000001"
+	for _, fixture := range []struct{ dsn, instance string }{
+		{"host=/missing user=bootstrap dbname=wrong", instance},
+		{"host=/missing user=bootstrap dbname=stead", "invalid"},
+		{"host=/missing user=" + RuntimeRole(instance) + " dbname=stead", instance},
+		{"intentionally-invalid-dsn", instance},
+	} {
+		if err := CheckExistingBootstrapCatalog(context.Background(), fixture.dsn, fixture.instance); err == nil || err.Error() != "existing bootstrap catalog rejected" {
+			t.Fatal("wrong startup identity or leaked diagnostic", err)
+		}
+	}
+}
