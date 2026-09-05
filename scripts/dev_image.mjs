@@ -97,10 +97,10 @@ export async function acquireImage(reference, cacheRoot) {
   await mkdir(temporary, { mode: 0o700 });
   for (const layer of manifest.layers) {
     const archive = path.join(directory, `${layer.digest.slice(7)}.tar.gz`);
-    const listing = spawnSync('tar', ['--list', '--gzip', '--file', archive], { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 });
+    const listing = spawnSync('/usr/bin/tar', ['--list', '--gzip', '--file', archive], { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 });
     if (listing.status !== 0) throw new Error('Image layer listing failed');
     validateArchiveNames(listing.stdout);
-    const extraction = spawnSync('tar', ['--extract', '--gzip', '--file', archive, '--directory', temporary, '--no-same-owner', '--no-same-permissions', '--exclude=dev/*', '--exclude=./dev/*'], { encoding: 'utf8' });
+    const extraction = spawnSync('/usr/bin/tar', ['--extract', '--gzip', '--file', archive, '--directory', temporary, '--no-same-owner', '--no-same-permissions', '--exclude=dev/*', '--exclude=./dev/*'], { encoding: 'utf8' });
     if (extraction.status !== 0) throw new Error('Image layer extraction failed');
   }
   await rename(temporary, rootfs);

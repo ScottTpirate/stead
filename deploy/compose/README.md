@@ -36,11 +36,18 @@ mirrors, actions, packages and untrusted upload surfaces are disabled for this
 candidate's security review scope.
 
 The Gitea binary's transitive source inventory also contains
-`github.com/couchbase/goutils v0.3.0` with file-level BSL-1.1. Its explicit
+`github.com/couchbase/goutils v0.3.0` with file-level BUSL-1.1. Its explicit
 non-production grant is intake evidence, not a production/distribution approval
 or an automatic license-policy decision. The Gitea candidate remains pending
 scoped license and security review; stock-provider status alone does not approve
 its dependency closure.
+
+The complete Couchbase license is preserved in
+[`notices/goutils-v0.3.0-BUSL-1.1.txt`](notices/goutils-v0.3.0-BUSL-1.1.txt).
+This applies to the development-only Gitea copy, not original Stead code. The
+current license is not Apache-2.0; its stated change date is March 1, 2029.
+See [`dev-service-intake.md`](dev-service-intake.md) for exact pending review
+units, source identities, contextual vulnerability assessment, and limitations.
 
 The two NATS streams and required-consumer registry remain WS-07-owned bootstrap
 inputs. This launcher creates one account and scoped service-role credentials;
