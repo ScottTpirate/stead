@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"encoding/json"
 	"os"
 	"testing"
 
@@ -24,6 +25,42 @@ func evaluatorFixture(t *testing.T) (*Evaluator, Label, identity.SessionRecord) 
 	label := Label{ProfileID: evaluator.profile.ID, SensitivityLevel: "internal", Version: 1}
 	session := identity.SessionRecord{SecurityDomain: evaluator.domain.ID, Authority: "stead_local_identity", NetworkZone: "loopback", ClassificationCeilings: map[string]string{evaluator.profile.ID: "internal"}}
 	return evaluator, label, session
+}
+
+// Exercise the profile rules themselves, not only fixed local-policy rows.
+// Matching rules deny unsupported semantic requirements; unrelated rules must
+// not silently alter an otherwise valid sensitivity-only label.
+func TestNativeClassificationSemanticRuleBoundaries(t *testing.T) {
+	for _, test := range []struct {
+		name, rules string
+		denied      bool
+	}{
+		{"implication", `{"implications":[{"when_all":[{"dimension":"sensitivity","id":"internal"}],"require_all":[{"dimension":"sensitivity","id":"public"}]}]}`, true},
+		{"unrelated-implication", `{"implications":[{"when_all":[{"dimension":"sensitivity","id":"restricted"}],"require_all":[{"dimension":"sensitivity","id":"public"}]}]}`, false},
+		{"incompatibility", `{"incompatibilities":[{"all_of":[{"dimension":"sensitivity","id":"internal"}]}]}`, true},
+		{"unrelated-incompatibility", `{"incompatibilities":[{"all_of":[{"dimension":"sensitivity","id":"restricted"}]}]}`, false},
+		{"sensitivity-constraint", `{"sensitivity_constraints":[{"when_any":[{"dimension":"sensitivity","id":"internal"}],"allowed_sensitivity_levels":["public"]}]}`, true},
+		{"unrelated-constraint", `{"sensitivity_constraints":[{"when_any":[{"dimension":"sensitivity","id":"restricted"}],"allowed_sensitivity_levels":["public"]}]}`, false},
+		{"dimension", `{"dimension_requirements":[{"when_all":[{"dimension":"sensitivity","id":"internal"}]}]}`, true},
+		{"unrelated-dimension", `{"dimension_requirements":[{"when_all":[{"dimension":"sensitivity","id":"restricted"}]}]}`, false},
+		{"context", `{"context_requirements":[{"when_all":[{"dimension":"sensitivity","id":"internal"}]}]}`, true},
+		{"unrelated-context", `{"context_requirements":[{"when_all":[{"dimension":"sensitivity","id":"restricted"}]}]}`, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			evaluator, label, session := evaluatorFixture(t)
+			if err := json.Unmarshal([]byte(test.rules), &evaluator.profile.Semantics); err != nil {
+				t.Fatal(err)
+			}
+			result, err := evaluator.Evaluate(label, session)
+			if test.denied {
+				if err != ErrDenied || result.DenialReason != "profile_handling_denied" {
+					t.Fatal("matching semantic requirement was ignored", result, err)
+				}
+			} else if err != nil || result.Marking != "Internal" {
+				t.Fatal("unrelated requirement changed allow", result, err)
+			}
+		})
+	}
 }
 
 func TestNativeClassificationFacts(t *testing.T) {
