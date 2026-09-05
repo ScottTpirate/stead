@@ -30,6 +30,9 @@ cannot mint these permits. `EffectStore` invocations must validate under owner S
 locks and return only after exact state plus audit/outbox commit. Consumed handles
 share one process-bound dispatch claim even when copied. Session-pending signals
 stop admission and suppress execution/output but are never terminal proof.
+Provider decisions seal the original authorization request's lifetime, exact
+deadline and correlation; reattaching a decision cannot replace that lifetime.
+Issuance, consumption and dispatch retain original and caller cancellation.
 Ambiguous calls and process loss remain reconciliation-owned. No exported
 provider-proof terminalizer, recovery-read permission, provider runtime hookup,
 or signed successor activation is supplied here. In-memory lifecycle tests are

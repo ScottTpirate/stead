@@ -19,18 +19,31 @@ type effectExecutionState struct {
 	effects                              *Effects
 	record                               EffectRecord
 	request                              context.Context
+	issueRequest, consumeRequest         context.Context
 	call                                 context.Context
 	cancel                               context.CancelFunc
 	sessionID                            string
 	committed, used, running, suppressed bool
 }
 
-func newEffectExecution(effects *Effects, issued *IssuedEffect) *EffectExecution {
-	call, cancel := context.WithDeadline(issued.request, issued.record.ExpiresAt)
-	execution := &EffectExecution{&effectExecutionState{effects: effects, record: issued.record, request: issued.request,
-		call: call, cancel: cancel, sessionID: issued.record.Authorization.SessionID}}
-	context.AfterFunc(call, execution.Suppress)
+func newEffectExecution(effects *Effects, issued *IssuedEffect, consumeRequest context.Context) *EffectExecution {
+	original := issued.decision.effectUse.request
+	call, cancel := context.WithDeadline(original, issued.record.ExpiresAt)
+	execution := &EffectExecution{&effectExecutionState{effects: effects, record: issued.record, request: original,
+		issueRequest: issued.request, consumeRequest: consumeRequest, call: call, cancel: cancel, sessionID: issued.record.Authorization.SessionID}}
+	stopIssue := context.AfterFunc(issued.request, cancel)
+	stopConsume := context.AfterFunc(consumeRequest, cancel)
+	context.AfterFunc(call, func() {
+		stopIssue()
+		stopConsume()
+		execution.Suppress()
+	})
 	return execution
+}
+
+func (execution *EffectExecution) requestsActive() bool {
+	return execution.request != nil && execution.request.Err() == nil && execution.issueRequest != nil && execution.issueRequest.Err() == nil &&
+		execution.consumeRequest != nil && execution.consumeRequest.Err() == nil
 }
 
 func (execution *EffectExecution) Record() EffectRecord {
@@ -65,7 +78,7 @@ func (execution *EffectExecution) SuppressionRequired() bool {
 	}
 	execution.mu.Lock()
 	defer execution.mu.Unlock()
-	return execution.suppressed || !execution.committed || execution.record.State != EffectConsumed || execution.call == nil || execution.call.Err() != nil || !execution.effects.currentProcess()
+	return execution.suppressed || !execution.committed || execution.record.State != EffectConsumed || execution.call == nil || execution.call.Err() != nil || !execution.requestsActive() || !execution.effects.currentProcess()
 }
 
 // Run's nil result means only that the one callback returned nil while its
@@ -80,7 +93,7 @@ func (execution *EffectExecution) Run(binding EffectBinding, dispatch func(conte
 	binding.OriginalDeadline = binding.OriginalDeadline.UTC()
 	binding.ProviderNotAfter = binding.ProviderNotAfter.UTC()
 	execution.mu.Lock()
-	if execution.used || !execution.committed || execution.record.State != EffectConsumed || execution.suppressed || execution.call == nil || execution.call.Err() != nil ||
+	if execution.used || !execution.committed || execution.record.State != EffectConsumed || execution.suppressed || execution.call == nil || execution.call.Err() != nil || !execution.requestsActive() ||
 		!execution.effects.currentProcess() || !reflect.DeepEqual(binding, execution.record.Binding) || dispatch == nil ||
 		!execution.effects.clock().Before(execution.record.ExpiresAt) {
 		execution.mu.Unlock()
@@ -95,7 +108,7 @@ func (execution *EffectExecution) Run(binding EffectBinding, dispatch func(conte
 		}
 		execution.mu.Lock()
 		execution.running = false
-		if execution.suppressed || call.Err() != nil || !execution.effects.currentProcess() {
+		if execution.suppressed || call.Err() != nil || !execution.requestsActive() || !execution.effects.currentProcess() {
 			err = ErrDenied
 		}
 		record := execution.record
@@ -110,7 +123,7 @@ func (execution *EffectExecution) Run(binding EffectBinding, dispatch func(conte
 			err = ErrDenied
 		}
 	}()
-	if call.Err() != nil {
+	if call.Err() != nil || !execution.requestsActive() {
 		return ErrDenied
 	}
 	return dispatch(call)

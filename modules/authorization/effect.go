@@ -154,7 +154,37 @@ type EffectStore interface {
 	TransitionEffect(context.Context, *EffectTransition) error
 }
 
-type effectDecisionUse struct{ claimed atomic.Bool }
+// The initiating request is sealed during Authorize, before WithContext can
+// attach the Decision elsewhere. Copies share both this lifetime and the claim.
+// Caller contexts may cancel work but can never replace its original lifetime.
+type effectDecisionUse struct {
+	claimed       atomic.Bool
+	request       context.Context
+	deadline      time.Time
+	correlationID string
+}
+
+func newEffectDecisionUse(ctx context.Context) *effectDecisionUse {
+	deadline, ok := ctx.Deadline()
+	correlationID := telemetry.CorrelationID(ctx)
+	if ctx.Err() != nil || !ok || !effectHex(correlationID, 32) {
+		return nil
+	}
+	return &effectDecisionUse{request: ctx, deadline: deadline.UTC(), correlationID: correlationID}
+}
+
+func (use *effectDecisionUse) valid(binding EffectBinding) bool {
+	return use != nil && use.request != nil && use.request.Err() == nil &&
+		binding.RequestID == use.correlationID && binding.OriginalDeadline.Equal(use.deadline)
+}
+
+func (use *effectDecisionUse) matches(ctx context.Context, binding EffectBinding) bool {
+	if !use.valid(binding) || ctx == nil || ctx.Err() != nil || telemetry.CorrelationID(ctx) != use.correlationID {
+		return false
+	}
+	deadline, ok := ctx.Deadline()
+	return ok && deadline.Equal(use.deadline)
+}
 
 type EffectIssue struct {
 	mu                sync.Mutex
@@ -179,7 +209,7 @@ func (issue *EffectIssue) Validate(current State, now time.Time) (EffectRecord, 
 		return EffectRecord{}, ErrDenied
 	}
 	issue.called = true
-	if current.SessionPending || issue.decision.ValidateFinal(current, now) != nil || issue.record.Validate() != nil || now.Before(issue.record.IssuedAt) ||
+	if issue.decision == nil || !issue.decision.effectUse.valid(issue.record.Binding) || current.SessionPending || issue.decision.ValidateFinal(current, now) != nil || issue.record.Validate() != nil || now.Before(issue.record.IssuedAt) ||
 		!now.Before(issue.record.ExpiresAt) || !current.PolicyTimeHighWater.Before(issue.record.ExpiresAt) {
 		return EffectRecord{}, ErrDenied
 	}
@@ -210,7 +240,7 @@ func (consume *EffectConsume) Validate(stored EffectRecord, current State, now t
 		return EffectRecord{}, ErrDenied
 	}
 	consume.called = true
-	if stored.State != EffectIssued || stored.Validate() != nil || !reflect.DeepEqual(stored, consume.record) ||
+	if consume.decision == nil || !consume.decision.effectUse.valid(consume.record.Binding) || stored.State != EffectIssued || stored.Validate() != nil || !reflect.DeepEqual(stored, consume.record) ||
 		current.SessionPending || consume.decision.ValidateFinal(current, now) != nil ||
 		!now.Before(stored.ExpiresAt) || !current.PolicyTimeHighWater.Before(stored.ExpiresAt) {
 		return EffectRecord{}, ErrDenied
@@ -304,12 +334,11 @@ func (issued *IssuedEffect) Record() EffectRecord {
 func (effects *Effects) Prepare(ctx context.Context, decision *Decision, binding EffectBinding) (*IssuedEffect, error) {
 	if ctx == nil || ctx.Err() != nil || !effects.currentProcess() || decision == nil || !decision.valid || decision.effectUse == nil ||
 		decision.evidence.Action != ProjectBackingProvision || decision.evidence.EvaluatorContractVersion != ProviderMutationEvaluatorContractVersion ||
-		decision.evidence.DisclosureMode != "request_boundary" || binding.RequestID != telemetry.CorrelationID(ctx) || !binding.valid(decision.evidence) {
+		decision.evidence.DisclosureMode != "request_boundary" || !decision.effectUse.matches(ctx, binding) || !binding.valid(decision.evidence) {
 		return nil, ErrDenied
 	}
 	bound, ok := DecisionFromContext(ctx)
-	deadline, hasDeadline := ctx.Deadline()
-	if !ok || bound != decision || !hasDeadline || !deadline.Equal(binding.OriginalDeadline) {
+	if !ok || bound != decision {
 		return nil, ErrDenied
 	}
 	binding.OriginalDeadline = binding.OriginalDeadline.UTC()
@@ -319,7 +348,7 @@ func (effects *Effects) Prepare(ctx context.Context, decision *Decision, binding
 		now = decision.evidence.PolicyTimeHighWater
 	}
 	expires := now.Add(5 * time.Second)
-	for _, limit := range []time.Time{decision.evidence.ExpiresAt, deadline, binding.ProviderNotAfter} {
+	for _, limit := range []time.Time{decision.evidence.ExpiresAt, decision.effectUse.deadline, binding.ProviderNotAfter} {
 		if limit.Before(expires) {
 			expires = limit
 		}
@@ -334,7 +363,7 @@ func (effects *Effects) Prepare(ctx context.Context, decision *Decision, binding
 	issue.mu.Lock()
 	validated := issue.validated
 	issue.mu.Unlock()
-	if err != nil || !validated || ctx.Err() != nil || !effects.currentProcess() {
+	if err != nil || !validated || !decision.effectUse.matches(ctx, binding) || !effects.currentProcess() {
 		return nil, ErrDenied
 	}
 	return &IssuedEffect{&issuedEffectState{effects: effects, decision: decision, request: ctx, record: record}}, nil
@@ -342,10 +371,14 @@ func (effects *Effects) Prepare(ctx context.Context, decision *Decision, binding
 
 func (effects *Effects) Consume(ctx context.Context, issued *IssuedEffect) (*EffectExecution, error) {
 	if ctx == nil || ctx.Err() != nil || issued == nil || issued.issuedEffectState == nil || issued.effects != effects || !effects.currentProcess() ||
-		issued.request.Err() != nil || telemetry.CorrelationID(ctx) != issued.record.Binding.RequestID || !issued.used.CompareAndSwap(false, true) {
+		issued.request.Err() != nil || !issued.decision.effectUse.matches(ctx, issued.record.Binding) {
 		return nil, ErrDenied
 	}
-	execution := newEffectExecution(effects, issued)
+	bound, ok := DecisionFromContext(ctx)
+	if !ok || bound != issued.decision || !issued.used.CompareAndSwap(false, true) {
+		return nil, ErrDenied
+	}
+	execution := newEffectExecution(effects, issued, ctx)
 	effects.mu.Lock()
 	if len(effects.executions) >= 128 || effects.executions[issued.record.Binding.EffectID] != nil {
 		effects.mu.Unlock()
@@ -373,7 +406,7 @@ func (effects *Effects) Consume(ctx context.Context, issued *IssuedEffect) (*Eff
 	execution.record = next
 	execution.committed = true
 	execution.mu.Unlock()
-	if ctx.Err() != nil || issued.request.Err() != nil || !effects.currentProcess() {
+	if !issued.decision.effectUse.matches(ctx, issued.record.Binding) || issued.request.Err() != nil || !effects.currentProcess() {
 		execution.Suppress()
 		return nil, ErrDenied
 	}

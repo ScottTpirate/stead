@@ -18,16 +18,19 @@ import (
 // durable outbox, provider enforcement, a signed successor activation, or a
 // product-path proof. The real root/adapter consumers are separate requirements.
 type effectUnitStore struct {
-	mu                                        sync.Mutex
-	state                                     State
-	now                                       *time.Time
-	record                                    EffectRecord
-	issueCalls, consumeCalls, transitionCalls int
-	skipValidation, failCommit                bool
-	beforeConsume                             func()
+	mu                                                   sync.Mutex
+	state                                                State
+	now                                                  *time.Time
+	record                                               EffectRecord
+	issueCalls, consumeCalls, transitionCalls            int
+	skipValidation, failCommit                           bool
+	beforeIssue, beforeConsume, afterIssue, afterConsume func()
 }
 
 func (store *effectUnitStore) IssueEffect(_ context.Context, issue *EffectIssue) error {
+	if store.beforeIssue != nil {
+		store.beforeIssue()
+	}
 	store.mu.Lock()
 	defer store.mu.Unlock()
 	store.issueCalls++
@@ -42,6 +45,9 @@ func (store *effectUnitStore) IssueEffect(_ context.Context, issue *EffectIssue)
 		return errors.New("unit commit failure")
 	}
 	store.record = record
+	if store.afterIssue != nil {
+		store.afterIssue()
+	}
 	return nil
 }
 func (store *effectUnitStore) ConsumeEffect(_ context.Context, consume *EffectConsume) error {
@@ -62,6 +68,9 @@ func (store *effectUnitStore) ConsumeEffect(_ context.Context, consume *EffectCo
 		return errors.New("unit commit failure")
 	}
 	store.record = record
+	if store.afterConsume != nil {
+		store.afterConsume()
+	}
 	return nil
 }
 func (store *effectUnitStore) TransitionEffect(_ context.Context, transition *EffectTransition) error {
@@ -98,6 +107,10 @@ type effectUnitFixture struct {
 }
 
 func newEffectUnitFixture(t *testing.T) effectUnitFixture {
+	return newEffectUnitFixtureWithLifetime(t, 5*time.Second)
+}
+
+func newEffectUnitFixtureWithLifetime(t *testing.T, lifetime time.Duration) effectUnitFixture {
 	t.Helper()
 	coordinator, repo, _, now := coordinatorFixture(t, true)
 	// Explicit unit-only construction: the production activation verifier still
@@ -113,7 +126,7 @@ func newEffectUnitFixture(t *testing.T) effectUnitFixture {
 	coordinator.config.Anchor.(*testAnchor).state = AnchorState{Binding: b, PolicyTimeHighWater: *now, PolicyTimeRevision: 1}
 	session := refreshedGuardSession(t, repo, now)
 	ctx := telemetry.WithCorrelationID(context.Background(), strings.Repeat("a", 32))
-	ctx, cancel := context.WithDeadline(ctx, now.Add(5*time.Second))
+	ctx, cancel := context.WithDeadline(ctx, now.Add(lifetime))
 	t.Cleanup(cancel)
 	decision, err := coordinator.Authorize(ctx, session, ProjectBackingProvision, repo.state.Resource)
 	if err != nil {
@@ -243,6 +256,162 @@ func TestProviderEffectUnitBindingsAndEarliestExpiry(t *testing.T) {
 	}
 	if p, e := f.effects.Prepare(f.ctx, f.decision, f.binding); e != ErrDenied || p != nil {
 		t.Fatal("decision reused for new issue")
+	}
+}
+
+func effectUnitReplacementContext(t *testing.T, f effectUnitFixture, correlation string, deadline time.Time) context.Context {
+	t.Helper()
+	ctx, cancel := context.WithDeadline(telemetry.WithCorrelationID(context.Background(), correlation), deadline)
+	t.Cleanup(cancel)
+	return f.decision.WithContext(ctx)
+}
+
+func TestProviderEffectUnitOriginalRequestCannotBeRebound(t *testing.T) {
+	for _, stage := range []string{"issue", "consume"} {
+		for _, change := range []string{"canceled-original", "correlation", "deadline"} {
+			t.Run(stage+"/"+change, func(t *testing.T) {
+				f := newEffectUnitFixture(t)
+				var issued *IssuedEffect
+				if stage == "consume" {
+					issued = f.issued(t)
+				}
+				binding := f.binding
+				switch change {
+				case "canceled-original":
+					f.cancel()
+				case "correlation":
+					binding.RequestID = strings.Repeat("d", 32)
+				case "deadline":
+					binding.OriginalDeadline = binding.OriginalDeadline.Add(time.Second)
+				}
+				ctx := effectUnitReplacementContext(t, f, binding.RequestID, binding.OriginalDeadline)
+				if ctx.Err() != nil {
+					t.Fatal("replacement context is not live")
+				}
+				if stage == "issue" {
+					if p, err := f.effects.Prepare(ctx, f.decision, binding); err != ErrDenied || p != nil || f.store.issueCalls != 0 {
+						t.Fatal("replacement context minted an issued lifetime")
+					}
+				} else if h, err := f.effects.Consume(ctx, issued); err != ErrDenied || h != nil || f.store.consumeCalls != 0 {
+					t.Fatal("replacement context consumed original authority")
+				}
+			})
+		}
+	}
+	t.Run("expired-original", func(t *testing.T) {
+		f := newEffectUnitFixtureWithLifetime(t, 500*time.Millisecond)
+		<-f.ctx.Done()
+		if f.ctx.Err() != context.DeadlineExceeded {
+			t.Fatal("original request did not expire")
+		}
+		binding := f.binding
+		binding.OriginalDeadline = time.Now().Add(time.Second)
+		ctx := effectUnitReplacementContext(t, f, binding.RequestID, binding.OriginalDeadline)
+		if p, err := f.effects.Prepare(ctx, f.decision, binding); err != ErrDenied || p != nil || f.store.issueCalls != 0 {
+			t.Fatal("expired original acquired a replacement lifetime")
+		}
+	})
+}
+
+func TestProviderEffectUnitSealedLifetimeCheckedAtStorageBoundaries(t *testing.T) {
+	for _, stage := range []string{"issue", "consume"} {
+		for _, moment := range []string{"before-validation", "after-validation"} {
+			t.Run(stage+"/"+moment, func(t *testing.T) {
+				f := newEffectUnitFixture(t)
+				var issued *IssuedEffect
+				if stage == "consume" {
+					issued = f.issued(t)
+				}
+				ctx := effectUnitReplacementContext(t, f, f.binding.RequestID, f.binding.OriginalDeadline)
+				if stage == "issue" {
+					if moment == "before-validation" {
+						f.store.beforeIssue = f.cancel
+					} else {
+						f.store.afterIssue = f.cancel
+					}
+					if p, err := f.effects.Prepare(ctx, f.decision, f.binding); err != ErrDenied || p != nil {
+						t.Fatal("canceled original issued a handle")
+					}
+				} else {
+					if moment == "before-validation" {
+						f.store.beforeConsume = f.cancel
+					} else {
+						f.store.afterConsume = f.cancel
+					}
+					if h, err := f.effects.Consume(ctx, issued); err != ErrDenied || h != nil {
+						t.Fatal("canceled original acquired an execution")
+					}
+				}
+				state := f.store.snapshot().State
+				if state == EffectTerminal || (moment == "before-validation" && ((stage == "issue" && state != "") || (stage == "consume" && state != EffectIssued))) {
+					t.Fatal("cancellation crossed validation or became terminal proof")
+				}
+			})
+		}
+	}
+}
+
+func TestProviderEffectUnitOriginalAndChildCancellationSuppressExecution(t *testing.T) {
+	for _, kind := range []string{"original-before-run", "original-during-run", "issue-child", "consume-child"} {
+		t.Run(kind, func(t *testing.T) {
+			f := newEffectUnitFixture(t)
+			// Even a same-binding detached caller cannot replace the original
+			// lifetime. Ordinary WithCancel/WithValue descendants also work.
+			base := effectUnitReplacementContext(t, f, f.binding.RequestID, f.binding.OriginalDeadline)
+			issueCtx, cancelIssue := context.WithCancel(base)
+			defer cancelIssue()
+			consumeCtx, cancelConsume := context.WithCancel(issueCtx)
+			defer cancelConsume()
+			issued, err := f.effects.Prepare(issueCtx, f.decision, f.binding)
+			if err != nil {
+				t.Fatal(err)
+			}
+			execution, err := f.effects.Consume(consumeCtx, issued)
+			if err != nil {
+				t.Fatal(err)
+			}
+			switch kind {
+			case "original-before-run":
+				f.cancel()
+			case "issue-child":
+				cancelIssue()
+			case "consume-child":
+				cancelConsume()
+			}
+			calls := 0
+			err = execution.Run(f.binding, func(call context.Context) error {
+				calls++
+				f.cancel()
+				if call.Err() == nil {
+					t.Fatal("execution was not derived from original request")
+				}
+				return nil
+			})
+			if err != ErrDenied || !execution.SuppressionRequired() || f.store.snapshot().State == EffectTerminal || (kind != "original-during-run" && calls != 0) || (kind == "original-during-run" && calls != 1) {
+				t.Fatal("request cancellation granted dispatch or terminal proof")
+			}
+		})
+	}
+}
+
+func TestProviderEffectUnitDecisionCopySharesOriginalRequestAndClaim(t *testing.T) {
+	f := newEffectUnitFixture(t)
+	copy := *f.decision
+	ctx, cancel := context.WithCancel(copy.WithContext(WithoutDecisions(f.ctx)))
+	defer cancel()
+	issued, err := f.effects.Prepare(ctx, &copy, f.binding)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p, err := f.effects.Prepare(f.ctx, f.decision, f.binding); err != ErrDenied || p != nil || f.store.issueCalls != 1 {
+		t.Fatal("Decision copy cloned issue authority")
+	}
+	execution, err := f.effects.Consume(ctx, issued)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := execution.Run(f.binding, func(context.Context) error { return nil }); err != nil {
+		t.Fatal("ordinary original-request descendant denied", err)
 	}
 }
 

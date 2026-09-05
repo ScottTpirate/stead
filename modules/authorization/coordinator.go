@@ -198,6 +198,13 @@ func (coordinator *Coordinator) Authorize(ctx context.Context, session identity.
 	if action == ProjectBackingProvision && coordinator.config.Activation.binding.EvaluatorContractVersion != ProviderMutationEvaluatorContractVersion {
 		return deny("context_denied")
 	}
+	var effectUse *effectDecisionUse
+	if action == ProjectBackingProvision {
+		effectUse = newEffectDecisionUse(ctx)
+		if effectUse == nil {
+			return deny("context_denied")
+		}
+	}
 	anchor, err := coordinator.config.Anchor.Read(ctx)
 	activation := coordinator.config.Activation
 	if err != nil || anchor.Binding != activation.binding || anchor.PolicyTimeRevision == 0 || anchor.PolicyTimeHighWater.IsZero() {
@@ -279,7 +286,9 @@ func (coordinator *Coordinator) Authorize(ctx context.Context, session identity.
 	if ctx.Err() != nil || !finished.Before(expires) {
 		return deny("context_denied")
 	}
-	return sealDecision(state, result, session, action, target, relation, activation.binding, anchor, id, now, expires, 1), nil
+	decision := sealDecision(state, result, session, action, target, relation, activation.binding, anchor, id, now, expires, 1)
+	decision.effectUse = effectUse
+	return decision, nil
 }
 
 func sealDecision(state State, result classification.Result, session identity.Authenticated, action Action, target ResourceRef, relation string, b ActivationBinding, anchor AnchorState, id string, now, expires time.Time, calls uint64) *Decision {
@@ -288,9 +297,6 @@ func sealDecision(state State, result classification.Result, session identity.Au
 	state.Label = state.Label.Copy()
 	result.Presentation.PolicyBundleID = b.PolicyBundleID
 	decision := &Decision{state: state, evidence: evidence, binding: b, marking: result.Marking, presentation: result.Presentation.Copy(), valid: true}
-	if action == ProjectBackingProvision && b.EvaluatorContractVersion == ProviderMutationEvaluatorContractVersion {
-		decision.effectUse = &effectDecisionUse{}
-	}
 	return decision
 }
 
