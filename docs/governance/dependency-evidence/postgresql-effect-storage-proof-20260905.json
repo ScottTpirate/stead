@@ -31,7 +31,7 @@
     "Fresh bootstrap preflight, two-user bootstrap rollback, SCRAM and exact owner-role/catalog checks",
     "Actual transaction commit, rollback, immutable outbox routing and keyset pagination",
     "Bounded aggregate security reads: 100 resources, 17 actual SQL statements in the fixed repository test",
-    "Atomic effect/audit/outbox writes and rollback after actual audit/outbox INSERT failures",
+    "Atomic effect/audit/outbox writes and rollback after injected failures following actual audit/outbox INSERTs",
     "Two concurrent full-record compare-and-swap updates have exactly one winner; stale and changed immutable bindings deny",
     "One original Project operation reservation; duplicate reservation rolls back",
     "Issued, consumed and reconciling rows prevent revocation acknowledgment",
