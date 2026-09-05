@@ -69,6 +69,15 @@ type EffectRecord struct {
 func (EffectRecord) String() string          { return "authorization.effect-record[private]" }
 func (record EffectRecord) GoString() string { return record.String() }
 
+// Local consume acknowledgment can lag its durable commit. Match every
+// immutable field for conservative suppression even while local lifecycle
+// fields lag; this comparison never replaces the store's exact full-row CAS.
+func sameEffectIdentity(local, expected EffectRecord) bool {
+	local.State, local.Version, local.UpdatedAt = expected.State, expected.Version, expected.UpdatedAt
+	local.TerminalOutcome, local.TerminalProofDigest = expected.TerminalOutcome, expected.TerminalProofDigest
+	return reflect.DeepEqual(local, expected)
+}
+
 func effectHex(value string, size int) bool {
 	if len(value) != size {
 		return false
@@ -449,6 +458,19 @@ func (effects *Effects) transition(ctx context.Context, before EffectRecord, sta
 	}
 	after := before
 	after.State, after.Version, after.UpdatedAt, after.TerminalOutcome, after.TerminalProofDigest = state, before.Version+1, now, outcome, proof
+	// Stop local dispatch/output before a conservative state transition can
+	// commit. Failed or lost acknowledgments cannot restore this authority.
+	// Suppression is not a terminal outcome or a revocation-drain proof.
+	effects.mu.Lock()
+	if execution := effects.executions[before.Binding.EffectID]; execution != nil {
+		execution.mu.Lock()
+		matches := sameEffectIdentity(execution.record, before)
+		execution.mu.Unlock()
+		if matches {
+			execution.Suppress()
+		}
+	}
+	effects.mu.Unlock()
 	transition := &EffectTransition{before: before, after: after}
 	err := effects.store.TransitionEffect(ctx, transition)
 	transition.mu.Lock()
@@ -460,11 +482,12 @@ func (effects *Effects) transition(ctx context.Context, before EffectRecord, sta
 	effects.mu.Lock()
 	if execution := effects.executions[before.Binding.EffectID]; execution != nil {
 		execution.mu.Lock()
+		matches := sameEffectIdentity(execution.record, before)
 		if reflect.DeepEqual(execution.record, before) {
 			execution.record = after
 		}
 		execution.mu.Unlock()
-		if state == EffectTerminal {
+		if state == EffectTerminal && matches {
 			execution.Suppress()
 			delete(effects.executions, before.Binding.EffectID)
 		}

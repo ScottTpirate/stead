@@ -565,6 +565,203 @@ func TestProviderEffectUnitClosedTransitionsAndNoResume(t *testing.T) {
 	}
 }
 
+// Supplemental owner-port fixture only: commit acknowledgment may be lost
+// after exact validation and persistence, unlike a pre-commit failure.
+type effectTransitionUnitStore struct {
+	EffectStore
+	beforeTransition   func(context.Context) error
+	consumeCommitted   func()
+	lostAcknowledgment bool
+}
+
+func (store *effectTransitionUnitStore) ConsumeEffect(ctx context.Context, consume *EffectConsume) error {
+	if err := store.EffectStore.ConsumeEffect(ctx, consume); err != nil {
+		return err
+	}
+	if store.consumeCommitted != nil {
+		store.consumeCommitted()
+	}
+	return nil
+}
+
+func (store *effectTransitionUnitStore) TransitionEffect(ctx context.Context, transition *EffectTransition) error {
+	if store.beforeTransition != nil {
+		if err := store.beforeTransition(ctx); err != nil {
+			return err
+		}
+	}
+	if err := store.EffectStore.TransitionEffect(ctx, transition); err != nil {
+		return err
+	}
+	if store.lostAcknowledgment {
+		return errors.New("unit lost transition commit acknowledgment")
+	}
+	return nil
+}
+
+func TestProviderEffectUnitTransitionSuppressesBeforeStorageAndOnLostAcknowledgment(t *testing.T) {
+	for _, outcome := range []string{"committed", "failed", "unvalidated", "lost-ack"} {
+		t.Run(outcome, func(t *testing.T) {
+			f := newEffectUnitFixture(t)
+			execution := f.execution(t)
+			before := execution.Record()
+			f.store.failCommit = outcome == "failed"
+			f.store.skipValidation = outcome == "unvalidated"
+			f.effects.store = &effectTransitionUnitStore{EffectStore: f.store, lostAcknowledgment: outcome == "lost-ack", beforeTransition: func(context.Context) error {
+				if !execution.SuppressionRequired() || f.store.snapshot().State != EffectConsumed {
+					t.Fatal("suppression did not precede storage")
+				}
+				if err := execution.Run(f.binding, func(context.Context) error { t.Fatal("transition dispatched"); return nil }); err != ErrDenied {
+					t.Fatal("transition did not deny dispatch")
+				}
+				return nil
+			}}
+			err := f.effects.ReconcileLost(f.ctx, before)
+			if (outcome == "committed" && err != nil) || (outcome != "committed" && err != ErrDenied) {
+				t.Fatal("incorrect commit disposition", err)
+			}
+			want := EffectConsumed
+			if outcome == "committed" || outcome == "lost-ack" {
+				want = EffectReconciling
+			}
+			if f.store.snapshot().State != want || !execution.SuppressionRequired() {
+				t.Fatal("failure restored dispatch or falsified durable state")
+			}
+			copy := *execution
+			if err := copy.Run(f.binding, func(context.Context) error { t.Fatal("copied handle resumed"); return nil }); err != ErrDenied {
+				t.Fatal("copied handle survived transition")
+			}
+			if outcome != "committed" && !reflect.DeepEqual(execution.Record(), before) {
+				t.Fatal("failed acknowledgment manufactured local durable state")
+			}
+		})
+	}
+}
+
+func TestProviderEffectUnitBlockedTransitionDeniesConcurrentDispatch(t *testing.T) {
+	f := newEffectUnitFixture(t)
+	execution := f.execution(t)
+	before := execution.Record()
+	entered, release := make(chan struct{}), make(chan struct{}, 1)
+	f.effects.store = &effectTransitionUnitStore{EffectStore: f.store, beforeTransition: func(ctx context.Context) error {
+		close(entered)
+		select {
+		case <-release:
+			return nil
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}}
+	result := make(chan error, 1)
+	go func() { result <- f.effects.ReconcileLost(f.ctx, before) }()
+	select {
+	case <-entered:
+	case <-f.ctx.Done():
+		t.Fatal("transition did not enter store")
+	}
+	var calls, grants atomic.Int32
+	var group sync.WaitGroup
+	for range 32 {
+		group.Add(1)
+		copy := *execution
+		go func() {
+			defer group.Done()
+			if copy.Run(f.binding, func(context.Context) error { calls.Add(1); return nil }) == nil {
+				grants.Add(1)
+			}
+		}()
+	}
+	group.Wait()
+	if calls.Load() != 0 || grants.Load() != 0 || f.store.snapshot().State != EffectConsumed {
+		t.Fatal("blocked transition allowed new dispatch or claimed completion")
+	}
+	release <- struct{}{}
+	if err := <-result; err != nil || f.store.snapshot().State != EffectReconciling {
+		t.Fatal("transition did not remain reconciliation-owned", err)
+	}
+}
+
+func TestProviderEffectUnitTransitionCancelsInflightBeforeStorage(t *testing.T) {
+	f := newEffectUnitFixture(t)
+	execution := f.execution(t)
+	before := execution.Record()
+	started, stopped := make(chan struct{}), make(chan struct{})
+	var callContext context.Context
+	var missingCancellation atomic.Bool
+	result := make(chan error, 1)
+	f.effects.store = &effectTransitionUnitStore{EffectStore: f.store, beforeTransition: func(context.Context) error {
+		if callContext.Err() == nil {
+			missingCancellation.Store(true)
+			return errors.New("unit transition reached storage without cancellation")
+		}
+		return nil
+	}}
+	go func() {
+		result <- execution.Run(f.binding, func(call context.Context) error {
+			callContext = call
+			close(started)
+			<-call.Done()
+			close(stopped)
+			return nil // Successful return after suppression is not releasable.
+		})
+	}()
+	select {
+	case <-started:
+	case <-f.ctx.Done():
+		t.Fatal("callback did not start")
+	}
+	// The callback's ambiguity recording may win the exact CAS; either winner
+	// leaves reconciliation durable and neither manufactures terminal proof.
+	if err := f.effects.ReconcileLost(f.ctx, before); err != nil && err != ErrDenied {
+		t.Fatal(err)
+	}
+	if err := <-result; err != ErrDenied || missingCancellation.Load() || !execution.SuppressionRequired() || f.store.snapshot().State != EffectReconciling {
+		t.Fatal("in-flight suppression released a result or became terminal proof", err)
+	}
+	<-stopped
+}
+
+func TestProviderEffectUnitTransitionSuppressesBeforeConsumeAcknowledgment(t *testing.T) {
+	f := newEffectUnitFixture(t)
+	issued := f.issued(t)
+	f.effects.store = &effectTransitionUnitStore{EffectStore: f.store, consumeCommitted: func() {
+		// The durable row is consumed while the registered handle's local row
+		// still says issued. Immutable identity, not that lagging state, binds it.
+		if err := f.effects.ReconcileLost(f.ctx, f.store.snapshot()); err != nil {
+			t.Fatal(err)
+		}
+	}}
+	execution, err := f.effects.Consume(f.ctx, issued)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f.store.snapshot().State != EffectReconciling || !execution.SuppressionRequired() {
+		t.Fatal("consume acknowledgment bypassed conservative suppression")
+	}
+	if execution.Run(f.binding, func(context.Context) error { t.Fatal("late acknowledgment dispatched"); return nil }) != ErrDenied {
+		t.Fatal("late acknowledgment restored authority")
+	}
+}
+
+func TestProviderEffectUnitTransitionDoesNotMatchOnlyEffectID(t *testing.T) {
+	for _, mutate := range []func(*EffectRecord){
+		func(r *EffectRecord) { r.Binding.PlanDigest = "sha256:" + strings.Repeat("e", 64) },
+		func(r *EffectRecord) { r.Authorization.SessionID = orgID },
+		func(r *EffectRecord) { r.Process.Nonce = strings.Repeat("f", 32) },
+	} {
+		f := newEffectUnitFixture(t)
+		execution := f.execution(t)
+		before := execution.Record()
+		mutate(&before)
+		if f.effects.ReconcileLost(f.ctx, before) != ErrDenied || execution.SuppressionRequired() || f.store.snapshot().State != EffectConsumed {
+			t.Fatal("foreign immutable binding matched local execution or durable CAS")
+		}
+		if err := execution.Run(f.binding, func(context.Context) error { return nil }); err != nil {
+			t.Fatal("foreign row suppressed the actual execution", err)
+		}
+	}
+}
+
 func TestProviderEffectUnitSessionPendingAlsoDeniesOrdinaryDecision(t *testing.T) {
 	coordinator, repo, session, now := coordinatorFixture(t, true)
 	decision, err := coordinator.Authorize(context.Background(), session, OrganizationRead, repo.state.Resource)
