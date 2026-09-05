@@ -55,10 +55,11 @@ an explicitly isolated service URL and private token file, passed against stock
 OpenFGA 1.19.0 backed by PostgreSQL: exact model, direct grants, idempotency,
 Team roles, noninheritance, and non-User-lead denial (30 actual HTTP calls).
 
-This is not complete P1-006 or an activated product path. Full valid signed
-runtime activation and the truthful local bootstrap evidence producer remain
-gated on the proposed local-development derivation decision. No test fixture,
-invented review receipt, unsigned local mode, production bootstrap, strict mode,
-Agent execution, trust rotation/recovery, or future restricted-label behavior is
-enabled by these interfaces. The only accepted activation constructor currently
-requires the existing exact-artifact review/attestation path.
+This is not complete P1-006 or an activated provider path. The local-development
+bootstrap amendment is accepted in [PR #46](https://github.com/ScottTpirate/stead/pull/46),
+and the initial signed metadata installation has passed its bounded bootstrap,
+policy and real Organization/Team/Project checks. That does not activate the
+provider evaluator ABI. No test fixture, invented review receipt, unsigned local
+mode, production bootstrap, strict mode, Agent execution, trust rotation/recovery,
+or future restricted-label behavior is enabled by these interfaces. The accepted
+activation constructor still requires exact-artifact review and attestation.
