@@ -61,7 +61,11 @@ func Bootstrap(ctx context.Context, config BootstrapConfig) (BootstrapResult, er
 	if !identity.ValidID(config.InstanceID) || !identity.ValidID(config.LabelID) || !identity.ValidID(config.Session.ID) || !config.Session.Principal.Valid() || config.Session.Principal.Type != "user" || config.Session.InstanceID != config.InstanceID || config.Session.SecurityDomain != config.SecurityDomain || config.SecurityDomain == "" || config.OpenFGAStoreID == "" || binding.OpenFGAStoreID != config.OpenFGAStoreID || binding.DeploymentPolicyID != config.SecurityDomain || binding.ActivationSetID == "" || binding.ActivationSequence == 0 || binding.OpenFGAModelID == "" || config.PolicyTimeHighWater.IsZero() || config.PolicyTimeRevision == 0 || len(config.AppPassword) < 24 || config.TokenDigest == ([32]byte{}) || config.Label.Version == 0 || config.Label.ProfileID == "" || config.Session.Revision != 1 || config.Session.PrincipalRevision != 1 || !config.Session.Active || !config.Session.PrincipalActive || !config.Session.ExpiresAt.After(time.Now()) {
 		return BootstrapResult{}, errors.New("invalid bootstrap configuration")
 	}
-	conn, err := pgx.Connect(ctx, config.AdminDSN)
+	parsed, err := pgx.ParseConfig(config.AdminDSN)
+	if err != nil || !bootstrapDatabaseName(parsed.Database) {
+		return BootstrapResult{}, errors.New("bootstrap database identity rejected")
+	}
+	conn, err := pgx.ConnectConfig(ctx, parsed)
 	if err != nil {
 		return BootstrapResult{}, errors.New("bootstrap database unavailable")
 	}
@@ -71,6 +75,11 @@ func Bootstrap(ctx context.Context, config BootstrapConfig) (BootstrapResult, er
 		return BootstrapResult{}, err
 	}
 	defer tx.Rollback(ctx)
+	// Recheck after the external preparation/preflight gap and before the first
+	// schema, role, identity or policy mutation in this atomic initializer.
+	if err = checkFreshDatabase(ctx, tx, parsed.Database); err != nil {
+		return BootstrapResult{}, err
+	}
 	var database, admin string
 	var version int
 	if err = tx.QueryRow(ctx, `SELECT current_database(),current_user,current_setting('server_version_num')::integer`).Scan(&database, &admin, &version); err != nil || version < MinimumServerVersion {
@@ -186,6 +195,14 @@ func Bootstrap(ctx context.Context, config BootstrapConfig) (BootstrapResult, er
 		return BootstrapResult{}, err
 	}
 	if err = execute(`INSERT INTO "authorization".resources(id,kind,label_id,pending,revision,tuple_revision) VALUES($1,'instance',$2,false,1,1)`, config.InstanceID, config.LabelID); err != nil {
+		return BootstrapResult{}, err
+	}
+	auditID, err := NewID()
+	if err != nil {
+		return BootstrapResult{}, err
+	}
+	bootstrapEvidence := map[string]any{"installation_id": config.InstanceID, "principal": config.Session.Principal, "activation_digest": digest, "activation_binding": binding, "policy_time_high_water": config.PolicyTimeHighWater, "policy_time_revision": config.PolicyTimeRevision, "scope": "isolated-local-development-bootstrap"}
+	if err = execute(`INSERT INTO audit.records(id,resource_id,actor,action,decision,evidence,occurred_at) VALUES($1,$2,$3,'identity.bootstrap','allow',$4,$5)`, auditID, config.InstanceID, config.Session.Principal.Type+":"+config.Session.Principal.ID, encode(bootstrapEvidence), time.Now().UTC()); err != nil {
 		return BootstrapResult{}, err
 	}
 	if err = tx.Commit(ctx); err != nil {
