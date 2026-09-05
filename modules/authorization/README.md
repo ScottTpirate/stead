@@ -22,6 +22,25 @@ decision, and atomically persist domain changes and audit/outbox evidence. A
 decision or tuple receipt is not a provider effect permit. Browser response
 release still requires the root request-boundary adapter and presentation rules.
 
+The inactive provider-mutation slice adds `project.backing.provision` against an
+existing Project's explicit `manager` relation and a fixed `create_hidden_tracker`
+permit lifecycle. It requires a distinct provider-capable evaluator ABI; the
+current metadata activation consumer and reviewed template remain unchanged and
+cannot mint these permits. `EffectStore` invocations must validate under owner SQL
+locks and return only after exact state plus audit/outbox commit. Consumed handles
+share one process-bound dispatch claim even when copied. Session-pending signals
+stop admission and suppress execution/output but are never terminal proof.
+Provider decisions seal the original authorization request's lifetime, exact
+deadline and correlation; reattaching a decision cannot replace that lifetime.
+Issuance, consumption and dispatch retain original and caller cancellation.
+Conservative transitions suppress matching local executions before persistence;
+failed or lost commit acknowledgments cannot restore dispatch authority.
+Ambiguous calls and process loss remain reconciliation-owned. No exported
+provider-proof terminalizer, recovery-read permission, provider runtime hookup,
+or signed successor activation is supplied here. In-memory lifecycle tests are
+unit evidence only; live PostgreSQL, exact adapter proof, revocation drain and
+independent review remain mandatory before this path can activate.
+
 The pinned model successor is `policies/openfga/model-v0.2.fga`. Its versioned
 JSON canonicalizer removes only stock protobuf empty defaults before exact
 read-back comparison. Team `lead` is direct User-only; parent hierarchy and

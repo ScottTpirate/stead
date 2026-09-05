@@ -63,6 +63,7 @@ func NewCoordinator(config Config) (*Coordinator, error) {
 // Decision is one immutable bounded logical decision, never a durable permit
 // for provider mutations, credentials, content, streams, or later jobs.
 type Decision struct {
+	effectUse    *effectDecisionUse
 	state        State
 	evidence     Evidence
 	binding      ActivationBinding
@@ -139,6 +140,8 @@ func actionRelation(action Action, target ResourceRef) (string, bool) {
 		want, relation = "team", "viewer"
 	case ProjectRead:
 		want, relation = "project", "viewer"
+	case ProjectBackingProvision:
+		want, relation = "project", "manager"
 	case TeamProfileManage:
 		want, relation = "team", "profile_manager"
 	case TeamRoleManage:
@@ -162,7 +165,7 @@ func validState(state State, session identity.SessionRecord, target ResourceRef,
 	if session.InstanceID != binding.InstallationID {
 		return false
 	}
-	if state.Resource != target || state.InstanceID != session.InstanceID || state.SecurityDomain != session.SecurityDomain || state.SecurityDomain != binding.DeploymentPolicyID || state.Principal != session.Principal || state.SessionID != session.ID || !state.PrincipalActive || !state.SessionActive || state.TuplePending || !validRevisions(state.Revisions) || state.Revisions.Principal != session.PrincipalRevision || state.Revisions.Session != session.Revision || state.ActivationDigest != binding.Digest() || state.ActivationSetID != binding.ActivationSetID || state.ActivationSequence != binding.ActivationSequence || state.OpenFGAModelID != binding.OpenFGAModelID || state.PolicyTimeHighWater.IsZero() || state.PolicyTimeRevision == 0 || !now.Before(state.ContextExpiresAt) {
+	if state.Resource != target || state.InstanceID != session.InstanceID || state.SecurityDomain != session.SecurityDomain || state.SecurityDomain != binding.DeploymentPolicyID || state.Principal != session.Principal || state.SessionID != session.ID || !state.PrincipalActive || !state.SessionActive || state.SessionPending || state.TuplePending || !validRevisions(state.Revisions) || state.Revisions.Principal != session.PrincipalRevision || state.Revisions.Session != session.Revision || state.ActivationDigest != binding.Digest() || state.ActivationSetID != binding.ActivationSetID || state.ActivationSequence != binding.ActivationSequence || state.OpenFGAModelID != binding.OpenFGAModelID || state.PolicyTimeHighWater.IsZero() || state.PolicyTimeRevision == 0 || !now.Before(state.ContextExpiresAt) {
 		return false
 	}
 	if target.Kind == "instance" {
@@ -191,6 +194,16 @@ func (coordinator *Coordinator) Authorize(ctx context.Context, session identity.
 	relation, known := actionRelation(action, target)
 	if ctx.Err() != nil || !known || !session.ValidAt(now) || session.Principal().Type != "user" {
 		return deny("context_denied")
+	}
+	if action == ProjectBackingProvision && coordinator.config.Activation.binding.EvaluatorContractVersion != ProviderMutationEvaluatorContractVersion {
+		return deny("context_denied")
+	}
+	var effectUse *effectDecisionUse
+	if action == ProjectBackingProvision {
+		effectUse = newEffectDecisionUse(ctx)
+		if effectUse == nil {
+			return deny("context_denied")
+		}
 	}
 	anchor, err := coordinator.config.Anchor.Read(ctx)
 	activation := coordinator.config.Activation
@@ -273,7 +286,9 @@ func (coordinator *Coordinator) Authorize(ctx context.Context, session identity.
 	if ctx.Err() != nil || !finished.Before(expires) {
 		return deny("context_denied")
 	}
-	return sealDecision(state, result, session, action, target, relation, activation.binding, anchor, id, now, expires, 1), nil
+	decision := sealDecision(state, result, session, action, target, relation, activation.binding, anchor, id, now, expires, 1)
+	decision.effectUse = effectUse
+	return decision, nil
 }
 
 func sealDecision(state State, result classification.Result, session identity.Authenticated, action Action, target ResourceRef, relation string, b ActivationBinding, anchor AnchorState, id string, now, expires time.Time, calls uint64) *Decision {
@@ -281,7 +296,8 @@ func sealDecision(state State, result classification.Result, session identity.Au
 	evidence.OpenFGACalls = calls
 	state.Label = state.Label.Copy()
 	result.Presentation.PolicyBundleID = b.PolicyBundleID
-	return &Decision{state: state, evidence: evidence, binding: b, marking: result.Marking, presentation: result.Presentation.Copy(), valid: true}
+	decision := &Decision{state: state, evidence: evidence, binding: b, marking: result.Marking, presentation: result.Presentation.Copy(), valid: true}
+	return decision
 }
 
 // ValidateFinal performs no network or repository I/O. The registered root
