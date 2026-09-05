@@ -42,9 +42,9 @@ try {
   const asyncapiID = "https://stead.example/specs/asyncapi/stead.yaml";
   ajv.addSchema({ $id: asyncapiID, components: { schemas: asyncapi.components.schemas } });
   const createdEvents = JSON.parse(execFileSync("scripts/run_pinned_go.sh", ["go", "run", "./tests/contract/audit/emit_created_events"], { encoding: "utf8", timeout: 60000, maxBuffer: 1 << 20 }));
-  if (!Array.isArray(createdEvents) || createdEvents.length !== 3) throw new Error("created event producer fixtures missing");
+  if (!Array.isArray(createdEvents) || createdEvents.length !== 7) throw new Error("created/effect event producer fixtures missing");
   for (const event of createdEvents) {
-    const envelope = event.data.resource.kind === "project" ? "ProjectCloudEventEnvelope" : "OrganizationCloudEventEnvelope";
+    const envelope = event.type === "stead.authorization.effect_changed.v1" ? "AuthorizationCloudEventEnvelope" : event.data.resource.kind === "project" ? "ProjectCloudEventEnvelope" : "OrganizationCloudEventEnvelope";
     const validate = ajv.getSchema(`${asyncapiID}#/components/schemas/${envelope}`);
     if (!validate(event)) throw new Error(`emitted ${event.type} does not conform: ${ajv.errorsText(validate.errors)}`);
     for (const field of ["resource", "container"]) {
