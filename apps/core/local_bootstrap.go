@@ -47,10 +47,10 @@ func runDevTemplateInspect(args []string, stdout, stderr io.Writer) int {
 	if err != nil {
 		return 1
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 	core, err := authorization.InspectLocalTemplateSource(ctx, repository)
-	if err != nil {
+	if err != nil || authorization.VerifyLocalDevelopmentExecutable(ctx, repository) != nil {
 		fmt.Fprintln(stderr, "stead-api: clean immutable template source inspection failed")
 		return 1
 	}

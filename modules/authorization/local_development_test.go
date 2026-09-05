@@ -47,6 +47,7 @@ func localUnitTemplate() LocalTemplateManifest {
 	core := LocalTemplateCore{SourceRevision: strings.Repeat("a", 40), SourceTree: strings.Repeat("b", 40), GoVersion: runtime.Version(), DependencyLockDigest: digest, PublicOrigin: "https://localhost:18443", OpenFGAURL: "http://127.0.0.1:18080", SecurityDomain: LocalDevelopmentSecurityDomain, ValiditySeconds: 86400, AllowedSubstitutions: append([]string{}, localSubstitutionFields...)}
 	core.GoBinaryDigest = digest
 	core.GoCompilerDigest = digest
+	core.GoToolchainDigest = digest
 	for _, path := range localSourceFiles {
 		core.Files = append(core.Files, LocalTemplateFile{Path: path, Digest: digest})
 	}
