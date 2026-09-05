@@ -10,7 +10,8 @@ This proposal does not activate a policy, change an accepted ADR, or grant a rel
 ADR-0006 requires a generated instance-local development key, verified signatures,
 and a visibly non-production trust store. Its mandatory release evidence also
 binds independent reviews to each exact policy bundle and completed archive.
-The key and local OpenFGA model identity change those digests on every install.
+The instance-local key changes those digests on every install. Local OpenFGA
+store/model IDs add separately verified runtime bindings, not archive content.
 
 The executable checks are `validateReviewsAndWaivers` in
 `modules/ci/policyrelease/builder.go` (bundle subject) and
@@ -49,8 +50,9 @@ The implementation must enforce all of the following:
    thresholds remain mandatory. Missing or failing results prevent signing and
    activation. Checked-in test fixtures and hard-coded PASS claims are forbidden.
 4. A distinct, domain-separated signed local-derivation attestation binds the
-   approved template/reviews, exact activation envelope and archive, generated
-   trust identity, model read-back receipt, installer identity, and those actual
+   approved template/reviews, exact activation envelope and archive, installation
+   ID, substitution-map digest, generated trust identity, model read-back receipt,
+   installer identity, and those actual
    results. Pre-signing and post-signing evidence remain acyclic. It must not be
    encoded as a production release attestation or as fabricated independent
    reviewer receipts. Closed schemas and runtime consumer checks validate it.
