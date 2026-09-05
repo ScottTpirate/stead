@@ -122,9 +122,22 @@ adr_decision_gates:
     decide_before_issue: STEAD-P1-016
     dependent_issues: [STEAD-P1-016, STEAD-P1-015, STEAD-P1-006, STEAD-P1-011, STEAD-P2-004, STEAD-P2-010]
   - adr_id: ADR-CAND-008
-    state: PROPOSED
+    state: ACCEPTED
     decision_record: docs/adr/0009-gitea-provider-reconciliation-precedence-and-conflict-handling.md
     project_owner_approval_required: true
+    immutable_revision: "b64384249a82f6f744ec07a002f70de6e24e15e6"
+    accepted_at: "2026-09-05"
+    approval_record: docs/governance/adr-0009-approval-record.md
+    approval_records:
+      - {role: "WS-03-provider-reconciliation", identity: "/root/adr_inspection", disposition: "APPROVED", decision_revision: "b64384249a82f6f744ec07a002f70de6e24e15e6"}
+      - {role: "WS-01-architecture", identity: "/root/adr_inspection", disposition: "APPROVED", decision_revision: "b64384249a82f6f744ec07a002f70de6e24e15e6"}
+      - {role: "WS-02-canonical-transaction", identity: "/root/adr_inspection", disposition: "APPROVED", decision_revision: "b64384249a82f6f744ec07a002f70de6e24e15e6"}
+      - {role: "WS-06-authorization-classification", identity: "/root/adr_inspection", disposition: "APPROVED", decision_revision: "b64384249a82f6f744ec07a002f70de6e24e15e6"}
+      - {role: "WS-07-event-audit", identity: "/root/adr_inspection", disposition: "APPROVED", decision_revision: "b64384249a82f6f744ec07a002f70de6e24e15e6"}
+      - {role: "WS-12-deployment-operations", identity: "/root/adr_inspection", disposition: "APPROVED", decision_revision: "b64384249a82f6f744ec07a002f70de6e24e15e6"}
+      - {role: "WS-13-independent-qa", identity: "/root/local_inventory", disposition: "APPROVED", decision_revision: "b64384249a82f6f744ec07a002f70de6e24e15e6"}
+      - {role: "WS-13-independent-security", identity: "/root/database_path", disposition: "APPROVED", decision_revision: "b64384249a82f6f744ec07a002f70de6e24e15e6"}
+      - {role: "project-owner", identity: "ScottTpirate", disposition: "APPROVED", decision_revision: "b64384249a82f6f744ec07a002f70de6e24e15e6"}
     decide_before_issue: STEAD-P1-003
     dependent_issues: [STEAD-P1-002, STEAD-P1-003, STEAD-P1-006, STEAD-P1-007, STEAD-P1-011, STEAD-P1-012, STEAD-P2-001]
   - adr_id: ADR-CAND-021

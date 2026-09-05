@@ -1,6 +1,6 @@
 # ADR-0009: Gitea provider reconciliation precedence and conflict handling
 
-- **Status:** Proposed
+- **Status:** Accepted at immutable decision revision `b64384249a82f6f744ec07a002f70de6e24e15e6` on 2026-09-05
 - **Date:** 2026-08-30
 - **Decision owners:** WS-03, with WS-02 canonical-domain, WS-06 authorization/classification, WS-07 event/audit, and WS-12 deployment/operations integration
 - **Project-owner approval required:** yes; this proposal narrowly changes locked per-provider-HTTP-call durable-permit clauses in the Master Build Directive's CLS-003/CLS-007 rules, constitution section 4.6, ADR-0005, and ADR-0007 for one closed bounded internal read plan
@@ -158,19 +158,19 @@ Decision acceptance adopts these future obligations; it does not claim runtime i
 
 ## Reviews and approvals
 
-Because this proposal narrowly supersedes accepted/locked call-granularity rules, every named review and explicit project-owner approval must name the same exact immutable decision SHA. Until the later mechanical acceptance record directly descends from that decision revision and changes only approval/gate/review records, ADR-0009 remains Proposed, `ADR-CAND-008` remains blocking, and no bounded-read exception is authorized.
+All required non-author reviews and explicit project-owner approval bind immutable decision `b64384249a82f6f744ec07a002f70de6e24e15e6` (tree `d65b35c1a29c0d75bd42ef52538aa85eaa2c6572`). This direct acceptance child changes only approval, gate, and tracking records. The reviewed decision and machine-readable contract remain unchanged. Detailed evidence is recorded in [the approval record](../governance/adr-0009-approval-record.md).
 
-| Role | Identity | Disposition | Evidence/date |
-|---|---|---|---|
-| `WS-03-provider-reconciliation` | pending non-author reviewer | pending | pending |
-| `WS-01-architecture` | pending | pending | pending |
-| `WS-02-canonical-transaction` | pending | pending | pending |
-| `WS-06-authorization-classification` | pending | pending | pending |
-| `WS-07-event-audit` | pending | pending | pending |
-| `WS-12-deployment-operations` | pending | pending | pending |
-| `WS-13-independent-qa` | pending non-author reviewer | pending | pending |
-| `WS-13-independent-security` | pending non-author reviewer | pending | pending |
-| `project-owner` | pending explicit approver | pending | must name exact immutable decision SHA |
+| Role | Identity | Decision revision | Disposition | Evidence/date |
+|---|---|---|---|---|
+| `WS-03-provider-reconciliation` | `/root/adr_inspection` | `b64384249a82f6f744ec07a002f70de6e24e15e6` | APPROVED | Provider precedence and bounded reads reviewed; 2026-09-05 |
+| `WS-01-architecture` | `/root/adr_inspection` | `b64384249a82f6f744ec07a002f70de6e24e15e6` | APPROVED | Architecture and locked-clause supersession reviewed; 2026-09-05 |
+| `WS-02-canonical-transaction` | `/root/adr_inspection` | `b64384249a82f6f744ec07a002f70de6e24e15e6` | APPROVED | Canonical transaction and outbox ownership reviewed; 2026-09-05 |
+| `WS-06-authorization-classification` | `/root/adr_inspection` | `b64384249a82f6f744ec07a002f70de6e24e15e6` | APPROVED | Fresh central authorization and fencing reviewed; 2026-09-05 |
+| `WS-07-event-audit` | `/root/adr_inspection` | `b64384249a82f6f744ec07a002f70de6e24e15e6` | APPROVED | Append-only audit and terminal-intent ownership reviewed; 2026-09-05 |
+| `WS-12-deployment-operations` | `/root/adr_inspection` | `b64384249a82f6f744ec07a002f70de6e24e15e6` | APPROVED | Compatibility, recovery and operational boundaries reviewed; 2026-09-05 |
+| `WS-13-independent-qa` | `/root/local_inventory` | `b64384249a82f6f744ec07a002f70de6e24e15e6` | APPROVED | 65 focused tests plus 13 independent rejection probes passed; 2026-09-05 |
+| `WS-13-independent-security` | `/root/database_path` | `b64384249a82f6f744ec07a002f70de6e24e15e6` | APPROVED | 65 focused tests plus 17 independent security probes passed; 2026-09-05 |
+| `project-owner` | `ScottTpirate` | `b64384249a82f6f744ec07a002f70de6e24e15e6` | APPROVED | Explicit response "Approved. continue" to the exact-SHA approval request in this conversation; 2026-09-05 |
 
 [^gitea-webhooks]: Gitea, [Webhooks: delivery headers, HMAC validation, events, recent deliveries, and redelivery](https://docs.gitea.com/usage/repository/webhooks/).
 [^gitea-issue-edit]: Gitea, [Edit an issue API: `content_version` optimistic locking for body edits](https://docs.gitea.com/api/operations/issue-edit-issue/).
