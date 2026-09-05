@@ -19,7 +19,10 @@ const (
 
 // SQLCollector executes CatalogQueryContracts through database/sql. The
 // application supplies its approved PostgreSQL driver elsewhere; this package
-// intentionally registers none.
+// intentionally registers none. Complete collection requires the transient
+// bootstrap identity: pg_authid is projected only as password presence, because
+// pg_roles masks every password with a non-null placeholder (including NOLOGIN
+// roles that have no password). No password material is returned or retained.
 type SQLCollector struct {
 	db *sql.DB
 }
