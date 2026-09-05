@@ -94,7 +94,31 @@ func TestLivePostgresBootstrapRolesSessionAndAtomicity(t *testing.T) {
 	binding := authorization.ActivationBinding{InstallationID: instance, ActivationSetID: "test-only-activation", OpenFGAModelID: "test-only-model", OpenFGAStoreID: "test-only-store", ActivationSequence: 1, DeploymentPolicyID: "test-only-domain"}
 	anchor := &databaseTestAnchor{state: authorization.AnchorState{Binding: binding, PolicyTimeHighWater: now, PolicyTimeRevision: 1}}
 	session := identity.SessionRecord{ID: sessionID, Principal: identity.Principal{Type: "user", ID: principal}, InstanceID: instance, SecurityDomain: binding.DeploymentPolicyID, Authority: "stead_local_identity", AuthenticationStrength: "local_bootstrap", NetworkZone: "loopback", DeviceTrust: "local", Environment: "local-development", ClassificationCeilings: map[string]string{"local": "internal"}, IssuedAt: now, ExpiresAt: now.Add(time.Hour), Revision: 1, PrincipalRevision: 1, Active: true, PrincipalActive: true}
-	bootstrap := BootstrapConfig{AdminDSN: adminDSN, AppPassword: runtimePassword, InstanceID: instance, SecurityDomain: binding.DeploymentPolicyID, OpenFGAStoreID: binding.OpenFGAStoreID, ActivationBinding: binding, PolicyTimeHighWater: now, PolicyTimeRevision: 1, LabelID: labelID, Label: classification.Label{ProfileID: "local", SensitivityLevel: "internal", Version: 1}, Session: session, TokenDigest: digest}
+	unprivileged := session
+	unprivileged.ID, _ = NewID()
+	unprivileged.Principal.ID, _ = NewID()
+	unprivilegedToken, unprivilegedDigest, err := identity.NewLocalToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	bootstrap := BootstrapConfig{AdminDSN: adminDSN, AppPassword: runtimePassword, InstanceID: instance, SecurityDomain: binding.DeploymentPolicyID, OpenFGAStoreID: binding.OpenFGAStoreID, ActivationBinding: binding, PolicyTimeHighWater: now, PolicyTimeRevision: 1, LabelID: labelID, Label: classification.Label{ProfileID: "local", SensitivityLevel: "internal", Version: 1}, Session: session, TokenDigest: digest, UnprivilegedSession: unprivileged, UnprivilegedTokenDigest: unprivilegedDigest}
+	t.Run("two_user_bootstrap_rollback", func(t *testing.T) {
+		// This is a storage failure fixture, not policy authority: PostgreSQL's
+		// signed bigint cannot encode this value in the namespace INSERT, which
+		// follows both User/session inserts in the same initializer transaction.
+		failed := bootstrap
+		failed.PolicyTimeRevision = ^uint64(0)
+		if _, err := Bootstrap(ctx, failed); err == nil {
+			t.Fatal("late namespace storage failure accepted")
+		}
+		if err := CheckFreshBootstrapDatabase(ctx, adminDSN, database); err != nil {
+			t.Fatal("failed two-user initializer left database material", err)
+		}
+		var roles int
+		if err := conn.QueryRow(ctx, `SELECT count(*) FROM pg_catalog.pg_roles WHERE left(rolname,length($1))=$1`, "sd_"+DeploymentKey(instance)+"_").Scan(&roles); err != nil || roles != 0 {
+			t.Fatal("failed two-user initializer retained roles")
+		}
+	})
 	result, err := Bootstrap(ctx, bootstrap)
 	if err != nil {
 		t.Fatal(err)
@@ -141,8 +165,20 @@ func TestLivePostgresBootstrapRolesSessionAndAtomicity(t *testing.T) {
 	}
 	if err = store.owned(ctx, "audit", false, func(tx pgx.Tx) error {
 		var records int
-		if err := tx.QueryRow(ctx, `SELECT count(*) FROM audit.records WHERE action='identity.bootstrap' AND resource_id=$1`, instance).Scan(&records); err != nil || records != 1 {
+		if err := tx.QueryRow(ctx, `SELECT count(*) FROM audit.records WHERE action='identity.bootstrap' AND resource_id=$1 AND evidence->'unprivileged_principal'->>'id'=$2 AND evidence->>'unprivileged_session_id'=$3 AND evidence->>'session_id'=$4`, instance, unprivileged.Principal.ID, unprivileged.ID, session.ID).Scan(&records); err != nil || records != 1 {
 			return errors.New("atomic bootstrap audit absent or duplicated")
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err = store.owned(ctx, "identity", false, func(tx pgx.Tx) error {
+		var principals, sessions int
+		if err := tx.QueryRow(ctx, `SELECT count(*) FROM identity.principals WHERE kind='user' AND active`).Scan(&principals); err != nil || principals != 2 {
+			return errors.New("fixed two-user bootstrap absent or duplicated")
+		}
+		if err := tx.QueryRow(ctx, `SELECT count(*) FROM identity.sessions WHERE active AND NOT bootstrap_consumed`).Scan(&sessions); err != nil || sessions != 2 {
+			return errors.New("fixed two-session bootstrap absent or already consumed")
 		}
 		return nil
 	}); err != nil {
@@ -154,6 +190,32 @@ func TestLivePostgresBootstrapRolesSessionAndAtomicity(t *testing.T) {
 	}
 	if _, err = authentication.Authenticate(ctx, token); err != nil {
 		t.Fatal("real SQL bootstrap authentication failed", err)
+	}
+	unprivilegedAuthenticated, err := authentication.Authenticate(ctx, unprivilegedToken)
+	if err != nil || unprivilegedAuthenticated.Principal() != unprivileged.Principal || unprivilegedAuthenticated.SessionID() != unprivileged.ID {
+		t.Fatal("real second-user authentication failed")
+	}
+	if changed, err := store.RotateSessionToken(ctx, unprivileged.ID, unprivilegedDigest, digest); err == nil || changed {
+		t.Fatal("second-user exchange collided with primary credential")
+	}
+	if _, err := authentication.Authenticate(ctx, unprivilegedToken); err != nil {
+		t.Fatal("rejected credential collision changed second-user session")
+	}
+	unprivilegedReplacement, unprivilegedReplacementDigest, _ := identity.NewLocalToken()
+	if changed, err := store.RotateSessionToken(ctx, unprivileged.ID, unprivilegedDigest, unprivilegedReplacementDigest); err != nil || !changed {
+		t.Fatal("second-user one-time exchange failed")
+	}
+	if changed, err := store.RotateSessionToken(ctx, unprivileged.ID, unprivilegedDigest, unprivilegedReplacementDigest); err != nil || changed {
+		t.Fatal("second-user bootstrap credential replay accepted")
+	}
+	if _, err := authentication.Authenticate(ctx, unprivilegedToken); err == nil {
+		t.Fatal("consumed second-user bootstrap token authenticated")
+	}
+	if replacement, err := authentication.Authenticate(ctx, unprivilegedReplacement); err != nil || replacement.Principal() != unprivileged.Principal {
+		t.Fatal("second-user rotated session did not retain its own identity")
+	}
+	if primary, err := authentication.Authenticate(ctx, token); err != nil || primary.Principal() != session.Principal {
+		t.Fatal("second-user exchange changed the primary credential")
 	}
 	_, newDigest, _ := identity.NewLocalToken()
 	changed, err := store.RotateSessionToken(ctx, sessionID, digest, newDigest)

@@ -1,6 +1,7 @@
 .PHONY: foundation-check go-check contract-check
 
 foundation-check: go-check contract-check
+	scripts/run_pinned_node.sh node --test scripts/checkpoint_a_smoke.test.mjs scripts/checkpoint_a_denial.test.mjs
 	scripts/run_pinned_node.sh npm run typecheck
 	scripts/run_pinned_node.sh npm run test:unit --workspace=@stead/web
 	scripts/run_pinned_node.sh npm run test --workspace=@stead/web

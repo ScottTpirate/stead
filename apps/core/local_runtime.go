@@ -37,7 +37,7 @@ func openLocalRuntime(ctx context.Context, repository string, config localdev.Co
 		return nil, localStageError("policy-directory")
 	}
 	record, err := readLocalMetadata[localBootstrapRecord](filepath.Join(config.StateDirectory, "bootstrap.json"), 64<<10)
-	if err != nil || record.SchemaVersion != "1.0.0" || !record.DevelopmentOnly || record.InstanceID != config.InstanceID || record.SecurityDomain != config.SecurityDomain || record.StoreID != config.StoreID || record.ModelID != config.ModelID || !identity.ValidID(record.PrincipalID) || !identity.ValidID(record.SessionID) || !identity.ValidID(record.LabelID) {
+	if err != nil || record.SchemaVersion != "1.0.0" || !record.DevelopmentOnly || record.InstanceID != config.InstanceID || record.SecurityDomain != config.SecurityDomain || record.StoreID != config.StoreID || record.ModelID != config.ModelID || !validLocalBootstrapUserIDs(record) {
 		return nil, localStageError("completed-bootstrap")
 	}
 	archive, err := localdev.ReadPrivate(filepath.Join(config.PolicyDirectory, "activation.tar"), 64<<20)

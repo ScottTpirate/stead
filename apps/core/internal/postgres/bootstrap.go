@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"maps"
 	"time"
 
 	"github.com/ScottTpirate/stead/modules/authorization"
@@ -25,7 +26,35 @@ type BootstrapConfig struct {
 	Label                                                             classification.Label
 	Session                                                           identity.SessionRecord
 	TokenDigest                                                       [sha256.Size]byte
+	UnprivilegedSession                                               identity.SessionRecord
+	UnprivilegedTokenDigest                                           [sha256.Size]byte
 }
+
+// Bootstrap always installs exactly two canonical synthetic Users. The second
+// receives the same signed context defaults but no relationship grant; neither
+// a session nor this fixed initializer is a resource authorization bypass.
+func validBootstrapUsers(config BootstrapConfig, now time.Time) bool {
+	if config.InstanceID == config.LabelID || config.TokenDigest == ([sha256.Size]byte{}) || config.UnprivilegedTokenDigest == ([sha256.Size]byte{}) || config.TokenDigest == config.UnprivilegedTokenDigest {
+		return false
+	}
+	seen := map[string]bool{config.InstanceID: true, config.LabelID: true}
+	for _, session := range []identity.SessionRecord{config.Session, config.UnprivilegedSession} {
+		if !identity.ValidID(session.ID) || !session.Principal.Valid() || session.Principal.Type != "user" || seen[session.ID] || seen[session.Principal.ID] || session.ID == session.Principal.ID {
+			return false
+		}
+		seen[session.ID], seen[session.Principal.ID] = true, true
+		if session.InstanceID != config.InstanceID || session.SecurityDomain != config.SecurityDomain || session.Authority != "stead_local_identity" || session.AuthenticationStrength != "local_bootstrap" || session.Environment != "local-development" || session.NetworkZone != "loopback" || session.DeviceTrust != "local" || session.Revision != 1 || session.PrincipalRevision != 1 || !session.Active || !session.PrincipalActive || session.IssuedAt.IsZero() || now.Before(session.IssuedAt) || !now.Before(session.ExpiresAt) || !session.IssuedAt.Before(session.ExpiresAt) || session.ExpiresAt.Sub(session.IssuedAt) > 8*time.Hour || len(session.ClassificationCeilings) == 0 {
+			return false
+		}
+		for profile, ceiling := range session.ClassificationCeilings {
+			if profile == "" || ceiling == "" {
+				return false
+			}
+		}
+	}
+	return config.Session.IssuedAt.Equal(config.UnprivilegedSession.IssuedAt) && config.Session.ExpiresAt.Equal(config.UnprivilegedSession.ExpiresAt) && maps.Equal(config.Session.ClassificationCeilings, config.UnprivilegedSession.ClassificationCeilings)
+}
+
 type BootstrapResult struct {
 	RuntimeRole, DatabaseName, ActivationDigest string
 	Manifest                                    Manifest
@@ -58,7 +87,7 @@ func Bootstrap(ctx context.Context, config BootstrapConfig) (BootstrapResult, er
 		return BootstrapResult{}, errors.New("bootstrap installation binding mismatch")
 	}
 	digest := binding.Digest()
-	if !identity.ValidID(config.InstanceID) || !identity.ValidID(config.LabelID) || !identity.ValidID(config.Session.ID) || !config.Session.Principal.Valid() || config.Session.Principal.Type != "user" || config.Session.InstanceID != config.InstanceID || config.Session.SecurityDomain != config.SecurityDomain || config.SecurityDomain == "" || config.OpenFGAStoreID == "" || binding.OpenFGAStoreID != config.OpenFGAStoreID || binding.DeploymentPolicyID != config.SecurityDomain || binding.ActivationSetID == "" || binding.ActivationSequence == 0 || binding.OpenFGAModelID == "" || config.PolicyTimeHighWater.IsZero() || config.PolicyTimeRevision == 0 || len(config.AppPassword) < 24 || config.TokenDigest == ([32]byte{}) || config.Label.Version == 0 || config.Label.ProfileID == "" || config.Session.Revision != 1 || config.Session.PrincipalRevision != 1 || !config.Session.Active || !config.Session.PrincipalActive || !config.Session.ExpiresAt.After(time.Now()) {
+	if !identity.ValidID(config.InstanceID) || !identity.ValidID(config.LabelID) || !validBootstrapUsers(config, time.Now()) || config.SecurityDomain == "" || config.OpenFGAStoreID == "" || binding.OpenFGAStoreID != config.OpenFGAStoreID || binding.DeploymentPolicyID != config.SecurityDomain || binding.ActivationSetID == "" || binding.ActivationSequence == 0 || binding.OpenFGAModelID == "" || config.PolicyTimeHighWater.IsZero() || config.PolicyTimeRevision == 0 || len(config.AppPassword) < 24 || config.Label.Version == 0 || config.Label.ProfileID == "" {
 		return BootstrapResult{}, errors.New("invalid bootstrap configuration")
 	}
 	parsed, err := pgx.ParseConfig(config.AdminDSN)
@@ -181,11 +210,16 @@ func Bootstrap(ctx context.Context, config BootstrapConfig) (BootstrapResult, er
 	}
 	// No cross-owner foreign key or trigger: typed participant validation is the
 	// only cross-module operation, and every initial row is one atomic bootstrap.
-	if err = execute(`INSERT INTO identity.principals VALUES($1,'user',true,1)`, config.Session.Principal.ID); err != nil {
-		return BootstrapResult{}, err
-	}
-	if err = execute(`INSERT INTO identity.sessions(id,token_digest,principal_id,record,active,revision) VALUES($1,$2,$3,$4,true,1)`, config.Session.ID, config.TokenDigest[:], config.Session.Principal.ID, encode(config.Session)); err != nil {
-		return BootstrapResult{}, err
+	for _, user := range []struct {
+		session identity.SessionRecord
+		digest  [sha256.Size]byte
+	}{{config.Session, config.TokenDigest}, {config.UnprivilegedSession, config.UnprivilegedTokenDigest}} {
+		if err = execute(`INSERT INTO identity.principals VALUES($1,'user',true,1)`, user.session.Principal.ID); err != nil {
+			return BootstrapResult{}, err
+		}
+		if err = execute(`INSERT INTO identity.sessions(id,token_digest,principal_id,record,active,revision) VALUES($1,$2,$3,$4,true,1)`, user.session.ID, user.digest[:], user.session.Principal.ID, encode(user.session)); err != nil {
+			return BootstrapResult{}, err
+		}
 	}
 	if err = execute(`INSERT INTO classification.labels VALUES($1,$2,1)`, config.LabelID, encode(config.Label)); err != nil {
 		return BootstrapResult{}, err
@@ -201,7 +235,7 @@ func Bootstrap(ctx context.Context, config BootstrapConfig) (BootstrapResult, er
 	if err != nil {
 		return BootstrapResult{}, err
 	}
-	bootstrapEvidence := map[string]any{"installation_id": config.InstanceID, "principal": config.Session.Principal, "activation_digest": digest, "activation_binding": binding, "policy_time_high_water": config.PolicyTimeHighWater, "policy_time_revision": config.PolicyTimeRevision, "scope": "isolated-local-development-bootstrap"}
+	bootstrapEvidence := map[string]any{"installation_id": config.InstanceID, "principal": config.Session.Principal, "session_id": config.Session.ID, "unprivileged_principal": config.UnprivilegedSession.Principal, "unprivileged_session_id": config.UnprivilegedSession.ID, "activation_digest": digest, "activation_binding": binding, "policy_time_high_water": config.PolicyTimeHighWater, "policy_time_revision": config.PolicyTimeRevision, "scope": "isolated-local-development-bootstrap"}
 	if err = execute(`INSERT INTO audit.records(id,resource_id,actor,action,decision,evidence,occurred_at) VALUES($1,$2,$3,'identity.bootstrap','allow',$4,$5)`, auditID, config.InstanceID, config.Session.Principal.Type+":"+config.Session.Principal.ID, encode(bootstrapEvidence), time.Now().UTC()); err != nil {
 		return BootstrapResult{}, err
 	}

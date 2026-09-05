@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/ScottTpirate/stead/apps/core/internal/localdev"
+	"github.com/ScottTpirate/stead/modules/identity"
 )
 
 func TestLocalCommandsRejectArgumentsBeforeBootstrap(t *testing.T) {
@@ -21,6 +22,46 @@ func TestLocalCommandsRejectArgumentsBeforeBootstrap(t *testing.T) {
 	output.Reset()
 	if runDevTemplateInspect([]string{"--template=other"}, &output, &output) != 2 {
 		t.Fatal("template override admitted")
+	}
+}
+
+func TestLocalBootstrapSecondUserMetadataAndPrivateCredential(t *testing.T) {
+	record := localBootstrapRecord{InstanceID: "019ed5bf-0000-7000-8000-000000000001", LabelID: "019ed5bf-0000-7000-8000-000000000002", PrincipalID: "019ed5bf-0000-7000-8000-000000000003", SessionID: "019ed5bf-0000-7000-8000-000000000004", UnprivilegedPrincipalID: "019ed5bf-0000-7000-8000-000000000005", UnprivilegedSessionID: "019ed5bf-0000-7000-8000-000000000006"}
+	if !validLocalBootstrapUserIDs(record) {
+		t.Fatal("distinct fixed bootstrap identities rejected")
+	}
+	for _, duplicate := range []string{"", "invalid", record.InstanceID, record.LabelID, record.PrincipalID, record.SessionID, record.UnprivilegedSessionID} {
+		changed := record
+		changed.UnprivilegedPrincipalID = duplicate
+		if validLocalBootstrapUserIDs(changed) {
+			t.Fatal("ambiguous second bootstrap principal accepted")
+		}
+	}
+	directory := t.TempDir()
+	if err := os.Chmod(directory, 0700); err != nil {
+		t.Fatal(err)
+	}
+	primary, _, err := identity.NewLocalToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	unprivileged, _, err := identity.NewLocalToken()
+	if err != nil || primary == unprivileged {
+		t.Fatal("distinct local credentials unavailable")
+	}
+	primaryPath := filepath.Join(directory, "one-time-login-token")
+	unprivilegedPath := filepath.Join(directory, "one-time-unprivileged-login-token")
+	if localdev.WriteExclusive(primaryPath, []byte(primary)) != nil || localdev.WriteExclusive(unprivilegedPath, []byte(unprivileged)) != nil {
+		t.Fatal("private distinct credentials not persisted")
+	}
+	if localdev.WriteExclusive(unprivilegedPath, []byte(primary)) == nil {
+		t.Fatal("second credential overwritten")
+	}
+	for filename, want := range map[string]string{primaryPath: primary, unprivilegedPath: unprivileged} {
+		actual, err := localdev.ReadPrivate(filename, 128)
+		if err != nil || string(actual) != want {
+			t.Fatal("credential content or private file boundary changed")
+		}
 	}
 }
 

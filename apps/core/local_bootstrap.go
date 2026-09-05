@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -22,16 +23,29 @@ import (
 )
 
 type localBootstrapRecord struct {
-	SchemaVersion    string `json:"schema_version"`
-	InstanceID       string `json:"instance_id"`
-	SecurityDomain   string `json:"security_domain"`
-	StoreID          string `json:"openfga_store_id"`
-	ModelID          string `json:"openfga_model_id"`
-	PrincipalID      string `json:"principal_id"`
-	SessionID        string `json:"session_id"`
-	LabelID          string `json:"label_id"`
-	ActivationDigest string `json:"activation_digest"`
-	DevelopmentOnly  bool   `json:"development_only"`
+	SchemaVersion           string `json:"schema_version"`
+	InstanceID              string `json:"instance_id"`
+	SecurityDomain          string `json:"security_domain"`
+	StoreID                 string `json:"openfga_store_id"`
+	ModelID                 string `json:"openfga_model_id"`
+	PrincipalID             string `json:"principal_id"`
+	SessionID               string `json:"session_id"`
+	UnprivilegedPrincipalID string `json:"unprivileged_principal_id"`
+	UnprivilegedSessionID   string `json:"unprivileged_session_id"`
+	LabelID                 string `json:"label_id"`
+	ActivationDigest        string `json:"activation_digest"`
+	DevelopmentOnly         bool   `json:"development_only"`
+}
+
+func validLocalBootstrapUserIDs(record localBootstrapRecord) bool {
+	seen := map[string]bool{}
+	for _, id := range []string{record.InstanceID, record.LabelID, record.PrincipalID, record.SessionID, record.UnprivilegedPrincipalID, record.UnprivilegedSessionID} {
+		if !identity.ValidID(id) || seen[id] {
+			return false
+		}
+		seen[id] = true
+	}
+	return true
 }
 
 type localStageError string
@@ -98,7 +112,7 @@ func runDevBootstrap(args []string, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "stead-api: local bootstrap failed at %s; existing evidence and state were preserved\n", stage)
 		return 1
 	}
-	fmt.Fprintln(stderr, "stead-api: synthetic-only local bootstrap complete; private one-time login token retained in state directory")
+	fmt.Fprintln(stderr, "stead-api: synthetic-only local bootstrap complete; distinct private one-time login tokens retained in state directory")
 	return 0
 }
 
@@ -193,12 +207,26 @@ func bootstrapLocal(ctx context.Context, repository string, config localdev.Conf
 	if err != nil {
 		return localStageError("identity-randomness")
 	}
+	unprivilegedPrincipalID, err := postgres.NewID()
+	if err != nil {
+		return localStageError("identity-randomness")
+	}
+	unprivilegedSessionID, err := postgres.NewID()
+	if err != nil {
+		return localStageError("identity-randomness")
+	}
+	unprivilegedToken, unprivilegedDigest, err := identity.NewLocalToken()
+	if err != nil {
+		return localStageError("identity-randomness")
+	}
 	grant := []authorization.Tuple{{User: "user:" + principalID, Relation: "organization_creator", Object: "instance:" + config.InstanceID}}
 	intent := struct {
 		InstanceID, PrincipalID, SessionID, LabelID, ActivationDigest string
+		UnprivilegedPrincipalID, UnprivilegedSessionID                string
 		TokenDigest                                                   [32]byte
+		UnprivilegedTokenDigest                                       [32]byte
 		Tuples                                                        []authorization.Tuple
-	}{config.InstanceID, principalID, sessionID, labelID, artifacts.Anchor.Binding.Digest(), digest, grant}
+	}{config.InstanceID, principalID, sessionID, labelID, artifacts.Anchor.Binding.Digest(), unprivilegedPrincipalID, unprivilegedSessionID, digest, unprivilegedDigest, grant}
 	if err := localdev.WriteExclusive(filepath.Join(config.StateDirectory, "bootstrap-identity-intent.json"), marshalLocal(intent)); err != nil {
 		return localStageError("identity-intent-persistence")
 	}
@@ -220,7 +248,11 @@ func bootstrapLocal(ctx context.Context, repository string, config localdev.Conf
 		return localStageError("signed-bootstrap-label")
 	}
 	session := identity.SessionRecord{ID: sessionID, Principal: identity.Principal{Type: "user", ID: principalID}, InstanceID: config.InstanceID, SecurityDomain: config.SecurityDomain, Authority: "stead_local_identity", AuthenticationStrength: "local_bootstrap", NetworkZone: "loopback", DeviceTrust: "local", Environment: "local-development", ClassificationCeilings: ceilings, IssuedAt: now, ExpiresAt: now.Add(8 * time.Hour), Revision: 1, PrincipalRevision: 1, Active: true, PrincipalActive: true}
-	result, err := postgres.Bootstrap(ctx, postgres.BootstrapConfig{AdminDSN: config.DatabaseAdminURL, AppPassword: config.DatabasePassword, InstanceID: config.InstanceID, SecurityDomain: config.SecurityDomain, OpenFGAStoreID: artifacts.OpenFGA.StoreID(), ActivationBinding: artifacts.Anchor.Binding, PolicyTimeHighWater: artifacts.Anchor.PolicyTimeHighWater, PolicyTimeRevision: artifacts.Anchor.PolicyTimeRevision, LabelID: labelID, Label: label, Session: session, TokenDigest: digest})
+	unprivilegedSession := session
+	unprivilegedSession.ID = unprivilegedSessionID
+	unprivilegedSession.Principal.ID = unprivilegedPrincipalID
+	unprivilegedSession.ClassificationCeilings = maps.Clone(ceilings)
+	result, err := postgres.Bootstrap(ctx, postgres.BootstrapConfig{AdminDSN: config.DatabaseAdminURL, AppPassword: config.DatabasePassword, InstanceID: config.InstanceID, SecurityDomain: config.SecurityDomain, OpenFGAStoreID: artifacts.OpenFGA.StoreID(), ActivationBinding: artifacts.Anchor.Binding, PolicyTimeHighWater: artifacts.Anchor.PolicyTimeHighWater, PolicyTimeRevision: artifacts.Anchor.PolicyTimeRevision, LabelID: labelID, Label: label, Session: session, TokenDigest: digest, UnprivilegedSession: unprivilegedSession, UnprivilegedTokenDigest: unprivilegedDigest})
 	if err != nil {
 		return localStageError("database-bootstrap")
 	}
@@ -236,6 +268,10 @@ func bootstrapLocal(ctx context.Context, repository string, config localdev.Conf
 	authenticator, err := identity.NewLocalAuthenticator(store, config.InstanceID, time.Now)
 	if err != nil {
 		return localStageError("central-identity")
+	}
+	unprivilegedAuthenticated, err := authenticator.Authenticate(ctx, unprivilegedToken)
+	if err != nil || unprivilegedAuthenticated.Principal() != unprivilegedSession.Principal || unprivilegedAuthenticated.SessionID() != unprivilegedSessionID {
+		return localStageError("unprivileged-central-identity")
 	}
 	authenticated, err := authenticator.Authenticate(ctx, token)
 	if err != nil {
@@ -261,7 +297,10 @@ func bootstrapLocal(ctx context.Context, repository string, config localdev.Conf
 	if err := localdev.WriteExclusive(filepath.Join(config.StateDirectory, "one-time-login-token"), []byte(token)); err != nil {
 		return localStageError("one-time-token-persistence")
 	}
-	record := localBootstrapRecord{SchemaVersion: "1.0.0", InstanceID: config.InstanceID, SecurityDomain: config.SecurityDomain, StoreID: artifacts.OpenFGA.StoreID(), ModelID: artifacts.OpenFGA.ModelID(), PrincipalID: principalID, SessionID: sessionID, LabelID: labelID, ActivationDigest: artifacts.Anchor.Binding.Digest(), DevelopmentOnly: true}
+	if err := localdev.WriteExclusive(filepath.Join(config.StateDirectory, "one-time-unprivileged-login-token"), []byte(unprivilegedToken)); err != nil {
+		return localStageError("unprivileged-one-time-token-persistence")
+	}
+	record := localBootstrapRecord{SchemaVersion: "1.0.0", InstanceID: config.InstanceID, SecurityDomain: config.SecurityDomain, StoreID: artifacts.OpenFGA.StoreID(), ModelID: artifacts.OpenFGA.ModelID(), PrincipalID: principalID, SessionID: sessionID, UnprivilegedPrincipalID: unprivilegedPrincipalID, UnprivilegedSessionID: unprivilegedSessionID, LabelID: labelID, ActivationDigest: artifacts.Anchor.Binding.Digest(), DevelopmentOnly: true}
 	if err := localdev.WriteExclusive(filepath.Join(config.StateDirectory, "bootstrap.json"), marshalLocal(record)); err != nil {
 		return localStageError("bootstrap-completion")
 	}
