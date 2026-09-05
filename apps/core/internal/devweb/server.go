@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -26,7 +27,22 @@ func origin(raw string) (*url.URL, error) {
 	if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || u.Path != "" || u.RawPath != "" {
 		return nil, errors.New("an exact HTTPS public origin is required")
 	}
+	if host := u.Hostname(); host != "localhost" && (net.ParseIP(host) == nil || !net.ParseIP(host).IsLoopback()) {
+		return nil, errors.New("development browser origin must be loopback")
+	}
 	return u, nil
+}
+
+func localListen(address string) error {
+	host, port, err := net.SplitHostPort(address)
+	if err != nil || net.ParseIP(host) == nil || !net.ParseIP(host).IsLoopback() {
+		return errors.New("development listener must be a literal loopback address")
+	}
+	number, err := strconv.ParseUint(port, 10, 16)
+	if err != nil || number == 0 {
+		return errors.New("development listener requires a numeric port")
+	}
+	return nil
 }
 
 // Handler routes only /api/v1 and health to a fixed trusted upstream. Request
@@ -108,6 +124,11 @@ func Handler(config Config) (http.Handler, error) {
 }
 
 func Run(ctx context.Context, config Config) error {
+	// The local-bootstrap identity's loopback context must be enforced by the
+	// listener, not inferred from client-controlled Host or Origin headers.
+	if err := localListen(config.Listen); err != nil {
+		return err
+	}
 	handler, err := Handler(config)
 	if err != nil {
 		return err

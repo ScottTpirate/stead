@@ -95,7 +95,7 @@ func TestProxyBoundaryAndStaticRoutes(t *testing.T) {
 	if upstreamCalls != 2 {
 		t.Fatalf("unexpected provider/proxy calls: %d", upstreamCalls)
 	}
-	for _, bad := range []string{"http://localhost:7443", "https://user@localhost:7443", "https://localhost:7443/", "https://localhost:7443?redirect=bad"} {
+	for _, bad := range []string{"http://localhost:7443", "https://user@localhost:7443", "https://localhost:7443/", "https://localhost:7443?redirect=bad", "https://public.example:7443", "https://192.168.1.20:7443", "https://0.0.0.0:7443"} {
 		config.Origin = bad
 		if _, err := Handler(config); err == nil {
 			t.Errorf("accepted %s", bad)
@@ -109,7 +109,23 @@ func TestProxyBoundaryAndStaticRoutes(t *testing.T) {
 }
 
 func TestRunRejectsMissingBuild(t *testing.T) {
-	if err := Run(context.Background(), Config{Origin: "https://localhost", Upstream: "http://localhost:9000", Assets: t.TempDir()}); err == nil {
+	if err := Run(context.Background(), Config{Listen: "127.0.0.1:7443", Origin: "https://localhost", Upstream: "http://localhost:9000", Assets: t.TempDir()}); err == nil {
 		t.Fatal("missing browser build allowed")
+	}
+}
+
+func TestDevelopmentListenerCannotExposeBootstrapExternally(t *testing.T) {
+	for _, address := range []string{"127.0.0.1:7443", "[::1]:7443"} {
+		if err := localListen(address); err != nil {
+			t.Errorf("loopback listener rejected: %v", err)
+		}
+	}
+	for _, address := range []string{"", ":7443", "0.0.0.0:7443", "[::]:7443", "192.168.1.20:7443", "localhost:7443", "127.0.0.1:0", "127.0.0.1:65536", "127.0.0.1:https"} {
+		if err := localListen(address); err == nil {
+			t.Errorf("unsafe listener accepted: %q", address)
+		}
+		if err := Run(context.Background(), Config{Listen: address}); err == nil || !strings.Contains(err.Error(), "listener") {
+			t.Errorf("Run must reject unsafe listener before startup: %q", address)
+		}
 	}
 }
