@@ -121,7 +121,7 @@ async function prepare(intakeOnly = false) {
   checkedCommand(path.join(repository, 'scripts/run_pinned_go.sh'), ['go', '-C', source, 'build', '-mod=readonly', '-trimpath', `-ldflags=-X github.com/openfga/openfga/internal/build.Version=${fga.version} -X github.com/openfga/openfga/internal/build.Commit=${fga.commit} -X github.com/openfga/openfga/internal/build.Date=${fga.commit_date}`, '-o', path.join(state, 'openfga'), './cmd/openfga'], { env: { ...baseEnvironment, CGO_ENABLED: '0', GOTOOLCHAIN: 'local' } });
   if (sha256(await readFile(path.join(state, 'openfga'))) !== fga.binary_sha256) throw new Error('Rebuilt OpenFGA binary differs from reviewed bytes');
   for (const [binary, sourcePath] of intakeOnly ? [] : [['stead-api', './apps/core'], ['stead-worker', './apps/worker']]) {
-    checkedCommand(path.join(repository, 'scripts/run_pinned_go.sh'), ['go', 'build', '-mod=readonly', '-o', path.join(state, binary), sourcePath], { env: { ...baseEnvironment, CGO_ENABLED: '0', GOTOOLCHAIN: 'local' } });
+    checkedCommand(path.join(repository, 'scripts/run_pinned_go.sh'), ['go', 'build', '-mod=readonly', '-trimpath', '-buildvcs=false', '-pgo=off', '-o', path.join(state, binary), sourcePath], { env: { ...baseEnvironment, CGO_ENABLED: '0', GOENV: 'off', GOWORK: 'off', GOTOOLCHAIN: 'local', GOOS: 'linux', GOARCH: 'amd64', GOAMD64: 'v1', GOEXPERIMENT: '' } });
   }
   if (!intakeOnly) {
     checkedCommand(path.join(repository, 'scripts/run_pinned_node.sh'), ['npm', 'ci', '--ignore-scripts', '--no-audit', '--no-fund']);
@@ -301,7 +301,7 @@ GRANT CONNECT ON DATABASE openfga TO openfga;
       return;
     }
     const environment = { STEAD_PUBLIC_ORIGIN: `https://localhost:${ports.web}`, STEAD_INSTANCE_ID: secret.instanceID, STEAD_SECURITY_DOMAIN: secret.securityDomain, STEAD_BOOTSTRAP_STATE_DIR: state, STEAD_DATABASE_URL_FILE: path.join(state, 'database-url'), STEAD_OPENFGA_URL: `http://127.0.0.1:${ports.openfga}`, STEAD_OPENFGA_TOKEN_FILE: path.join(state, 'openfga-key'), STEAD_POLICY_DIR: path.join(state, 'policy'), STEAD_TLS_CERT_FILE: path.join(state, 'tls/localhost.crt'), STEAD_TLS_KEY_FILE: path.join(state, 'tls/localhost.key') };
-    checkedCommand(path.join(state, 'stead-api'), ['dev-bootstrap'], { env: { ...baseEnvironment, ...environment, STEAD_DATABASE_ADMIN_URL_FILE: path.join(state, 'database-admin-url'), STEAD_DATABASE_PASSWORD_FILE: path.join(state, 'database-password'), STEAD_INSTANCE_ID: secret.instanceID, STEAD_SECURITY_DOMAIN: secret.securityDomain, STEAD_BOOTSTRAP_STATE_DIR: state, STEAD_NATS_MAINTENANCE_FILE: path.join(state, 'nats-maintenance.json') }, stdio: 'pipe' });
+    checkedCommand(path.join(state, 'stead-api'), ['dev-bootstrap'], { env: { ...baseEnvironment, ...environment, STEAD_DATABASE_ADMIN_URL_FILE: path.join(state, 'database-admin-url'), STEAD_DATABASE_PASSWORD_FILE: path.join(state, 'database-password'), STEAD_INSTANCE_ID: secret.instanceID, STEAD_SECURITY_DOMAIN: secret.securityDomain, STEAD_BOOTSTRAP_STATE_DIR: state }, stdio: 'pipe' });
     const auth = JSON.parse(await readPrivate('bootstrap.json'));
     environment.STEAD_OPENFGA_STORE_ID = auth.openfga_store_id;
     environment.STEAD_OPENFGA_MODEL_ID = auth.openfga_model_id;
@@ -347,7 +347,9 @@ async function main() {
   const log = await import('node:fs').then((fs) => fs.openSync(path.join(state, 'supervisor.log'), 'a', 0o600));
   const child = spawn(process.execPath, [fileURLToPath(import.meta.url), '__run'], { cwd: repository, env: baseEnvironment, detached: true, stdio: ['ignore', log, log] });
   child.unref();
-  for (let attempt = 0; attempt < 360; attempt++) {
+  // Initial policy derivation runs actual bounded tests and a clean compiler
+  // verification. Wait asynchronously without extending any runtime decision.
+  for (let attempt = 0; attempt < 1200; attempt++) {
     const current = await status();
     if (current.running && current.ready) {
       console.log(`Stead local development: https://localhost:${ports.web} (trust this checkout's private development certificate deliberately; no system trust was changed)`);

@@ -41,7 +41,7 @@ func (output *boundedOutput) Write(data []byte) (int, error) {
 func checkEnvironment() []string {
 	// Deliberately do not inherit GOFLAGS, GOENV, compiler overrides, credentials,
 	// shell startup files, proxy settings or npm configuration from the caller.
-	return []string{"PATH=/usr/local/bin:/usr/bin:/bin", "LANG=C.UTF-8", "CGO_ENABLED=0", "GOENV=off", "GOTOOLCHAIN=local", "GOCACHE=/tmp/stead-go-build-cache", "GOPATH=/tmp/stead-go-path", "npm_config_cache=/tmp/stead-local-npm-cache", "npm_config_userconfig=/dev/null", "npm_config_globalconfig=/dev/null"}
+	return []string{"PATH=/usr/local/bin:/usr/bin:/bin", "LANG=C.UTF-8", "CGO_ENABLED=0", "GOENV=off", "GOWORK=off", "GOTOOLCHAIN=local", "GOOS=linux", "GOARCH=amd64", "GOAMD64=v1", "GOEXPERIMENT=", "GOCACHE=/tmp/stead-go-build-cache", "GOPATH=/tmp/stead-go-path", "npm_config_cache=/tmp/stead-local-npm-cache", "npm_config_userconfig=/dev/null", "npm_config_globalconfig=/dev/null"}
 }
 
 func captureCheck(ctx context.Context, root, executable string, args []string, input []byte) (authorization.LocalCheckCapture, error) {

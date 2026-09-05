@@ -42,10 +42,16 @@ func TestCheckOutputAndExecutionCaptureAreActualAndBounded(t *testing.T) {
 func TestCheckEnvironmentCannotInheritServiceSecretsOrCompilerOverrides(t *testing.T) {
 	t.Setenv("STEAD_DATABASE_PASSWORD", "must-not-leak")
 	t.Setenv("GOFLAGS", "-tags=unsafe")
+	t.Setenv("GOWORK", "/outside/unreviewed.work")
+	workDisabled := false
 	for _, entry := range checkEnvironment() {
+		workDisabled = workDisabled || entry == "GOWORK=off"
 		if strings.Contains(entry, "must-not-leak") || strings.HasPrefix(entry, "STEAD_") || strings.HasPrefix(entry, "GOFLAGS=") || strings.HasPrefix(entry, "HOME=") {
 			t.Fatal("untrusted check environment")
 		}
+	}
+	if !workDisabled {
+		t.Fatal("automatic ancestor workspace discovery remains enabled")
 	}
 }
 
