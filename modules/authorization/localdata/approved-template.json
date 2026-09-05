@@ -2,8 +2,8 @@
   "schema_version": "1.0.0",
   "status": "approved",
   "core": {
-    "source_revision": "5cc1f030c4d4dd81eb188e00ceb9f41ea2b7a498",
-    "source_tree": "385fdaabefbb4a0a7e6ec05a2f3ccb1b106c4383",
+    "source_revision": "5cff5956979acb76c34eec4a93f7831e0869f3e6",
+    "source_tree": "ca490b806aa1032a21191f83933699c083666cee",
     "go_version": "go1.27.0",
     "go_binary_digest": "sha256:1db869c560a193573a71be466a34e0d4abb7792d78165c6102cdda069276a3a8",
     "go_compiler_digest": "sha256:28d760ce44468fe3d4103227a3a5bc7d152423f5d1bb5c19fe5fd90498da755b",
@@ -240,28 +240,28 @@
     {
       "role": "architecture-contract-owner",
       "reviewer_id": "/root/template_architecture_review",
-      "source_revision": "5cc1f030c4d4dd81eb188e00ceb9f41ea2b7a498",
-      "core_digest": "sha256:84dc7da7bdc235d5ea9501d12a2595f209a7d975fa6e81388dc05860d1198ab8",
+      "source_revision": "5cff5956979acb76c34eec4a93f7831e0869f3e6",
+      "core_digest": "sha256:9926c73ca8f3090036c3c322831e7f068e4dfa92a3a0b52bcde923138866144c",
       "record_path": "docs/governance/local-development-template-review.json",
-      "record_digest": "sha256:03943198e538dd440f3c1b79bdd670776dec48f637fddd18d8976ee3d429d4e1",
+      "record_digest": "sha256:2d6d7d6a7516d1ee9ff5be3165e74fb2d267ff2b5f242870e7976c9155a337d2",
       "disposition": "accept"
     },
     {
       "role": "qa",
-      "reviewer_id": "/root/template_qa_daemon_fix",
-      "source_revision": "5cc1f030c4d4dd81eb188e00ceb9f41ea2b7a498",
-      "core_digest": "sha256:84dc7da7bdc235d5ea9501d12a2595f209a7d975fa6e81388dc05860d1198ab8",
+      "reviewer_id": "/root/unprivileged_qa_review",
+      "source_revision": "5cff5956979acb76c34eec4a93f7831e0869f3e6",
+      "core_digest": "sha256:9926c73ca8f3090036c3c322831e7f068e4dfa92a3a0b52bcde923138866144c",
       "record_path": "docs/governance/local-development-template-review.json",
-      "record_digest": "sha256:03943198e538dd440f3c1b79bdd670776dec48f637fddd18d8976ee3d429d4e1",
+      "record_digest": "sha256:2d6d7d6a7516d1ee9ff5be3165e74fb2d267ff2b5f242870e7976c9155a337d2",
       "disposition": "accept"
     },
     {
       "role": "security",
-      "reviewer_id": "/root/parallel_read_security_final",
-      "source_revision": "5cc1f030c4d4dd81eb188e00ceb9f41ea2b7a498",
-      "core_digest": "sha256:84dc7da7bdc235d5ea9501d12a2595f209a7d975fa6e81388dc05860d1198ab8",
+      "reviewer_id": "/root/unprivileged_security_review",
+      "source_revision": "5cff5956979acb76c34eec4a93f7831e0869f3e6",
+      "core_digest": "sha256:9926c73ca8f3090036c3c322831e7f068e4dfa92a3a0b52bcde923138866144c",
       "record_path": "docs/governance/local-development-template-review.json",
-      "record_digest": "sha256:03943198e538dd440f3c1b79bdd670776dec48f637fddd18d8976ee3d429d4e1",
+      "record_digest": "sha256:2d6d7d6a7516d1ee9ff5be3165e74fb2d267ff2b5f242870e7976c9155a337d2",
       "disposition": "accept"
     }
   ]
