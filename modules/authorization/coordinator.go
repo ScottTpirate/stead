@@ -144,7 +144,7 @@ func validState(state State, session identity.SessionRecord, target ResourceRef,
 	if session.InstanceID != binding.InstallationID {
 		return false
 	}
-	if state.Resource != target || state.InstanceID != session.InstanceID || state.SecurityDomain != session.SecurityDomain || state.SecurityDomain != binding.DeploymentPolicyID || state.Principal != session.Principal || state.SessionID != session.ID || !state.PrincipalActive || !state.SessionActive || state.TuplePending || state.ExplicitDeny || !state.ProviderPathAllowed || !state.CapabilityActive || !validRevisions(state.Revisions) || state.Revisions.Principal != session.PrincipalRevision || state.Revisions.Session != session.Revision || state.ActivationDigest != binding.Digest() || state.ActivationSetID != binding.ActivationSetID || state.ActivationSequence != binding.ActivationSequence || state.OpenFGAModelID != binding.OpenFGAModelID || state.PolicyTimeHighWater.IsZero() || state.PolicyTimeRevision == 0 || !now.Before(state.ContextExpiresAt) {
+	if state.Resource != target || state.InstanceID != session.InstanceID || state.SecurityDomain != session.SecurityDomain || state.SecurityDomain != binding.DeploymentPolicyID || state.Principal != session.Principal || state.SessionID != session.ID || !state.PrincipalActive || !state.SessionActive || state.TuplePending || !validRevisions(state.Revisions) || state.Revisions.Principal != session.PrincipalRevision || state.Revisions.Session != session.Revision || state.ActivationDigest != binding.Digest() || state.ActivationSetID != binding.ActivationSetID || state.ActivationSequence != binding.ActivationSequence || state.OpenFGAModelID != binding.OpenFGAModelID || state.PolicyTimeHighWater.IsZero() || state.PolicyTimeRevision == 0 || !now.Before(state.ContextExpiresAt) {
 		return false
 	}
 	if target.Kind == "instance" {
@@ -199,12 +199,22 @@ func (coordinator *Coordinator) Authorize(ctx context.Context, session identity.
 	state.PolicyTimeHighWater = anchor.PolicyTimeHighWater
 	state.PolicyTimeRevision = anchor.PolicyTimeRevision
 	allowed, err := coordinator.config.OpenFGA.Check(ctx, Tuple{User: session.Principal().Type + ":" + session.Principal().ID, Relation: relation, Object: target.Kind + ":" + target.ID})
-	if err != nil || !allowed {
+	if err != nil {
 		return deny("relationship_denied")
 	}
 	result, err := activation.evaluator.Evaluate(state.Label, session.Context())
-	if err != nil {
-		return deny("classification_denied")
+	if err != nil && result.DenialReason == "" {
+		return deny("context_denied")
+	}
+	policy := NativePolicyDecision(NativePolicyFacts{
+		PrincipalType: session.Principal().Type, Operation: "metadata",
+		RelationshipAllowed: allowed, ProviderPathAllowed: state.ProviderPathAllowed,
+		FenceCurrent: true, ExplicitDeny: state.ExplicitDeny,
+		TrustedAttributesValid: true, CapabilityActive: state.CapabilityActive,
+		ContextValid: true, ClassificationReason: result.DenialReason,
+	})
+	if !policy.Allowed {
+		return deny(policy.Reason)
 	}
 	finished := coordinator.config.Clock().UTC()
 	if finished.Before(now) {
