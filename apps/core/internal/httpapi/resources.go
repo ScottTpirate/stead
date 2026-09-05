@@ -104,63 +104,6 @@ func (server *Server) getProject(w http.ResponseWriter, r *http.Request) {
 	server.get(w, r, "project", r.PathValue("project_id"), 200)
 }
 
-func (server *Server) list(w http.ResponseWriter, r *http.Request, kind string) {
-	session, ok := server.authenticated(w, r)
-	if !ok {
-		return
-	}
-	var parent *authorization.Decision
-	var ids []string
-	var err error
-	if kind == "organization" {
-		// This initial local-bootstrap management view requires an explicit
-		// instance creation grant, including for empty results. It is not a
-		// universal membership or Organization-access shortcut.
-		parent, ok = server.authorize(w, r, session, authorization.OrganizationCreate, "instance", server.config.InstanceID)
-		if !ok {
-			return
-		}
-		ids, err = server.config.Repository.ListOrganizationIDs(r.Context(), server.config.InstanceID, 100)
-	} else {
-		org := r.PathValue("organization_id")
-		parent, ok = server.authorize(w, r, session, authorization.OrganizationRead, "organization", org)
-		if !ok {
-			return
-		}
-		if kind == "team" {
-			ids, err = server.config.Repository.ListTeamIDs(r.Context(), org, 100)
-		} else {
-			ids, err = server.config.Repository.ListProjectIDs(r.Context(), org, 100)
-		}
-	}
-	if err != nil || len(ids) > 100 {
-		problem(w, 503)
-		return
-	}
-	values := []map[string]any{}
-	decisions := []*authorization.Decision{parent}
-	for _, id := range ids {
-		value, decision, err := server.readResource(r.Context(), session, kind, id)
-		if err != nil {
-			if r.Context().Err() != nil {
-				problem(w, 503)
-				return
-			}
-			continue
-		}
-		values = append(values, value)
-		decisions = append(decisions, decision)
-	}
-	server.release(w, r, 200, values, decisions)
-}
-func (server *Server) listOrganizations(w http.ResponseWriter, r *http.Request) {
-	server.list(w, r, "organization")
-}
-func (server *Server) listTeams(w http.ResponseWriter, r *http.Request) { server.list(w, r, "team") }
-func (server *Server) listProjects(w http.ResponseWriter, r *http.Request) {
-	server.list(w, r, "project")
-}
-
 func idempotencyKey(r *http.Request) string {
 	values := r.Header.Values("Idempotency-Key")
 	if len(values) != 1 || !organization.ValidIdempotencyKey(values[0]) {

@@ -209,24 +209,37 @@ func (store *Store) canonicalExists(ctx context.Context, ref authorization.Resou
 }
 
 func (store *Store) ListOrganizationIDs(ctx context.Context, instanceID string, limit int) ([]string, error) {
+	return store.ListOrganizationPageIDs(ctx, instanceID, "", limit)
+}
+func (store *Store) ListOrganizationPageIDs(ctx context.Context, instanceID, after string, limit int) ([]string, error) {
 	if instanceID != store.config.InstanceID {
 		return nil, organization.ErrUnavailable
 	}
-	return store.listIDs(ctx, "organization", `SELECT id::text FROM organization.organizations WHERE active ORDER BY id LIMIT $1`, nil, limit)
+	return store.listIDs(ctx, "organization", `SELECT id::text FROM organization.organizations WHERE active AND ($2::uuid IS NULL OR id>$2::uuid) ORDER BY id LIMIT $1`, nil, after, limit)
 }
 func (store *Store) ListTeamIDs(ctx context.Context, organizationID string, limit int) ([]string, error) {
-	return store.listIDs(ctx, "organization", `SELECT id::text FROM organization.teams WHERE organization_id=$2 AND active ORDER BY id LIMIT $1`, &organizationID, limit)
+	return store.ListTeamPageIDs(ctx, organizationID, "", limit)
+}
+func (store *Store) ListTeamPageIDs(ctx context.Context, organizationID, after string, limit int) ([]string, error) {
+	return store.listIDs(ctx, "organization", `SELECT id::text FROM organization.teams WHERE organization_id=$3 AND active AND ($2::uuid IS NULL OR id>$2::uuid) ORDER BY id LIMIT $1`, &organizationID, after, limit)
 }
 func (store *Store) ListProjectIDs(ctx context.Context, organizationID string, limit int) ([]string, error) {
-	return store.listIDs(ctx, "project", `SELECT id::text FROM project.projects WHERE organization_id=$2 AND active ORDER BY id LIMIT $1`, &organizationID, limit)
+	return store.ListProjectPageIDs(ctx, organizationID, "", limit)
 }
-func (store *Store) listIDs(ctx context.Context, owner, query string, org *string, limit int) ([]string, error) {
-	if limit < 1 || limit > 100 || (org != nil && !identity.ValidID(*org)) {
+func (store *Store) ListProjectPageIDs(ctx context.Context, organizationID, after string, limit int) ([]string, error) {
+	return store.listIDs(ctx, "project", `SELECT id::text FROM project.projects WHERE organization_id=$3 AND active AND ($2::uuid IS NULL OR id>$2::uuid) ORDER BY id LIMIT $1`, &organizationID, after, limit)
+}
+func (store *Store) listIDs(ctx context.Context, owner, query string, org *string, after string, limit int) ([]string, error) {
+	if limit < 1 || limit > 100 || (after != "" && !identity.ValidID(after)) || (org != nil && !identity.ValidID(*org)) {
 		return nil, organization.ErrInvalid
 	}
 	ids := []string{}
 	err := store.owned(ctx, owner, false, func(tx pgx.Tx) error {
-		args := []any{limit}
+		var cursor any
+		if after != "" {
+			cursor = after
+		}
+		args := []any{limit, cursor}
 		if org != nil {
 			args = append(args, *org)
 		}
