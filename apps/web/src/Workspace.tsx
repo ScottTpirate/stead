@@ -42,6 +42,7 @@ export function Workspace({ route, navigate }: { readonly route: RouteMatch; rea
   const [projects, setProjects] = useState<Resource[]>([]);
   const [peek, setPeek] = useState<Resource | null>(null);
   const [continuations, setContinuations] = useState<Record<MutationForm, string>>({ organization: "", team: "", project: "" });
+  const [refreshRevision, setRefreshRevision] = useState(0);
   const generation = useRef(0);
   const mutationKey = useRef<{ fingerprint: string; value: string } | null>(null);
 
@@ -106,7 +107,7 @@ export function Workspace({ route, navigate }: { readonly route: RouteMatch; rea
       applyPage("project", projectList.data, false);
     }).catch((cause: unknown) => { if (!controller.signal.aborted) failed(cause); });
     return () => { controller.abort(); };
-  }, [organizationID, session, failed, applyPage]);
+  }, [organizationID, session, refreshRevision, failed, applyPage]);
 
   useEffect(() => {
     if (!session) return;
@@ -137,6 +138,18 @@ export function Workspace({ route, navigate }: { readonly route: RouteMatch; rea
     try { await platformClient.request("deleteSession"); }
     catch (cause) { failed(cause); }
     finally { clear(); setBusy(false); }
+  }
+
+  async function refresh() {
+    const revision = generation.current;
+    setBusy(true); setError(""); setPeek(null);
+    try {
+      await loadOrganizations(revision);
+      // An unchanged Organization still needs fresh collection reads. Reuse
+      // the existing abort/generation-fenced effect, not a cached response.
+      if (revision === generation.current) setRefreshRevision((value) => value + 1);
+    } catch (cause) { if (revision === generation.current) failed(cause); }
+    finally { setBusy(false); }
   }
 
   async function loadMore(kind: MutationForm) {
@@ -228,7 +241,7 @@ export function Workspace({ route, navigate }: { readonly route: RouteMatch; rea
             {organizations.length === 0 && <option value="">Create your first Organization</option>}
             {organizations.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}
           </select></label>
-          <button type="button" disabled={busy} onClick={() => { setError(""); void loadOrganizations(generation.current).catch(failed); }}>Refresh</button>
+          <button type="button" disabled={busy} onClick={() => { void refresh(); }}>Refresh</button>
           {area !== "home" && continuations.organization && <button type="button" disabled={busy} onClick={() => { void loadMore("organization"); }}>Load more Organizations</button>}
         </div>
         {(area === "home" || area === "teams" || area === "projects") ? <div className="product-columns">

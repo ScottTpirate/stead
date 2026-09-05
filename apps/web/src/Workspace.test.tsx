@@ -110,3 +110,29 @@ it("can select an owning Team beyond the first page without leaving the Project 
   expect(screen.getByRole("option", { name: "First Team" })).toBeTruthy();
   expect(request).toHaveBeenCalledWith("listTeams", { path: { organization_id: organization.id }, query: { page_size: 20, after: first.id } });
 });
+
+it("Refresh retries the displayed collections after a transient failure", async () => {
+  const team = { ...organization, kind: "team", id: "fixture-team", title: "Owning Team" };
+  const project = { ...organization, kind: "project", id: "fixture-project", title: "Saved Project" };
+  let projectReads = 0;
+  const request = vi.spyOn(platformClient, "request").mockImplementation(async <T,>(operation: string) => {
+    if (operation === "getSession") return response(session as T);
+    if (operation === "listOrganizations") return response({ items: [organization] } as T);
+    if (operation === "listTeams") return response({ items: [team] } as T);
+    if (operation === "listProjects") {
+      if (++projectReads === 1) throw new PlatformApiError(503);
+      return response({ items: [project] } as T);
+    }
+    throw new Error("unexpected operation");
+  });
+  const user = userEvent.setup();
+  render(<Workspace route={matchRoute("/projects")} navigate={() => {}} />);
+  await screen.findByRole("alert");
+  expect(screen.queryByRole("button", { name: "OPS Saved Project" })).toBeNull();
+  await user.click(screen.getByRole("button", { name: "Refresh" }));
+  await screen.findByRole("button", { name: "OPS Saved Project" });
+  expect(screen.getByRole("option", { name: "Owning Team" })).toBeTruthy();
+  expect(screen.queryByRole("alert")).toBeNull();
+  expect(request.mock.calls.filter(([operation]) => operation === "listTeams")).toHaveLength(2);
+  expect(projectReads).toBe(2);
+});
