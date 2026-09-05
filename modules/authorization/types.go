@@ -16,16 +16,17 @@ var ErrDenied = errors.New("operation not permitted")
 type Action string
 
 const (
-	OrganizationCreate  Action = "organization.create"
-	OrganizationRead    Action = "organization.read"
-	OrganizationsList   Action = "organization.list"
-	TeamCreate          Action = "team.create"
-	TeamRead            Action = "team.read"
-	ProjectCreate       Action = "project.create"
-	ProjectRead         Action = "project.read"
-	TeamProfileManage   Action = "team.profile.manage"
-	TeamRoleManage      Action = "team.role.manage"
-	TeamHierarchyManage Action = "team.hierarchy.manage"
+	OrganizationCreate      Action = "organization.create"
+	OrganizationRead        Action = "organization.read"
+	OrganizationsList       Action = "organization.list"
+	TeamCreate              Action = "team.create"
+	TeamRead                Action = "team.read"
+	ProjectCreate           Action = "project.create"
+	ProjectRead             Action = "project.read"
+	ProjectBackingProvision Action = "project.backing.provision"
+	TeamProfileManage       Action = "team.profile.manage"
+	TeamRoleManage          Action = "team.role.manage"
+	TeamHierarchyManage     Action = "team.hierarchy.manage"
 )
 
 type ResourceRef struct {
@@ -68,6 +69,7 @@ type State struct {
 	SessionID           string
 	PrincipalActive     bool
 	SessionActive       bool
+	SessionPending      bool
 	TuplePending        bool
 	ExplicitDeny        bool
 	ProviderPathAllowed bool
