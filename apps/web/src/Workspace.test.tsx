@@ -37,6 +37,7 @@ it("clears the disposable credential and creates through the generated client", 
   await user.type(credential, token);
   await user.click(screen.getByRole("button", { name: "Sign in" }));
   await screen.findByRole("button", { name: "Sign out" });
+  expect(screen.getByRole("note").textContent).toBe("Local development · synthetic data only");
   expect(credential.value).toBe("");
   expect(request).toHaveBeenCalledWith("createSession", { body: { token } });
   await user.type(screen.getByLabelText("Key"), "OPS");

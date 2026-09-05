@@ -213,6 +213,7 @@ export function Workspace({ route, navigate }: { readonly route: RouteMatch; rea
   const resources = area === "teams" ? teams : area === "projects" ? projects : organizations;
   return <AppShell route={route} navigate={navigate} sessionLabel={session ? <button type="button" onClick={() => { void logout(); }} disabled={busy}>Sign out</button> : "Local development"}>
     <div className="product-workspace" aria-busy={checking || busy}>
+      <p className="product-development" role="note">Local development · synthetic data only</p>
       {error && <p className="product-error" role="alert">{error}</p>}
       {checking ? <p role="status">Checking your session…</p> : !session ? <section className="product-panel">
         <h2>Open your workspace</h2>
