@@ -210,7 +210,7 @@ func (server *Server) list(w http.ResponseWriter, r *http.Request, kind string) 
 		page.Items = values[:size]
 		page.NextAfter = ids[size-1]
 	}
-	server.release(w, r, 200, page, decisions)
+	server.release(w, r, 200, page, decisions, false)
 }
 
 func allowedPageSet(decisions []*authorization.Decision, kind, organization string, rows int) bool {

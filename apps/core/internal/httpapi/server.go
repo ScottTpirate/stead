@@ -363,9 +363,24 @@ func (response *protectedResponse) Release(ctx context.Context) error {
 	return err
 }
 func (response *protectedResponse) Suppress() { response.body = nil }
-func (server *Server) release(w http.ResponseWriter, r *http.Request, status int, value any, decisions []*authorization.Decision) {
+func newProtectedResponse(w http.ResponseWriter, status int, value any, resourceETag bool) (*protectedResponse, error) {
 	body, err := json.Marshal(value)
 	if err != nil || len(body) > maxResponseBytes {
+		return nil, errors.New("invalid protected response")
+	}
+	response := &protectedResponse{writer: w, body: body, status: status}
+	// The Platform contract declares strong ETags for individual mutable
+	// resources, not collection envelopes. Both still use the same final fence.
+	if resourceETag {
+		digest := sha256.Sum256(body)
+		response.etag = `"` + hex.EncodeToString(digest[:]) + `"`
+	}
+	return response, nil
+}
+
+func (server *Server) release(w http.ResponseWriter, r *http.Request, status int, value any, decisions []*authorization.Decision, resourceETag bool) {
+	response, err := newProtectedResponse(w, status, value, resourceETag)
+	if err != nil {
 		problem(w, 503)
 		return
 	}
@@ -374,8 +389,6 @@ func (server *Server) release(w http.ResponseWriter, r *http.Request, status int
 		problem(w, 404)
 		return
 	}
-	digest := sha256.Sum256(body)
-	response := &protectedResponse{writer: w, body: body, status: status, etag: `"` + hex.EncodeToString(digest[:]) + `"`}
 	if _, err = server.boundary.ReleaseProtected(r.Context(), revision, response); err != nil && !response.released {
 		problem(w, 404)
 	}

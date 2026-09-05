@@ -92,7 +92,7 @@ func (server *Server) get(w http.ResponseWriter, r *http.Request, kind, id strin
 		domainError(w, err)
 		return
 	}
-	server.release(w, r, status, value, []*authorization.Decision{decision})
+	server.release(w, r, status, value, []*authorization.Decision{decision}, true)
 }
 func (server *Server) getOrganization(w http.ResponseWriter, r *http.Request) {
 	server.get(w, r, "organization", r.PathValue("organization_id"), 200)
@@ -130,7 +130,7 @@ func (server *Server) created(w http.ResponseWriter, r *http.Request, session id
 		domainError(w, err)
 		return
 	}
-	server.release(w, r, 201, value, []*authorization.Decision{decision})
+	server.release(w, r, 201, value, []*authorization.Decision{decision}, true)
 }
 func (server *Server) createOrganization(w http.ResponseWriter, r *http.Request) {
 	session, ok := server.authenticated(w, r)
