@@ -143,7 +143,7 @@ func runLocalAPI(stderr io.Writer) int {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	startup, cancel := context.WithTimeout(ctx, 30*time.Second)
+	startup, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	observations := json.NewEncoder(stderr)
 	var observationLock sync.Mutex
 	runtime, err := openLocalRuntime(startup, repository, config, func(observation httpapi.Observation) {

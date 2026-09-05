@@ -13,7 +13,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
-	"runtime/debug"
 	"slices"
 	"strings"
 
@@ -103,6 +102,11 @@ func InspectLocalTemplateSource(ctx context.Context, root string) (LocalTemplate
 		}
 		*item.field = digest
 	}
+	var toolchainErr error
+	core.GoToolchainDigest, toolchainErr = localToolchainDigest(runtime.GOROOT())
+	if toolchainErr != nil {
+		return LocalTemplateCore{}, ErrDenied
+	}
 	status, err := gitLocal(ctx, root, "status", "--porcelain=v1", "--untracked-files=all")
 	if err != nil || len(status) != 0 {
 		return LocalTemplateCore{}, ErrDenied
@@ -177,7 +181,7 @@ func localToolDigest(path string) (string, error) {
 
 func validateLocalTemplate(manifest LocalTemplateManifest) error {
 	core := manifest.Core
-	if !digestPattern.MatchString(core.GoBinaryDigest) || !digestPattern.MatchString(core.GoCompilerDigest) {
+	if !digestPattern.MatchString(core.GoBinaryDigest) || !digestPattern.MatchString(core.GoCompilerDigest) || !digestPattern.MatchString(core.GoToolchainDigest) {
 		return ErrDenied
 	}
 	if manifest.SchemaVersion != "1.0.0" || manifest.Status != "approved" || !gitObjectPattern.MatchString(core.SourceRevision) || !gitObjectPattern.MatchString(core.SourceTree) || core.GoVersion == "" || core.SecurityDomain != LocalDevelopmentSecurityDomain || core.PublicOrigin != "https://localhost:18443" || core.OpenFGAURL != "http://127.0.0.1:18080" || core.ValiditySeconds != 86400 || !slices.Equal(core.AllowedSubstitutions, localSubstitutionFields) || len(core.Files) != len(localSourceFiles) || len(core.Checks) != 4 || len(manifest.Reviews) != 3 || !digestPattern.MatchString(core.DependencyLockDigest) {
@@ -227,7 +231,7 @@ func loadLocalTemplate(ctx context.Context, root string) (LocalTemplateManifest,
 	}
 	core := manifest.Core
 	actual, err := InspectLocalTemplateSource(ctx, root)
-	if err != nil || actual.GoVersion != core.GoVersion || actual.GoBinaryDigest != core.GoBinaryDigest || actual.GoCompilerDigest != core.GoCompilerDigest || actual.DependencyLockDigest != core.DependencyLockDigest || !slices.Equal(actual.Files, core.Files) {
+	if err != nil || actual.GoVersion != core.GoVersion || actual.GoBinaryDigest != core.GoBinaryDigest || actual.GoCompilerDigest != core.GoCompilerDigest || actual.GoToolchainDigest != core.GoToolchainDigest || actual.DependencyLockDigest != core.DependencyLockDigest || !slices.Equal(actual.Files, core.Files) {
 		return LocalTemplateManifest{}, ErrDenied
 	}
 	tree, err := gitLocal(ctx, root, "rev-parse", "--verify", core.SourceRevision+"^{tree}")
@@ -256,21 +260,7 @@ func loadLocalTemplate(ctx context.Context, root string) (LocalTemplateManifest,
 			return LocalTemplateManifest{}, ErrDenied
 		}
 	}
-	// The running installer must itself have been built from this clean reviewed
-	// source or its exact metadata-only acceptance descendant, not an old binary
-	// pointed at a newer checkout. No -ldflags or environment receipt bypass.
-	build, ok := debug.ReadBuildInfo()
-	if !ok {
-		return LocalTemplateManifest{}, ErrDenied
-	}
-	settings := map[string]string{}
-	for _, setting := range build.Settings {
-		settings[setting.Key] = setting.Value
-	}
-	if settings["vcs.revision"] != actual.SourceRevision || settings["vcs.modified"] != "false" {
-		return LocalTemplateManifest{}, ErrDenied
-	}
-	if settings["GOOS"] != "linux" || settings["GOARCH"] != "amd64" || settings["GOAMD64"] != "v1" || settings["CGO_ENABLED"] != "0" || settings["-buildmode"] != "exe" || settings["-compiler"] != "gc" || settings["-tags"] != "" || settings["GOEXPERIMENT"] != "" || settings["-ldflags"] != "" {
+	if verifyLocalExecutable(ctx, root, actual) != nil {
 		return LocalTemplateManifest{}, ErrDenied
 	}
 	return manifest, nil

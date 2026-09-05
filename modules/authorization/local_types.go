@@ -72,6 +72,7 @@ type LocalTemplateCore struct {
 	GoVersion            string              `json:"go_version"`
 	GoBinaryDigest       string              `json:"go_binary_digest"`
 	GoCompilerDigest     string              `json:"go_compiler_digest"`
+	GoToolchainDigest    string              `json:"go_toolchain_digest"`
 	DependencyLockDigest string              `json:"dependency_lock_digest"`
 	Files                []LocalTemplateFile `json:"files"`
 	PublicOrigin         string              `json:"public_origin"`
