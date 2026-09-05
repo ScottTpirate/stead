@@ -136,3 +136,26 @@ it("Refresh retries the displayed collections after a transient failure", async 
   expect(request.mock.calls.filter(([operation]) => operation === "listTeams")).toHaveLength(2);
   expect(projectReads).toBe(2);
 });
+
+it("Refresh clears a rejected session without retrying its prior collections", async () => {
+  let organizationReads = 0;
+  const project = { ...organization, kind: "project", id: "fixture-project", title: "Saved Project" };
+  const request = vi.spyOn(platformClient, "request").mockImplementation(async <T,>(operation: string) => {
+    if (operation === "getSession") return response(session as T);
+    if (operation === "listOrganizations") {
+      if (++organizationReads > 1) throw new PlatformApiError(401);
+      return response({ items: [organization] } as T);
+    }
+    if (operation === "listProjects") return response({ items: [project] } as T);
+    return response({ items: [] } as T);
+  });
+  const user = userEvent.setup();
+  render(<Workspace route={matchRoute("/projects")} navigate={() => {}} />);
+  await screen.findByRole("button", { name: "OPS Saved Project" });
+  await user.click(screen.getByRole("button", { name: "Refresh" }));
+  await screen.findByLabelText("Setup credential");
+  expect(screen.queryByText("Saved Project")).toBeNull();
+  expect(screen.queryByText("Authorized server title")).toBeNull();
+  expect(request.mock.calls.filter(([operation]) => operation === "listProjects")).toHaveLength(1);
+  expect(request.mock.calls.filter(([operation]) => operation === "listTeams")).toHaveLength(1);
+});
