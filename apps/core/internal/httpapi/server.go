@@ -46,6 +46,7 @@ type Repository interface {
 }
 
 type Observation struct {
+	CorrelationID        string  `json:"correlation_id"`
 	Operation            string  `json:"operation"`
 	Status               int     `json:"status"`
 	DurationMilliseconds float64 `json:"duration_ms"`
@@ -134,12 +135,13 @@ func (server *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(output, "Unavailable", 503)
 		return
 	}
-	output.Header().Set("X-Correlation-ID", hex.EncodeToString(id[:]))
+	correlationID := hex.EncodeToString(id[:])
+	output.Header().Set("X-Correlation-ID", correlationID)
 	output.Header().Set("Cache-Control", "no-store")
 	output.Header().Set("X-Content-Type-Options", "nosniff")
 	defer func() {
 		if server.config.Observe != nil {
-			server.config.Observe(Observation{Operation: r.Pattern, Status: output.status, DurationMilliseconds: float64(time.Since(started).Microseconds()) / 1000, ResponseBytes: output.bytes, Snapshot: counters.Snapshot()})
+			server.config.Observe(Observation{CorrelationID: correlationID, Operation: r.Pattern, Status: output.status, DurationMilliseconds: float64(time.Since(started).Microseconds()) / 1000, ResponseBytes: output.bytes, Snapshot: counters.Snapshot()})
 		}
 	}()
 	if strings.HasPrefix(r.URL.Path, "/api/") {
