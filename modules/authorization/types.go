@@ -72,6 +72,7 @@ type State struct {
 	ProviderPathAllowed bool
 	ActivationSetID     string
 	ActivationSequence  uint64
+	ActivationDigest    string
 	OpenFGAModelID      string
 	Revisions           Revisions
 	Label               classification.Label
@@ -119,6 +120,7 @@ type Evidence struct {
 	PolicyBundleID                   string
 	ActivationSetID                  string
 	ActivationSequence               uint64
+	ActivationDigest                 string
 	ActivationEpoch                  uint64
 	TrustEpoch                       uint64
 	DeploymentPolicyID               string
