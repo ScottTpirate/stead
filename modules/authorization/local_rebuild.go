@@ -15,7 +15,6 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
-	"runtime"
 	"strings"
 )
 
@@ -219,7 +218,7 @@ func verifyLocalExecutable(ctx context.Context, repository string, core LocalTem
 	if os.Mkdir(source, 0700) != nil || exportLocalSource(ctx, repository, core.SourceRevision, source) != nil {
 		return ErrDenied
 	}
-	toolchain := runtime.GOROOT()
+	toolchain := LocalDevelopmentToolchainDirectory
 	// A fresh module cache has no mutable pre-existing unpacked dependencies.
 	// Go verifies each fetched build dependency zip against the exact readonly
 	// go.sum while unpacking it. Do not fetch unrelated historical test graphs

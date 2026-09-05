@@ -95,7 +95,7 @@ func InspectLocalTemplateSource(ctx context.Context, root string) (LocalTemplate
 	for _, item := range []struct {
 		field *string
 		path  string
-	}{{&core.GoBinaryDigest, filepath.Join(runtime.GOROOT(), "bin/go")}, {&core.GoCompilerDigest, filepath.Join(runtime.GOROOT(), "pkg/tool/linux_amd64/compile")}} {
+	}{{&core.GoBinaryDigest, filepath.Join(LocalDevelopmentToolchainDirectory, "bin/go")}, {&core.GoCompilerDigest, filepath.Join(LocalDevelopmentToolchainDirectory, "pkg/tool/linux_amd64/compile")}} {
 		digest, err := localToolDigest(item.path)
 		if err != nil {
 			return LocalTemplateCore{}, err
@@ -103,7 +103,7 @@ func InspectLocalTemplateSource(ctx context.Context, root string) (LocalTemplate
 		*item.field = digest
 	}
 	var toolchainErr error
-	core.GoToolchainDigest, toolchainErr = localToolchainDigest(runtime.GOROOT())
+	core.GoToolchainDigest, toolchainErr = localToolchainDigest(LocalDevelopmentToolchainDirectory)
 	if toolchainErr != nil {
 		return LocalTemplateCore{}, ErrDenied
 	}

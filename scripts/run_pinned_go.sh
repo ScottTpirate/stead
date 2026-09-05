@@ -27,6 +27,7 @@ fi
 printf '%s  %s\n' "$binary_sha256" "$toolchain/bin/go" | sha256sum --check --status
 
 export PATH="$toolchain/bin:$PATH"
+export GOROOT="$toolchain"
 export GOCACHE="${GOCACHE:-/tmp/stead-go-build-cache}"
 export GOPATH="${GOPATH:-/tmp/stead-go-path}"
 cd "$repo_root"
