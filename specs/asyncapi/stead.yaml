@@ -24,7 +24,7 @@ channels:
   authorizationEvents:
     address: stead.authorization.changed.v1
     x-logical-producer-source: urn:stead:producer:authorization
-    x-event-types: [stead.authorization.model_activated.v1, stead.authorization.tuple_changed.v1, stead.authorization.delegation_revoked.v1, stead.authorization.policy_activated.v1]
+    x-event-types: [stead.authorization.model_activated.v1, stead.authorization.tuple_changed.v1, stead.authorization.delegation_revoked.v1, stead.authorization.policy_activated.v1, stead.authorization.effect_changed.v1]
     messages: {AuthorizationCloudEvent: {$ref: '#/components/messages/AuthorizationCloudEvent'}}
   classificationEvents:
     address: stead.classification.changed.v1
@@ -271,7 +271,7 @@ components:
     AuthorizationCloudEventEnvelope:
       allOf:
         - {$ref: '#/components/schemas/SteadCloudEventEnvelope'}
-        - {type: object, properties: {source: {const: urn:stead:producer:authorization}, type: {enum: [stead.authorization.model_activated.v1, stead.authorization.tuple_changed.v1, stead.authorization.delegation_revoked.v1, stead.authorization.policy_activated.v1]}}}
+        - {type: object, properties: {source: {const: urn:stead:producer:authorization}, type: {enum: [stead.authorization.model_activated.v1, stead.authorization.tuple_changed.v1, stead.authorization.delegation_revoked.v1, stead.authorization.policy_activated.v1, stead.authorization.effect_changed.v1]}}}
     ClassificationCloudEventEnvelope:
       allOf:
         - {$ref: '#/components/schemas/SteadCloudEventEnvelope'}
