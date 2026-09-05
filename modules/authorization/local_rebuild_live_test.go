@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -53,7 +52,7 @@ func TestLiveLocalExecutableFixedRecipeAndOverlayRejection(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(stage, "go.work"), []byte("invalid unreviewed ancestor workspace\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	environment := localBuildEnvironment(stage, runtime.GOROOT())
+	environment := localBuildEnvironment(stage, LocalDevelopmentToolchainDirectory)
 	build := func(name, overlay string) string {
 		t.Helper()
 		executable := filepath.Join(stage, name)
@@ -62,7 +61,7 @@ func TestLiveLocalExecutableFixedRecipeAndOverlayRejection(t *testing.T) {
 			args = append(args, "-overlay", overlay)
 		}
 		args = append(args, "./apps/core")
-		command := exec.CommandContext(ctx, filepath.Join(runtime.GOROOT(), "bin/go"), args...)
+		command := exec.CommandContext(ctx, filepath.Join(LocalDevelopmentToolchainDirectory, "bin/go"), args...)
 		command.Dir, command.Env = checkout, environment
 		if output, err := command.CombinedOutput(); err != nil {
 			t.Fatalf("actual candidate build: %s %v", output, err)
@@ -70,15 +69,21 @@ func TestLiveLocalExecutableFixedRecipeAndOverlayRejection(t *testing.T) {
 		return executable
 	}
 	baseline := build("reviewed-stead-api", "")
-	command := exec.CommandContext(ctx, baseline, "dev-template-inspect")
-	command.Dir, command.Env = checkout, environment
-	start := time.Now()
-	output, err := command.CombinedOutput()
-	var observed LocalTemplateCore
-	if err != nil || json.Unmarshal(output, &observed) != nil || observed.SourceRevision != actual.SourceRevision || observed.SourceTree != actual.SourceTree || observed.GoToolchainDigest != actual.GoToolchainDigest {
-		t.Fatalf("fixed recipe/ancestor workspace isolation failed: %s %v", output, err)
+	daemonEnvironment := []string{"PATH=/usr/local/bin:/usr/bin:/bin", "LANG=C.UTF-8"}
+	for _, variant := range []struct {
+		name string
+		env  []string
+	}{{"stripped-daemon", daemonEnvironment}, {"poisoned-ambient-GOROOT", append(append([]string{}, daemonEnvironment...), "GOROOT=/nonexistent/unreviewed/toolchain")}} {
+		command := exec.CommandContext(ctx, baseline, "dev-template-inspect")
+		command.Dir, command.Env = checkout, variant.env
+		start := time.Now()
+		output, err := command.CombinedOutput()
+		var observed LocalTemplateCore
+		if err != nil || json.Unmarshal(output, &observed) != nil || observed.SourceRevision != actual.SourceRevision || observed.SourceTree != actual.SourceTree || observed.GoToolchainDigest != actual.GoToolchainDigest {
+			t.Fatalf("fixed recipe/ancestor workspace isolation failed (%s): %s %v", variant.name, output, err)
+		}
+		t.Logf("real fixed-recipe binary self-comparison and ancestor go.work isolation PASS (%s, %s)", variant.name, time.Since(start).Round(time.Millisecond))
 	}
-	t.Logf("real fixed-recipe binary self-comparison and ancestor go.work isolation PASS (%s)", time.Since(start).Round(time.Millisecond))
 	main := filepath.Join(checkout, "apps/core/main.go")
 	data, err := os.ReadFile(main)
 	if err != nil || !bytes.Contains(data, []byte(`component.Run("stead-api"`)) {
@@ -95,9 +100,9 @@ func TestLiveLocalExecutableFixedRecipeAndOverlayRejection(t *testing.T) {
 		t.Fatal(err)
 	}
 	changed := build("overlay-stead-api", overlay)
-	command = exec.CommandContext(ctx, changed, "dev-template-inspect")
-	command.Dir, command.Env = checkout, environment
-	output, err = command.CombinedOutput()
+	command := exec.CommandContext(ctx, changed, "dev-template-inspect")
+	command.Dir, command.Env = checkout, daemonEnvironment
+	output, err := command.CombinedOutput()
 	if err == nil || !strings.Contains(string(output), "clean immutable template source inspection failed") {
 		t.Fatalf("unrecorded build overlay admitted: %s %v", output, err)
 	}

@@ -9,6 +9,11 @@ import (
 
 const LocalDevelopmentSecurityDomain = "stead-local-development"
 
+// Local development uses the exact pinned distribution prepared by the
+// reviewed toolchain wrapper. A trimpath daemon cannot infer GOROOT from its
+// executable location, and inherited caller GOROOT is not a trust input.
+const LocalDevelopmentToolchainDirectory = "/tmp/stead-go-toolchain-1.27.0/toolchain/go"
+
 // LocalCheckRequest identifies a fixed, reviewed check, not a caller-selected
 // executable. SubjectDigest is the pre-signing derivation input digest, except
 // for offline-verification where it is the completed archive digest.
