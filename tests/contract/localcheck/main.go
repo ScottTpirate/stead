@@ -217,7 +217,7 @@ func conformance(ctx context.Context) ([]authorization.LocalCheckCase, error) {
 func mutations() ([]mutant, error) {
 	selected := map[string]map[string]bool{
 		"modules/authorization/native_policy.go": {"NativePolicyDecision": true},
-		"modules/authorization/coordinator.go":   {"Authorize": true, "ValidateFinal": true, "validState": true},
+		"modules/authorization/coordinator.go":   {"Authorize": true, "ValidateFinal": true, "validState": true, "readCurrentAnchor": true},
 		"modules/authorization/read_set.go":      {"AuthorizeSet": true},
 		"modules/authorization/openfga_batch.go": {"BatchCheck": true},
 		"modules/classification/evaluator.go":    {"Evaluate": true},

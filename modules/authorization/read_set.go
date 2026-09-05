@@ -65,19 +65,36 @@ func (coordinator *Coordinator) AuthorizeSet(ctx context.Context, session identi
 	if !session.ValidAt(now) || now.Before(activation.issuedAt) || !now.Before(activation.expiresAt) {
 		return deny("context_denied")
 	}
-	states, err := repository.ReadStates(ctx, session.Principal(), session.SessionID(), refs)
-	if err != nil || len(states) != len(refs) {
-		return deny("stale_authorization_input")
-	}
-	results := make([]classification.Result, len(reads))
-	indexes := []int{}
-	tuples := []Tuple{}
 	expires := now.Add(2 * time.Second)
 	for _, bound := range []time.Time{session.ExpiresAt(), activation.expiresAt} {
 		if bound.Before(expires) {
 			expires = bound
 		}
 	}
+	states, err := repository.ReadStates(ctx, session.Principal(), session.SessionID(), refs)
+	if err != nil || len(states) != len(refs) {
+		return deny("stale_authorization_input")
+	}
+	anchor, err = coordinator.readCurrentAnchor(ctx, anchor)
+	if err != nil {
+		return deny("stale_authorization_input")
+	}
+	fresh := coordinator.config.Clock().UTC()
+	if anchor.PolicyTimeHighWater.Sub(fresh) > MaxPolicyClockSkew {
+		return deny("context_denied")
+	}
+	if fresh.After(now) {
+		now = fresh
+	}
+	if now.Before(anchor.PolicyTimeHighWater) {
+		now = anchor.PolicyTimeHighWater
+	}
+	if !session.ValidAt(now) || now.Before(activation.issuedAt) || !now.Before(activation.expiresAt) || !now.Before(expires) {
+		return deny("context_denied")
+	}
+	results := make([]classification.Result, len(reads))
+	indexes := []int{}
+	tuples := []Tuple{}
 	for i := range states {
 		state := &states[i]
 		if state.Resource != refs[i] {
@@ -111,6 +128,9 @@ func (coordinator *Coordinator) AuthorizeSet(ctx context.Context, session identi
 		return deny("relationship_denied")
 	}
 	finished := coordinator.config.Clock().UTC()
+	if anchor.PolicyTimeHighWater.Sub(finished) > MaxPolicyClockSkew {
+		return deny("context_denied")
+	}
 	if finished.Before(now) {
 		finished = now
 	}
