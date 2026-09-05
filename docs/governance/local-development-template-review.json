@@ -3,57 +3,57 @@
   "status": "accepted",
   "scope": "Initial synthetic local-development template/compiler/test source only; not an instance artifact, production approval or Phase 1 release.",
   "owner_decision_revision": "83d2bfef6c08227f2d15d465c7ada316c5934a31",
-  "source_revision": "6edd21e077180231fa1bc9b853d9ce907ecd325a",
-  "source_tree": "275fa1b9d489e5974452ee0a8c8f3f5da8e9c6ec",
-  "core_digest": "sha256:c735398f56f5b20c880d29c06dba29a6d831e93a52d629002b32fae72881e7f5",
+  "source_revision": "1a5506e6ebac953644a15d00561e2340a7801877",
+  "source_tree": "8fb92a1a1c73c90644dd997276f25d28af398772",
+  "core_digest": "sha256:987d41634fe71cab99eda565de1e260d5c1e5f841ab397f504f6194ce5ba4b43",
   "reviews": [
     {
       "role": "architecture-contract-owner",
       "reviewer_id": "/root/template_architecture_review",
       "disposition": "accept",
       "independent_non_author": true,
-      "evidence": "Independently recomputed core digest, ten bound files, actual compiler/Go driver and all 17,349 toolchain entries; reproduced ordered 32/93/3/1 check inventories. Focused final changed-code tests passed. Scoped startup catalog inspection adds no runtime privileges or new locked decision."
+      "evidence": "Independently recomputed updated core, ten bound files, compiler/driver and full 17,349-entry toolchain hash; reproduced ordered inventories. Focused exact-source delta tests passed. The fixed toolchain directory resolves stripped daemon startup without expanding policy authority."
     },
     {
       "role": "qa",
-      "reviewer_id": "/root/template_qa_review",
+      "reviewer_id": "/root/template_qa_daemon_fix",
       "disposition": "accept",
       "independent_non_author": true,
-      "evidence": "Independently verified core/input digests and ordered inventories; seven race suites, focused vet and fifteen smoke/launcher boundary tests passed. Actual fixed-recipe self-build, invalid ancestor go.work isolation and compiled-overlay denial passed at this source in 23.55 seconds; retained /tmp/stead-local-rebuild-proof-1839300966. Clock finding resolved. Reviewed actual 92/93 mutation result."
+      "evidence": "Fresh independent non-author reviewer recomputed exact core/input/toolchain digests and ordered 32/93/3/1 inventories. Own seven race suites, focused vet, fifteen launcher/generated-SDK boundary tests and poisoned-GOROOT wrapper check passed. Inspected security's exact-source live proof and matched its reviewed binary to root's actual API; live security execution is attributed, not claimed as QA execution. No unresolved scoped QA defect."
     },
     {
       "role": "security",
       "reviewer_id": "/root/template_security_review",
       "disposition": "accept",
       "independent_non_author": true,
-      "evidence": "Independently reproduced ordered inventories, all bound file digests, actual 32/32 policy rows and 92/93 critical mutant kills, signed semantic-negative/config/catalog/clock tests, and live executable/workspace/overlay gate at this source in 17.481 seconds. Retained /tmp/stead-local-rebuild-proof-1279557698. S1/S1b source-binding findings resolved; no unresolved finding within approved initial synthetic local scope."
+      "evidence": "Independently verified seven-file correction, updated exact core/input bindings and unchanged policy/dependency/toolchain/check inventories. Focused tests passed; actual exact-source stripped-daemon, poisoned-GOROOT, ancestor-workspace and compiled-overlay test passed in 22.933 seconds. Proof /tmp/stead-local-rebuild-proof-3207616256; earlier quota-failed attempt is preserved and receives no credit. No unresolved scoped security finding."
     }
   ],
   "evidence": [
     {
-      "path": "/tmp/stead-foundation-final-20260905.log",
-      "sha256": "9dd48b67d4b027c631fd42ef576784dff72305d64cf66b95505696f37619de87",
-      "result": "make foundation-check exit 0 at reviewed source"
+      "path": "/tmp/stead-foundation-daemon-fixed.log",
+      "sha256": "119dcde3b44ebe3f2997c1afe27cacfa11e6ade35a016f25b93ad3acb3a70c37",
+      "result": "make foundation-check exit 0 at updated reviewed source"
     },
     {
-      "path": "/tmp/stead-api-govulncheck-6edd21e.json",
+      "path": "/tmp/stead-api-govulncheck-daemon-fixed.json",
       "sha256": "3605e9139d1be9a911536fb413fabad639a3d2a9cf1209137fec194cc01f2aea",
-      "result": "actual API binary scan, govulncheck v1.7.0, database 2026-09-02T19:12:04Z, exit 0, no finding records; actual binary SBOM included"
+      "result": "actual updated API binary scan, govulncheck v1.7.0, database 2026-09-02T19:12:04Z, exit 0, no findings; actual binary SBOM included"
     },
     {
-      "path": "/tmp/stead-live-rebuild-6edd21e.log",
-      "sha256": "6cd0bb3aca09e69af4bf88ec9610d62bc417d3cd6698cbd8cebb4217c78ce4d1",
-      "result": "root actual executable/source/ancestor workspace/overlay gate exit 0, 23.054 seconds"
+      "path": "/tmp/stead-daemon-fixed-api",
+      "sha256": "a2d58a399747b924ab3ef1cee9a5287d3e8f8b8382648c0f58f2e5179b39d429",
+      "result": "actual fixed-recipe API, stripped PATH/LANG-only daemon inspection passed and equals independent security proof binary"
+    },
+    {
+      "path": "/tmp/stead-template-core-daemon-fixed.json",
+      "sha256": "d779ee86592dbc219afb7303c4e9f0a3ea173692e95d1f15196da7ca30871bfc",
+      "result": "actual stripped-daemon dev-template-inspect and derived ordered runner inventory"
     },
     {
       "path": "/tmp/stead-mutation-6edd21e.json",
       "sha256": "fe7deb57c2985e22cb0aed06a5c2405d6794bcfd0ff2a02f1c4de1aa6de4c53a",
       "result": "source-review exploratory campaign, not installation evidence: 92/93 killed, guard-014 survivor; seven excluded guards receive no credit"
-    },
-    {
-      "path": "/tmp/stead-template-core-6edd21e.json",
-      "sha256": "647254c1d5a9a37bb1a7bc6c80078fe444b4a0b27d5eae33027febcd66c3e637",
-      "result": "actual clean-source dev-template-inspect plus derived ordered runner inventories"
     }
   ],
   "go_archive_verification": {
@@ -68,5 +68,7 @@
     "Production and nonlocal consumers reject development trust and evidence.",
     "No renewal, rotation, recovery, upgrade, promotion, untrusted data or provider-object use is approved by this record.",
     "Startup full catalog inspection is read-only and uses a transient separate administrative process; it is not continuous privileged API monitoring."
-  ]
+  ],
+  "supersedes_source_revision": "6edd21e077180231fa1bc9b853d9ce907ecd325a",
+  "correction": "The first unactivated installation exposed ambient runtime.GOROOT dependence under the stripped daemon environment. Seven-file correction binds the same reviewed fixed toolchain path; no policy, dependency, contract, substitution, inventory or threshold changes. Failed state and quota-failed test attempts are preserved, not counted as passing evidence."
 }
