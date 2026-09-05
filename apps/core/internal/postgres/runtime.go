@@ -38,6 +38,9 @@ type Store struct {
 	createPlan   transaction.PlanContract[command]
 	readPlan     transaction.PlanContract[command]
 	activatePlan transaction.PlanContract[command]
+	// Committed local operation provenance, never drain/terminal authority.
+	// A new Store after restart cannot attribute recovery to the old User.
+	effectOrigins map[string]authorization.EffectRecord
 }
 
 func DeploymentKey(instance string) string {

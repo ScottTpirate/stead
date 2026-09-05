@@ -57,11 +57,11 @@ func (store *Store) readStates(ctx context.Context, principal identity.Principal
 		if err != nil || namespace.InstanceID != store.config.InstanceID || namespace.SecurityDomain != store.config.SecurityDomain {
 			return authorization.ErrDenied
 		}
-		query := `SELECT id::text,kind,COALESCE(organization_id::text,''),label_id::text,pending,explicit_deny,provider_allowed,capability_active,revision,tuple_revision FROM "authorization".resources WHERE id=ANY($1::uuid[]) ORDER BY id`
+		query := `SELECT r.id::text,r.kind,COALESCE(r.organization_id::text,''),r.label_id::text,r.pending,r.explicit_deny,r.provider_allowed,r.capability_active,r.revision,r.tuple_revision,f.pending FROM "authorization".resources r CROSS JOIN "authorization".session_fences f WHERE r.id=ANY($1::uuid[]) AND f.session_id=$2 ORDER BY r.id`
 		if lock {
 			query += ` FOR SHARE`
 		}
-		rows, err := tx.Query(ctx, query, ids)
+		rows, err := tx.Query(ctx, query, ids, sessionID)
 		count(ctx, 1, 0, 0, 0)
 		if err != nil {
 			return err
@@ -70,7 +70,7 @@ func (store *Store) readStates(ctx context.Context, principal identity.Principal
 		for rows.Next() {
 			current := resourceSecurity{state: namespace}
 			state := &current.state
-			if err = rows.Scan(&state.Resource.ID, &state.Resource.Kind, &state.OrganizationID, &current.labelID, &state.TuplePending, &state.ExplicitDeny, &state.ProviderPathAllowed, &state.CapabilityActive, &state.Revisions.Resource, &state.Revisions.Tuples); err != nil {
+			if err = rows.Scan(&state.Resource.ID, &state.Resource.Kind, &state.OrganizationID, &current.labelID, &state.TuplePending, &state.ExplicitDeny, &state.ProviderPathAllowed, &state.CapabilityActive, &state.Revisions.Resource, &state.Revisions.Tuples, &state.SessionPending); err != nil {
 				return err
 			}
 			index, requested := positions[state.Resource]

@@ -80,6 +80,9 @@ func (store *Store) RevokeSession(ctx context.Context, id string) error {
 	if !identity.ValidID(id) {
 		return identity.ErrUnauthenticated
 	}
+	if err := store.guardSessionEffectDrain(ctx, id); err != nil {
+		return identity.ErrUnauthenticated
+	}
 	return store.owned(ctx, "identity", true, func(tx pgx.Tx) error {
 		tag, err := tx.Exec(ctx, `UPDATE identity.sessions SET active=false,revision=revision+1 WHERE id=$1 AND active`, id)
 		count(ctx, 1, uint64(tag.RowsAffected()), 0, 0)
@@ -102,12 +105,12 @@ func loadSecurity(ctx context.Context, tx pgx.Tx, principal identity.Principal, 
 	result.state.Resource = ref
 	result.state.Principal = principal
 	result.state.SessionID = sessionID
-	query := `SELECT COALESCE(organization_id::text,''),label_id::text,pending,explicit_deny,provider_allowed,capability_active,revision,tuple_revision FROM "authorization".resources WHERE id=$1 AND kind=$2`
+	query := `SELECT COALESCE(r.organization_id::text,''),r.label_id::text,r.pending,r.explicit_deny,r.provider_allowed,r.capability_active,r.revision,r.tuple_revision,f.pending FROM "authorization".resources r CROSS JOIN "authorization".session_fences f WHERE r.id=$1 AND r.kind=$2 AND f.session_id=$3`
 	if lock {
 		query += ` FOR SHARE`
 	}
 	state := &result.state
-	err = tx.QueryRow(ctx, query, ref.ID, ref.Kind).Scan(&state.OrganizationID, &result.labelID, &state.TuplePending, &state.ExplicitDeny, &state.ProviderPathAllowed, &state.CapabilityActive, &state.Revisions.Resource, &state.Revisions.Tuples)
+	err = tx.QueryRow(ctx, query, ref.ID, ref.Kind, sessionID).Scan(&state.OrganizationID, &result.labelID, &state.TuplePending, &state.ExplicitDeny, &state.ProviderPathAllowed, &state.CapabilityActive, &state.Revisions.Resource, &state.Revisions.Tuples, &state.SessionPending)
 	count(ctx, 1, 0, 0, 0)
 	if err != nil {
 		return resourceSecurity{}, authorization.ErrDenied

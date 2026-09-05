@@ -67,6 +67,8 @@ var schemaTables = map[string]map[string]string{
 	},
 	"classification": {"labels": `id uuid PRIMARY KEY, value jsonb NOT NULL, revision bigint NOT NULL CHECK(revision>0)`},
 	"authorization": {
+		"session_fences": `session_id uuid PRIMARY KEY, pending boolean NOT NULL DEFAULT false`,
+		"effects":        `id uuid PRIMARY KEY, operation_id uuid NOT NULL UNIQUE, project_id uuid NOT NULL UNIQUE, session_id uuid NOT NULL, state text NOT NULL CHECK(state IN ('issued','consumed','reconciling','terminal')), version bigint NOT NULL CHECK(version>0), record jsonb NOT NULL, label jsonb NOT NULL, UNIQUE(id,version)`,
 		"namespace":      `id boolean PRIMARY KEY CHECK(id), instance_id uuid NOT NULL, security_domain text NOT NULL, store_id text NOT NULL, activation_id text NOT NULL, activation_sequence bigint NOT NULL CHECK(activation_sequence>0), model_id text NOT NULL, activation_binding jsonb NOT NULL, activation_digest text NOT NULL, revisions jsonb NOT NULL, policy_time timestamptz NOT NULL, policy_revision bigint NOT NULL CHECK(policy_revision>0)`,
 		"resources":      `id uuid PRIMARY KEY, kind text NOT NULL, organization_id uuid, label_id uuid NOT NULL, pending boolean NOT NULL, explicit_deny boolean NOT NULL DEFAULT false, provider_allowed boolean NOT NULL DEFAULT true, capability_active boolean NOT NULL DEFAULT true, revision bigint NOT NULL CHECK(revision>0), tuple_revision bigint NOT NULL CHECK(tuple_revision>0)`,
 		"requests":       `actor text NOT NULL, action text NOT NULL, key text NOT NULL, input_hash bytea NOT NULL, resource_id uuid NOT NULL, PRIMARY KEY(actor,action,key)`,
@@ -218,6 +220,9 @@ func Bootstrap(ctx context.Context, config BootstrapConfig) (BootstrapResult, er
 			return BootstrapResult{}, err
 		}
 		if err = execute(`INSERT INTO identity.sessions(id,token_digest,principal_id,record,active,revision) VALUES($1,$2,$3,$4,true,1)`, user.session.ID, user.digest[:], user.session.Principal.ID, encode(user.session)); err != nil {
+			return BootstrapResult{}, err
+		}
+		if err = execute(`INSERT INTO "authorization".session_fences(session_id) VALUES($1)`, user.session.ID); err != nil {
 			return BootstrapResult{}, err
 		}
 	}
