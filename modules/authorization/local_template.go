@@ -38,7 +38,7 @@ var localSourceFiles = []string{
 	"go.mod", "go.sum", ".tool-versions",
 	"modules/authorization/contract/decision-table.json", "modules/authorization/contract/deployment-local.json",
 	"modules/authorization/contract/input-schema.json", "modules/authorization/contract/output-schema.json",
-	"modules/authorization/contract/profile-commercial.json", "modules/authorization/contract/registries.json",
+	"modules/authorization/" + localProfileContractPath(), "modules/authorization/contract/registries.json",
 	"policies/openfga/model-v0.2.fga",
 }
 

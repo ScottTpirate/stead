@@ -73,13 +73,16 @@ func checkLocalCandidate(template LocalTemplateManifest, archive []byte, workflo
 			return localCandidate{}, ErrDenied
 		}
 	}
-	profile, _ := contracts.ReadFile("contract/profile-commercial.json")
+	_, profile, profileMetadata, err := localProfileTemplate()
+	if err != nil {
+		return localCandidate{}, ErrDenied
+	}
 	domain, _ := contracts.ReadFile("contract/deployment-local.json")
 	model, err := fixedmodel.ModelJSON()
 	if err != nil || !bytes.Equal(files["payload/profile.json"], profile) || !bytes.Equal(files["payload/deployment-policy.json"], domain) || !bytes.Equal(files["payload/openfga-model.json"], model) {
 		return localCandidate{}, ErrDenied
 	}
-	wantProfile := policyrelease.ProfileBinding{ProfileID: "commercial", Version: "1.0.0", SchemaID: policyrelease.SecurityProfileSchemaID, Path: "payload/profile.json", Digest: policyrelease.SHA256Digest(profile), SigningFormat: policyrelease.ActivationFormatV1}
+	wantProfile := policyrelease.ProfileBinding{ProfileID: profileMetadata.ProfileID, Version: profileMetadata.Version, SchemaID: policyrelease.SecurityProfileSchemaID, Path: "payload/profile.json", Digest: policyrelease.SHA256Digest(profile), SigningFormat: policyrelease.ActivationFormatV1}
 	if len(manifest.Profiles) != 1 || manifest.Profiles[0] != wantProfile || manifest.OpenFGAModel != (policyrelease.OpenFGAModelBinding{SchemaVersion: "1.1", SourcePath: "payload/openfga-model.json", SourceDigest: policyrelease.SHA256Digest(model), CompatibilityID: "stead-openfga-local-metadata-v1", TupleMigrationID: "initial-local-installation"}) || substitutions.ModelSourceDigest != manifest.OpenFGAModel.SourceDigest {
 		return localCandidate{}, ErrDenied
 	}
