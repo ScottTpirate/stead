@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/url"
 	"os"
+	"reflect"
 	"slices"
 	"strings"
 	"sync"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/ScottTpirate/stead/apps/core/internal/outbox"
 	"github.com/ScottTpirate/stead/apps/core/internal/transaction"
+	"github.com/ScottTpirate/stead/internal/telemetry"
 	"github.com/ScottTpirate/stead/modules/authorization"
 	"github.com/ScottTpirate/stead/modules/classification"
 	"github.com/ScottTpirate/stead/modules/identity"
@@ -76,6 +78,10 @@ func TestLivePostgresBootstrapRolesSessionAndAtomicity(t *testing.T) {
 	}
 	config.Database = database
 	adminDSN := testDSN(config.User, config.Password, database)
+	if err = CheckFreshBootstrapDatabase(ctx, adminDSN, database); err != nil {
+		t.Fatal("pristine isolated database rejected", err)
+	}
+	t.Run("fresh_bootstrap_preflight", func(t *testing.T) { testFreshBootstrap(t, adminDSN, database) })
 	runtimePassword := strings.Repeat("a7", 32)
 	token, digest, err := identity.NewLocalToken()
 	if err != nil {
@@ -104,6 +110,41 @@ func TestLivePostgresBootstrapRolesSessionAndAtomicity(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer store.Close()
+	if err = store.CheckActivation(ctx, binding); err != nil {
+		t.Fatal("initial activation readiness rejected", err)
+	}
+	wrongBinding := binding
+	wrongBinding.ActivationSequence++
+	if err = store.CheckActivation(ctx, wrongBinding); err == nil {
+		t.Fatal("stale/mismatched activation passed readiness")
+	}
+	if err = store.owned(ctx, "authorization", true, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `UPDATE "authorization".namespace SET revisions=jsonb_set(revisions,'{Authority}','0') WHERE id`)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err = store.CheckActivation(ctx, binding); err == nil {
+		t.Fatal("zero unknown namespace revision passed readiness")
+	}
+	if err = store.owned(ctx, "authorization", true, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `UPDATE "authorization".namespace SET revisions=jsonb_set(revisions,'{Authority}','1') WHERE id`)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err = CheckFreshBootstrapDatabase(ctx, adminDSN, database); err == nil {
+		t.Fatal("initialized database passed fresh preflight")
+	}
+	if err = store.owned(ctx, "audit", false, func(tx pgx.Tx) error {
+		var records int
+		if err := tx.QueryRow(ctx, `SELECT count(*) FROM audit.records WHERE action='identity.bootstrap' AND resource_id=$1`, instance).Scan(&records); err != nil || records != 1 {
+			return errors.New("atomic bootstrap audit absent or duplicated")
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
 	authentication, err := identity.NewLocalAuthenticator(store, instance, time.Now)
 	if err != nil {
 		t.Fatal(err)
@@ -145,6 +186,7 @@ func TestLivePostgresBootstrapRolesSessionAndAtomicity(t *testing.T) {
 	}
 	t.Run("real_transaction_commit_rollback_outbox", func(t *testing.T) { testAtomicBackend(t, store) })
 	t.Run("real_keyset_candidate_pages", func(t *testing.T) { testCandidatePages(t, store) })
+	t.Run("bounded_set_security_reads", func(t *testing.T) { testStateSets(t, store, session, labelID) })
 	var serverVersion int
 	var grantor string
 	db, err := pgx.Connect(ctx, adminDSN)
@@ -166,6 +208,118 @@ func TestLivePostgresBootstrapRolesSessionAndAtomicity(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Logf("LIVE PostgreSQL %d: SCRAM, runtime NOINHERIT owner isolation, token one-use/revocation, commit+rollback+outbox and complete catalog PASS", serverVersion)
+}
+
+func testFreshBootstrap(t *testing.T, adminDSN, database string) {
+	ctx := context.Background()
+	conn, err := pgx.Connect(ctx, adminDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close(ctx)
+	if err = CheckFreshBootstrapDatabase(ctx, adminDSN, database); err == nil {
+		t.Fatal("another live client did not block bootstrap preflight")
+	}
+	if err = checkFreshDatabase(ctx, conn, database); err != nil {
+		t.Fatal("sole client pristine database rejected", err)
+	}
+	for _, query := range []string{
+		`CREATE SCHEMA used`, `CREATE TABLE public.used(id integer)`,
+		`CREATE SEQUENCE public.used`, `CREATE TYPE public.used AS ENUM ('existing')`,
+		`CREATE FUNCTION public.used() RETURNS integer LANGUAGE sql IMMUTABLE AS 'SELECT 1'`,
+		`ALTER DEFAULT PRIVILEGES GRANT SELECT ON TABLES TO PUBLIC`,
+		`SELECT lo_create(0)`, `DROP EXTENSION plpgsql`,
+	} {
+		tx, err := conn.Begin(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err = tx.Exec(ctx, query); err != nil {
+			_ = tx.Rollback(ctx)
+			t.Fatal("freshness fixture failed", err)
+		}
+		if err = checkFreshDatabase(ctx, tx, database); err == nil {
+			_ = tx.Rollback(ctx)
+			t.Fatal("existing database material accepted", query)
+		}
+		if err = tx.Rollback(ctx); err != nil {
+			t.Fatal(err)
+		}
+		if err = checkFreshDatabase(ctx, conn, database); err != nil {
+			t.Fatal("fixture rollback did not restore freshness", err)
+		}
+	}
+	t.Log("pristine database accepted; existing schema/table/sequence/type/function/default ACL/large object/extension changes and other clients denied")
+}
+
+func testStateSets(t *testing.T, store *Store, session identity.SessionRecord, labelID string) {
+	ctx := context.Background()
+	org, _ := NewID()
+	refs := make([]authorization.ResourceRef, 100)
+	for index := range refs {
+		id, _ := NewID()
+		refs[index] = authorization.ResourceRef{Kind: "team", ID: id}
+	}
+	if err := store.owned(ctx, "organization", true, func(tx pgx.Tx) error {
+		for _, ref := range refs {
+			if _, err := tx.Exec(ctx, `INSERT INTO organization.teams(id,organization_id,key,depth,record) VALUES($1,$2,$3,0,'{}')`, ref.ID, org, ref.ID); err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.owned(ctx, "authorization", true, func(tx pgx.Tx) error {
+		for _, ref := range refs {
+			if _, err := tx.Exec(ctx, `INSERT INTO "authorization".resources(id,kind,organization_id,label_id,pending,revision,tuple_revision) VALUES($1,'team',$2,$3,false,1,1)`, ref.ID, org, labelID); err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	measured, counters := telemetry.Begin(ctx)
+	states, err := store.ReadStates(measured, session.Principal, session.ID, refs)
+	if err != nil || len(states) != len(refs) {
+		t.Fatal("real set state read failed", err)
+	}
+	if queries := counters.Snapshot().SQLQueries; queries != 17 {
+		t.Fatal("100-resource security set did not use fixed 17 statements including transaction/role controls", queries)
+	}
+	for index, state := range states {
+		if state.Resource != refs[index] || state.OrganizationID != org || state.SessionActive || state.Revisions.Session != 3 || state.Label.Version != 1 {
+			t.Fatal("batch reordered, omitted or changed authoritative state", index)
+		}
+	}
+	one, err := store.ReadState(ctx, session.Principal, session.ID, refs[0])
+	if err != nil || !reflect.DeepEqual(one, states[0]) {
+		t.Fatal("set and single authoritative state disagree", err)
+	}
+	missing, _ := NewID()
+	withMissing := append(append([]authorization.ResourceRef(nil), refs...), authorization.ResourceRef{Kind: "team", ID: missing})
+	read, err := store.ReadStates(ctx, session.Principal, session.ID, withMissing)
+	if err != nil || len(read) != 101 || !reflect.DeepEqual(read[100], authorization.State{Resource: withMissing[100]}) {
+		t.Fatal("missing resource was not an aligned closed denial", err)
+	}
+	// The same set loader is exercised under one actual locked final-fence
+	// transaction, without minting fake central decisions or response permits.
+	tx, err := store.pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback(ctx)
+	locked, err := store.readStates(ctx, session.Principal, session.ID, refs, true, func(owner string, read func(pgx.Tx) error) error {
+		if _, err := tx.Exec(ctx, "SET LOCAL ROLE "+pgx.Identifier{store.prefix + owner + "_execute"}.Sanitize()); err != nil {
+			return err
+		}
+		return read(tx)
+	})
+	if err != nil || !reflect.DeepEqual(locked, states) {
+		t.Fatal("locked aggregate state differs", err)
+	}
+	t.Log("100 resources: 17 actual SQL statements; aligned missing-resource denial and locked aggregate state PASS")
 }
 
 func testCandidatePages(t *testing.T, store *Store) {

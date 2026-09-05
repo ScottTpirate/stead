@@ -117,7 +117,7 @@ func DecisionFromContext(ctx context.Context) (*Decision, bool) {
 func actionRelation(action Action, target ResourceRef) (string, bool) {
 	want, relation := "", ""
 	switch action {
-	case OrganizationCreate:
+	case OrganizationCreate, OrganizationsList:
 		want, relation = "instance", "organization_creator"
 	case OrganizationRead:
 		want, relation = "organization", "viewer"
@@ -235,11 +235,15 @@ func (coordinator *Coordinator) Authorize(ctx context.Context, session identity.
 	if ctx.Err() != nil || !finished.Before(expires) {
 		return deny("context_denied")
 	}
-	b := activation.binding
+	return sealDecision(state, result, session, action, target, relation, activation.binding, anchor, id, now, expires, 1), nil
+}
+
+func sealDecision(state State, result classification.Result, session identity.Authenticated, action Action, target ResourceRef, relation string, b ActivationBinding, anchor AnchorState, id string, now, expires time.Time, calls uint64) *Decision {
 	evidence := Evidence{DecisionID: id, Actor: session.Principal(), SessionID: session.SessionID(), Action: action, Target: target, InstanceID: state.InstanceID, OrganizationID: state.OrganizationID, SecurityDomain: state.SecurityDomain, Relation: relation, OpenFGAModelID: b.OpenFGAModelID, PolicyBundleID: b.PolicyBundleID, ActivationSetID: b.ActivationSetID, ActivationSequence: b.ActivationSequence, ActivationDigest: b.Digest(), ActivationEpoch: b.ActivationEpoch, TrustEpoch: b.TrustEpoch, DeploymentPolicyID: b.DeploymentPolicyID, DeploymentPolicyVersion: b.DeploymentPolicyVersion, DeploymentPolicyDigest: b.DeploymentPolicyDigest, SignedEnvelopeDigest: b.SignedEnvelopeDigest, ArchiveDigest: b.ArchiveDigest, ReleaseAttestationID: b.ReleaseAttestationID, ReleaseAttestationEnvelopeDigest: b.ReleaseAttestationEnvelopeDigest, TrustSetID: b.TrustSetID, TrustEnvelopeDigest: b.TrustEnvelopeDigest, ModelSourceDigest: b.ModelSourceDigest, EvaluatorContractVersion: b.EvaluatorContractVersion, Revisions: state.Revisions, PolicyTimeHighWater: anchor.PolicyTimeHighWater, PolicyTimeRevision: anchor.PolicyTimeRevision, EvaluatedAt: now, ExpiresAt: expires, DisclosureMode: b.DisclosureMode, OpenFGACalls: 1}
+	evidence.OpenFGACalls = calls
 	state.Label = state.Label.Copy()
 	result.Presentation.PolicyBundleID = b.PolicyBundleID
-	return &Decision{state: state, evidence: evidence, binding: b, marking: result.Marking, presentation: result.Presentation.Copy(), valid: true}, nil
+	return &Decision{state: state, evidence: evidence, binding: b, marking: result.Marking, presentation: result.Presentation.Copy(), valid: true}
 }
 
 // ValidateFinal performs no network or repository I/O. The registered root

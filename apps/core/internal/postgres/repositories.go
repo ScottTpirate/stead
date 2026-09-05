@@ -94,30 +94,41 @@ type resourceSecurity struct {
 
 func loadSecurity(ctx context.Context, tx pgx.Tx, principal identity.Principal, sessionID string, ref authorization.ResourceRef, lock bool) (resourceSecurity, error) {
 	var result resourceSecurity
+	var err error
+	result.state, err = loadNamespace(ctx, tx, lock)
+	if err != nil {
+		return resourceSecurity{}, err
+	}
 	result.state.Resource = ref
 	result.state.Principal = principal
 	result.state.SessionID = sessionID
+	query := `SELECT COALESCE(organization_id::text,''),label_id::text,pending,explicit_deny,provider_allowed,capability_active,revision,tuple_revision FROM "authorization".resources WHERE id=$1 AND kind=$2`
+	if lock {
+		query += ` FOR SHARE`
+	}
+	state := &result.state
+	err = tx.QueryRow(ctx, query, ref.ID, ref.Kind).Scan(&state.OrganizationID, &result.labelID, &state.TuplePending, &state.ExplicitDeny, &state.ProviderPathAllowed, &state.CapabilityActive, &state.Revisions.Resource, &state.Revisions.Tuples)
+	count(ctx, 1, 0, 0, 0)
+	if err != nil {
+		return resourceSecurity{}, authorization.ErrDenied
+	}
+	return result, nil
+}
+
+func loadNamespace(ctx context.Context, tx pgx.Tx, lock bool) (authorization.State, error) {
+	var result authorization.State
 	var revisions, bindingJSON []byte
 	var storeID string
 	query := `SELECT instance_id::text,security_domain,store_id,activation_id,activation_sequence,model_id,activation_digest,activation_binding,revisions,policy_time,policy_revision FROM "authorization".namespace WHERE id`
 	if lock {
 		query += ` FOR UPDATE`
 	}
-	state := &result.state
+	state := &result
 	err := tx.QueryRow(ctx, query).Scan(&state.InstanceID, &state.SecurityDomain, &storeID, &state.ActivationSetID, &state.ActivationSequence, &state.OpenFGAModelID, &state.ActivationDigest, &bindingJSON, &revisions, &state.PolicyTimeHighWater, &state.PolicyTimeRevision)
 	count(ctx, 1, 0, 0, 0)
 	var binding authorization.ActivationBinding
-	if err != nil || json.Unmarshal(revisions, &state.Revisions) != nil || json.Unmarshal(bindingJSON, &binding) != nil || binding.Digest() != state.ActivationDigest || binding.OpenFGAStoreID != storeID || binding.OpenFGAModelID != state.OpenFGAModelID || binding.DeploymentPolicyID != state.SecurityDomain || binding.ActivationSetID != state.ActivationSetID || binding.ActivationSequence != state.ActivationSequence {
-		return resourceSecurity{}, authorization.ErrDenied
-	}
-	query = `SELECT COALESCE(organization_id::text,''),label_id::text,pending,explicit_deny,provider_allowed,capability_active,revision,tuple_revision FROM "authorization".resources WHERE id=$1 AND kind=$2`
-	if lock {
-		query += ` FOR SHARE`
-	}
-	err = tx.QueryRow(ctx, query, ref.ID, ref.Kind).Scan(&state.OrganizationID, &result.labelID, &state.TuplePending, &state.ExplicitDeny, &state.ProviderPathAllowed, &state.CapabilityActive, &state.Revisions.Resource, &state.Revisions.Tuples)
-	count(ctx, 1, 0, 0, 0)
-	if err != nil {
-		return resourceSecurity{}, authorization.ErrDenied
+	if err != nil || json.Unmarshal(revisions, &state.Revisions) != nil || json.Unmarshal(bindingJSON, &binding) != nil || binding.InstallationID != state.InstanceID || binding.Digest() != state.ActivationDigest || binding.OpenFGAStoreID != storeID || binding.OpenFGAModelID != state.OpenFGAModelID || binding.DeploymentPolicyID != state.SecurityDomain || binding.ActivationSetID != state.ActivationSetID || binding.ActivationSequence != state.ActivationSequence {
+		return authorization.State{}, authorization.ErrDenied
 	}
 	return result, nil
 }

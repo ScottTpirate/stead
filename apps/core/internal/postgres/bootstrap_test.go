@@ -17,3 +17,14 @@ func TestBootstrapRejectsOtherInstallationBeforeDatabaseAccess(t *testing.T) {
 		t.Fatal("foreign installation reached database bootstrap", err)
 	}
 }
+
+func TestFreshBootstrapRejectsWrongDatabaseBeforeConnecting(t *testing.T) {
+	for _, name := range []string{"", "postgres", "template0", "template1", "gitea", "openfga", "Stead", "stead;drop", strings.Repeat("s", 64)} {
+		if bootstrapDatabaseName(name) {
+			t.Fatal("reserved or unsafe bootstrap name accepted", name)
+		}
+	}
+	if err := CheckFreshBootstrapDatabase(context.Background(), "host=/missing user=bootstrap dbname=wrong", "stead"); err == nil || !strings.Contains(err.Error(), "identity rejected") {
+		t.Fatal("DSN mismatch reached database", err)
+	}
+}

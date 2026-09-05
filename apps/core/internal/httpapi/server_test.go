@@ -105,3 +105,28 @@ func TestUnknownAndCrossOriginRequestsStayGeneric(t *testing.T) {
 		}
 	}
 }
+
+func TestListQueryBoundaryDoesNotEnableOtherOperationQueries(t *testing.T) {
+	server := &Server{config: Config{Origin: "https://localhost:7443"}, host: "localhost:7443", mux: http.NewServeMux()}
+	server.mux.HandleFunc("GET /api/v1/organizations", server.listOrganizations)
+	server.mux.HandleFunc("GET /api/v1/session", func(http.ResponseWriter, *http.Request) { t.Fatal("non-list query reached handler") })
+	for _, tc := range []struct {
+		path   string
+		status int
+	}{
+		{"/api/v1/organizations?page_size=2", 401},
+		{"/api/v1/organizations?page_size=0", 400},
+		{"/api/v1/organizations?page_size=2&page_size=3", 400},
+		{"/api/v1/organizations?after=hidden", 400},
+		{"/api/v1/organizations?total=100", 400},
+		{"/api/v1/session?page_size=2", 400},
+	} {
+		r := httptest.NewRequest(http.MethodGet, tc.path, nil)
+		r.Host = server.host
+		w := httptest.NewRecorder()
+		server.ServeHTTP(w, r)
+		if w.Code != tc.status {
+			t.Errorf("%s: got %d want %d", tc.path, w.Code, tc.status)
+		}
+	}
+}
