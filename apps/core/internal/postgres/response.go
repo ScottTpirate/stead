@@ -198,5 +198,18 @@ func (store *Store) Recheck(ctx context.Context, revision transaction.BoundRevis
 			return transaction.RecheckReceipt{}, authorization.ErrDenied
 		}
 	}
+	// A bounded list can take longer to recheck than one resource. The proof
+	// must still be current at the end, not merely when the loop started.
+	latest, err := store.config.Anchor.Read(ctx)
+	if err != nil || latest.Binding != proof.Binding || latest.PolicyTimeRevision < anchor.PolicyTimeRevision || latest.PolicyTimeHighWater.Before(anchor.PolicyTimeHighWater) {
+		return transaction.RecheckReceipt{}, authorization.ErrDenied
+	}
+	finished := time.Now().UTC()
+	if finished.Before(latest.PolicyTimeHighWater) {
+		finished = latest.PolicyTimeHighWater
+	}
+	if !finished.Before(proof.ExpiresAt) {
+		return transaction.RecheckReceipt{}, authorization.ErrDenied
+	}
 	return issuer.Confirm(revision)
 }
