@@ -1,1 +1,253 @@
-{"schema_version":"1.0.0","status":"pending","core":{},"reviews":[]}
+{
+  "schema_version": "1.0.0",
+  "status": "approved",
+  "core": {
+    "source_revision": "1a5506e6ebac953644a15d00561e2340a7801877",
+    "source_tree": "8fb92a1a1c73c90644dd997276f25d28af398772",
+    "go_version": "go1.27.0",
+    "go_binary_digest": "sha256:1db869c560a193573a71be466a34e0d4abb7792d78165c6102cdda069276a3a8",
+    "go_compiler_digest": "sha256:28d760ce44468fe3d4103227a3a5bc7d152423f5d1bb5c19fe5fd90498da755b",
+    "go_toolchain_digest": "sha256:1094bd21c51b33277b6af26c63f3bbe613cdbd92005bd964a2a59722e290bbbd",
+    "dependency_lock_digest": "sha256:b90c1ce39e44b933baf4b2d6c8674e41f9d66d8b71b1d94e93923d3441c5f469",
+    "files": [
+      {
+        "path": "go.mod",
+        "digest": "sha256:54c2cb8e5cd58f5fc26a6c6251941512bc7f37befa9a4d1cd555eae211f4714a"
+      },
+      {
+        "path": "go.sum",
+        "digest": "sha256:b90c1ce39e44b933baf4b2d6c8674e41f9d66d8b71b1d94e93923d3441c5f469"
+      },
+      {
+        "path": ".tool-versions",
+        "digest": "sha256:02f9e91d4f20ba6714264fb7e8004dcd2bab8ca2d6625cf11d4e2f3044345a57"
+      },
+      {
+        "path": "modules/authorization/contract/decision-table.json",
+        "digest": "sha256:409b7251bf6b40a3950865a0eda047cfcfbd1d56489a3c038f9239c6b9e02242"
+      },
+      {
+        "path": "modules/authorization/contract/deployment-local.json",
+        "digest": "sha256:adfb342857ad9134e4f729c8fe18120056e96c9837baba189527bf8153fd0b97"
+      },
+      {
+        "path": "modules/authorization/contract/input-schema.json",
+        "digest": "sha256:57d99fda9cc557c5d4888fb483176af7603148818958b595659f6aedf068c507"
+      },
+      {
+        "path": "modules/authorization/contract/output-schema.json",
+        "digest": "sha256:4aa0e613a66a3bc44ec3400b10c23d857c726ed773a1c720628216747f231dae"
+      },
+      {
+        "path": "modules/authorization/contract/profile-commercial.json",
+        "digest": "sha256:aa5828e3343c1f939617e2c1c690bf88d2135f993c7b63bc90e4cf6bf40faf2b"
+      },
+      {
+        "path": "modules/authorization/contract/registries.json",
+        "digest": "sha256:b5f436752af4934bb9de42a0d70b3f143dac271ce937aeb7dbfba1fd3cb5399c"
+      },
+      {
+        "path": "policies/openfga/model-v0.2.fga",
+        "digest": "sha256:45899d07003b134c3cdf9cb615966e7ae18c2b0f403295fa4e44e10637d9dc2a"
+      }
+    ],
+    "public_origin": "https://localhost:18443",
+    "openfga_url": "http://127.0.0.1:18080",
+    "security_domain": "stead-local-development",
+    "validity_seconds": 86400,
+    "allowed_substitutions": [
+      "installation_id",
+      "issued_at",
+      "expires_at",
+      "instance_keys",
+      "trust_envelope",
+      "openfga_store_id",
+      "openfga_model_id",
+      "derived_digests"
+    ],
+    "checks": [
+      {
+        "id": "policy-conformance",
+        "cases": [
+          "POLICY-001",
+          "POLICY-001A",
+          "POLICY-001B",
+          "POLICY-002",
+          "POLICY-003",
+          "POLICY-004",
+          "POLICY-005",
+          "POLICY-006",
+          "POLICY-007",
+          "POLICY-008",
+          "POLICY-009",
+          "POLICY-010",
+          "POLICY-011",
+          "POLICY-011A",
+          "POLICY-012",
+          "POLICY-012A",
+          "POLICY-012B",
+          "POLICY-013",
+          "POLICY-013A",
+          "POLICY-014",
+          "POLICY-014A",
+          "POLICY-015",
+          "POLICY-AGENT-001",
+          "POLICY-AGENT-002",
+          "POLICY-AGENT-003",
+          "POLICY-AGENT-004",
+          "POLICY-AGENT-005",
+          "POLICY-AGENT-006",
+          "POLICY-AGENT-007",
+          "POLICY-AGENT-008",
+          "POLICY-HIERARCHY-001",
+          "POLICY-LEAK-001"
+        ],
+        "required_rate": 100
+      },
+      {
+        "id": "critical-mutations",
+        "cases": [
+          "guard-001",
+          "guard-002",
+          "guard-003",
+          "guard-004",
+          "guard-005",
+          "guard-007",
+          "guard-008",
+          "guard-009",
+          "guard-010",
+          "guard-011",
+          "guard-012",
+          "guard-013",
+          "guard-014",
+          "guard-016",
+          "guard-018",
+          "guard-019",
+          "guard-020",
+          "guard-021",
+          "guard-022",
+          "guard-023",
+          "guard-024",
+          "guard-025",
+          "guard-026",
+          "guard-027",
+          "guard-029",
+          "guard-030",
+          "guard-031",
+          "guard-032",
+          "guard-033",
+          "guard-034",
+          "guard-035",
+          "guard-036",
+          "guard-037",
+          "guard-038",
+          "guard-039",
+          "guard-040",
+          "guard-041",
+          "guard-042",
+          "guard-043",
+          "guard-044",
+          "guard-045",
+          "guard-046",
+          "guard-047",
+          "guard-048",
+          "guard-049",
+          "guard-050",
+          "guard-051",
+          "guard-052",
+          "guard-053",
+          "guard-054",
+          "guard-055",
+          "guard-056",
+          "guard-057",
+          "guard-058",
+          "guard-059",
+          "guard-060",
+          "guard-061",
+          "guard-062",
+          "guard-063",
+          "guard-064",
+          "guard-065",
+          "guard-066",
+          "guard-067",
+          "guard-069",
+          "guard-070",
+          "guard-071",
+          "guard-072",
+          "guard-073",
+          "guard-074",
+          "guard-075",
+          "guard-076",
+          "guard-077",
+          "guard-078",
+          "guard-080",
+          "guard-081",
+          "guard-082",
+          "guard-083",
+          "guard-085",
+          "guard-086",
+          "guard-087",
+          "guard-088",
+          "guard-089",
+          "guard-090",
+          "guard-091",
+          "guard-092",
+          "guard-093",
+          "guard-094",
+          "guard-095",
+          "guard-096",
+          "guard-097",
+          "guard-098",
+          "guard-099",
+          "guard-100"
+        ],
+        "required_rate": 90
+      },
+      {
+        "id": "dependency-review",
+        "cases": [
+          "approved-dependency-locks",
+          "go-module-integrity",
+          "npm-vulnerability-review"
+        ],
+        "required_rate": 100
+      },
+      {
+        "id": "offline-verification",
+        "cases": [
+          "actual-archive-signatures-trust-policy-and-evidence"
+        ],
+        "required_rate": 100
+      }
+    ]
+  },
+  "reviews": [
+    {
+      "role": "architecture-contract-owner",
+      "reviewer_id": "/root/template_architecture_review",
+      "source_revision": "1a5506e6ebac953644a15d00561e2340a7801877",
+      "core_digest": "sha256:987d41634fe71cab99eda565de1e260d5c1e5f841ab397f504f6194ce5ba4b43",
+      "record_path": "docs/governance/local-development-template-review.json",
+      "record_digest": "sha256:9a4fbc65302f969591987d4618196783538a4fd1be617b167b6abdc2fa733240",
+      "disposition": "accept"
+    },
+    {
+      "role": "qa",
+      "reviewer_id": "/root/template_qa_daemon_fix",
+      "source_revision": "1a5506e6ebac953644a15d00561e2340a7801877",
+      "core_digest": "sha256:987d41634fe71cab99eda565de1e260d5c1e5f841ab397f504f6194ce5ba4b43",
+      "record_path": "docs/governance/local-development-template-review.json",
+      "record_digest": "sha256:9a4fbc65302f969591987d4618196783538a4fd1be617b167b6abdc2fa733240",
+      "disposition": "accept"
+    },
+    {
+      "role": "security",
+      "reviewer_id": "/root/template_security_review",
+      "source_revision": "1a5506e6ebac953644a15d00561e2340a7801877",
+      "core_digest": "sha256:987d41634fe71cab99eda565de1e260d5c1e5f841ab397f504f6194ce5ba4b43",
+      "record_path": "docs/governance/local-development-template-review.json",
+      "record_digest": "sha256:9a4fbc65302f969591987d4618196783538a4fd1be617b167b6abdc2fa733240",
+      "disposition": "accept"
+    }
+  ]
+}
