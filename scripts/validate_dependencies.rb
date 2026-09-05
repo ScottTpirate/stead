@@ -65,8 +65,20 @@ EXPECTED_PGXPOOL_CLOSURE = {
   "golang.org/x/sync" => ["v0.17.0", "h1:l60nONMj9l5drqw6jlhIELNv9I0A4OFgRsG9k2oT9Ug=", "h1:9KTHXmSnoGruLpwFjVSX0lNNA75CykiMECbovNTZqGI=", "04914c200cb38d4ea960ee6a4c314a028c632991", "BSD-3-Clause", "NOTICE-GO-X-SYNC-BSD-3-CLAUSE"],
   "golang.org/x/text" => ["v0.29.0", "h1:1neNs90w9YzJ9BocxfsQNHKuAT4pkghyXc4nhZ6sJvk=", "h1:7MhJOA9CD2qZyOKYazxdYMF85OwPdEr9jTtBpO7ydH4=", "e69f31bf9cf2f46bd3325bc9bad37fe9001731c2", "BSD-3-Clause", "NOTICE-GO-X-TEXT-BSD-3-CLAUSE"]
 }.freeze
+REJECTED_PGX_APPROVAL_ID = "DEP-APP-GO-PGX-V5-5-10-0"
+REJECTED_POSTGRES_APPROVAL_ID = "DEP-APP-OCI-POSTGRES-16-BOOKWORM-BB3E1A57"
+SUCCESSOR_PGX_APPROVAL_ID = "DEP-APP-GO-PGXPOOL-V5-10-0-XTEXT-0-41-0"
+SUCCESSOR_POSTGRES_APPROVAL_ID = "DEP-APP-OCI-CHAINGUARD-POSTGRES-18-6-R2-99982050"
+SUCCESSOR_PGX_NOTICE_IDS = %w[
+  NOTICE-P1-015-PGX-MIT
+  NOTICE-P1-015-PGPASSFILE-MIT
+  NOTICE-P1-015-PGSERVICEFILE-MIT
+  NOTICE-P1-015-PUDDLE-MIT
+  NOTICE-P1-015-GO-X-SYNC-BSD-3-CLAUSE
+  NOTICE-P1-015-GO-X-TEXT-BSD-3-CLAUSE
+].freeze
 EXPECTED_REJECTED_DECISIONS = {
-  "github.com/jackc/pgx/v5" => {
+  REJECTED_PGX_APPROVAL_ID => {
     "category" => "ALLOW-PERMISSIVE",
     "status" => "REJECTED",
     "independent_approval_required" => true,
@@ -79,7 +91,7 @@ EXPECTED_REJECTED_DECISIONS = {
       "github-issue-38-comment-5471438378"
     ]
   },
-  "postgres" => {
+  REJECTED_POSTGRES_APPROVAL_ID => {
     "category" => "UNKNOWN",
     "status" => "REJECTED",
     "independent_approval_required" => true,
@@ -297,6 +309,35 @@ def schema_errors(value, schema, root_schema, path = "$")
   errors
 end
 
+def candidate_records(records_by_name, name)
+  value = records_by_name[name]
+  return [] if value.nil?
+
+  value.is_a?(Array) ? value : [value]
+end
+
+def select_approved_candidate(records_by_name, name, identity, errors, label: name)
+  matches = candidate_records(records_by_name, name).select do |record|
+    identity.all? { |path, expected| nested_value(record, path) == expected }
+  end
+  if matches.empty?
+    errors << "#{label}: no exact candidate record matches the active version and digest"
+    return nil
+  end
+
+  approved = matches.select { |record| record.dig("decision", "status") == "APPROVED" }
+  if approved.empty?
+    errors << "#{label}: exact candidate is not approved for use"
+    return nil
+  end
+  if approved.length > 1
+    errors << "#{label}: multiple approved exact candidate records make active selection ambiguous"
+    return nil
+  end
+
+  approved.first
+end
+
 def direct_npm_dependencies(lockfile, errors)
   manifests = [["", JSON.parse(File.read(File.join(ROOT, "package.json")))]]
   Array(manifests.first.last["workspaces"]).each do |workspace|
@@ -416,32 +457,58 @@ def go_sum_entries(source, errors, label = "go.sum")
   entries
 end
 
-def validate_go_dependencies(mod_source, sum_source, components, errors, allowed_indirect: {}, mod_label: "go.mod", sum_label: "go.sum")
+def validate_go_dependencies(mod_source, sum_source, records_by_name, errors, go_closures_by_approval_id: {}, mod_label: "go.mod", sum_label: "go.sum")
   requirements = go_requirements(mod_source, errors, mod_label)
   dependencies = requirements.reject { |entry| entry["indirect"] }
   sums = go_sum_entries(sum_source, errors, sum_label)
+  selected_records = []
 
   dependencies.each do |entry|
     name = entry["name"]
     version = entry["version"]
-    record = components[name]
-    if record.nil? || record.dig("component", "kind") != "go_module" || record.dig("component", "ecosystem") != "go"
+    candidates = candidate_records(records_by_name, name).select do |record|
+      record.dig("component", "kind") == "go_module" && record.dig("component", "ecosystem") == "go"
+    end
+    if candidates.empty?
       errors << "dependency registry: direct Go module #{name}@#{version} has no go_module candidate record"
       next
     end
 
-    errors << "#{name}: registry version differs from go.mod" unless record.dig("component", "version") == version
-    errors << "#{name}: direct Go module is not approved for use" unless record.dig("decision", "status") == "APPROVED"
     module_sum = sums[[name, version]]
     go_mod_sum = sums[[name, "#{version}/go.mod"]]
     errors << "#{sum_label}: missing module checksum for #{name} #{version}" if module_sum.nil?
     errors << "#{sum_label}: missing go.mod checksum for #{name} #{version}" if go_mod_sum.nil?
-    if module_sum && record.dig("component", "digest", "value") != module_sum
+    version_candidates = candidates.select { |record| record.dig("component", "version") == version }
+    errors << "#{name}: registry version differs from go.mod" if version_candidates.empty?
+    if module_sum && version_candidates.none? { |record| record.dig("component", "digest", "value") == module_sum }
       errors << "#{name}: registry module checksum differs from #{sum_label}"
     end
-    if go_mod_sum && record.dig("component", "module_file_digest", "value") != go_mod_sum
+    if go_mod_sum && version_candidates.none? { |record| record.dig("component", "module_file_digest", "value") == go_mod_sum }
       errors << "#{name}: registry go.mod checksum differs from #{sum_label}"
     end
+    next if module_sum.nil? || go_mod_sum.nil?
+
+    record = select_approved_candidate(
+      records_by_name,
+      name,
+      {
+        ["component", "kind"] => "go_module",
+        ["component", "ecosystem"] => "go",
+        ["component", "version"] => version,
+        ["component", "digest", "value"] => module_sum,
+        ["component", "module_file_digest", "value"] => go_mod_sum
+      },
+      errors,
+      label: "#{name}@#{version}"
+    )
+    selected_records << record if record
+  end
+
+  pgx_record = selected_records.find { |record| record.dig("component", "name") == "github.com/jackc/pgx/v5" }
+  allowed_indirect = pgx_record ? go_closures_by_approval_id[pgx_record["approval_id"]] : {}
+  if pgx_record && allowed_indirect.nil?
+    errors << "go.mod: approved pgx candidate #{pgx_record['approval_id']} has no approval-ID-bound runtime closure"
+    allowed_indirect = {}
   end
   indirect = requirements.select { |entry| entry["indirect"] }
   indirect.each do |entry|
@@ -465,12 +532,12 @@ def validate_go_dependencies(mod_source, sum_source, components, errors, allowed
   if active_names.include?("github.com/jackc/pgx/v5")
     errors << "go.mod: github.com/jackc/pgx/v5 must be a direct dependency" unless dependencies.any? { |entry| entry["name"] == "github.com/jackc/pgx/v5" }
     missing = expected_names - active_names
-    errors << "go.mod: pgxpool reviewed runtime closure is incomplete: #{missing.to_a.sort.join(', ')}" unless missing.empty?
+    errors << "go.mod: approval-ID-bound pgxpool runtime closure is incomplete: #{missing.to_a.sort.join(', ')}" unless missing.empty?
   elsif !(active_names & expected_names).empty?
     errors << "go.mod: pgxpool transitive modules may not be active without direct github.com/jackc/pgx/v5"
   end
 
-  { "direct" => dependencies, "requirements" => requirements }
+  { "direct" => dependencies, "requirements" => requirements, "selected_records" => selected_records }
 end
 
 def oci_workflow_references(source, errors, label)
@@ -495,22 +562,34 @@ def oci_workflow_references(source, errors, label)
   references
 end
 
-def validate_oci_workflow_images(workflow_sources, components, errors)
+def validate_oci_workflow_images(workflow_sources, records_by_name, errors)
   references = workflow_sources.flat_map do |label, source|
     oci_workflow_references(source, errors, label)
   end
   references.each do |reference|
     name = reference["name"]
-    record = components[name]
-    unless record && record.dig("component", "kind") == "oci_image" && record.dig("component", "ecosystem") == "oci"
+    candidates = candidate_records(records_by_name, name).select do |record|
+      record.dig("component", "kind") == "oci_image" && record.dig("component", "ecosystem") == "oci"
+    end
+    if candidates.empty?
       errors << "dependency registry: workflow OCI image #{name} has no oci_image candidate record"
       next
     end
-    if reference["version"] && record.dig("component", "version") != reference["version"]
+
+    if reference["version"] && candidates.none? { |record| record.dig("component", "version") == reference["version"] }
       errors << "#{name}: registry version differs from workflow image tag"
     end
-    errors << "#{name}: workflow image digest differs from approval registry" unless record.dig("component", "digest", "value") == reference["digest"]
-    errors << "#{name}: workflow OCI image is not approved for use" unless record.dig("decision", "status") == "APPROVED"
+    if candidates.none? { |record| record.dig("component", "digest", "value") == reference["digest"] }
+      errors << "#{name}: workflow image digest differs from approval registry"
+    end
+    identity = {
+      ["component", "kind"] => "oci_image",
+      ["component", "ecosystem"] => "oci",
+      ["component", "digest", "value"] => reference["digest"]
+    }
+    identity[["component", "version"]] = reference["version"] if reference["version"]
+    record = select_approved_candidate(records_by_name, name, identity, errors, label: name)
+    reference["approval_id"] = record["approval_id"] if record
   end
   references
 end
@@ -560,20 +639,20 @@ def decision_state_errors(record)
   errors
 end
 
-def exact_rejected_candidate_errors(components)
-  errors = EXPECTED_REJECTED_DECISIONS.filter_map do |name, expected|
-    record = components[name]
+def exact_rejected_candidate_errors(records_by_id)
+  errors = EXPECTED_REJECTED_DECISIONS.filter_map do |approval_id, expected|
+    record = records_by_id[approval_id]
     if record.nil?
-      "dependency registry: missing rejected evidence record #{name}"
+      "dependency registry: missing rejected evidence record #{approval_id}"
     elsif record["decision"] != expected
-      "#{name}: rejected decision or its immutable reason/evidence binding differs from the reviewed disposition"
+      "#{approval_id}: rejected decision or its immutable reason/evidence binding differs from the reviewed disposition"
     end
   end
-  postgres_record = components["postgres"]
+  postgres_record = records_by_id[REJECTED_POSTGRES_APPROVAL_ID]
   if postgres_record && postgres_record.dig("component", "license_expression") != "NOASSERTION"
     errors << "postgres: rejected image license must remain NOASSERTION"
   end
-  pgx_record = components["github.com/jackc/pgx/v5"]
+  pgx_record = records_by_id[REJECTED_PGX_APPROVAL_ID]
   if pgx_record
     obligations = pgx_record.fetch("obligations", {})
     unless obligations["notices"] == REJECTED_PGX_NOTICE_IDS
@@ -587,7 +666,13 @@ def exact_rejected_candidate_errors(components)
 end
 
 def nested_value(value, path)
-  path.reduce(value) { |cursor, key| cursor.is_a?(Hash) ? cursor[key] : nil }
+  path.reduce(value) do |cursor, key|
+    if cursor.is_a?(Hash)
+      cursor[key]
+    elsif cursor.is_a?(Array) && key.is_a?(Integer)
+      cursor[key]
+    end
+  end
 end
 
 def pgxpool_closure_errors(evidence)
@@ -611,6 +696,38 @@ def postgresql_rejection_evidence_errors(evidence)
     "dependency-evidence/stead-p1-015-postgresql.yaml: #{path.join('.')} must preserve rejected finding #{expected.inspect}"
   end
   errors.concat(pgxpool_closure_errors(evidence))
+end
+
+# Approval identity and reviewed artifact metadata are data, not locked Markdown prose.
+def postgresql_successor_errors(records_by_id, evidence)
+  errors = []
+  intake = evidence.fetch("successor_intake", {})
+  approvals = evidence.dig("successor_approval", "candidates") || {}
+  %w[go_candidate oci_candidate].each do |key|
+    candidate = intake.fetch(key, {})
+    id = candidate["approval_id"]
+    record = records_by_id[id]
+    approval = approvals[id]
+    next if record && record.dig("decision", "status") != "APPROVED" && approval.nil?
+    unless record && approval
+      errors << "dependency evidence: missing exact successor record or approval for #{key}"
+      next
+    end
+    digest = candidate[key == "go_candidate" ? "module_sum" : "index_digest"]
+    errors << "#{id}: reviewed version/digest mismatch" unless record.dig("component", "version") == candidate["version"] && record.dig("component", "digest", "value") == digest
+    errors << "#{id}: approval identity mismatch" unless approval["approvers"] == record.dig("decision", "approvers") && approval["approved_at"] == record.dig("decision", "approved_at")
+    errors << "#{id}: missing immutable review binding" unless approval["candidate_revision"]&.match?(/\A[0-9a-f]{40}\z/) && approval["evidence_manifest_sha256"]&.match?(/\A[0-9a-f]{64}\z/)
+    errors << "#{id}: activation requires reviewed proof and rescan" unless approval.values_at("activation_allowed", "rescan", "functional_proof") == [true, "PASS", "PASS"]
+    if key == "oci_candidate"
+      errors << "#{id}: test image may not be distributed" unless record.dig("usage", "distributed_in") == [] && record.dig("usage", "relationship") == "test" && candidate["distribution_allowed"] == false
+    else
+      closure = Array(candidate["pgxpool_runtime_closure"])
+      notices = [candidate["notice_id"], *closure.map { |entry| entry["notice_id"] }]
+      errors << "#{id}: notice coverage differs from reviewed closure" unless record.dig("obligations", "notices") == notices
+      errors << "#{id}: duplicate or missing runtime closure" unless closure.length == 5 && closure.map { |entry| entry["module"] }.uniq.length == closure.length
+    end
+  end
+  errors
 end
 
 def notice_quarantine_errors(source)
@@ -673,6 +790,7 @@ end
 def run_validator_self_tests
   guard_count = 7
   pending_go = {
+    "approval_id" => "DEP-APP-TEST-GO-PENDING",
     "component" => {
       "name" => "example.com/db", "kind" => "go_module", "ecosystem" => "go", "version" => "v1.2.3",
       "digest" => { "algorithm" => "go-h1", "value" => "h1:#{'a' * 43}=" },
@@ -681,6 +799,7 @@ def run_validator_self_tests
     "decision" => { "status" => "REVIEWED_PENDING_INDEPENDENT_APPROVAL" }
   }
   pending_oci = {
+    "approval_id" => "DEP-APP-TEST-OCI-PENDING",
     "component" => {
       "name" => "postgres", "kind" => "oci_image", "ecosystem" => "oci", "version" => "16-bookworm",
       "digest" => { "algorithm" => "sha256", "value" => "sha256:#{'a' * 64}" }
@@ -726,12 +845,14 @@ def run_validator_self_tests
   failures << "wrong OCI digest mutation was accepted" unless wrong_oci_errors.any? { |error| error.include?("digest differs") }
 
   rejected_go = Marshal.load(Marshal.dump(pending_go))
+  rejected_go["approval_id"] = "DEP-APP-TEST-GO-REJECTED"
   rejected_go["component"]["name"] = "example.com/rejected-db"
   rejected_go["decision"] = {
     "status" => "REJECTED", "approvers" => [], "approved_at" => nil,
     "reason_codes" => ["REACHABLE_KNOWN_VULNERABILITY"], "evidence_refs" => ["evidence/rejected-db"]
   }
   rejected_oci = Marshal.load(Marshal.dump(pending_oci))
+  rejected_oci["approval_id"] = "DEP-APP-TEST-OCI-REJECTED"
   rejected_oci["component"]["name"] = "rejected-postgres"
   rejected_oci["decision"] = {
     "status" => "REJECTED", "approvers" => [], "approved_at" => nil,
@@ -775,29 +896,86 @@ def run_validator_self_tests
   guard_count += 1
 
   registry_fixture = load_yaml(REGISTRY_PATH)
-  registry_components = registry_fixture.fetch("records").to_h { |record| [record.dig("component", "name"), record] }
+  registry_records_by_id = registry_fixture.fetch("records").to_h { |record| [record.fetch("approval_id"), record] }
+  failures << "approval-ID lookup lost rejected history beside a same-name successor" unless exact_rejected_candidate_errors(registry_records_by_id).empty?
+
+  exact_identity = {
+    ["component", "kind"] => "go_module",
+    ["component", "version"] => pending_go.dig("component", "version"),
+    ["component", "digest", "value"] => pending_go.dig("component", "digest", "value"),
+    ["component", "module_file_digest", "value"] => pending_go.dig("component", "module_file_digest", "value")
+  }
+  rejected_history = Marshal.load(Marshal.dump(pending_go))
+  rejected_history["decision"]["status"] = "REJECTED"
+  selection_errors = []
+  select_approved_candidate({ "example.com/db" => [rejected_history, pending_go] }, "example.com/db", exact_identity, selection_errors)
+  failures << "pending successor activation was accepted" unless selection_errors.any? { |error| error.include?("not approved for use") }
+
+  approved_successor = Marshal.load(Marshal.dump(pending_go))
+  approved_successor["decision"]["status"] = "APPROVED"
+  selection_errors = []
+  selection = select_approved_candidate({ "example.com/db" => [rejected_history, approved_successor] }, "example.com/db", exact_identity, selection_errors)
+  failures << "one approved exact successor was not selected" unless selection == approved_successor && selection_errors.empty?
+  duplicate_approved = Marshal.load(Marshal.dump(approved_successor))
+  duplicate_approved["approval_id"] = "DEP-APP-TEST-DUPLICATE-APPROVAL"
+  ambiguous_errors = []
+  ambiguous = select_approved_candidate({ "example.com/db" => [approved_successor, duplicate_approved] }, "example.com/db", exact_identity, ambiguous_errors)
+  failures << "two approved exact records did not fail closed as ambiguous" unless ambiguous.nil? && ambiguous_errors.any? { |error| error.include?("multiple approved exact candidate") }
+
+  approved_without_evidence = Marshal.load(Marshal.dump(registry_records_by_id))
+  approved_without_evidence.fetch(SUCCESSOR_PGX_APPROVAL_ID)["decision"] = {
+    "category" => "ALLOW-PERMISSIVE",
+    "status" => "APPROVED",
+    "independent_approval_required" => true,
+    "approvers" => ["independent-qa", "independent-security"],
+    "approved_at" => "2026-09-04T16:30:00Z"
+  }
+  missing_approval_evidence_errors = postgresql_successor_errors(approved_without_evidence, load_yaml(POSTGRESQL_EVIDENCE_PATH))
+  unless missing_approval_evidence_errors.any? { |error| error.include?("approval identity mismatch") }
+    failures << "successor was approved without exact-revision approval evidence"
+  end
+
+  approved_pgx = Marshal.load(Marshal.dump(registry_records_by_id.fetch(SUCCESSOR_PGX_APPROVAL_ID)))
+  approved_pgx["decision"]["status"] = "APPROVED"
+  pgx_sum = "github.com/jackc/pgx/v5 v5.10.0 #{approved_pgx.dig('component', 'digest', 'value')}\n" \
+            "github.com/jackc/pgx/v5 v5.10.0/go.mod #{approved_pgx.dig('component', 'module_file_digest', 'value')}\n"
+  incomplete_closure_errors = []
+  validate_go_dependencies(
+    "module fixture\nrequire github.com/jackc/pgx/v5 v5.10.0\n",
+    pgx_sum,
+    { "github.com/jackc/pgx/v5" => [approved_pgx] },
+    incomplete_closure_errors,
+    go_closures_by_approval_id: { SUCCESSOR_PGX_APPROVAL_ID => load_yaml(POSTGRESQL_EVIDENCE_PATH).dig("successor_intake", "go_candidate", "pgxpool_runtime_closure").to_h do |entry|
+    [entry.fetch("module"), entry.values_at("version", "module_sum", "go_mod_sum")]
+  end },
+    mod_label: "incomplete-successor.mod",
+    sum_label: "incomplete-successor.sum"
+  )
+  failures << "incomplete approval-ID-bound pgx closure was accepted" unless incomplete_closure_errors.any? { |error| error.include?("runtime closure is incomplete") }
+  guard_count += 6
+
   decision_mutation_survivors = []
-  EXPECTED_REJECTED_DECISIONS.each do |name, expected_decision|
+  EXPECTED_REJECTED_DECISIONS.each do |approval_id, expected_decision|
     expected_decision.each_key do |field|
-      mutated_components = Marshal.load(Marshal.dump(registry_components))
-      mutated_components.fetch(name).fetch("decision").delete(field)
-      decision_mutation_survivors << "#{name}.decision.#{field}" if exact_rejected_candidate_errors(mutated_components).empty?
+      mutated_records = Marshal.load(Marshal.dump(registry_records_by_id))
+      mutated_records.fetch(approval_id).fetch("decision").delete(field)
+      decision_mutation_survivors << "#{approval_id}.decision.#{field}" if exact_rejected_candidate_errors(mutated_records).empty?
       guard_count += 1
     end
   end
   failures << "exact rejected-decision mutation survivors: #{decision_mutation_survivors.join(', ')}" unless decision_mutation_survivors.empty?
 
   softened_decision_mutations = [
-    ["github.com/jackc/pgx/v5", "status", "APPROVED"],
-    ["github.com/jackc/pgx/v5", "reason_codes", ["RISK_ACCEPTED"]],
-    ["postgres", "category", "REVIEW-NONRUNTIME"],
-    ["postgres", "reason_codes", ["SCAN_REVIEWED"]]
+    [REJECTED_PGX_APPROVAL_ID, "status", "APPROVED"],
+    [REJECTED_PGX_APPROVAL_ID, "reason_codes", ["RISK_ACCEPTED"]],
+    [REJECTED_POSTGRES_APPROVAL_ID, "category", "REVIEW-NONRUNTIME"],
+    [REJECTED_POSTGRES_APPROVAL_ID, "reason_codes", ["SCAN_REVIEWED"]]
   ]
   softened_decision_survivors = []
-  softened_decision_mutations.each do |name, field, replacement|
-    mutated_components = Marshal.load(Marshal.dump(registry_components))
-    mutated_components.fetch(name).fetch("decision")[field] = replacement
-    softened_decision_survivors << "#{name}.decision.#{field}" if exact_rejected_candidate_errors(mutated_components).empty?
+  softened_decision_mutations.each do |approval_id, field, replacement|
+    mutated_records = Marshal.load(Marshal.dump(registry_records_by_id))
+    mutated_records.fetch(approval_id).fetch("decision")[field] = replacement
+    softened_decision_survivors << "#{approval_id}.decision.#{field}" if exact_rejected_candidate_errors(mutated_records).empty?
     guard_count += 1
   end
   failures << "rejected decision softening mutation survivors: #{softened_decision_survivors.join(', ')}" unless softened_decision_survivors.empty?
@@ -813,18 +991,18 @@ def run_validator_self_tests
   }
   notice_obligation_survivors = []
   notice_obligation_mutations.each do |label, mutation|
-    mutated_components = Marshal.load(Marshal.dump(registry_components))
-    mutation.call(mutated_components.fetch("github.com/jackc/pgx/v5"))
-    notice_obligation_survivors << label if exact_rejected_candidate_errors(mutated_components).empty?
+    mutated_records = Marshal.load(Marshal.dump(registry_records_by_id))
+    mutation.call(mutated_records.fetch(REJECTED_PGX_APPROVAL_ID))
+    notice_obligation_survivors << label if exact_rejected_candidate_errors(mutated_records).empty?
     guard_count += 1
   end
   unless notice_obligation_survivors.empty?
     failures << "rejected notice-obligation mutation survivors: #{notice_obligation_survivors.join(', ')}"
   end
 
-  softened_license_components = Marshal.load(Marshal.dump(registry_components))
-  softened_license_components.fetch("postgres").fetch("component")["license_expression"] = "MIT"
-  if exact_rejected_candidate_errors(softened_license_components).empty?
+  softened_license_records = Marshal.load(Marshal.dump(registry_records_by_id))
+  softened_license_records.fetch(REJECTED_POSTGRES_APPROVAL_ID).fetch("component")["license_expression"] = "MIT"
+  if exact_rejected_candidate_errors(softened_license_records).empty?
     failures << "rejected OCI license softening mutation was accepted"
   end
   guard_count += 1
@@ -973,8 +1151,11 @@ records = registry.fetch("records", [])
 ids = records.map { |record| record["approval_id"] }
 errors << "dependency registry: approval_id values must be unique" unless ids.uniq.length == ids.length
 
-components = records.to_h { |record| [record.dig("component", "name"), record] }
-errors << "dependency registry: component names must be unique" unless components.length == records.length
+records_by_id = records.to_h { |record| [record["approval_id"], record] }
+records_by_name = records.group_by { |record| record.dig("component", "name") }
+components = records_by_name.transform_values do |candidates|
+  candidates.length == 1 ? candidates.first : candidates.find { |record| record.dig("decision", "status") == "APPROVED" }
+end
 
 records.each do |record|
   name = record.dig("component", "name")
@@ -1022,7 +1203,7 @@ records.each do |record|
 
   errors << "#{name}: rollback target must be the immutable Phase 0 baseline" unless rollback_version == FOUNDATION_ROLLBACK_TARGET
 end
-errors.concat(exact_rejected_candidate_errors(components))
+errors.concat(exact_rejected_candidate_errors(records_by_id))
 
 REQUIRED_PINS.each do |name, (version, digest)|
   record = components[name]
@@ -1075,13 +1256,14 @@ expected_postgresql_evidence.each do |path, expected|
 end
 
 errors.concat(postgresql_rejection_evidence_errors(postgresql_evidence))
+errors.concat(postgresql_successor_errors(records_by_id, postgresql_evidence))
 
-pgx_record = components["github.com/jackc/pgx/v5"]
+pgx_record = records_by_id[REJECTED_PGX_APPROVAL_ID]
 if pgx_record
   errors << "github.com/jackc/pgx/v5: registry artifact checksum differs from intake evidence" unless pgx_record.dig("component", "digest", "value") == postgresql_evidence.dig("go_candidate", "module_sum")
   errors << "github.com/jackc/pgx/v5: registry go.mod checksum differs from intake evidence" unless pgx_record.dig("component", "module_file_digest", "value") == postgresql_evidence.dig("go_candidate", "go_mod_sum")
 end
-postgres_record = components["postgres"]
+postgres_record = records_by_id[REJECTED_POSTGRES_APPROVAL_ID]
 if postgres_record
   errors << "postgres: registry index digest differs from intake evidence" unless postgres_record.dig("component", "digest", "value") == postgresql_evidence.dig("oci_candidate", "index_digest")
 end
@@ -1111,13 +1293,17 @@ go_mod_source = File.read(GO_MOD_PATH)
 go_sum_source = File.file?(GO_SUM_PATH) ? File.read(GO_SUM_PATH) : ""
 errors << "go.work: workspace overrides are prohibited in release input" if File.file?(File.join(ROOT, "go.work"))
 errors << "vendor: vendored Go source requires separate provenance and approval" if File.directory?(File.join(ROOT, "vendor"))
-allowed_pgxpool_indirect = EXPECTED_PGXPOOL_CLOSURE.transform_values { |values| values.first(3) }
+go_closures_by_approval_id = {
+  SUCCESSOR_PGX_APPROVAL_ID => postgresql_evidence.dig("successor_intake", "go_candidate", "pgxpool_runtime_closure").to_h do |entry|
+    [entry.fetch("module"), entry.values_at("version", "module_sum", "go_mod_sum")]
+  end
+}
 go_validation = validate_go_dependencies(
   go_mod_source,
   go_sum_source,
-  components,
+  records_by_name,
   errors,
-  allowed_indirect: allowed_pgxpool_indirect
+  go_closures_by_approval_id: go_closures_by_approval_id
 )
 direct_go = go_validation["direct"]
 direct_go_names = direct_go.map { |entry| entry["name"] }.to_set
@@ -1157,7 +1343,7 @@ workflow_paths.each do |workflow_path|
 end
 
 workflow_sources = workflow_paths.to_h { |path| [path.delete_prefix(ROOT + "/"), File.read(path)] }
-oci_references = validate_oci_workflow_images(workflow_sources, components, errors)
+oci_references = validate_oci_workflow_images(workflow_sources, records_by_name, errors)
 active_record_names.merge(oci_references.map { |reference| reference["name"] })
 
 ci_path = File.join(ROOT, ".github/workflows/ci.yml")
