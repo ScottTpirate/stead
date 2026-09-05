@@ -78,6 +78,10 @@ func TestLivePostgresBootstrapRolesSessionAndAtomicity(t *testing.T) {
 	}
 	config.Database = database
 	adminDSN := testDSN(config.User, config.Password, database)
+	if err = CheckFreshBootstrapDatabase(ctx, adminDSN, database); err != nil {
+		t.Fatal("pristine isolated database rejected", err)
+	}
+	t.Run("fresh_bootstrap_preflight", func(t *testing.T) { testFreshBootstrap(t, adminDSN, database) })
 	runtimePassword := strings.Repeat("a7", 32)
 	token, digest, err := identity.NewLocalToken()
 	if err != nil {
@@ -106,6 +110,41 @@ func TestLivePostgresBootstrapRolesSessionAndAtomicity(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer store.Close()
+	if err = store.CheckActivation(ctx, binding); err != nil {
+		t.Fatal("initial activation readiness rejected", err)
+	}
+	wrongBinding := binding
+	wrongBinding.ActivationSequence++
+	if err = store.CheckActivation(ctx, wrongBinding); err == nil {
+		t.Fatal("stale/mismatched activation passed readiness")
+	}
+	if err = store.owned(ctx, "authorization", true, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `UPDATE "authorization".namespace SET revisions=jsonb_set(revisions,'{Authority}','0') WHERE id`)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err = store.CheckActivation(ctx, binding); err == nil {
+		t.Fatal("zero unknown namespace revision passed readiness")
+	}
+	if err = store.owned(ctx, "authorization", true, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `UPDATE "authorization".namespace SET revisions=jsonb_set(revisions,'{Authority}','1') WHERE id`)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err = CheckFreshBootstrapDatabase(ctx, adminDSN, database); err == nil {
+		t.Fatal("initialized database passed fresh preflight")
+	}
+	if err = store.owned(ctx, "audit", false, func(tx pgx.Tx) error {
+		var records int
+		if err := tx.QueryRow(ctx, `SELECT count(*) FROM audit.records WHERE action='identity.bootstrap' AND resource_id=$1`, instance).Scan(&records); err != nil || records != 1 {
+			return errors.New("atomic bootstrap audit absent or duplicated")
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
 	authentication, err := identity.NewLocalAuthenticator(store, instance, time.Now)
 	if err != nil {
 		t.Fatal(err)
@@ -169,6 +208,48 @@ func TestLivePostgresBootstrapRolesSessionAndAtomicity(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Logf("LIVE PostgreSQL %d: SCRAM, runtime NOINHERIT owner isolation, token one-use/revocation, commit+rollback+outbox and complete catalog PASS", serverVersion)
+}
+
+func testFreshBootstrap(t *testing.T, adminDSN, database string) {
+	ctx := context.Background()
+	conn, err := pgx.Connect(ctx, adminDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close(ctx)
+	if err = CheckFreshBootstrapDatabase(ctx, adminDSN, database); err == nil {
+		t.Fatal("another live client did not block bootstrap preflight")
+	}
+	if err = checkFreshDatabase(ctx, conn, database); err != nil {
+		t.Fatal("sole client pristine database rejected", err)
+	}
+	for _, query := range []string{
+		`CREATE SCHEMA used`, `CREATE TABLE public.used(id integer)`,
+		`CREATE SEQUENCE public.used`, `CREATE TYPE public.used AS ENUM ('existing')`,
+		`CREATE FUNCTION public.used() RETURNS integer LANGUAGE sql IMMUTABLE AS 'SELECT 1'`,
+		`ALTER DEFAULT PRIVILEGES GRANT SELECT ON TABLES TO PUBLIC`,
+		`SELECT lo_create(0)`, `DROP EXTENSION plpgsql`,
+	} {
+		tx, err := conn.Begin(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err = tx.Exec(ctx, query); err != nil {
+			_ = tx.Rollback(ctx)
+			t.Fatal("freshness fixture failed", err)
+		}
+		if err = checkFreshDatabase(ctx, tx, database); err == nil {
+			_ = tx.Rollback(ctx)
+			t.Fatal("existing database material accepted", query)
+		}
+		if err = tx.Rollback(ctx); err != nil {
+			t.Fatal(err)
+		}
+		if err = checkFreshDatabase(ctx, conn, database); err != nil {
+			t.Fatal("fixture rollback did not restore freshness", err)
+		}
+	}
+	t.Log("pristine database accepted; existing schema/table/sequence/type/function/default ACL/large object/extension changes and other clients denied")
 }
 
 func testStateSets(t *testing.T, store *Store, session identity.SessionRecord, labelID string) {
