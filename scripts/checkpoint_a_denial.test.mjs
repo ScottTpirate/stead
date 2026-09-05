@@ -56,6 +56,8 @@ test('denial compares only generic canonical bodies and rejects resource metadat
   for (const value of [problem({ detail: 'exists' }), problem({ title: 'Denied existing object' }), problem({ status: 403 }), problem({ correlation_id: 'b'.repeat(32) })]) assert.throws(() => denialResponse(body(value), new Headers(headers()), 404));
   for (const raw of [Buffer.from(JSON.stringify(problem())), Buffer.from(`{"title":"protected",${JSON.stringify(problem()).slice(1)}\n`), Buffer.from(`${JSON.stringify(problem()).replace('about:blank', 'about:\\u0062lank')}\n`), Buffer.from([0xff])]) assert.throws(() => denialResponse(raw, new Headers(headers()), 404));
   assert.throws(() => denialResponse(body(problem()), new Headers(headers({ 'cache-control': 'public' })), 404));
+  assert.deepEqual(denialResponse(body(problem()), new Headers(headers({ 'cache-control': 'no-store, no-store' })), 404), first);
+  for (const value of ['no-store, public', 'no-store, max-age=60', 'no-store,', ',no-store', '\u00a0no-store', 'no-store\u00a0', 'no-store,'.repeat(20) + 'no-store']) assert.throws(() => denialResponse(body(problem()), new Headers(headers({ 'cache-control': value })), 404));
   assert.throws(() => denialResponse(body(problem()), new Headers(headers()), 401));
 });
 

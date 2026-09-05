@@ -40,7 +40,10 @@ export function validateDenialDestination(input, init) {
 }
 
 export function denialResponse(body, headers, status) {
-  if (status !== 404 || headers.get('content-type') !== 'application/problem+json' || headers.get('cache-control') !== 'no-store') throw failure();
+  // The BFF and API may both append no-store. Repetition does not weaken the
+  // directive; reject any other (including conflicting) cache instruction.
+  const cacheControl = headers.get('cache-control');
+  if (status !== 404 || headers.get('content-type') !== 'application/problem+json' || !cacheControl || cacheControl.length > 128 || !cacheControl.split(',').every((part) => part.replace(/^[ \t]+|[ \t]+$/gu, '') === 'no-store')) throw failure();
   for (const key of ['etag', 'stead-schema-version', 'last-modified', 'location', 'content-location', 'link', 'set-cookie']) if (headers.has(key)) throw failure();
   const raw = new TextDecoder('utf-8', { fatal: true }).decode(body);
   const problem = genericProblem(body, status);
