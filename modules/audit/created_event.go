@@ -4,7 +4,6 @@ package audit
 import (
 	"encoding/json"
 	"errors"
-	"github.com/ScottTpirate/stead/modules/authorization"
 	"github.com/ScottTpirate/stead/modules/classification"
 	"github.com/ScottTpirate/stead/modules/identity"
 	"github.com/ScottTpirate/stead/modules/organization"
@@ -16,16 +15,21 @@ type actorContext struct {
 	CorrelationID string             `json:"correlation_id"`
 	CausationID   string             `json:"causation_id"`
 }
+type resourceRef struct {
+	Kind string `json:"kind"`
+	ID   string `json:"id"`
+	URI  string `json:"uri"`
+}
 type createdData struct {
-	SchemaVersion  string                    `json:"schema_version"`
-	OrganizationID string                    `json:"organization_id"`
-	SecurityDomain string                    `json:"security_domain_id"`
-	Container      authorization.ResourceRef `json:"container"`
-	Label          classification.Label      `json:"effective_security_label"`
-	Actor          actorContext              `json:"actor_context"`
-	Resource       authorization.ResourceRef `json:"resource"`
-	IdempotencyKey string                    `json:"idempotency_key"`
-	ChangedFields  []string                  `json:"changed_fields"`
+	SchemaVersion  string               `json:"schema_version"`
+	OrganizationID string               `json:"organization_id"`
+	SecurityDomain string               `json:"security_domain_id"`
+	Container      resourceRef          `json:"container"`
+	Label          classification.Label `json:"effective_security_label"`
+	Actor          actorContext         `json:"actor_context"`
+	Resource       resourceRef          `json:"resource"`
+	IdempotencyKey string               `json:"idempotency_key"`
+	ChangedFields  []string             `json:"changed_fields"`
 }
 type createdEvent struct {
 	SpecVersion     string      `json:"specversion"`
@@ -35,6 +39,7 @@ type createdEvent struct {
 	Subject         string      `json:"subject"`
 	Time            time.Time   `json:"time"`
 	DataContentType string      `json:"datacontenttype"`
+	DataSchema      string      `json:"dataschema"`
 	Data            createdData `json:"data"`
 }
 
@@ -53,7 +58,7 @@ func CreatedEvent(eventID string, resource organization.Resource, idempotencyKey
 	default:
 		return nil, errors.New("invalid created event kind")
 	}
-	ref := authorization.ResourceRef{Kind: resource.Kind, ID: resource.ID}
-	value := createdEvent{SpecVersion: "1.0", ID: eventID, Source: "urn:stead:producer:" + producer, Type: "stead." + resource.Kind + ".created.v1", Subject: "urn:uuid:" + resource.ID, Time: resource.CreatedAt, DataContentType: "application/json", Data: createdData{SchemaVersion: "0.1", OrganizationID: resource.OrganizationID, SecurityDomain: domain, Container: authorization.ResourceRef{Kind: "organization", ID: resource.OrganizationID}, Label: resource.Label.Copy(), Actor: actorContext{Actor: resource.CreatedBy, CorrelationID: correlationID, CausationID: correlationID}, Resource: ref, IdempotencyKey: idempotencyKey, ChangedFields: []string{"created"}}}
+	ref := resourceRef{Kind: resource.Kind, ID: resource.ID, URI: "urn:uuid:" + resource.ID}
+	value := createdEvent{SpecVersion: "1.0", ID: eventID, Source: "urn:stead:producer:" + producer, Type: "stead." + resource.Kind + ".created.v1", Subject: "urn:uuid:" + resource.ID, Time: resource.CreatedAt, DataContentType: "application/json", DataSchema: "https://stead.example/packages/event-schemas/stead/stead-event-v0.1.schema.json", Data: createdData{SchemaVersion: "0.1", OrganizationID: resource.OrganizationID, SecurityDomain: domain, Container: resourceRef{Kind: "organization", ID: resource.OrganizationID, URI: "urn:uuid:" + resource.OrganizationID}, Label: resource.Label.Copy(), Actor: actorContext{Actor: resource.CreatedBy, CorrelationID: correlationID, CausationID: correlationID}, Resource: ref, IdempotencyKey: idempotencyKey, ChangedFields: []string{"created"}}}
 	return json.Marshal(value)
 }
