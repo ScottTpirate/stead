@@ -36,9 +36,9 @@ type Repository interface {
 	transaction.RevisionRechecker
 	RotateSessionToken(context.Context, string, [sha256.Size]byte, [sha256.Size]byte) (bool, error)
 	RevokeSession(context.Context, string) error
-	ListOrganizationIDs(context.Context, string, int) ([]string, error)
-	ListTeamIDs(context.Context, string, int) ([]string, error)
-	ListProjectIDs(context.Context, string, int) ([]string, error)
+	ListOrganizationPageIDs(context.Context, string, string, int) ([]string, error)
+	ListTeamPageIDs(context.Context, string, string, int) ([]string, error)
+	ListProjectPageIDs(context.Context, string, string, int) ([]string, error)
 	FinalizeResponse(context.Context, []*authorization.Decision) (transaction.BoundRevision, error)
 }
 
@@ -140,7 +140,7 @@ func (server *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 	if strings.HasPrefix(r.URL.Path, "/api/") {
-		if r.Host != server.host || r.URL.IsAbs() || r.URL.RawPath != "" || r.URL.RawQuery != "" || strings.ContainsAny(r.URL.Path, "\\\x00") || r.Header.Get("Sec-Fetch-Site") == "cross-site" {
+		if r.Host != server.host || r.URL.IsAbs() || r.URL.RawPath != "" || strings.ContainsAny(r.URL.Path, "\\\x00") || r.Header.Get("Sec-Fetch-Site") == "cross-site" {
 			problem(output, 400)
 			return
 		}
@@ -160,6 +160,10 @@ func (server *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	_, pattern := server.mux.Handler(r)
+	if r.URL.RawQuery != "" && !listPattern(pattern) {
+		problem(output, 400)
+		return
+	}
 	if pattern == "" {
 		problem(output, 404)
 		return
