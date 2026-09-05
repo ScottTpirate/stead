@@ -14,6 +14,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/ScottTpirate/stead/modules/authorization"
@@ -48,6 +49,23 @@ func captureCheck(ctx context.Context, root, executable string, args []string, i
 	command := exec.CommandContext(ctx, executable, args...)
 	command.Dir = root
 	command.Env = checkEnvironment()
+	if filepath.Base(executable) == "run_pinned_go.sh" && len(args) > 1 && args[0] == "go" && args[1] == "run" {
+		// Compiler evidence may not be satisfied from a shared compiled-object
+		// cache. Only exact go.sum-verified module ZIP inputs are reused; source
+		// extraction and every compilation happen in this fresh private cache.
+		cache, err := os.MkdirTemp("", "stead-local-check-build-")
+		if err != nil {
+			return authorization.LocalCheckCapture{}, ErrConfiguration
+		}
+		defer os.RemoveAll(cache)
+		filtered := []string{}
+		for _, entry := range command.Env {
+			if !strings.HasPrefix(entry, "GOCACHE=") {
+				filtered = append(filtered, entry)
+			}
+		}
+		command.Env = append(filtered, "GOCACHE="+filepath.Join(cache, "build"), "GOMODCACHE="+filepath.Join(cache, "modules"), "GOPROXY=file:///tmp/stead-go-path/pkg/mod/cache/download", "GOSUMDB=off")
+	}
 	command.Stdin = bytes.NewReader(input)
 	stdout, stderr := &boundedOutput{limit: 256 << 10}, &boundedOutput{limit: 256 << 10}
 	command.Stdout = stdout
