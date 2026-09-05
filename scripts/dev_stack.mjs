@@ -82,24 +82,41 @@ function requireApproval() {
   }
 }
 
+async function verifyHostPrerequisites() {
+  for (const [binary, digest] of [
+    ['/usr/bin/bwrap', '6ad2138a73d592acb43525432965e3c66f6fad8a2f3d610c6ca0b6855e993cbe'],
+    ['/usr/bin/tar', '8bd961dfeee3543f158f550566a66e78c713a9ad5b88432bab93b63f2bb9347c'],
+    ['/usr/bin/git', '93473c28694fd72bd889364107cd2770514de59780885a6a4aafca4d602e30ad'],
+  ]) {
+    const info = await lstat(binary);
+    if (!info.isFile() || info.uid !== 0 || (info.mode & 0o6022) !== 0 || sha256(await readFile(binary)) !== digest) throw new Error(`Exact reviewed non-setuid host prerequisite required: ${path.basename(binary)}`);
+  }
+}
+
 async function prepare(intakeOnly = false) {
   if (!intakeOnly) requireApproval();
+  await verifyHostPrerequisites();
   await privateDirectory(state);
   await privateDirectory(path.join(state, 'images'));
+  const giteaLicense = await readFile(path.join(repository, 'deploy/compose/notices/goutils-v0.3.0-BUSL-1.1.txt'));
+  if (sha256(giteaLicense) !== '3c22e5817c43fb602a003fd713cafc4db0cf46d9ec0473dd324eab22ad3eb4e1') throw new Error('Exact upstream development Gitea license notice is required');
+  await privateFile('GITEA-NONPRODUCTION-LICENSE.txt', giteaLicense);
+  console.log('Gitea development-only BUSL notice: deploy/compose/notices/goutils-v0.3.0-BUSL-1.1.txt; no production grant is activated.');
   const roots = {};
   for (const [name, pin] of Object.entries(pins.services)) {
     if (!pin.image) continue;
     console.log(`Preparing pinned non-distributed ${name} ${pin.version}`);
     roots[name] = (await acquireImage(pin.image, path.join(state, 'images'))).rootfs;
+    if (name === 'gitea') await privateFile(path.join('images', pin.image.split('sha256:')[1], 'GITEA-NONPRODUCTION-LICENSE.txt'), giteaLicense);
   }
   const fga = pins.services.openfga;
   const source = path.join(state, 'openfga-source');
   try { await access(path.join(source, '.git')); } catch {
-    checkedCommand('git', ['clone', '--filter=blob:none', '--no-checkout', fga.source, source]);
-    checkedCommand('git', ['-C', source, 'checkout', '--detach', fga.commit]);
+    checkedCommand('/usr/bin/git', ['clone', '--filter=blob:none', '--no-checkout', fga.source, source]);
+    checkedCommand('/usr/bin/git', ['-C', source, 'checkout', '--detach', fga.commit]);
   }
-  const revision = checkedCommand('git', ['-C', source, 'rev-parse', 'HEAD'], { encoding: 'utf8', stdio: 'pipe' }).stdout.trim();
-  const dirty = checkedCommand('git', ['-C', source, 'status', '--porcelain'], { encoding: 'utf8', stdio: 'pipe' }).stdout;
+  const revision = checkedCommand('/usr/bin/git', ['-C', source, 'rev-parse', 'HEAD'], { encoding: 'utf8', stdio: 'pipe' }).stdout.trim();
+  const dirty = checkedCommand('/usr/bin/git', ['-C', source, 'status', '--porcelain'], { encoding: 'utf8', stdio: 'pipe' }).stdout;
   if (revision !== fga.commit || dirty) throw new Error('OpenFGA source differs from the reviewed stock revision');
   checkedCommand(path.join(repository, 'scripts/run_pinned_go.sh'), ['go', '-C', source, 'build', '-mod=readonly', '-trimpath', `-ldflags=-X github.com/openfga/openfga/internal/build.Version=${fga.version} -X github.com/openfga/openfga/internal/build.Commit=${fga.commit} -X github.com/openfga/openfga/internal/build.Date=${fga.commit_date}`, '-o', path.join(state, 'openfga'), './cmd/openfga'], { env: { ...baseEnvironment, CGO_ENABLED: '0', GOTOOLCHAIN: 'local' } });
   if (sha256(await readFile(path.join(state, 'openfga'))) !== fga.binary_sha256) throw new Error('Rebuilt OpenFGA binary differs from reviewed bytes');
@@ -182,6 +199,7 @@ async function smoke() {
 
 async function run(intakeOnly = false) {
   if (!intakeOnly) requireApproval();
+  await verifyHostPrerequisites();
   const secret = await secretState();
   const roots = JSON.parse(await readPrivate('roots.json'));
   const children = [];
@@ -228,6 +246,7 @@ async function run(intakeOnly = false) {
   };
   try {
     for (const directory of ['postgres', 'postgres-socket', 'gitea', 'gitea-config', 'nats', 'tls', 'policy']) await privateDirectory(path.join(state, directory));
+    await privateFile('gitea/GITEA-NONPRODUCTION-LICENSE.txt', await readPrivate('GITEA-NONPRODUCTION-LICENSE.txt'));
     await privateFile('gitea-config/app.ini', giteaConfig(secret));
     await privateFile('nats.conf', natsConfig(secret));
     await privateFile('openfga-key', secret.openfgaKey);

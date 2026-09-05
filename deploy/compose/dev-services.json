@@ -17,7 +17,7 @@
       "commit": "146cc3eec57174711eac0e0a0c7b38670c6e3922",
       "review": "pending-independent-review",
       "uid": 1000,
-      "license_review_note": "The actual binary closure contains github.com/couchbase/goutils v0.3.0 with file-level BSL-1.1. Its non-production grant requires scoped license-policy review; this candidate is not approved for production or distribution.",
+      "license_review_note": "The actual binary closure contains github.com/couchbase/goutils v0.3.0 with file-level BUSL-1.1. Its non-production grant requires scoped license-policy review; this candidate is not approved for production or distribution.",
       "constraints": ["SSH disabled", "no outbound mirrors or repository imports", "no actions or packages", "no untrusted uploads or extensions", "no browser credentials", "loopback/private service network only"]
     },
     "nats": {
@@ -41,6 +41,8 @@
     }
   },
   "intake_evidence": {
+    "review_request": "deploy/compose/dev-service-intake.md",
+    "license_supplement_sha256": "2626be2d0fbcef47aa20daf69a6183e17ea689aeddf5b02ecbf75cea2ea1af28",
     "source_inventory_sha256": "ce9a0f15b345039cb6854abbd1ae327278d75c4eaaed47fd6cdc376fa9ab29bf",
     "distinct_go_module_identities": 371,
     "module_checksum_mismatches": 0,
