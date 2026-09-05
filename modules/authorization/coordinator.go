@@ -21,6 +21,10 @@ type Config struct {
 }
 type Coordinator struct{ config Config }
 
+// MaxPolicyClockSkew is part of the signed local evaluator ABI. A host clock
+// rollback beyond this bound denies, even though compare-max never decreases.
+const MaxPolicyClockSkew = 5 * time.Second
+
 // VerifiedActivation is sealed by VerifyActivation after archive, both
 // signatures, trust, model read-back, runtime policy and anchor verification.
 type VerifiedActivation struct {
@@ -47,11 +51,12 @@ func NewCoordinator(config Config) (*Coordinator, error) {
 // Decision is one immutable bounded logical decision, never a durable permit
 // for provider mutations, credentials, content, streams, or later jobs.
 type Decision struct {
-	state    State
-	evidence Evidence
-	binding  ActivationBinding
-	marking  string
-	valid    bool
+	state        State
+	evidence     Evidence
+	binding      ActivationBinding
+	marking      string
+	presentation classification.SecurityPresentation
+	valid        bool
 }
 
 func (decision *Decision) Evidence() Evidence {
@@ -65,6 +70,12 @@ func (decision *Decision) Marking() string {
 		return ""
 	}
 	return decision.marking
+}
+func (decision *Decision) Presentation() classification.SecurityPresentation {
+	if decision == nil {
+		return classification.SecurityPresentation{}
+	}
+	return decision.presentation.Copy()
 }
 func (decision *Decision) Binding() ActivationBinding {
 	if decision == nil {
@@ -130,6 +141,9 @@ func validRevisions(revisions Revisions) bool {
 	return true
 }
 func validState(state State, session identity.SessionRecord, target ResourceRef, binding ActivationBinding, now time.Time) bool {
+	if session.InstanceID != binding.InstallationID {
+		return false
+	}
 	if state.Resource != target || state.InstanceID != session.InstanceID || state.SecurityDomain != session.SecurityDomain || state.SecurityDomain != binding.DeploymentPolicyID || state.Principal != session.Principal || state.SessionID != session.ID || !state.PrincipalActive || !state.SessionActive || state.TuplePending || state.ExplicitDeny || !state.ProviderPathAllowed || !state.CapabilityActive || !validRevisions(state.Revisions) || state.Revisions.Principal != session.PrincipalRevision || state.Revisions.Session != session.Revision || state.ActivationDigest != binding.Digest() || state.ActivationSetID != binding.ActivationSetID || state.ActivationSequence != binding.ActivationSequence || state.OpenFGAModelID != binding.OpenFGAModelID || state.PolicyTimeHighWater.IsZero() || state.PolicyTimeRevision == 0 || !now.Before(state.ContextExpiresAt) {
 		return false
 	}
@@ -164,6 +178,9 @@ func (coordinator *Coordinator) Authorize(ctx context.Context, session identity.
 	activation := coordinator.config.Activation
 	if err != nil || anchor.Binding != activation.binding || anchor.PolicyTimeRevision == 0 || anchor.PolicyTimeHighWater.IsZero() {
 		return deny("stale_authorization_input")
+	}
+	if anchor.PolicyTimeHighWater.Sub(now) > MaxPolicyClockSkew {
+		return deny("context_denied")
 	}
 	if now.Before(anchor.PolicyTimeHighWater) {
 		now = anchor.PolicyTimeHighWater
@@ -205,7 +222,8 @@ func (coordinator *Coordinator) Authorize(ctx context.Context, session identity.
 	b := activation.binding
 	evidence := Evidence{DecisionID: id, Actor: session.Principal(), SessionID: session.SessionID(), Action: action, Target: target, InstanceID: state.InstanceID, OrganizationID: state.OrganizationID, SecurityDomain: state.SecurityDomain, Relation: relation, OpenFGAModelID: b.OpenFGAModelID, PolicyBundleID: b.PolicyBundleID, ActivationSetID: b.ActivationSetID, ActivationSequence: b.ActivationSequence, ActivationDigest: b.Digest(), ActivationEpoch: b.ActivationEpoch, TrustEpoch: b.TrustEpoch, DeploymentPolicyID: b.DeploymentPolicyID, DeploymentPolicyVersion: b.DeploymentPolicyVersion, DeploymentPolicyDigest: b.DeploymentPolicyDigest, SignedEnvelopeDigest: b.SignedEnvelopeDigest, ArchiveDigest: b.ArchiveDigest, ReleaseAttestationID: b.ReleaseAttestationID, ReleaseAttestationEnvelopeDigest: b.ReleaseAttestationEnvelopeDigest, TrustSetID: b.TrustSetID, TrustEnvelopeDigest: b.TrustEnvelopeDigest, ModelSourceDigest: b.ModelSourceDigest, EvaluatorContractVersion: b.EvaluatorContractVersion, Revisions: state.Revisions, PolicyTimeHighWater: anchor.PolicyTimeHighWater, PolicyTimeRevision: anchor.PolicyTimeRevision, EvaluatedAt: now, ExpiresAt: expires, DisclosureMode: b.DisclosureMode, OpenFGACalls: 1}
 	state.Label = state.Label.Copy()
-	return &Decision{state: state, evidence: evidence, binding: b, marking: result.Marking, valid: true}, nil
+	result.Presentation.PolicyBundleID = b.PolicyBundleID
+	return &Decision{state: state, evidence: evidence, binding: b, marking: result.Marking, presentation: result.Presentation.Copy(), valid: true}, nil
 }
 
 // ValidateFinal performs no network or repository I/O. The registered root
@@ -213,6 +231,9 @@ func (coordinator *Coordinator) Authorize(ctx context.Context, session identity.
 // compare-max the independent time anchor, then supply that latest time here.
 // A time-only advance is normal; activation/revocation/resource changes deny.
 func (decision *Decision) ValidateFinal(current State, now time.Time) error {
+	if current.PolicyTimeHighWater.Sub(now) > MaxPolicyClockSkew {
+		return ErrDenied
+	}
 	if decision == nil || !decision.valid || current.PolicyTimeHighWater.Before(decision.state.PolicyTimeHighWater) || current.PolicyTimeRevision < decision.state.PolicyTimeRevision {
 		return ErrDenied
 	}

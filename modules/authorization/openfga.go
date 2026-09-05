@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -13,7 +14,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ScottTpirate/stead/internal/telemetry"
+	"github.com/ScottTpirate/stead/modules/ci/policyrelease"
 	"github.com/ScottTpirate/stead/modules/identity"
+	fixedmodel "github.com/ScottTpirate/stead/policies/openfga"
 )
 
 type Tuple struct {
@@ -77,6 +81,10 @@ func validTuple(tuple Tuple) bool {
 }
 
 func (client *OpenFGA) call(ctx context.Context, path string, input, output any) error {
+	return client.request(ctx, http.MethodPost, "/stores/"+client.storeID+path, input, output)
+}
+
+func (client *OpenFGA) request(ctx context.Context, method, path string, input, output any) error {
 	if client == nil || ctx.Err() != nil {
 		return ErrDenied
 	}
@@ -84,7 +92,7 @@ func (client *OpenFGA) call(ctx context.Context, path string, input, output any)
 	if err != nil {
 		return ErrDenied
 	}
-	request, err := http.NewRequestWithContext(ctx, http.MethodPost, client.endpoint+"/stores/"+client.storeID+path, bytes.NewReader(body))
+	request, err := http.NewRequestWithContext(ctx, method, client.endpoint+path, bytes.NewReader(body))
 	if err != nil {
 		return ErrDenied
 	}
@@ -92,6 +100,7 @@ func (client *OpenFGA) call(ctx context.Context, path string, input, output any)
 	if client.token != "" {
 		request.Header.Set("Authorization", "Bearer "+client.token)
 	}
+	telemetry.AddOpenFGA(ctx, 1)
 	response, err := client.client.Do(request)
 	if err != nil {
 		return ErrDenied
@@ -108,7 +117,7 @@ func (client *OpenFGA) call(ctx context.Context, path string, input, output any)
 }
 
 func (client *OpenFGA) Check(ctx context.Context, tuple Tuple) (bool, error) {
-	if !validTuple(tuple) {
+	if client == nil || !validTuple(tuple) {
 		return false, ErrDenied
 	}
 	var result struct {
@@ -124,6 +133,159 @@ func (client *OpenFGA) Check(ctx context.Context, tuple Tuple) (bool, error) {
 		return false, ErrDenied
 	}
 	return *result.Allowed, nil
+}
+
+// ModelReceipt cannot be constructed by an API caller. It binds the exact
+// fixed model canonical bytes to an immutable model returned by OpenFGA.
+type ModelReceipt struct{ modelID, storeID, sourceDigest string }
+
+func (receipt *ModelReceipt) ModelID() string {
+	if receipt == nil {
+		return ""
+	}
+	return receipt.modelID
+}
+func (receipt *ModelReceipt) StoreID() string {
+	if receipt == nil {
+		return ""
+	}
+	return receipt.storeID
+}
+func (receipt *ModelReceipt) SourceDigest() string {
+	if receipt == nil {
+		return ""
+	}
+	return receipt.sourceDigest
+}
+
+func canonicalModel(data []byte) ([]byte, error) {
+	var value map[string]any
+	if decodeClosed(data, &value) != nil {
+		return nil, ErrDenied
+	}
+	for key := range value {
+		if !slices.Contains([]string{"schema_version", "type_definitions", "conditions", "id"}, key) {
+			return nil, ErrDenied
+		}
+	}
+	delete(value, "id")
+	// Stock protojson emits these known protobuf defaults while an upload may
+	// omit them. Only these non-semantic defaults are removed; unknown fields,
+	// nonempty metadata, conditions, or rewrites remain and must compare equal.
+	normalizeModelDefaults(value)
+	if conditions, present := value["conditions"]; present {
+		object, ok := conditions.(map[string]any)
+		if !ok || len(object) != 0 {
+			return nil, ErrDenied
+		}
+		delete(value, "conditions")
+	}
+	types, ok := value["type_definitions"].([]any)
+	if !ok {
+		return nil, ErrDenied
+	}
+	for _, raw := range types {
+		definition, ok := raw.(map[string]any)
+		if !ok {
+			return nil, ErrDenied
+		}
+		for _, key := range []string{"relations", "metadata"} {
+			if child, ok := definition[key].(map[string]any); ok && len(child) == 0 {
+				delete(definition, key)
+			}
+		}
+	}
+	return json.Marshal(value)
+}
+
+func normalizeModelDefaults(value any) {
+	switch node := value.(type) {
+	case map[string]any:
+		for key, child := range node {
+			if child == nil && slices.Contains([]string{"metadata", "source_info", "wildcard"}, key) {
+				delete(node, key)
+				continue
+			}
+			if text, ok := child.(string); ok && text == "" && slices.Contains([]string{"module", "object", "relation", "condition"}, key) {
+				delete(node, key)
+				continue
+			}
+			normalizeModelDefaults(child)
+			if object, ok := child.(map[string]any); ok && len(object) == 0 && slices.Contains([]string{"relations", "conditions", "metadata"}, key) {
+				delete(node, key)
+			}
+		}
+	case []any:
+		for _, child := range node {
+			normalizeModelDefaults(child)
+		}
+	}
+}
+
+func (client *OpenFGA) VerifyModel(ctx context.Context) (*ModelReceipt, error) {
+	if client == nil {
+		return nil, ErrDenied
+	}
+	source, err := fixedmodel.ModelJSON()
+	if err != nil {
+		return nil, ErrDenied
+	}
+	var result struct {
+		Model json.RawMessage `json:"authorization_model"`
+	}
+	if client.request(ctx, http.MethodGet, "/stores/"+client.storeID+"/authorization-models/"+client.modelID, nil, &result) != nil {
+		return nil, ErrDenied
+	}
+	var identity struct {
+		ID string `json:"id"`
+	}
+	if json.Unmarshal(result.Model, &identity) != nil || identity.ID != client.modelID {
+		return nil, ErrDenied
+	}
+	actual, err := canonicalModel(result.Model)
+	if err != nil || !bytes.Equal(actual, source) {
+		return nil, ErrDenied
+	}
+	return &ModelReceipt{modelID: client.modelID, storeID: client.storeID, sourceDigest: policyrelease.SHA256Digest(source)}, nil
+}
+
+// ProvisionLocalOpenFGA is explicit disposable-development setup. It creates
+// a new store, uploads the fixed expand-compatible model, and reads it back.
+// Failure leaves an inert store for diagnosis; it never selects latest or
+// pretends an unverified upload is an activation.
+func ProvisionLocalOpenFGA(ctx context.Context, endpoint, token string) (*OpenFGA, *ModelReceipt, error) {
+	const placeholder = "00000000000000000000000000"
+	client, err := NewOpenFGA(OpenFGAConfig{URL: endpoint, StoreID: placeholder, ModelID: placeholder, Token: token, LocalDevelopment: true})
+	if err != nil {
+		return nil, nil, err
+	}
+	var store struct {
+		ID      string `json:"id"`
+		Name    string `json:"name"`
+		Created string `json:"created_at"`
+		Updated string `json:"updated_at"`
+		Deleted string `json:"deleted_at"`
+	}
+	if client.request(ctx, http.MethodPost, "/stores", map[string]string{"name": "Stead local development"}, &store) != nil || !ulidPattern.MatchString(store.ID) {
+		return nil, nil, fmt.Errorf("OpenFGA bootstrap store: %w", ErrDenied)
+	}
+	client.storeID = store.ID
+	source, err := fixedmodel.ModelJSON()
+	if err != nil {
+		return nil, nil, ErrDenied
+	}
+	var model struct {
+		ID string `json:"authorization_model_id"`
+	}
+	if client.call(ctx, "/authorization-models", json.RawMessage(source), &model) != nil || !ulidPattern.MatchString(model.ID) {
+		return nil, nil, fmt.Errorf("OpenFGA bootstrap model upload: %w", ErrDenied)
+	}
+	client.modelID = model.ID
+	receipt, err := client.VerifyModel(ctx)
+	if err != nil {
+		return nil, nil, fmt.Errorf("OpenFGA bootstrap model readback: %w", ErrDenied)
+	}
+	return client, receipt, nil
 }
 
 // TupleReceipt proves exact direct tuples were observed after acknowledged
@@ -192,7 +354,12 @@ func (client *OpenFGA) WriteVerified(ctx context.Context, tuples []Tuple) (*Tupl
 	for _, tuple := range tuples {
 		var result struct {
 			Tuples []struct {
-				Key       Tuple  `json:"key"`
+				Key struct {
+					User      string          `json:"user"`
+					Relation  string          `json:"relation"`
+					Object    string          `json:"object"`
+					Condition json.RawMessage `json:"condition"`
+				} `json:"key"`
 				Timestamp string `json:"timestamp"`
 			} `json:"tuples"`
 			Continuation string `json:"continuation_token"`
@@ -202,7 +369,11 @@ func (client *OpenFGA) WriteVerified(ctx context.Context, tuples []Tuple) (*Tupl
 			PageSize    int    `json:"page_size"`
 			Consistency string `json:"consistency"`
 		}{tuple, 2, "HIGHER_CONSISTENCY"}, &result)
-		if err != nil || len(result.Tuples) != 1 || result.Continuation != "" || result.Tuples[0].Key != tuple {
+		if err != nil || len(result.Tuples) != 1 || result.Continuation != "" {
+			return nil, ErrDenied
+		}
+		key := result.Tuples[0].Key
+		if (Tuple{User: key.User, Relation: key.Relation, Object: key.Object}) != tuple || (len(key.Condition) != 0 && !bytes.Equal(key.Condition, []byte("null"))) {
 			return nil, ErrDenied
 		}
 	}

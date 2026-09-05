@@ -40,7 +40,7 @@ func decodeActivationArchive(archive []byte) (UnsignedActivation, []byte, error)
 	}
 	contents := make(map[string][]byte)
 	reader := tar.NewReader(bytes.NewReader(archive))
-	for {
+	for entry := 0; entry <= MaxArchiveEntries; entry++ {
 		header, err := reader.Next()
 		if err == io.EOF {
 			break

@@ -105,6 +105,9 @@ func jsonValue(decoder *json.Decoder, depth int) (any, error) {
 }
 
 func exactMembers(shape any, kind reflect.Type) bool {
+	if shape == nil && kind.Kind() == reflect.Pointer {
+		return true
+	}
 	for kind.Kind() == reflect.Pointer {
 		kind = kind.Elem()
 	}
