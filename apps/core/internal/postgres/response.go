@@ -8,6 +8,7 @@ import (
 
 	"github.com/ScottTpirate/stead/apps/core/internal/transaction"
 	"github.com/ScottTpirate/stead/modules/authorization"
+	"github.com/jackc/pgx/v5"
 )
 
 type responseKey struct{}
@@ -36,12 +37,16 @@ func (store *Store) FinalizeResponse(ctx context.Context, decisions []*authoriza
 	seen := map[authorization.ResourceRef]bool{}
 	for _, decision := range decisions {
 		e := decision.Evidence()
-		if e.Actor != first.Actor || e.SessionID != first.SessionID || e.ActivationDigest != first.ActivationDigest || e.InstanceID != store.config.InstanceID || seen[e.Target] {
+		if e.Actor != first.Actor || e.SessionID != first.SessionID || e.ActivationDigest != first.ActivationDigest || e.InstanceID != store.config.InstanceID || seen[e.Target] || (len(decisions) > 1 && (e.DecisionID != first.DecisionID || e.EvaluatedAt != first.EvaluatedAt || e.ExpiresAt != first.ExpiresAt)) {
 			return transaction.BoundRevision{}, authorization.ErrDenied
 		}
 		seen[e.Target] = true
 		switch e.Action {
 		case authorization.OrganizationRead, authorization.TeamRead, authorization.ProjectRead:
+		case authorization.Action("organization.list"):
+			if e.Target.Kind != "instance" {
+				return transaction.BoundRevision{}, authorization.ErrDenied
+			}
 		case authorization.OrganizationCreate:
 			if e.Target.Kind != "instance" {
 				return transaction.BoundRevision{}, authorization.ErrDenied
@@ -84,48 +89,18 @@ func (store *Store) finalResponseOperation(ctx context.Context, binding transact
 		return authorization.ErrDenied
 	}
 	primary := decisions[0].Evidence()
-	if err = session.role(ctx, "identity"); err != nil {
+	refs := make([]authorization.ResourceRef, len(decisions))
+	for index, decision := range decisions {
+		refs[index] = decision.Evidence().Target
+	}
+	states, err := store.readStates(ctx, primary.Actor, primary.SessionID, refs, true, func(owner string, read func(pgx.Tx) error) error {
+		if err := session.role(ctx, owner); err != nil {
+			return err
+		}
+		return read(session.tx)
+	})
+	if err != nil {
 		return err
-	}
-	identityState, err := loadSession(ctx, session.tx, "s.id=$1", primary.SessionID, true)
-	if err != nil || identityState.Principal != primary.Actor {
-		return authorization.ErrDenied
-	}
-	states := make([]authorization.State, 0, len(decisions))
-	for _, decision := range decisions {
-		e := decision.Evidence()
-		if err = session.role(ctx, "authorization"); err != nil {
-			return err
-		}
-		security, err := loadSecurity(ctx, session.tx, e.Actor, e.SessionID, e.Target, true)
-		if err != nil {
-			return err
-		}
-		applyIdentity(&security.state, identityState)
-		if err = session.role(ctx, "classification"); err != nil {
-			return err
-		}
-		security.state.Label, err = loadLabel(ctx, session.tx, security.labelID, true)
-		if err != nil {
-			return err
-		}
-		security.state.Revisions.Label = security.state.Label.Version
-		if e.Target.Kind != "instance" {
-			owner, query := canonicalQuery(e.Target.Kind)
-			if owner == "" {
-				return authorization.ErrDenied
-			}
-			if err = session.role(ctx, owner); err != nil {
-				return err
-			}
-			var organization string
-			err = session.tx.QueryRow(ctx, query+` FOR SHARE`, e.Target.ID).Scan(&organization)
-			count(ctx, 1, 0, 0, 0)
-			if err != nil || organization != security.state.OrganizationID {
-				return authorization.ErrDenied
-			}
-		}
-		states = append(states, security.state)
 	}
 	now := time.Now().UTC()
 	anchor, err := store.config.Anchor.CompareMax(ctx, decisions[0].Binding(), now)
@@ -187,9 +162,20 @@ func (store *Store) Recheck(ctx context.Context, revision transaction.BoundRevis
 	if !now.Before(proof.ExpiresAt) {
 		return transaction.RecheckReceipt{}, authorization.ErrDenied
 	}
-	for _, prior := range proof.States {
-		current, err := store.ReadState(ctx, prior.Principal, prior.SessionID, prior.Resource)
-		if err != nil || current.PolicyTimeHighWater.After(anchor.PolicyTimeHighWater) || current.PolicyTimeRevision > anchor.PolicyTimeRevision || anchor.PolicyTimeHighWater.Before(prior.PolicyTimeHighWater) || anchor.PolicyTimeRevision < prior.PolicyTimeRevision {
+	refs := make([]authorization.ResourceRef, len(proof.States))
+	for index, prior := range proof.States {
+		if prior.Principal != proof.States[0].Principal || prior.SessionID != proof.States[0].SessionID {
+			return transaction.RecheckReceipt{}, authorization.ErrDenied
+		}
+		refs[index] = prior.Resource
+	}
+	currents, err := store.ReadStates(ctx, proof.States[0].Principal, proof.States[0].SessionID, refs)
+	if err != nil {
+		return transaction.RecheckReceipt{}, authorization.ErrDenied
+	}
+	for index, prior := range proof.States {
+		current := currents[index]
+		if current.PolicyTimeHighWater.After(anchor.PolicyTimeHighWater) || current.PolicyTimeRevision > anchor.PolicyTimeRevision || anchor.PolicyTimeHighWater.Before(prior.PolicyTimeHighWater) || anchor.PolicyTimeRevision < prior.PolicyTimeRevision {
 			return transaction.RecheckReceipt{}, authorization.ErrDenied
 		}
 		current.PolicyTimeHighWater = prior.PolicyTimeHighWater

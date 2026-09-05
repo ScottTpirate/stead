@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/url"
 	"os"
+	"reflect"
 	"slices"
 	"strings"
 	"sync"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/ScottTpirate/stead/apps/core/internal/outbox"
 	"github.com/ScottTpirate/stead/apps/core/internal/transaction"
+	"github.com/ScottTpirate/stead/internal/telemetry"
 	"github.com/ScottTpirate/stead/modules/authorization"
 	"github.com/ScottTpirate/stead/modules/classification"
 	"github.com/ScottTpirate/stead/modules/identity"
@@ -145,6 +147,7 @@ func TestLivePostgresBootstrapRolesSessionAndAtomicity(t *testing.T) {
 	}
 	t.Run("real_transaction_commit_rollback_outbox", func(t *testing.T) { testAtomicBackend(t, store) })
 	t.Run("real_keyset_candidate_pages", func(t *testing.T) { testCandidatePages(t, store) })
+	t.Run("bounded_set_security_reads", func(t *testing.T) { testStateSets(t, store, session, labelID) })
 	var serverVersion int
 	var grantor string
 	db, err := pgx.Connect(ctx, adminDSN)
@@ -166,6 +169,76 @@ func TestLivePostgresBootstrapRolesSessionAndAtomicity(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Logf("LIVE PostgreSQL %d: SCRAM, runtime NOINHERIT owner isolation, token one-use/revocation, commit+rollback+outbox and complete catalog PASS", serverVersion)
+}
+
+func testStateSets(t *testing.T, store *Store, session identity.SessionRecord, labelID string) {
+	ctx := context.Background()
+	org, _ := NewID()
+	refs := make([]authorization.ResourceRef, 100)
+	for index := range refs {
+		id, _ := NewID()
+		refs[index] = authorization.ResourceRef{Kind: "team", ID: id}
+	}
+	if err := store.owned(ctx, "organization", true, func(tx pgx.Tx) error {
+		for _, ref := range refs {
+			if _, err := tx.Exec(ctx, `INSERT INTO organization.teams(id,organization_id,key,depth,record) VALUES($1,$2,$3,0,'{}')`, ref.ID, org, ref.ID); err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.owned(ctx, "authorization", true, func(tx pgx.Tx) error {
+		for _, ref := range refs {
+			if _, err := tx.Exec(ctx, `INSERT INTO "authorization".resources(id,kind,organization_id,label_id,pending,revision,tuple_revision) VALUES($1,'team',$2,$3,false,1,1)`, ref.ID, org, labelID); err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	measured, counters := telemetry.Begin(ctx)
+	states, err := store.ReadStates(measured, session.Principal, session.ID, refs)
+	if err != nil || len(states) != len(refs) {
+		t.Fatal("real set state read failed", err)
+	}
+	if queries := counters.Snapshot().SQLQueries; queries != 17 {
+		t.Fatal("100-resource security set did not use fixed 17 statements including transaction/role controls", queries)
+	}
+	for index, state := range states {
+		if state.Resource != refs[index] || state.OrganizationID != org || state.SessionActive || state.Revisions.Session != 3 || state.Label.Version != 1 {
+			t.Fatal("batch reordered, omitted or changed authoritative state", index)
+		}
+	}
+	one, err := store.ReadState(ctx, session.Principal, session.ID, refs[0])
+	if err != nil || !reflect.DeepEqual(one, states[0]) {
+		t.Fatal("set and single authoritative state disagree", err)
+	}
+	missing, _ := NewID()
+	withMissing := append(append([]authorization.ResourceRef(nil), refs...), authorization.ResourceRef{Kind: "team", ID: missing})
+	read, err := store.ReadStates(ctx, session.Principal, session.ID, withMissing)
+	if err != nil || len(read) != 101 || !reflect.DeepEqual(read[100], authorization.State{Resource: withMissing[100]}) {
+		t.Fatal("missing resource was not an aligned closed denial", err)
+	}
+	// The same set loader is exercised under one actual locked final-fence
+	// transaction, without minting fake central decisions or response permits.
+	tx, err := store.pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback(ctx)
+	locked, err := store.readStates(ctx, session.Principal, session.ID, refs, true, func(owner string, read func(pgx.Tx) error) error {
+		if _, err := tx.Exec(ctx, "SET LOCAL ROLE "+pgx.Identifier{store.prefix + owner + "_execute"}.Sanitize()); err != nil {
+			return err
+		}
+		return read(tx)
+	})
+	if err != nil || !reflect.DeepEqual(locked, states) {
+		t.Fatal("locked aggregate state differs", err)
+	}
+	t.Log("100 resources: 17 actual SQL statements; aligned missing-resource denial and locked aggregate state PASS")
 }
 
 func testCandidatePages(t *testing.T, store *Store) {
