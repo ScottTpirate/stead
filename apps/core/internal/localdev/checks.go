@@ -23,7 +23,7 @@ import (
 
 // CheckRunner invokes only fixed reviewed checks, never an executable supplied
 // by policy input. No service/password/signing environment reaches a check.
-type CheckRunner struct{ RepositoryRoot string }
+type CheckRunner struct{ RepositoryRoot, EvidenceDirectory string }
 
 type boundedOutput struct {
 	bytes.Buffer
@@ -42,13 +42,28 @@ func (output *boundedOutput) Write(data []byte) (int, error) {
 func checkEnvironment() []string {
 	// Deliberately do not inherit GOFLAGS, GOENV, compiler overrides, credentials,
 	// shell startup files, proxy settings or npm configuration from the caller.
-	return []string{"PATH=/usr/local/bin:/usr/bin:/bin", "LANG=C.UTF-8", "CGO_ENABLED=0", "GOROOT=" + authorization.LocalDevelopmentToolchainDirectory, "GOENV=off", "GOWORK=off", "GOTOOLCHAIN=local", "GOOS=linux", "GOARCH=amd64", "GOAMD64=v1", "GOEXPERIMENT=", "GOCACHE=/tmp/stead-go-build-cache", "GOPATH=/tmp/stead-go-path", "npm_config_cache=/tmp/stead-local-npm-cache", "npm_config_userconfig=/dev/null", "npm_config_globalconfig=/dev/null"}
+	return []string{"PATH=/usr/local/bin:/usr/bin:/bin", "LANG=C.UTF-8", "CGO_ENABLED=0", "GOROOT=" + authorization.LocalDevelopmentToolchainDirectory, "GOENV=off", "GOWORK=off", "GOTOOLCHAIN=local", "GOOS=linux", "GOARCH=amd64", "GOAMD64=v1", "GOEXPERIMENT=", "GOCACHE=/tmp/stead-go-build-cache", "GOPATH=/tmp/stead-go-path", "npm_config_cache=/tmp/stead-local-npm-cache"}
 }
 
 func captureCheck(ctx context.Context, root, executable string, args []string, input []byte) (authorization.LocalCheckCapture, error) {
 	command := exec.CommandContext(ctx, executable, args...)
 	command.Dir = root
 	command.Env = checkEnvironment()
+	if filepath.Base(executable) == "run_pinned_node.sh" {
+		// npm rejects one path loaded as both global and user configuration.
+		// Use separate private empty configurations, never the caller's files.
+		configuration, err := os.MkdirTemp("", "stead-local-npm-config-")
+		if err != nil {
+			return authorization.LocalCheckCapture{}, ErrConfiguration
+		}
+		for _, kind := range []string{"user", "global"} {
+			path := filepath.Join(configuration, kind+".npmrc")
+			if WriteExclusive(path, []byte("\n")) != nil {
+				return authorization.LocalCheckCapture{}, ErrConfiguration
+			}
+			command.Env = append(command.Env, "npm_config_"+kind+"config="+path)
+		}
+	}
 	if filepath.Base(executable) == "run_pinned_go.sh" && len(args) > 1 && args[0] == "go" && args[1] == "run" {
 		// Compiler evidence may not be satisfied from a shared compiled-object
 		// cache. Only exact go.sum-verified module ZIP inputs are reused; source
@@ -96,10 +111,23 @@ func validCheckRequest(request authorization.LocalCheckRequest) bool {
 	return checkRevision.MatchString(request.SourceRevision) && checkRevision.MatchString(request.SourceTree) && checkDigest.MatchString(request.SubjectDigest)
 }
 
-func (runner CheckRunner) Run(ctx context.Context, request authorization.LocalCheckRequest) (authorization.LocalCheckCapture, error) {
-	if ctx == nil || ctx.Err() != nil || !filepath.IsAbs(runner.RepositoryRoot) || !validCheckRequest(request) {
+func validCheckID(id string) bool {
+	switch id {
+	case "policy-conformance", "critical-mutations", "dependency-review", "offline-verification":
+		return true
+	}
+	return false
+}
+
+func (runner CheckRunner) Run(ctx context.Context, request authorization.LocalCheckRequest) (capture authorization.LocalCheckCapture, resultErr error) {
+	if ctx == nil || ctx.Err() != nil || !filepath.IsAbs(runner.RepositoryRoot) || !validCheckID(request.ID) || !validCheckRequest(request) || PrivateDirectory(runner.EvidenceDirectory) != nil {
 		return authorization.LocalCheckCapture{}, ErrConfiguration
 	}
+	defer func() {
+		if retainCheckCapture(runner.EvidenceDirectory, request, capture, resultErr) != nil {
+			resultErr = ErrConfiguration
+		}
+	}()
 	ctx, cancel := context.WithTimeout(ctx, 8*time.Minute)
 	defer cancel()
 	switch request.ID {
@@ -190,10 +218,14 @@ func decodeCheckInput(data []byte, request *authorization.LocalCheckRequest) err
 // Dependency checks re-execute approval/lock consistency, exact module cache
 // integrity and the npm advisory review. They do not relabel prior govulncheck
 // results as a new scan; actual runtime binary scans remain an integration gate.
-func (runner CheckRunner) dependencies(ctx context.Context, request authorization.LocalCheckRequest) (authorization.LocalCheckCapture, error) {
-	capture := authorization.LocalCheckCapture{StartedAt: time.Now().UTC()}
+func (runner CheckRunner) dependencies(ctx context.Context, request authorization.LocalCheckRequest) (capture authorization.LocalCheckCapture, resultErr error) {
+	capture.StartedAt = time.Now().UTC()
 	cases := []authorization.LocalCheckCase{}
 	raw := &boundedOutput{limit: 256 << 10}
+	defer func() {
+		capture.Stderr = append([]byte(nil), raw.Bytes()...)
+		capture.FinishedAt = time.Now().UTC()
+	}()
 	for _, check := range []struct {
 		id, executable string
 		args           []string
@@ -203,24 +235,23 @@ func (runner CheckRunner) dependencies(ctx context.Context, request authorizatio
 		{"npm-vulnerability-review", filepath.Join(runner.RepositoryRoot, "scripts/run_pinned_node.sh"), []string{"npm", "audit", "--json", "--audit-level=high"}},
 	} {
 		result, err := captureCheck(ctx, runner.RepositoryRoot, check.executable, check.args, nil)
-		if err != nil {
-			return capture, err
-		}
-		cases = append(cases, authorization.LocalCheckCase{ID: check.id, Passed: result.ExitCode == 0})
+		cases = append(cases, authorization.LocalCheckCase{ID: check.id, Passed: err == nil && result.ExitCode == 0})
 		// Quoted process output is evidence, not an interpreted PASS string.
 		encoded, _ := json.Marshal(struct {
-			Check          string
-			ExitCode       int
-			Stdout, Stderr string
-		}{check.id, result.ExitCode, string(result.Stdout), string(result.Stderr)})
+			Check           string
+			ExitCode        int
+			ExecutionFailed bool
+			Stdout, Stderr  string
+		}{check.id, result.ExitCode, err != nil, string(result.Stdout), string(result.Stderr)})
 		if _, err := raw.Write(append(encoded, '\n')); err != nil {
 			return capture, ErrConfiguration
+		}
+		if err != nil {
+			return capture, err
 		}
 	}
 	report := actualReport(request, cases)
 	capture.Stdout, _ = json.Marshal(report)
-	capture.Stderr = append([]byte(nil), raw.Bytes()...)
-	capture.FinishedAt = time.Now().UTC()
 	if report.Failed != 0 {
 		capture.ExitCode = 1
 	}
