@@ -72,7 +72,10 @@ func TestLivePostgresBootstrapRolesSessionAndAtomicity(t *testing.T) {
 	principal, _ := NewID()
 	sessionID, _ := NewID()
 	labelID, _ := NewID()
-	database := "stead_" + DeploymentKey(instance)
+	// The opt-in harness owns a fresh isolated cluster. The fixed database also
+	// exercises the actual startup catalog diagnostic; an existing DB fails the
+	// CREATE below rather than being overwritten or removed.
+	database := "stead"
 	if _, err = conn.Exec(ctx, "CREATE DATABASE "+pgx.Identifier{database}.Sanitize()); err != nil {
 		t.Fatal(err)
 	}
@@ -207,6 +210,26 @@ func TestLivePostgresBootstrapRolesSessionAndAtomicity(t *testing.T) {
 		}
 		t.Fatal(err)
 	}
+	if err = CheckExistingBootstrapCatalog(ctx, adminDSN, instance); err != nil {
+		t.Fatal("actual startup catalog rejected unchanged owned database", err)
+	}
+	otherInstallation, _ := NewID()
+	if err = CheckExistingBootstrapCatalog(ctx, adminDSN, otherInstallation); err == nil {
+		t.Fatal("startup catalog accepted different installation")
+	}
+	if _, err = db.Exec(ctx, `GRANT SELECT ON audit.records TO PUBLIC`); err != nil {
+		t.Fatal(err)
+	}
+	if err = CheckExistingBootstrapCatalog(ctx, adminDSN, instance); err == nil {
+		t.Fatal("startup catalog accepted actual public ACL drift")
+	}
+	if _, err = db.Exec(ctx, `REVOKE SELECT ON audit.records FROM PUBLIC`); err != nil {
+		t.Fatal(err)
+	}
+	if err = CheckExistingBootstrapCatalog(ctx, adminDSN, instance); err != nil {
+		t.Fatal("startup catalog failed after restoring exact ACL", err)
+	}
+	t.Log("transient-admin startup catalog: unchanged exact database accepted; wrong installation and actual public ACL drift denied; restored ACL accepted")
 	t.Logf("LIVE PostgreSQL %d: SCRAM, runtime NOINHERIT owner isolation, token one-use/revocation, commit+rollback+outbox and complete catalog PASS", serverVersion)
 }
 
