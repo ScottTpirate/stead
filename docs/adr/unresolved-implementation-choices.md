@@ -1,6 +1,6 @@
 # Unresolved implementation choices requiring ADRs
 
-**Status:** Active candidate queue; eight candidates are resolved, and the remaining entries are deferred to their named decision point<br>
+**Status:** Active candidate queue; nine candidates are resolved, and the remaining entries are deferred to their named decision point<br>
 **Rule:** An ADR may select among conforming options; it may not silently change a locked decision.
 
 ## Admission test
@@ -24,16 +24,20 @@ Phase 0 fixed each candidate's non-negotiable boundary without selecting its phy
 | `ADR-CAND-007` Policy-bundle distribution and trust roots | `ACCEPTED` on 2026-08-30 at `24c74d52ef0a78840ab147da48c3d66589e49e3e` | [ADR-0006](./0006-signed-policy-bundle-distribution-and-activation.md) selects the Stead Policy Activation Set v1, reproducible unsigned content, DSSE/P-256 signing, deployment-policy-driven thresholds/custody/cryptographic assurance, offline trust rotation, and atomic OpenFGA/policy activation; TUF is considered but is not the v1 activation authority. |
 | `ADR-CAND-021` Initial Team relation model | `ACCEPTED` on 2026-08-30 at `24c74d52ef0a78840ab147da48c3d66589e49e3e` | [ADR-0004](./0004-initial-team-role-and-authorization-semantics.md) selects fixed explicit `lead`, `member`, and `contributor` relations while preserving zero hierarchy/accountability inheritance. |
 
+## Accepted provider reconciliation decision
+
+| Candidate | Disposition | Decision |
+|---|---|---|
+| `ADR-CAND-008` Provider reconciliation conflict semantics | `ACCEPTED` on 2026-09-05 at `b64384249a82f6f744ec07a002f70de6e24e15e6` | [ADR-0009](./0009-gitea-provider-reconciliation-precedence-and-conflict-handling.md) selects closed precedence, one fresh authorization for a bounded internal read plan, durable one-use permits for excluded effects, effective-principal canonical acceptance fencing, and projection-backed ordinary reads. Required reviews and explicit project-owner approval are recorded in [the approval record](../governance/adr-0009-approval-record.md). |
+
 ## Proposed decisions awaiting approval
 
-| Candidate | Proposed decision | Required decision-time review |
-|---|---|---|
+None.
 
 ## Deferred choices required before dependent implementation
 
 | Candidate | Decision genuinely left open | Non-negotiable constraints | Owner / reviewers | Blocks |
 |---|---|---|---|---|
-| `ADR-CAND-008` Provider reconciliation conflict semantics | Per-capability source-of-truth precedence, webhook/version/idempotency tokens, scheduled full reconciliation, direct-change accept versus reset rules, and degraded-provider behavior | Stock supported Gitea APIs only; fixed SCM-003 mapping; canonical model cannot be expanded by provider values; violations produce clear audit | WS-03 / WS-01,02,06,07,13 | Provider interfaces, tracker workflow, golden scenario |
 
 If an approved Phase 0 contract resolves one of these choices directly and records the complete rationale/effects, the architecture owner may convert the candidate into that contract's decision record rather than duplicate it. The decision must still be immutable, reviewable, and linked from this queue.
 

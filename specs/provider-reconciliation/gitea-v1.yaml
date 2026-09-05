@@ -1,0 +1,156 @@
+schema_version: "1.0"
+status: governed_by_adr_0009
+contract_id: P-SCM-RECONCILIATION-GITEA-V1
+owner: WS-03
+decision_record: docs/adr/0009-gitea-provider-reconciliation-precedence-and-conflict-handling.md
+activation_gate: ADR-CAND-008_ACCEPTED_AT_EXACT_IMMUTABLE_SHA
+requirements:
+  - PRIN-002
+  - ARCH-004
+  - DOM-004
+  - SCM-001
+  - SCM-002
+  - SCM-003
+  - SCM-004
+  - SCM-005
+  - AUTH-002
+  - AUTH-006
+  - CLS-003
+  - CLS-006
+  - CLS-007
+  - SEC-006
+  - EVT-003
+  - AUD-001
+  - AUD-002
+  - TEST-006
+  - PERF-003
+  - PERF-004
+
+authority:
+  canonical_state: module_owned_postgresql
+  provider_owned_state: documented_gitea_api_or_git
+  provider_permission: enforcement_not_authority
+  webhook: authenticated_dirty_notification_not_canonical_delta
+  ordinary_ui_read_source: local_rebuildable_postgresql_projection
+  ordinary_ui_synchronous_provider_calls: 0
+
+field_classes:
+  canonical_only:
+    examples: [canonical_id, capability, team_hierarchy, typed_relationship]
+    provider_change: reject_or_quarantine
+  provider_content:
+    examples: [work_content, comment, reaction, active_software_data]
+    provider_change: accept_only_one_proven_currently_authorized_delta
+  mapped_value:
+    examples: [work_status, work_type, priority, cycle_milestone, active_user_assignee]
+    provider_change: accept_existing_mapping_or_reset
+  managed_configuration:
+    examples: [hidden_tracker, board_shape, labels, repository_purpose, webhook_registration]
+    provider_change: reset_verify_or_quarantine
+  central_security:
+    examples: [authorization_tuple, security_domain, classification, provider_path_eligibility]
+    provider_change: fence_reset_verify_or_quarantine
+  provider_identity:
+    examples: [installation_id, resource_id, issue_number, git_sha, endpoint_token]
+    provider_change: map_only_to_authorized_canonical_resource_or_provisioning_operation
+  derived_projection:
+    examples: [normalized_snapshot, search_input, activity_input, inbox_input]
+    provider_change: rebuild_or_suppress_never_authorize
+
+authorization:
+  provider_read_scope:
+    type: ProviderAuthorizationScope
+    owner: WS-06
+    consumer: WS-03
+    decision_cardinality: one_fresh_per_bounded_logical_provider_read_plan
+    reusable: false
+    renewable: false
+    transferable: false
+    durable_effect_permits_per_eligible_call_or_page: 0
+    execution_scope: atomic_process_instance_single_holder
+    eligible_calls:
+      - pagination_read
+      - snapshot_read
+      - bounded_verification_read
+      - compatibility_profile_safe_idempotent_read_retry
+    required_bindings:
+      - scope_id
+      - logical_operation_id
+      - acting_service_principal
+      - initiating_principal_or_explicit_system_initiator
+      - organization_id
+      - security_domain_id
+      - canonical_container
+      - closed_resource_set_or_container_inventory_scope
+      - provider_installation_id
+      - provider_api_path
+      - provider_resource_key_when_resource_specific
+      - reconciliation_generation
+      - allowed_operation_class
+      - closed_call_plan
+      - activation_snapshot
+      - authorization_consistency_vector
+      - provider_enforcement_fence
+      - resource_fence
+      - unique_execution_claim
+      - process_instance_holder_identity
+      - monotonic_fencing_token
+      - claim_deadline
+      - compatibility_profile_id_version_and_schema_digest
+      - original_deadline
+      - immutable_earliest_bound_expiry
+    bounded_dimensions: [attempts, calls, pages, items, response_bytes]
+    validation_points: [before_each_provider_call, before_local_outcome_commit]
+  effect_permit:
+    type: AuthorizationEffectPermit
+    owner: WS-06
+    durability: durable_one_use_per_effect
+    required_for:
+      - provider_mutation
+      - credential_issuance
+      - direct_git_or_protocol_access
+      - export_or_download
+      - non_idempotent_call
+      - ambiguous_external_effect
+      - operation_outliving_logical_request_or_job
+  canonical_acceptance:
+    provider_read_scope_authorizes_acceptance: false
+    authorization: fresh_effective_principal_central_decision_for_exact_delta
+    required_fences:
+      - activation
+      - authorization
+      - provider_enforcement
+      - resource
+      - operation
+      - optimistic_canonical_owner_revision
+
+provider_behavior:
+  reconciliation_outcomes: [in_sync, accept, reset, quarantine]
+  provider_originated_acceptance: fresh_authorization_and_final_fence
+  ambiguous_effect_state: reconciling_until_terminal_proof
+  blind_retry: false
+  network_io_inside_postgresql_transaction: false
+  general_project_creates_code_repository: false
+
+persistence:
+  reconciliation_state_owner: WS-03
+  canonical_write_owner: WS-02
+  core_outbox_owner: WS-02
+  audit_schema_owner: WS-01
+  audit_materialization_owner: WS-07
+  audit_record_materialization: append_only_insert_or_exact_identity_and_digest_match
+  protected_audit_evidence_owner: WS-03
+  protected_audit_evidence_resolution_port: authenticated_authorized_typed_bounded_set_oriented_read
+  protected_audit_evidence_consumer: WS-07
+  deployment_operations_owner: WS-12
+  projections_rebuildable: true
+  browser_direct_provider_calls: 0
+
+verification:
+  runtime_issue: STEAD-P1-003
+  runtime_test_location: tests/contract/gitea
+  deferred_runtime_concerns:
+    - pagination_bounds
+    - reconciliation_state_transitions
+    - provider_call_behavior
+    - effect_permit_behavior
