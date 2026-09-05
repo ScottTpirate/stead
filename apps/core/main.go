@@ -15,7 +15,16 @@ func main() {
 			os.Exit(runDevCertificate(os.Args[2:], os.Stderr))
 		case "dev-probe":
 			os.Exit(runDevProbe(os.Args[2:], os.Stderr))
+		case "dev-bootstrap":
+			os.Exit(runDevBootstrap(os.Args[2:], os.Stderr))
+		case "dev-policy-check":
+			os.Exit(runDevPolicyCheck(os.Args[2:], os.Stderr))
+		case "dev-template-inspect":
+			os.Exit(runDevTemplateInspect(os.Args[2:], os.Stdout, os.Stderr))
 		}
+	}
+	if len(os.Args) == 1 {
+		os.Exit(runLocalAPI(os.Stderr))
 	}
 	os.Exit(component.Run("stead-api", os.Args[1:], os.Stdout, os.Stderr))
 }
