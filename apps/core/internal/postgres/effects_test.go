@@ -110,3 +110,54 @@ func TestEffectStoredJSONAndOriginDoNotMintAuthority(t *testing.T) {
 		}
 	}
 }
+
+// Reproduces the formerly accepted SQL subset: indexed identities and terminal
+// markers are present, but the actor, operation, process and lifetime are not.
+func truncatedTerminalRecord(record authorization.EffectRecord) []byte {
+	return encode(map[string]any{
+		"State": authorization.EffectTerminal, "Version": record.Version,
+		"TerminalOutcome": authorization.EffectCanceledBeforeEffect, "TerminalProofDigest": "",
+		"Authorization": map[string]any{"SessionID": record.Authorization.SessionID},
+		"Binding": map[string]any{"EffectID": record.Binding.EffectID, "OperationID": record.Binding.OperationID,
+			"Project": map[string]any{"id": record.Binding.Project.ID}},
+	})
+}
+
+func TestEffectRowRequiresCompleteRecordIndexesAndLabel(t *testing.T) {
+	r, label := effectStorageFixture(t)
+	r.State, r.TerminalOutcome, r.Version = authorization.EffectTerminal, authorization.EffectCanceledBeforeEffect, 2
+	stored := storedEffectRow{id: r.Binding.EffectID, operationID: r.Binding.OperationID, projectID: r.Binding.Project.ID,
+		sessionID: r.Authorization.SessionID, state: string(r.State), version: r.Version, raw: encode(r), labelRaw: encode(label)}
+	if _, _, err := stored.decode(); err != nil {
+		t.Fatal("complete stored cancellation rejected", err)
+	}
+	for name, mutate := range map[string]func(*storedEffectRow){
+		"truncated_terminal": func(v *storedEffectRow) { v.raw = truncatedTerminalRecord(r) },
+		"wrong_effect":       func(v *storedEffectRow) { v.id = r.Binding.OperationID },
+		"wrong_operation":    func(v *storedEffectRow) { v.operationID = r.Binding.EffectID },
+		"wrong_project":      func(v *storedEffectRow) { v.projectID = r.Binding.EffectID },
+		"wrong_session":      func(v *storedEffectRow) { v.sessionID = r.Binding.EffectID },
+		"wrong_state":        func(v *storedEffectRow) { v.state = string(authorization.EffectIssued) },
+		"wrong_version":      func(v *storedEffectRow) { v.version++ },
+		"truncated_label":    func(v *storedEffectRow) { v.labelRaw = []byte(`{"version":1}`) },
+		"wrong_label_revision": func(v *storedEffectRow) {
+			changed := label
+			changed.Version++
+			v.labelRaw = encode(changed)
+		},
+		"unsupported_label": func(v *storedEffectRow) {
+			changed := label
+			changed.Compartments = []string{"not-supported-by-native-policy"}
+			v.labelRaw = encode(changed)
+		},
+		"oversize_record": func(v *storedEffectRow) { v.raw = append(v.raw, []byte(strings.Repeat(" ", 64<<10))...) },
+	} {
+		t.Run(name, func(t *testing.T) {
+			changed := stored
+			mutate(&changed)
+			if _, _, err := changed.decode(); err == nil {
+				t.Fatal("invalid complete effect row admitted")
+			}
+		})
+	}
+}

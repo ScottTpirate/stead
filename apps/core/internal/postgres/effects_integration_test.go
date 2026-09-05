@@ -3,9 +3,11 @@ package postgres
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/ScottTpirate/stead/apps/core/internal/outbox"
 	"github.com/ScottTpirate/stead/apps/core/internal/transaction"
@@ -155,12 +157,79 @@ func testEffectStorage(t *testing.T, store *Store, user identity.SessionRecord) 
 		if err := store.RevokeSession(ctx, user.ID); err == nil {
 			t.Fatal("terminal index without matching terminal evidence acknowledged drain")
 		}
+		terminal := r
+		terminal.State, terminal.TerminalOutcome = authorization.EffectTerminal, authorization.EffectCanceledBeforeEffect
+		for _, corruption := range []struct {
+			name      string
+			record    []byte
+			labelJSON []byte
+		}{
+			{"truncated_terminal", truncatedTerminalRecord(terminal), encode(label)},
+			{"truncated_terminal_label", encode(terminal), []byte(`{"version":1}`)},
+			{"oversize_terminal_record", encode(map[string]any{"State": terminal.State, "Padding": strings.Repeat("x", 65<<10)}), encode(label)},
+		} {
+			t.Run(corruption.name, func(t *testing.T) {
+				// Deliberate corruption in this fresh test-only database. Resetting
+				// pending here proves the failing inspection leaves a NEW fence
+				// commit, rather than relying on a preceding denial's state.
+				if err := store.owned(ctx, "authorization", true, func(tx pgx.Tx) error {
+					if _, err := tx.Exec(ctx, `UPDATE "authorization".session_fences SET pending=false WHERE session_id=$1`, user.ID); err != nil {
+						return err
+					}
+					_, err := tx.Exec(ctx, `UPDATE "authorization".effects SET state='terminal',record=$2,label=$3 WHERE id=$1`, r.Binding.EffectID, corruption.record, corruption.labelJSON)
+					return err
+				}); err != nil {
+					t.Fatal(err)
+				}
+				if err := store.RevokeSession(ctx, user.ID); err == nil {
+					t.Fatal("malformed terminal evidence acknowledged drain")
+				}
+				if err := store.owned(ctx, "authorization", false, func(tx pgx.Tx) error {
+					return tx.QueryRow(ctx, `SELECT pending FROM "authorization".session_fences WHERE session_id=$1`, user.ID).Scan(&pending)
+				}); err != nil || !pending {
+					t.Fatal("malformed inspection rolled pending back", err)
+				}
+				if err := store.owned(ctx, "identity", false, func(tx pgx.Tx) error {
+					return tx.QueryRow(ctx, `SELECT active FROM identity.sessions WHERE id=$1`, user.ID).Scan(&active)
+				}); err != nil || !active {
+					t.Fatal("malformed terminal evidence revoked identity", err)
+				}
+			})
+		}
 		if err := store.owned(ctx, "authorization", true, func(tx pgx.Tx) error {
-			_, err := tx.Exec(ctx, `UPDATE "authorization".effects SET state='reconciling' WHERE id=$1`, r.Binding.EffectID)
+			_, err := tx.Exec(ctx, `UPDATE "authorization".effects SET state='reconciling',record=$2,label=$3 WHERE id=$1`, r.Binding.EffectID, encode(r), encode(label))
 			return err
 		}); err != nil {
 			t.Fatal(err)
 		}
+		t.Run("inspection_timeout_preserves_pending", func(t *testing.T) {
+			if err := store.owned(ctx, "authorization", true, func(tx pgx.Tx) error {
+				_, err := tx.Exec(ctx, `UPDATE "authorization".session_fences SET pending=false WHERE session_id=$1`, user.ID)
+				return err
+			}); err != nil {
+				t.Fatal(err)
+			}
+			// This fresh fixture lock blocks only the inspection, not the fence.
+			// It is released when this test-owned transaction returns.
+			if err := store.owned(ctx, "authorization", true, func(tx pgx.Tx) error {
+				if _, err := tx.Exec(ctx, `LOCK TABLE "authorization".effects IN ACCESS EXCLUSIVE MODE`); err != nil {
+					return err
+				}
+				bounded, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
+				defer cancel()
+				if err := store.RevokeSession(bounded, user.ID); err == nil || bounded.Err() != context.DeadlineExceeded {
+					return errors.New("inspection did not deny at the caller deadline")
+				}
+				return tx.QueryRow(ctx, `SELECT pending FROM "authorization".session_fences WHERE session_id=$1`, user.ID).Scan(&pending)
+			}); err != nil || !pending {
+				t.Fatal("inspection timeout lost committed pending", err)
+			}
+			if err := store.owned(ctx, "identity", false, func(tx pgx.Tx) error {
+				return tx.QueryRow(ctx, `SELECT active FROM identity.sessions WHERE id=$1`, user.ID).Scan(&active)
+			}); err != nil || !active {
+				t.Fatal("inspection timeout acknowledged revocation", err)
+			}
+		})
 		// This helper's private writes did not become local process provenance.
 		if len(store.effectOrigins) != 0 {
 			t.Fatal("storage fixture minted execution provenance")
