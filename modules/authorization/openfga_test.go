@@ -3,6 +3,7 @@ package authorization
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -132,8 +133,40 @@ func TestLiveOpenFGALocalProtocol(t *testing.T) {
 			t.Fatal("stock role or noninheritance behavior mismatch")
 		}
 	}
+	batch := make([]Tuple, len(checks))
+	for index, check := range checks {
+		batch[index] = Tuple{check.user, check.relation, check.object}
+	}
+	before := counters.Snapshot().OpenFGACalls
+	allowed, err := client.BatchCheck(ctx, batch)
+	if err != nil || len(allowed) != len(checks) || counters.Snapshot().OpenFGACalls != before+1 {
+		t.Fatal("stock eight-role BatchCheck did not use exactly one bounded call", err)
+	}
+	for index, check := range checks {
+		if allowed[index] != check.want {
+			t.Fatal("stock BatchCheck role/noninheritance differs from direct Check")
+		}
+	}
+	large := make([]Tuple, MaxReadSet)
+	for index := range large {
+		large[index] = Tuple{alice, "viewer", fmt.Sprintf("team:019ec4e0-0000-7000-8000-%012d", 100+index)}
+	}
+	before = counters.Snapshot().OpenFGACalls
+	allowed, err = client.BatchCheck(ctx, large)
+	if err != nil || len(allowed) != MaxReadSet || counters.Snapshot().OpenFGACalls != before+3 {
+		t.Fatal("stock 101-result BatchCheck did not honor three max50 chunks", err)
+	}
+	for _, value := range allowed {
+		if value {
+			t.Fatal("ungranted synthetic resource allowed by stock batch")
+		}
+	}
+	before = counters.Snapshot().OpenFGACalls
+	if _, err = client.BatchCheck(ctx, append(large, large[0])); err != ErrDenied || counters.Snapshot().OpenFGACalls != before {
+		t.Fatal("oversized live batch reached provider")
+	}
 	if _, err := client.WriteVerified(ctx, []Tuple{{"service_account:019ec4e0-0000-7000-8000-000000000030", "lead", child}}); err != ErrDenied {
 		t.Fatal("stock model admitted non-User lead")
 	}
-	t.Logf("stock model, direct grants, idempotency, hierarchy/accountability noninheritance PASS; actual OpenFGA HTTP calls=%d", counters.Snapshot().OpenFGACalls)
+	t.Logf("stock model, direct grants, idempotency, hierarchy/accountability noninheritance, eight-role batch and 101-result max50 batch PASS; actual OpenFGA HTTP calls=%d", counters.Snapshot().OpenFGACalls)
 }
