@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"time"
 
+	"github.com/ScottTpirate/stead/internal/telemetry"
 	"github.com/ScottTpirate/stead/modules/classification"
 	"github.com/ScottTpirate/stead/modules/identity"
 )
@@ -184,7 +185,7 @@ func (coordinator *Coordinator) Authorize(ctx context.Context, session identity.
 	}
 	id := hex.EncodeToString(material[:])
 	deny := func(reason string) (*Decision, error) {
-		_ = coordinator.config.Denials.RecordDenial(ctx, Denial{DecisionID: id, Actor: session.Principal(), Action: action, Reason: reason, OccurredAt: now})
+		_ = coordinator.config.Denials.RecordDenial(ctx, Denial{DecisionID: id, RequestID: telemetry.CorrelationID(ctx), Actor: session.Principal(), Action: action, Reason: reason, OccurredAt: now})
 		return nil, ErrDenied
 	}
 	relation, known := actionRelation(action, target)

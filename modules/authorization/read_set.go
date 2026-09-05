@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"time"
 
+	"github.com/ScottTpirate/stead/internal/telemetry"
 	"github.com/ScottTpirate/stead/modules/classification"
 	"github.com/ScottTpirate/stead/modules/identity"
 )
@@ -28,7 +29,7 @@ func (coordinator *Coordinator) AuthorizeSet(ctx context.Context, session identi
 	}
 	id := hex.EncodeToString(material[:])
 	deny := func(reason string) ([]*Decision, error) {
-		_ = coordinator.config.Denials.RecordDenial(ctx, Denial{DecisionID: id, Actor: session.Principal(), Action: reads[0].Action, Reason: reason, OccurredAt: now})
+		_ = coordinator.config.Denials.RecordDenial(ctx, Denial{DecisionID: id, RequestID: telemetry.CorrelationID(ctx), Actor: session.Principal(), Action: reads[0].Action, Reason: reason, OccurredAt: now})
 		return nil, ErrDenied
 	}
 	repository, ok := coordinator.config.Repository.(SetRepository)

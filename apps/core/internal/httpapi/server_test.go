@@ -2,12 +2,14 @@ package httpapi
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/ScottTpirate/stead/apps/core/internal/transaction"
+	"github.com/ScottTpirate/stead/internal/telemetry"
 )
 
 func TestClosedBoundedJSONRequest(t *testing.T) {
@@ -116,6 +118,45 @@ func TestObservationJoinsOnlyTheServerGeneratedResponseCorrelation(t *testing.T)
 	server.ServeHTTP(response, request)
 	if len(observed.CorrelationID) != 32 || observed.CorrelationID != response.Header().Get("X-Correlation-ID") || observed.CorrelationID == "client-controlled" || observed.Status != 404 || observed.ResponseBytes != response.Body.Len() {
 		t.Fatal("observation was not bound to actual response")
+	}
+}
+
+func TestServerCorrelationContextIgnoresClientAndInheritedIDs(t *testing.T) {
+	const clientID = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	const inheritedID = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	var observed Observation
+	var downstream string
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/correlation-test", func(w http.ResponseWriter, r *http.Request) {
+		downstream = telemetry.CorrelationID(r.Context())
+		telemetry.AddAudit(r.Context(), 1)
+		problem(w, http.StatusForbidden)
+	})
+	server := &Server{host: "localhost:18443", mux: mux, config: Config{Origin: "https://localhost:18443", Observe: func(value Observation) { observed = value }}}
+	previous := ""
+	for _, supplied := range [][]string{nil, {clientID}, {clientID, "client-resource-or-credential"}} {
+		request := httptest.NewRequest(http.MethodGet, "/api/correlation-test", nil)
+		request.Host = server.host
+		request = request.WithContext(telemetry.WithCorrelationID(request.Context(), inheritedID))
+		for _, value := range supplied {
+			request.Header.Add("X-Correlation-ID", value)
+		}
+		response := httptest.NewRecorder()
+		server.ServeHTTP(response, request)
+		var body struct {
+			CorrelationID string `json:"correlation_id"`
+		}
+		if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+			t.Fatal(err)
+		}
+		id := response.Header().Get("X-Correlation-ID")
+		if response.Code != http.StatusForbidden || len(id) != 32 || id == clientID || id == inheritedID || id == previous || downstream != id || observed.CorrelationID != id || body.CorrelationID != id || observed.Snapshot.AuditWrites != 1 {
+			t.Fatal("response, request context and telemetry did not share only the fresh server correlation")
+		}
+		if strings.Contains(response.Body.String(), "client-resource-or-credential") || telemetry.CorrelationID(request.Context()) != inheritedID {
+			t.Fatal("untrusted metadata leaked or the parent request context changed")
+		}
+		previous = id
 	}
 }
 

@@ -128,7 +128,6 @@ func (server *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx, counters := telemetry.Begin(r.Context())
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
-	r = r.WithContext(ctx)
 	output := &observedWriter{ResponseWriter: w}
 	var id [16]byte
 	if _, err := rand.Read(id[:]); err != nil {
@@ -136,6 +135,7 @@ func (server *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	correlationID := hex.EncodeToString(id[:])
+	r = r.WithContext(telemetry.WithCorrelationID(ctx, correlationID))
 	output.Header().Set("X-Correlation-ID", correlationID)
 	output.Header().Set("Cache-Control", "no-store")
 	output.Header().Set("X-Content-Type-Options", "nosniff")
