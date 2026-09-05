@@ -1,7 +1,7 @@
-import { AppShell } from "./AppShell";
+import { Workspace } from "./Workspace";
 import { useRoute } from "./useRoute";
 
 export function Foundation() {
   const { match, navigate } = useRoute();
-  return <AppShell route={match} navigate={navigate} />;
+  return <Workspace route={match} navigate={navigate} />;
 }

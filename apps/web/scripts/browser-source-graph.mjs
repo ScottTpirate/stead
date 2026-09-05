@@ -1153,6 +1153,24 @@ function scriptBoundaryRules(path, source) {
   const staticValues = [];
   let directNetwork = false;
   let dynamicBoundaryConstruction = false;
+  // A controlled form is not an alternate transport: cancellation must be the
+  // first synchronous statement. Its remaining calls and all props are still
+  // checked below; action/formAction and spreads receive no exception.
+  const cancelsNativeSubmit = (node) => {
+    const attribute = node.attributes.properties.find((item) =>
+      ts.isJsxAttribute(item) && item.name.getText(sourceFile) === "onSubmit");
+    const fn = attribute?.initializer && ts.isJsxExpression(attribute.initializer)
+      ? attribute.initializer.expression : undefined;
+    if (!fn || !ts.isArrowFunction(fn) || fn.parameters.length !== 1 ||
+        !ts.isIdentifier(fn.parameters[0].name) || !ts.isBlock(fn.body)) return false;
+    const first = fn.body.statements[0];
+    if (!first || !ts.isExpressionStatement(first) || !ts.isCallExpression(first.expression)) return false;
+    const call = first.expression;
+    return call.arguments.length === 0 && ts.isPropertyAccessExpression(call.expression) &&
+      ts.isIdentifier(call.expression.expression) &&
+      call.expression.expression.text === fn.parameters[0].name.text &&
+      call.expression.name.text === "preventDefault";
+  };
   const approvedInternalNavigationImport =
     path.endsWith(
       [sep, "apps", sep, "web", sep, "src", sep, "AppShell.tsx"].join(""),
@@ -1355,7 +1373,8 @@ function scriptBoundaryRules(path, source) {
     }
     if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
       const tag = node.tagName.getText(sourceFile);
-      if (/^[a-z]/u.test(tag) && RESOURCE_JSX_ELEMENTS.has(tag.toLowerCase())) {
+      if (/^[a-z]/u.test(tag) && RESOURCE_JSX_ELEMENTS.has(tag.toLowerCase()) &&
+          !(tag === "form" && cancelsNativeSubmit(node))) {
         directNetwork = true;
       }
       for (const attribute of node.attributes.properties) {

@@ -651,7 +651,7 @@ async function main() {
     generated_by: "apps/web/scripts/measure-bundle.mjs",
     measurement_method:
       "Exact inventory, SHA-256 binding, bounded reads, and executable capability classification for every transformed browser artifact plus uncompressed file bytes and Node zlib level 9 over closed Vite manifest JavaScript graphs with stable shared-chunk attribution",
-    scope: "Wave 0 original non-import foundation",
+    scope: "Checkpoint A generated-client UI integration; live product acceptance pending",
     mature_interface_perf005_complete: false,
     lazy_boundaries_are_placeholders: true,
     minimal_foundation_baseline_bytes_gzip: baseline,
