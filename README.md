@@ -10,6 +10,8 @@ The reviewed signed bootstrap has passed real per-installation policy, mutation,
 
 The inactive provider-effect store has also passed a [fresh real PostgreSQL storage test](docs/governance/dependency-evidence/postgresql-effect-storage-proof-20260905.json): atomic effect/audit/outbox rollback, competing updates, and fail-closed revocation fences under malformed records and inspection timeout. This is storage evidence, not provider activation or successful sealed provider authorization.
 
+The patched browser, Playwright and axe have passed an [isolated tool-compatibility test](docs/governance/dependency-evidence/browser-tool-compatibility-proof-20260905.json), including real renderer sandbox checks, verified TLS with negative controls, keyboard/reload and positive/negative axe checks. Independent QA/security verified the result and cleanup; this synthetic fixture is not Stead browser-journey or accessibility-release evidence.
+
 ## Phase 0 package
 
 - [Reconciliation report](docs/architecture/PHASE0_RECONCILIATION_REPORT.md)
