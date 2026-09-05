@@ -18,6 +18,7 @@ type Action string
 const (
 	OrganizationCreate  Action = "organization.create"
 	OrganizationRead    Action = "organization.read"
+	OrganizationsList   Action = "organization.list"
 	TeamCreate          Action = "team.create"
 	TeamRead            Action = "team.read"
 	ProjectCreate       Action = "project.create"
@@ -84,6 +85,18 @@ type State struct {
 
 type Repository interface {
 	ReadState(context.Context, identity.Principal, string, ResourceRef) (State, error)
+}
+
+// SetRepository reads one bounded logical set through authoritative owner
+// ports. Results preserve input order; an absent resource is represented only
+// by its ResourceRef. Infrastructure or malformed stored state fails the set.
+type SetRepository interface {
+	ReadStates(context.Context, identity.Principal, string, []ResourceRef) ([]State, error)
+}
+
+type ReadAuthorization struct {
+	Action Action
+	Target ResourceRef
 }
 
 // DenialRecorder owns durable reason-safe denial evidence. It may not include
