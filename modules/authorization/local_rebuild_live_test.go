@@ -30,7 +30,13 @@ func TestLiveLocalExecutableFixedRecipeAndOverlayRejection(t *testing.T) {
 	if err != nil {
 		t.Fatal("gate requires clean immutable source")
 	}
-	stage := t.TempDir()
+	stage, err := os.MkdirTemp("", "stead-local-rebuild-proof-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Preserve the actual compiler/module-cache evidence. Go intentionally makes
+	// unpacked module sources read-only; do not relax that boundary for cleanup.
+	t.Logf("private executable provenance proof retained at %s", stage)
 	checkout := filepath.Join(stage, "checkout")
 	clone := exec.CommandContext(ctx, "/usr/bin/git", "clone", "--quiet", "--no-hardlinks", "--no-checkout", root, checkout)
 	clone.Env = []string{"PATH=/usr/bin:/bin", "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_NO_REPLACE_OBJECTS=1", "LC_ALL=C"}
