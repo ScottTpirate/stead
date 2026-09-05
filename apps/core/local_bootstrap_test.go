@@ -15,6 +15,9 @@ func TestLocalCommandsRejectArgumentsBeforeBootstrap(t *testing.T) {
 	if runDevBootstrap([]string{"--unsafe"}, &output) != 2 {
 		t.Fatal("unexpected bootstrap options")
 	}
+	if runDevCatalogCheck([]string{"--repair"}, &output) != 2 {
+		t.Fatal("catalog repair option admitted")
+	}
 	output.Reset()
 	if runDevTemplateInspect([]string{"--template=other"}, &output, &output) != 2 {
 		t.Fatal("template override admitted")

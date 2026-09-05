@@ -3,6 +3,9 @@ package postgres
 import (
 	"context"
 	"database/sql"
+	"errors"
+
+	"github.com/ScottTpirate/stead/modules/identity"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/stdlib"
 )
@@ -80,4 +83,35 @@ func CheckBootstrapCatalog(ctx context.Context, adminDSN string, manifest Manife
 		return err
 	}
 	return Compare(manifest, snapshot)
+}
+
+// CheckExistingBootstrapCatalog is a read-only startup diagnostic using the
+// transient local bootstrap identity and the fixed isolated Stead database.
+// It is not runtime readiness or ongoing ACL monitoring. The API never receives
+// this identity; no security-definer function or additional runtime grant exists.
+func CheckExistingBootstrapCatalog(ctx context.Context, adminDSN, instanceID string) error {
+	rejected := errors.New("existing bootstrap catalog rejected")
+	config, err := pgx.ParseConfig(adminDSN)
+	if err != nil || !identity.ValidID(instanceID) || config.Database != "stead" || config.User == "" || config.User == RuntimeRole(instanceID) {
+		return rejected
+	}
+	db := sql.OpenDB(stdlib.GetConnector(*config))
+	defer db.Close()
+	var database, grantor, installation string
+	var version int
+	var template, utf8 bool
+	err = db.QueryRowContext(ctx, `SELECT pg_catalog.current_database(),current_user,pg_catalog.current_setting('server_version_num')::integer,d.datistemplate,pg_catalog.pg_encoding_to_char(d.encoding)='UTF8',n.instance_id::text
+	 FROM pg_catalog.pg_database d CROSS JOIN "authorization".namespace n WHERE d.datname=pg_catalog.current_database() AND n.id`).Scan(&database, &grantor, &version, &template, &utf8, &installation)
+	if err != nil || database != "stead" || grantor != config.User || installation != instanceID || version < MinimumServerVersion || template || !utf8 {
+		return rejected
+	}
+	manifest := RuntimeManifest(instanceID, database, grantor, version)
+	if ValidateManifest(manifest) != nil {
+		return rejected
+	}
+	snapshot, err := NewSQLCollector(db).Collect(ctx, manifest)
+	if err != nil || snapshot.ServerVersion != version || Compare(manifest, snapshot) != nil {
+		return rejected
+	}
+	return nil
 }

@@ -312,6 +312,7 @@ GRANT CONNECT ON DATABASE openfga TO openfga;
     // Restart only loads the exact retained activation; API startup verifies
     // signature/trust/source/model/anchor/expiry and never renews an installation.
     const auth = JSON.parse(await readPrivate('bootstrap.json'));
+    checkedCommand(path.join(state, 'stead-api'), ['dev-catalog-check'], { env: { ...baseEnvironment, ...environment, STEAD_DATABASE_ADMIN_URL_FILE: path.join(state, 'database-admin-url'), STEAD_DATABASE_PASSWORD_FILE: path.join(state, 'database-password') }, stdio: 'pipe' });
     environment.STEAD_OPENFGA_STORE_ID = auth.openfga_store_id;
     environment.STEAD_OPENFGA_MODEL_ID = auth.openfga_model_id;
     start('stead-api', path.join(state, 'stead-api'), [], { ...environment, STEAD_LISTEN: `127.0.0.1:${ports.api}` });

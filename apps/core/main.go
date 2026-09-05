@@ -21,6 +21,8 @@ func main() {
 			os.Exit(runDevPolicyCheck(os.Args[2:], os.Stderr))
 		case "dev-template-inspect":
 			os.Exit(runDevTemplateInspect(os.Args[2:], os.Stdout, os.Stderr))
+		case "dev-catalog-check":
+			os.Exit(runDevCatalogCheck(os.Args[2:], os.Stderr))
 		}
 	}
 	if len(os.Args) == 1 {

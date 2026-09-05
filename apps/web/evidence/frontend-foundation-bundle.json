@@ -27,7 +27,7 @@
   "distribution_artifacts": [
     {
       "file": ".vite/manifest.json",
-      "sha256": "851d9a197f34af2c72b79d6270dbdd22819c44199ecd0087cc3daaad1db81528",
+      "sha256": "07c3da2bb1e503387544cb20f814a0171cc74b1166f31edaca3fce15e9e3a6d8",
       "uncompressed_bytes": 1546
     },
     {
@@ -61,9 +61,9 @@
       "uncompressed_bytes": 19391
     },
     {
-      "file": "assets/index-D7R1k-Nz.js",
-      "sha256": "9ef692cd42d316734f520c429911ac63630a15287cbb7a783e2ae356f9d9b858",
-      "uncompressed_bytes": 410549
+      "file": "assets/index-NcJPVZOg.js",
+      "sha256": "43eb9e9b85f05e611b0ee74808a6abc76196fdf368d4f8baabd223801106cd16",
+      "uncompressed_bytes": 410658
     },
     {
       "file": "assets/migration-BtQwf3v_.js",
@@ -72,7 +72,7 @@
     },
     {
       "file": "index.html",
-      "sha256": "b45122ee141b4dfc6a35e8ebd25832eb3db2a98ef5180edaf31d49097602cdc4",
+      "sha256": "d8bad98584edadd4ae29ba78efc702839faac22e16415e851ed791334b65bb74",
       "uncompressed_bytes": 444
     }
   ],
@@ -163,7 +163,7 @@
       "unsafeStaticNetworkTargets": []
     },
     {
-      "file": "assets/index-D7R1k-Nz.js",
+      "file": "assets/index-NcJPVZOg.js",
       "dynamicResourceTargets": 19,
       "dynamicNetworkCalls": 1,
       "externalDestinations": [],
@@ -202,16 +202,16 @@
     }
   ],
   "eager_javascript": {
-    "uncompressed_bytes": 410549,
-    "gzip_bytes": 78041,
-    "delta_bytes_gzip": 17233,
+    "uncompressed_bytes": 410658,
+    "gzip_bytes": 78069,
+    "delta_bytes_gzip": 17261,
     "files": [
       {
         "source": "index.html",
-        "file": "assets/index-D7R1k-Nz.js",
-        "sha256": "9ef692cd42d316734f520c429911ac63630a15287cbb7a783e2ae356f9d9b858",
-        "uncompressed_bytes": 410549,
-        "gzip_bytes": 78041
+        "file": "assets/index-NcJPVZOg.js",
+        "sha256": "43eb9e9b85f05e611b0ee74808a6abc76196fdf368d4f8baabd223801106cd16",
+        "uncompressed_bytes": 410658,
+        "gzip_bytes": 78069
       }
     ]
   },
