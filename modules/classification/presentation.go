@@ -19,8 +19,10 @@ type SecurityPresentation struct {
 }
 
 func (presentation SecurityPresentation) Copy() SecurityPresentation {
-	presentation.Markings = append([]Marking(nil), presentation.Markings...)
-	presentation.RequiredSurfaces = append([]string(nil), presentation.RequiredSurfaces...)
-	presentation.WarningActions = append([]string(nil), presentation.WarningActions...)
+	// These fields are required JSON arrays. A nil destination would turn a
+	// valid empty source array into null when the copied presentation is sent.
+	presentation.Markings = append([]Marking{}, presentation.Markings...)
+	presentation.RequiredSurfaces = append([]string{}, presentation.RequiredSurfaces...)
+	presentation.WarningActions = append([]string{}, presentation.WarningActions...)
 	return presentation
 }
