@@ -88,7 +88,7 @@ func runDevBootstrap(args []string, stderr io.Writer) int {
 	defer stop()
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Minute)
 	defer cancel()
-	err = bootstrapLocal(ctx, repository, config, os.Getenv, localdev.CheckRunner{RepositoryRoot: repository})
+	err = bootstrapLocal(ctx, repository, config, os.Getenv, localdev.CheckRunner{RepositoryRoot: repository, EvidenceDirectory: filepath.Join(config.StateDirectory, "check-evidence")})
 	if err != nil {
 		stage := "verification"
 		var code localStageError
@@ -141,6 +141,9 @@ func bootstrapLocal(ctx context.Context, repository string, config localdev.Conf
 	started, _ := json.Marshal(struct{ SchemaVersion, InstallationID string }{"1.0.0", config.InstanceID})
 	if err := localdev.WriteExclusive(filepath.Join(config.StateDirectory, "bootstrap.started"), started); err != nil {
 		return localStageError("existing-bootstrap")
+	}
+	if err := os.Mkdir(filepath.Join(config.StateDirectory, "check-evidence"), 0700); err != nil {
+		return localStageError("check-evidence-directory")
 	}
 	workflow, err := newLocalPolicyWorkflow(filepath.Join(config.StateDirectory, "policy-events"))
 	if err != nil {
