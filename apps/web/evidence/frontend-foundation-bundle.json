@@ -27,7 +27,7 @@
   "distribution_artifacts": [
     {
       "file": ".vite/manifest.json",
-      "sha256": "5c79cce17d153d3375062a49943a578b64720bc89ca84b31403d633d0d47bf97",
+      "sha256": "e16f87da6081841add771b374f0f957332e5fbb4e611a385d50113280b424c11",
       "uncompressed_bytes": 1546
     },
     {
@@ -56,14 +56,14 @@
       "uncompressed_bytes": 59
     },
     {
-      "file": "assets/index-Bg-GPH_E.js",
-      "sha256": "46ae8287c0f107b2c89831627fe4ae4ff3918716dc15e9ea8b6ea16571bd4816",
-      "uncompressed_bytes": 407918
-    },
-    {
       "file": "assets/index-CTo4Bph1.css",
       "sha256": "74cb8f55dff4437cbfc7fe38da4dda165a50058d1a88699ab56a87168248bb25",
       "uncompressed_bytes": 19391
+    },
+    {
+      "file": "assets/index-uMR3XDKk.js",
+      "sha256": "050e3d7e87345ca56459e72c338a4720403596041f7c7a21eff20ea91e510ede",
+      "uncompressed_bytes": 410364
     },
     {
       "file": "assets/migration-BtQwf3v_.js",
@@ -72,7 +72,7 @@
     },
     {
       "file": "index.html",
-      "sha256": "1b7cf6b903382193c34a44905b969ca918b98f39d138775a73905084462ec76e",
+      "sha256": "0df2d42f41ec57737de3e3ca68a49b303c9872a54943bd9a6f40af03c558d142",
       "uncompressed_bytes": 444
     }
   ],
@@ -163,7 +163,7 @@
       "unsafeStaticNetworkTargets": []
     },
     {
-      "file": "assets/index-Bg-GPH_E.js",
+      "file": "assets/index-uMR3XDKk.js",
       "dynamicResourceTargets": 19,
       "dynamicNetworkCalls": 1,
       "externalDestinations": [],
@@ -202,16 +202,16 @@
     }
   ],
   "eager_javascript": {
-    "uncompressed_bytes": 407918,
-    "gzip_bytes": 77443,
-    "delta_bytes_gzip": 16635,
+    "uncompressed_bytes": 410364,
+    "gzip_bytes": 77993,
+    "delta_bytes_gzip": 17185,
     "files": [
       {
         "source": "index.html",
-        "file": "assets/index-Bg-GPH_E.js",
-        "sha256": "46ae8287c0f107b2c89831627fe4ae4ff3918716dc15e9ea8b6ea16571bd4816",
-        "uncompressed_bytes": 407918,
-        "gzip_bytes": 77443
+        "file": "assets/index-uMR3XDKk.js",
+        "sha256": "050e3d7e87345ca56459e72c338a4720403596041f7c7a21eff20ea91e510ede",
+        "uncompressed_bytes": 410364,
+        "gzip_bytes": 77993
       }
     ]
   },
