@@ -17,6 +17,8 @@ type LocalCheckRequest struct {
 	SubjectDigest  string
 	SourceRevision string
 	SourceTree     string
+	Files          []policyrelease.File
+	Archive        []byte
 }
 
 // LocalCheckCapture is actual process output captured by the reviewed local
