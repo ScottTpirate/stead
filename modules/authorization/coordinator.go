@@ -86,6 +86,12 @@ func (decision *Decision) Binding() ActivationBinding {
 
 type decisionContextKey struct{}
 
+// WithoutDecisions starts a fresh logical decision set without discarding
+// cancellation, deadlines, telemetry, or other request-scoped context.
+func WithoutDecisions(ctx context.Context) context.Context {
+	return context.WithValue(ctx, decisionContextKey{}, []*Decision(nil))
+}
+
 func (decision *Decision) WithContext(ctx context.Context) context.Context {
 	prior := DecisionsFromContext(ctx)
 	if decision == nil || !decision.valid || len(prior) >= 2 {
