@@ -14,6 +14,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/ScottTpirate/stead/modules/authorization"
@@ -41,13 +42,30 @@ func (output *boundedOutput) Write(data []byte) (int, error) {
 func checkEnvironment() []string {
 	// Deliberately do not inherit GOFLAGS, GOENV, compiler overrides, credentials,
 	// shell startup files, proxy settings or npm configuration from the caller.
-	return []string{"PATH=/usr/local/bin:/usr/bin:/bin", "LANG=C.UTF-8", "CGO_ENABLED=0", "GOENV=off", "GOTOOLCHAIN=local", "GOCACHE=/tmp/stead-go-build-cache", "GOPATH=/tmp/stead-go-path", "npm_config_cache=/tmp/stead-local-npm-cache", "npm_config_userconfig=/dev/null", "npm_config_globalconfig=/dev/null"}
+	return []string{"PATH=/usr/local/bin:/usr/bin:/bin", "LANG=C.UTF-8", "CGO_ENABLED=0", "GOENV=off", "GOWORK=off", "GOTOOLCHAIN=local", "GOOS=linux", "GOARCH=amd64", "GOAMD64=v1", "GOEXPERIMENT=", "GOCACHE=/tmp/stead-go-build-cache", "GOPATH=/tmp/stead-go-path", "npm_config_cache=/tmp/stead-local-npm-cache", "npm_config_userconfig=/dev/null", "npm_config_globalconfig=/dev/null"}
 }
 
 func captureCheck(ctx context.Context, root, executable string, args []string, input []byte) (authorization.LocalCheckCapture, error) {
 	command := exec.CommandContext(ctx, executable, args...)
 	command.Dir = root
 	command.Env = checkEnvironment()
+	if filepath.Base(executable) == "run_pinned_go.sh" && len(args) > 1 && args[0] == "go" && args[1] == "run" {
+		// Compiler evidence may not be satisfied from a shared compiled-object
+		// cache. Only exact go.sum-verified module ZIP inputs are reused; source
+		// extraction and every compilation happen in this fresh private cache.
+		cache, err := os.MkdirTemp("", "stead-local-check-build-")
+		if err != nil {
+			return authorization.LocalCheckCapture{}, ErrConfiguration
+		}
+		defer os.RemoveAll(cache)
+		filtered := []string{}
+		for _, entry := range command.Env {
+			if !strings.HasPrefix(entry, "GOCACHE=") {
+				filtered = append(filtered, entry)
+			}
+		}
+		command.Env = append(filtered, "GOCACHE="+filepath.Join(cache, "build"), "GOMODCACHE="+filepath.Join(cache, "modules"), "GOPROXY=file:///tmp/stead-go-path/pkg/mod/cache/download", "GOSUMDB=off")
+	}
 	command.Stdin = bytes.NewReader(input)
 	stdout, stderr := &boundedOutput{limit: 256 << 10}, &boundedOutput{limit: 256 << 10}
 	command.Stdout = stdout
