@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "purpose": "Synthetic local development only; never a product, release, installer or air-gap artifact",
+  "platform": "linux/amd64",
+  "services": {
+    "postgres": {
+      "version": "18.6-r2",
+      "image": "cgr.dev/chainguard/postgres@sha256:f9fe3c8946c2f696d9835598a46bc584350acb925028ea1a47977ad9b93bd7c4",
+      "approval_id": "DEP-APP-OCI-CHAINGUARD-POSTGRES-18-6-R2-99982050",
+      "review": "pending-activation",
+      "uid": 70
+    },
+    "gitea": {
+      "version": "1.27.3-rootless",
+      "image": "docker.gitea.com/gitea@sha256:95b0ae18fb99b4a579b3dd383ea5ad8d8f77534c030c1fe554e6378ac8a5c496",
+      "source": "https://github.com/go-gitea/gitea",
+      "commit": "146cc3eec57174711eac0e0a0c7b38670c6e3922",
+      "review": "pending-independent-review",
+      "uid": 1000,
+      "license_review_note": "The actual binary closure contains github.com/couchbase/goutils v0.3.0 with file-level BSL-1.1. Its non-production grant requires scoped license-policy review; this candidate is not approved for production or distribution.",
+      "constraints": ["SSH disabled", "no outbound mirrors or repository imports", "no actions or packages", "no untrusted uploads or extensions", "no browser credentials", "loopback/private service network only"]
+    },
+    "nats": {
+      "version": "2.14.6",
+      "image": "registry-1.docker.io/library/nats@sha256:190ba625ec25f1eab47e4215f064067a924e548a3428ae226ec23d32a122b03f",
+      "source": "https://github.com/nats-io/nats-server",
+      "commit": "1aa10f9fe4e7a27b7d877af004a9c0022fdc4910",
+      "review": "pending-independent-review",
+      "uid": 65532
+    },
+    "openfga": {
+      "version": "v1.19.0",
+      "source": "https://github.com/openfga/openfga.git",
+      "commit": "130c30aea5e73543e63b173dadfbd1ee519aa97a",
+      "commit_date": "2026-08-25T14:48:10Z",
+      "toolchain": "go1.27.0",
+      "binary_sha256": "2f90d6f9a1b3a5c92fb114006f41dbe48edd59877cf068bae648a232b4342dec",
+      "review": "pending-independent-review",
+      "uid": 65532,
+      "constraints": ["stock source and dependency lock unchanged", "CGO disabled", "no grpc-health-probe binary", "PostgreSQL datastore only", "preshared service authentication", "no authorization query caches"]
+    }
+  },
+  "intake_evidence": {
+    "source_inventory_sha256": "ce9a0f15b345039cb6854abbd1ae327278d75c4eaaed47fd6cdc376fa9ab29bf",
+    "distinct_go_module_identities": 371,
+    "module_checksum_mismatches": 0,
+    "openfga_binary_modules": 141,
+    "nats_binary_modules": 9,
+    "gitea_binary_modules": 249,
+    "license_review_complete": false,
+    "trivy_version": "0.74.0",
+    "openfga_rebuild_govulncheck_symbol_findings": 0,
+    "nats_govulncheck_symbol_findings": 0,
+    "nats_govulncheck_unreachable_module_findings": 3,
+    "gitea_critical_findings": "SSH components; contextual dev evaluation pending distinct review",
+    "scope": "Evidence only, not independent approval; exact reports remain in the local intake evidence bundle"
+  }
+}
