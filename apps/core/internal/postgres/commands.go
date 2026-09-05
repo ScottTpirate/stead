@@ -9,6 +9,7 @@ import (
 
 	"github.com/ScottTpirate/stead/apps/core/internal/outbox"
 	"github.com/ScottTpirate/stead/apps/core/internal/transaction"
+	"github.com/ScottTpirate/stead/modules/audit"
 	"github.com/ScottTpirate/stead/modules/authorization"
 	"github.com/ScottTpirate/stead/modules/identity"
 	"github.com/ScottTpirate/stead/modules/organization"
@@ -105,7 +106,11 @@ func (store *Store) register() error {
 	if err != nil {
 		return err
 	}
-	store.coordinator, err = transaction.NewCoordinator(transaction.Configuration{Backend: contract, Registry: registry, Outbox: appender, FinalAuthorizationAudit: store, FinalAuthorizationOperation: finalOperation})
+	durableOperation, err := transaction.NewBackendOperation(contract, transaction.DurableEffectOwner, store.effectOperation)
+	if err != nil {
+		return err
+	}
+	store.coordinator, err = transaction.NewCoordinator(transaction.Configuration{Backend: contract, Registry: registry, Outbox: appender, FinalAuthorizationAudit: store, FinalAuthorizationOperation: finalOperation, DurableEffectPreparation: store, DurableEffectOperation: durableOperation})
 	return err
 }
 
@@ -448,19 +453,37 @@ func (store *Store) appendOutbox(ctx context.Context, binding transaction.Execut
 	if err = session.role(ctx, "core_outbox"); err != nil {
 		return err
 	}
-	var event struct {
-		ID, Type string
-		Data     struct{ Resource authorization.ResourceRef }
-	}
-	if json.Unmarshal(intent.PayloadCopy(), &event) != nil || !identity.ValidID(event.ID) || event.Data.Resource.ID != session.result.ID {
+	eventID, resourceID, subject, err := outboxRoute(intent.PayloadCopy())
+	if err != nil || resourceID != session.result.ID {
 		return authorization.ErrDenied
 	}
-	subject := "stead.organization.changed.v1"
-	if event.Data.Resource.Kind == "project" {
-		subject = "stead.project.changed.v1"
-	}
 	digest := intent.Digest()
-	_, err = session.tx.Exec(ctx, `INSERT INTO core_outbox.intents(id,resource_id,subject,payload,digest,created_at) VALUES($1,$2,$3,$4,$5,$6)`, event.ID, session.result.ID, subject, intent.PayloadCopy(), digest[:], time.Now().UTC())
+	_, err = session.tx.Exec(ctx, `INSERT INTO core_outbox.intents(id,resource_id,subject,payload,digest,created_at) VALUES($1,$2,$3,$4,$5,$6)`, eventID, session.result.ID, subject, intent.PayloadCopy(), digest[:], time.Now().UTC())
 	count(ctx, 1, 1, 0, 1)
 	return err
+}
+
+// WS-07 owns payload validity. Routing additionally binds the closed producer
+// source/type/resource combination; a Project resource is not a project event.
+func outboxRoute(payload []byte) (id, resourceID, subject string, err error) {
+	var event struct {
+		ID, Source, Type string
+		Data             struct{ Resource authorization.ResourceRef }
+	}
+	if json.Unmarshal(payload, &event) != nil || !identity.ValidID(event.ID) || !identity.ValidID(event.Data.Resource.ID) {
+		return "", "", "", authorization.ErrDenied
+	}
+	if event.Type == audit.EffectEventType {
+		id, resourceID, err = audit.DecodeEffectEvent(payload)
+		return id, resourceID, audit.EffectEventSubject, err
+	}
+	switch {
+	case event.Source == "urn:stead:producer:organization" && ((event.Type == "stead.organization.created.v1" && event.Data.Resource.Kind == "organization") || (event.Type == "stead.team.created.v1" && event.Data.Resource.Kind == "team")):
+		subject = "stead.organization.changed.v1"
+	case event.Source == "urn:stead:producer:project" && event.Type == "stead.project.created.v1" && event.Data.Resource.Kind == "project":
+		subject = "stead.project.changed.v1"
+	default:
+		return "", "", "", authorization.ErrDenied
+	}
+	return event.ID, event.Data.Resource.ID, subject, nil
 }

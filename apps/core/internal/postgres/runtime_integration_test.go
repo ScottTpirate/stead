@@ -252,6 +252,7 @@ func TestLivePostgresBootstrapRolesSessionAndAtomicity(t *testing.T) {
 	t.Run("real_transaction_commit_rollback_outbox", func(t *testing.T) { testAtomicBackend(t, store) })
 	t.Run("real_keyset_candidate_pages", func(t *testing.T) { testCandidatePages(t, store) })
 	t.Run("bounded_set_security_reads", func(t *testing.T) { testStateSets(t, store, session, labelID) })
+	t.Run("real_effect_storage_not_provider_authorization", func(t *testing.T) { testEffectStorage(t, store, unprivileged) })
 	var serverVersion int
 	var grantor string
 	db, err := pgx.Connect(ctx, adminDSN)
