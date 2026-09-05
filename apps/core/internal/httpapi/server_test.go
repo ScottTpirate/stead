@@ -109,7 +109,8 @@ func TestUnknownAndCrossOriginRequestsStayGeneric(t *testing.T) {
 func TestObservationJoinsOnlyTheServerGeneratedResponseCorrelation(t *testing.T) {
 	var observed Observation
 	server := &Server{host: "localhost:18443", mux: http.NewServeMux(), config: Config{Origin: "https://localhost:18443", Observe: func(value Observation) { observed = value }}}
-	request := httptest.NewRequest(http.MethodGet, "https://localhost:18443/api/unknown", nil)
+	request := httptest.NewRequest(http.MethodGet, "/api/unknown", nil)
+	request.Host = "localhost:18443"
 	request.Header.Set("X-Correlation-ID", "client-controlled")
 	response := httptest.NewRecorder()
 	server.ServeHTTP(response, request)
