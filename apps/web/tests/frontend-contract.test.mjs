@@ -292,6 +292,31 @@ test("computed and runtime-composed browser boundaries cannot evade the graph ga
   }
 });
 
+test("controlled forms cancel native transport synchronously without alternate sinks", async () => {
+  const fixtureParent =
+    process.env.STEAD_TEST_TMPDIR ?? join(homedir(), ".cache", "stead-test-tmp");
+  await mkdir(fixtureParent, { recursive: true });
+  const fixtureRoot = await mkdtemp(join(fixtureParent, "stead-controlled-form-"));
+  const cases = [
+    ['<form onSubmit={(event) => { event.preventDefault(); save(); }} />', []],
+    ['<form onSubmit={() => { save(); }} />', ["direct-browser-network"]],
+    ['<form onSubmit={async (event) => { await save(); event.preventDefault(); }} />', ["direct-browser-network"]],
+    ['<form action="/submit" onSubmit={(event) => { event.preventDefault(); }} />', ["direct-browser-network"]],
+    ['<form onSubmit={(event) => { event.preventDefault(); fetch("/submit"); }} />', ["direct-browser-network"]],
+  ];
+  try {
+    for (const [fixture, rules] of cases) {
+      await writeFile(join(fixtureRoot, "entry.tsx"), `export const Form = () => ${fixture};\n`, "utf8");
+      const graph = await collectBrowserSourceGraph({
+        entryPath: join(fixtureRoot, "entry.tsx"), repositoryRoot: fixtureRoot,
+      });
+      assert.deepEqual(findBrowserBoundaryViolations(graph).map(({ rule }) => rule), rules, fixture);
+    }
+  } finally {
+    await rm(fixtureRoot, { recursive: true, force: true });
+  }
+});
+
 test("aliased call-through and encoded JSX resource sinks fail independently", async () => {
   const fixtureParent =
     process.env.STEAD_TEST_TMPDIR ?? join(homedir(), ".cache", "stead-test-tmp");
