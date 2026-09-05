@@ -1,6 +1,6 @@
 import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   Button,
@@ -9,6 +9,13 @@ import {
 } from "../../../packages/design-system/src/index";
 
 import { Foundation } from "./Foundation";
+import { platformClient } from "./platform";
+import { PlatformApiError } from "../../../packages/api-client/src/index";
+
+beforeEach(() => {
+  // Shell unit tests have no network. The live product smoke is separate.
+  vi.spyOn(platformClient, "request").mockRejectedValue(new PlatformApiError(401));
+});
 
 const forbiddenCapabilityLinks = () =>
   ["Code", "Delivery"].flatMap((name) =>
@@ -17,6 +24,7 @@ const forbiddenCapabilityLinks = () =>
 
 afterEach(() => {
   cleanup();
+  vi.restoreAllMocks();
   window.history.replaceState(null, "", "/");
 });
 

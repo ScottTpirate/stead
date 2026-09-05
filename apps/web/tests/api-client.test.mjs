@@ -29,6 +29,15 @@ const SCHEMA_STRING_CANDIDATES = [
 ];
 
 const validOperationOptions = {
+  getSession: {},
+  createSession: { body: { token: "a".repeat(43) } },
+  deleteSession: {},
+  listOrganizations: {},
+  createOrganization: { body: { key: "ORG", name: "Organization fixture" }, idempotencyKey: "request-0003" },
+  getTeam: { path: { team_id: VALID_UUID } },
+  createTeam: { path: { organization_id: VALID_UUID }, body: { key: "TEAM", name: "Team fixture" }, idempotencyKey: "request-0004" },
+  listProjects: { path: { organization_id: VALID_UUID } },
+  createProject: { path: { organization_id: VALID_UUID }, body: { key: "PRJ", title: "Project fixture", purpose: "Work together", owning_team_id: VALID_UUID }, idempotencyKey: "request-0005" },
   getOrganization: { path: { organization_id: VALID_UUID } },
   listTeams: { path: { organization_id: VALID_UUID } },
   getProject: { path: { project_id: VALID_UUID } },
@@ -178,7 +187,7 @@ test("generated operation registry is reproducible from the current OpenAPI cont
   await import("../../../packages/api-client/scripts/generate-operation-registry.mjs");
   const after = await readFile(generatedPath, "utf8");
   assert.equal(after, before);
-  assert.equal(Object.keys(operationDefinitions).length, 11);
+  assert.deepEqual(Object.keys(operationDefinitions).sort(), Object.keys(validOperationOptions).sort());
 });
 
 test("generated operation definitions are deeply immutable at runtime", () => {

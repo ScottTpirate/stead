@@ -2,7 +2,7 @@ openapi: 3.1.1
 info:
   title: Stead Platform API
   version: 0.1.0
-  description: Phase 0 canonical contract skeleton. It exposes Platform ontology, never Gitea or Devlane ontology.
+  description: Canonical Platform contract. The Phase 1 BFF exposes authorized Stead resources, never provider or infrastructure ontology.
 servers:
   - url: /api/v1
 x-stead-identity-profile:
@@ -20,6 +20,7 @@ x-stead-versioning:
   breaking_major_coexistence: at_least_two_stable_releases_and_180_days_after_successor_ga_whichever_is_longer
 security:
   - oidc: []
+  - localSession: []
 tags:
   - {name: Organizations, description: Organization-scoped canonical resources}
   - {name: Teams, description: Hierarchical organizational Teams without implicit authorization inheritance}
@@ -29,6 +30,39 @@ tags:
   - {name: Identity, description: Typed principal references and identity seams}
   - {name: Search, description: Authorization- and classification-filtered multi-resource search}
 paths:
+  /session:
+    get:
+      tags: [Identity]
+      summary: Read the authenticated local development session
+      operationId: getSession
+      responses: {'200': {$ref: '#/components/responses/Session'}, default: {$ref: '#/components/responses/Problem'}}
+    post:
+      tags: [Identity]
+      summary: Exchange a disposable local bootstrap credential for a secure session cookie
+      description: Enabled only by the signed local-development deployment policy. The credential is consumed atomically; it is never retained in browser storage.
+      operationId: createSession
+      security: []
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [token], properties: {token: {type: string, pattern: '^[A-Za-z0-9_-]{43}$'}}, additionalProperties: false}}}}
+      responses: {'200': {$ref: '#/components/responses/Session'}, default: {$ref: '#/components/responses/Problem'}}
+    delete:
+      tags: [Identity]
+      summary: Revoke the current session and clear its cookie
+      operationId: deleteSession
+      responses: {'200': {description: Session revoked, content: {application/json: {schema: {type: object, required: [signed_out], properties: {signed_out: {const: true}}, additionalProperties: false}}}}, default: {$ref: '#/components/responses/Problem'}}
+  /organizations:
+    get:
+      tags: [Organizations]
+      summary: List only individually authorized Organizations
+      operationId: listOrganizations
+      description: Bounded to 100 authorized results, without unfiltered totals or existence metadata.
+      responses: {'200': {$ref: '#/components/responses/OrganizationList'}, default: {$ref: '#/components/responses/Problem'}}
+    post:
+      tags: [Organizations]
+      summary: Create an Organization using an explicit instance grant
+      operationId: createOrganization
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/OrganizationCreate'}}}}
+      responses: {'201': {$ref: '#/components/responses/Organization'}, default: {$ref: '#/components/responses/Problem'}}
   /organizations/{organization_id}:
     get:
       tags: [Organizations]
@@ -44,6 +78,34 @@ paths:
       description: Hierarchy is returned only after authorization; parentage does not grant access.
       parameters: [{$ref: '#/components/parameters/OrganizationId'}]
       responses: {'200': {$ref: '#/components/responses/TeamList'}, default: {$ref: '#/components/responses/Problem'}}
+    post:
+      tags: [Teams]
+      summary: Create a Team with explicit permissions and optional structural parent
+      operationId: createTeam
+      parameters: [{$ref: '#/components/parameters/OrganizationId'}, {$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/TeamCreate'}}}}
+      responses: {'201': {$ref: '#/components/responses/Team'}, default: {$ref: '#/components/responses/Problem'}}
+  /teams/{team_id}:
+    get:
+      tags: [Teams]
+      summary: Read an individually authorized Team
+      operationId: getTeam
+      parameters: [{$ref: '#/components/parameters/TeamId'}]
+      responses: {'200': {$ref: '#/components/responses/Team'}, default: {$ref: '#/components/responses/Problem'}}
+  /organizations/{organization_id}/projects:
+    get:
+      tags: [Projects]
+      summary: List individually authorized Project views
+      operationId: listProjects
+      parameters: [{$ref: '#/components/parameters/OrganizationId'}]
+      responses: {'200': {$ref: '#/components/responses/ProjectList'}, default: {$ref: '#/components/responses/Problem'}}
+    post:
+      tags: [Projects]
+      summary: Create a general Project with Work and Docs capabilities
+      operationId: createProject
+      parameters: [{$ref: '#/components/parameters/OrganizationId'}, {$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/ProjectCreate'}}}}
+      responses: {'201': {$ref: '#/components/responses/ProjectView'}, default: {$ref: '#/components/responses/Problem'}}
   /projects/{project_id}:
     get:
       tags: [Projects]
@@ -116,6 +178,7 @@ paths:
 components:
   securitySchemes:
     oidc: {type: openIdConnect, openIdConnectUrl: '/.well-known/openid-configuration'}
+    localSession: {type: apiKey, in: cookie, name: __Host-stead_session, description: Explicit local-development-only bootstrap identity; still subject to the central authorization boundary}
   parameters:
     OrganizationId: {name: organization_id, in: path, required: true, schema: {$ref: '#/components/schemas/UuidV7'}}
     TeamId: {name: team_id, in: path, required: true, schema: {$ref: '#/components/schemas/UuidV7'}}
@@ -127,6 +190,39 @@ components:
     ETag: {schema: {type: string}, description: Strong resource version validator}
     SteadSchemaVersion: {schema: {type: string, pattern: '^[1-9][0-9]*\.[0-9]+$'}, description: Exact response representation schema version}
   schemas:
+    Session:
+      type: object
+      required: [principal, instance_id, expires_at, session_revision]
+      properties:
+        principal: {$ref: '#/components/schemas/PrincipalRef'}
+        instance_id: {$ref: '#/components/schemas/UuidV7'}
+        expires_at: {type: string, format: date-time}
+        session_revision: {type: integer, minimum: 1}
+      additionalProperties: false
+    OrganizationCreate:
+      type: object
+      required: [key, name]
+      properties:
+        key: {type: string, pattern: '^[A-Z][A-Z0-9]{1,9}$'}
+        name: {type: string, minLength: 1}
+      additionalProperties: false
+    TeamCreate:
+      type: object
+      required: [key, name]
+      properties:
+        key: {type: string, pattern: '^[A-Z][A-Z0-9]{1,9}$'}
+        name: {type: string, minLength: 1}
+        parent_team_id: {$ref: '#/components/schemas/UuidV7'}
+      additionalProperties: false
+    ProjectCreate:
+      type: object
+      required: [key, title, purpose, owning_team_id]
+      properties:
+        key: {type: string, pattern: '^[A-Z][A-Z0-9]{1,9}$'}
+        title: {type: string, minLength: 1}
+        purpose: {type: string, minLength: 1}
+        owning_team_id: {$ref: '#/components/schemas/UuidV7'}
+      additionalProperties: false
     UuidV7: {$ref: '../work-graph-profile/owgp-v0.1.schema.json#/$defs/UuidV7'}
     CanonicalResourceUri: {$ref: '../work-graph-profile/owgp-v0.1.schema.json#/$defs/CanonicalResourceUri'}
     CanonicalBrowserUrl: {$ref: '../work-graph-profile/owgp-v0.1.schema.json#/$defs/CanonicalBrowserUrl'}
@@ -221,6 +317,10 @@ components:
         correlation_id: {type: string}
       additionalProperties: false
   responses:
+    Session: {description: Authenticated identity context without resource grants, content: {application/json: {schema: {$ref: '#/components/schemas/Session'}}}}
+    OrganizationList: {description: Authorized Organizations only, headers: {Stead-Schema-Version: {$ref: '#/components/headers/SteadSchemaVersion'}}, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/Organization'}}}}}
+    Team: {description: Authorized Team, headers: {ETag: {$ref: '#/components/headers/ETag'}, Stead-Schema-Version: {$ref: '#/components/headers/SteadSchemaVersion'}}, content: {application/json: {schema: {$ref: '#/components/schemas/Team'}}}}
+    ProjectList: {description: Authorized Projects only, headers: {Stead-Schema-Version: {$ref: '#/components/headers/SteadSchemaVersion'}}, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/ProjectView'}}}}}
     Organization: {description: Organization, headers: {ETag: {$ref: '#/components/headers/ETag'}, Stead-Schema-Version: {$ref: '#/components/headers/SteadSchemaVersion'}}, content: {application/json: {schema: {$ref: '#/components/schemas/Organization'}}}}
     TeamList: {description: Authorized Teams only, headers: {Stead-Schema-Version: {$ref: '#/components/headers/SteadSchemaVersion'}}, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/Team'}}}}}
     ProjectView: {description: Authorization-filtered Project summary with capability-derived visible areas, headers: {ETag: {$ref: '#/components/headers/ETag'}, Stead-Schema-Version: {$ref: '#/components/headers/SteadSchemaVersion'}}, content: {application/json: {schema: {$ref: '#/components/schemas/ProjectView'}}}}

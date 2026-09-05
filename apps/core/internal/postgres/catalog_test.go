@@ -271,7 +271,7 @@ func TestCatalogQueryContractsCoverExactACLInputs(t *testing.T) {
 		}
 	}
 	for name, fragments := range map[string][]string{
-		"roles":         {"pg_roles", "rolinherit", "rolbypassrls", "rolpassword", "rolvaliduntil", "rolconfig", "shobj_description", "json_agg", `ORDER BY setting COLLATE "C"`, "configuration_json"},
+		"roles":         {"pg_authid", "rolinherit", "rolbypassrls", "rolpassword", "rolvaliduntil", "rolconfig", "shobj_description", "json_agg", `ORDER BY setting COLLATE "C"`, "configuration_json"},
 		"memberships":   {"pg_auth_members", "admin_option", "inherit_option", "set_option", "grantor"},
 		"database_acls": {"pg_database", "aclexplode", "acldefault"},
 		"schema_acls":   {"pg_namespace", "aclexplode", "acldefault"},
