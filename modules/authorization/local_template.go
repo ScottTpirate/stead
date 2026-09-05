@@ -39,10 +39,19 @@ var localSourceFiles = []string{
 	"policies/openfga/model-v0.2.fga",
 }
 
+type localGitOutput struct{ bytes.Buffer }
+
+func (output *localGitOutput) Write(data []byte) (int, error) {
+	if output.Len()+len(data) > 1<<20 {
+		return 0, ErrDenied
+	}
+	return output.Buffer.Write(data)
+}
+
 func gitLocal(ctx context.Context, root string, args ...string) ([]byte, error) {
-	command := exec.CommandContext(ctx, "git", append([]string{"--no-pager", "-c", "core.fsmonitor=false", "-c", "core.untrackedCache=false", "-C", root}, args...)...)
-	command.Env = []string{"PATH=/usr/bin:/bin", "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/dev/null", "LC_ALL=C"}
-	var stdout bytes.Buffer
+	command := exec.CommandContext(ctx, "/usr/bin/git", append([]string{"--no-pager", "-c", "core.fsmonitor=false", "-c", "core.untrackedCache=false", "-C", root}, args...)...)
+	command.Env = []string{"PATH=/usr/bin:/bin", "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_NO_REPLACE_OBJECTS=1", "LC_ALL=C"}
+	var stdout localGitOutput
 	command.Stdout = &stdout
 	if err := command.Run(); err != nil || stdout.Len() > 1<<20 {
 		return nil, ErrDenied
@@ -82,6 +91,28 @@ func InspectLocalTemplateSource(ctx context.Context, root string) (LocalTemplate
 	if err != nil || len(status) != 0 {
 		return LocalTemplateCore{}, ErrDenied
 	}
+	// Index hints must not hide edited compiler inputs from a clean-tree check.
+	indexed, err := gitLocal(ctx, root, "ls-files", "-v", "-z")
+	if err != nil {
+		return LocalTemplateCore{}, ErrDenied
+	}
+	for _, entry := range bytes.Split(indexed, []byte{0}) {
+		if len(entry) > 0 && entry[0] != 'H' {
+			return LocalTemplateCore{}, ErrDenied
+		}
+	}
+	// An ignored source file can still be compiled. Reject such hidden inputs;
+	// generated/cache directories are not permission to add reviewed Go code.
+	ignored, err := gitLocal(ctx, root, "ls-files", "--others", "--ignored", "--exclude-standard", "-z", "--", ":(glob)**/*.go", ":(exclude).cache/**", ":(exclude)**/node_modules/**")
+	if err != nil {
+		return LocalTemplateCore{}, ErrDenied
+	}
+	for _, entry := range bytes.Split(ignored, []byte{0}) {
+		path := string(entry)
+		if strings.HasSuffix(path, ".go") && !strings.HasPrefix(path, ".cache/") && !strings.Contains(path, "/node_modules/") && !strings.HasPrefix(path, "node_modules/") {
+			return LocalTemplateCore{}, ErrDenied
+		}
+	}
 	for _, item := range []struct {
 		field *string
 		ref   string
@@ -93,6 +124,10 @@ func InspectLocalTemplateSource(ctx context.Context, root string) (LocalTemplate
 		*item.field = string(value)
 	}
 	for _, path := range localSourceFiles {
+		info, err := os.Lstat(filepath.Join(root, path))
+		if err != nil || !info.Mode().IsRegular() || info.Size() > 8<<20 {
+			return LocalTemplateCore{}, ErrDenied
+		}
 		content, err := os.ReadFile(filepath.Join(root, path))
 		if err != nil {
 			return LocalTemplateCore{}, ErrDenied
