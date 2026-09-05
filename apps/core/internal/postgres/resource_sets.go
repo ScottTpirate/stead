@@ -74,9 +74,9 @@ func readResourceSet[T any](ctx context.Context, store *Store, kind string, deci
 	if err != nil || anchor.Binding != decisions[0].Binding() {
 		return nil, authorization.ErrDenied
 	}
-	now := time.Now().UTC()
-	if now.Before(anchor.PolicyTimeHighWater) {
-		now = anchor.PolicyTimeHighWater
+	now, err := boundedPolicyTime(time.Now().UTC(), anchor.PolicyTimeHighWater, first.ExpiresAt)
+	if err != nil {
+		return nil, authorization.ErrDenied
 	}
 	result := make([]T, len(decisions))
 	for index, decision := range decisions {

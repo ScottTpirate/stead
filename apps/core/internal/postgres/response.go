@@ -22,6 +22,22 @@ type responseProof struct {
 	ExpiresAt time.Time
 }
 
+// boundedPolicyTime rejects excessive rollback before clamping permitted clock
+// skew. Callers must sample again after database work; neither clamping nor a
+// fresh sample may extend the already-sealed disclosure expiry.
+func boundedPolicyTime(now, highWater, expires time.Time) (time.Time, error) {
+	if now.IsZero() || highWater.IsZero() || expires.IsZero() || highWater.Sub(now) > authorization.MaxPolicyClockSkew {
+		return time.Time{}, authorization.ErrDenied
+	}
+	if now.Before(highWater) {
+		now = highWater
+	}
+	if !now.Before(expires) {
+		return time.Time{}, authorization.ErrDenied
+	}
+	return now, nil
+}
+
 // FinalizeResponse is called once, after the complete finite payload has been
 // buffered. A list includes its authorized instance/container plus every row.
 // It cannot grant access to any row that lacks a fresh sealed central decision.
@@ -156,10 +172,7 @@ func (store *Store) Recheck(ctx context.Context, revision transaction.BoundRevis
 	if err != nil || anchor.Binding != proof.Binding {
 		return transaction.RecheckReceipt{}, authorization.ErrDenied
 	}
-	if now.Before(anchor.PolicyTimeHighWater) {
-		now = anchor.PolicyTimeHighWater
-	}
-	if !now.Before(proof.ExpiresAt) {
+	if _, err = boundedPolicyTime(now, anchor.PolicyTimeHighWater, proof.ExpiresAt); err != nil {
 		return transaction.RecheckReceipt{}, authorization.ErrDenied
 	}
 	refs := make([]authorization.ResourceRef, len(proof.States))
@@ -191,10 +204,7 @@ func (store *Store) Recheck(ctx context.Context, revision transaction.BoundRevis
 		return transaction.RecheckReceipt{}, authorization.ErrDenied
 	}
 	finished := time.Now().UTC()
-	if finished.Before(latest.PolicyTimeHighWater) {
-		finished = latest.PolicyTimeHighWater
-	}
-	if !finished.Before(proof.ExpiresAt) {
+	if _, err = boundedPolicyTime(finished, latest.PolicyTimeHighWater, proof.ExpiresAt); err != nil {
 		return transaction.RecheckReceipt{}, authorization.ErrDenied
 	}
 	return issuer.Confirm(revision)
