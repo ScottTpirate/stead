@@ -190,7 +190,11 @@ export function Workspace({ route, navigate }: { readonly route: RouteMatch; rea
         }
       } else {
         const list = await platformClient.request<ResourcePage>(kind === "team" ? "listTeams" : "listProjects", { path: { organization_id: organizationID }, query: { page_size: 20 } });
-        if (revision === generation.current) applyPage(kind, list.data, false);
+        if (revision === generation.current) {
+          applyPage(kind, list.data, false);
+          const update = kind === "team" ? setTeams : setProjects;
+          update((prior) => prior.some((item) => item.id === result.data.id) ? prior : [...prior, result.data]);
+        }
       }
     } catch (cause) { failed(cause); } finally { setBusy(false); }
   }
@@ -243,7 +247,7 @@ export function Workspace({ route, navigate }: { readonly route: RouteMatch; rea
               <label>Key<input name="key" required pattern="[A-Z][A-Z0-9]{1,9}" maxLength={10} placeholder="DESIGN" /></label>
               <label>{area === "projects" ? "Title" : "Name"}<input name={area === "projects" ? "title" : "name"} required maxLength={160} /></label>
               {area === "teams" && <label>Parent Team<select name="parent_team_id"><option value="">No parent</option>{teams.map((team) => <option key={team.id} value={team.id}>{team.title}</option>)}</select></label>}
-              {area === "projects" && <><label>Purpose<textarea name="purpose" required maxLength={2000} /></label><label>Owning Team<select name="owning_team_id" required><option value="">Choose an authorized Team</option>{teams.map((team) => <option key={team.id} value={team.id}>{team.title}</option>)}</select></label><p>Work and Docs are included. Team ownership does not grant access.</p></>}
+              {area === "projects" && <><label>Purpose<textarea name="purpose" required maxLength={2000} /></label><label>Owning Team<select name="owning_team_id" required><option value="">Choose an authorized Team</option>{teams.map((team) => <option key={team.id} value={team.id}>{team.title}</option>)}</select></label>{continuations.team && <button type="button" disabled={busy} onClick={() => { void loadMore("team"); }}>Load more owning Teams</button>}<p>Work and Docs are included. Team ownership does not grant access.</p></>}
               <button type="submit" disabled={busy || (area === "projects" && teams.length === 0)}>Create {area === "home" ? "Organization" : area === "teams" ? "Team" : "Project"}</button>
             </form>
           </section>}

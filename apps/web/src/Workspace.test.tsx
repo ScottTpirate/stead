@@ -88,3 +88,24 @@ it("loads another authorized page without replacing the first page", async () =>
   expect(request).toHaveBeenCalledWith("listOrganizations", { query: { page_size: 20, after: organization.id } });
   expect(screen.queryByRole("button", { name: "Load more Organizations" })).toBeNull();
 });
+
+it("can select an owning Team beyond the first page without leaving the Project form", async () => {
+  const first = { ...organization, kind: "team", id: "fixture-team", title: "First Team" };
+  const later = { ...first, id: "fixture-later-team", title: "Later Team" };
+  const request = vi.spyOn(platformClient, "request").mockImplementation(async <T,>(operation: string, options?: PlatformRequestOptions) => {
+    if (operation === "getSession") return response(session as T);
+    if (operation === "listOrganizations") return response({ items: [organization] } as T);
+    if (operation === "listTeams") return response((options?.query?.after
+      ? { items: [later] }
+      : { items: [first], next_after: first.id }) as T);
+    return response({ items: [] } as T);
+  });
+  const user = userEvent.setup();
+  render(<Workspace route={matchRoute("/projects")} navigate={() => {}} />);
+  await user.click(await screen.findByRole("button", { name: "Load more owning Teams" }));
+  await screen.findByRole("option", { name: "Later Team" });
+  await user.selectOptions(screen.getByLabelText("Owning Team"), later.id);
+  expect((screen.getByLabelText("Owning Team") as HTMLSelectElement).value).toBe(later.id);
+  expect(screen.getByRole("option", { name: "First Team" })).toBeTruthy();
+  expect(request).toHaveBeenCalledWith("listTeams", { path: { organization_id: organization.id }, query: { page_size: 20, after: first.id } });
+});
