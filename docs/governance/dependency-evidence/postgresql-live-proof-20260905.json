@@ -1,0 +1,331 @@
+{
+  "recordedAt": "2026-09-05T09:01:48.070Z",
+  "candidateCommit": "ceab7242064bb9330b78cd4014b8b9976280ae38",
+  "disposition": "FUNCTIONAL_PROOF_AND_REFRESHED_EVIDENCE_NOT_INDEPENDENT_APPROVAL",
+  "runtimeModules": [
+    "github.com/jackc/pgx/v5@v5.10.0",
+    "github.com/jackc/pgpassfile@v1.0.0",
+    "github.com/jackc/pgservicefile@v0.0.0-20240606120523-5a60cdf6a761",
+    "github.com/jackc/puddle/v2@v2.2.2",
+    "golang.org/x/sync@v0.22.0",
+    "golang.org/x/text@v0.41.0"
+  ],
+  "imageIndex": "sha256:999820501e569af8d16bafe1e97c4f8b43583a71b5d8a41a0170a6d9940af8e5",
+  "imagePlatform": "sha256:f9fe3c8946c2f696d9835598a46bc584350acb925028ea1a47977ad9b93bd7c4",
+  "executableSha256": "1bc2cfe77acb8ff94e1b4914ce4bf0d23f456136632587d37fac43a51faf4eff",
+  "tests": [
+    "original image entrypoint initialization",
+    "PostgreSQL 18.6 readiness",
+    "SCRAM-only HBA rules and password verifier",
+    "wrong password rejected SQLSTATE 28P01",
+    "pgxpool connection",
+    "real committed row",
+    "rolled-back row absent",
+    "clean shutdown",
+    "restart persisted committed row",
+    "same exact binary after gofmt rebuild",
+    "live harness source and binary govulncheck zero findings",
+    "module-only govulncheck zero findings",
+    "module checksum verification",
+    "Go vet"
+  ],
+  "imageVulnerabilities": {
+    "trivy": {
+      "findings": 0,
+      "databaseUpdatedAt": "2026-09-04T13:08:55.575059601Z"
+    },
+    "grype": {
+      "critical": 0,
+      "high": 0,
+      "medium": 1,
+      "mediumId": "CVE-2026-18374",
+      "databaseBuiltAt": "2026-09-05T06:27:00Z"
+    }
+  },
+  "limits": [
+    "No Docker daemon or Compose execution: rootless bubblewrap tested the digest-verified extracted image filesystem, original entrypoint and PostgreSQL binaries.",
+    "Image extraction excluded device nodes and did not preserve numeric ownership; bubblewrap supplied isolated /dev and mapped invoking user to postgres UID70.",
+    "No TCP or external network; proof used local Unix sockets under private /tmp. TLS and container network connectivity remain integration checks.",
+    "Disposable fixture administrator owns the scratch probe table. This does not demonstrate Stead namespace roles, authorization, API, canonical domain, or audit/outbox integration.",
+    "Initial socket-directory override broke the image entrypoint internal psql setup; default /tmp socket corrected the harness. Earlier output and partial synthetic data were preserved.",
+    "Run the database script only with a fresh empty database fixture directory: random bootstrap password is intentionally not retained after execution.",
+    "No production dependency or image acceptance is self-approved by this evidence."
+  ],
+  "artifacts": [
+    {
+      "path": "check-harness.mjs",
+      "bytes": 3379,
+      "sha256": "0306c481a872da85e7afac59a35d33f7716559bb6c6011d8d440c9e335143dcf"
+    },
+    {
+      "path": "collect-evidence.mjs",
+      "bytes": 3917,
+      "sha256": "f982de7107ff4c7dabe0b0d1c2eec1552a5d51907ee709f33c7ef59e0777ab75"
+    },
+    {
+      "path": "cosign-apko-refresh.stderr",
+      "bytes": 806,
+      "sha256": "a81ff76919616b44197d7982a1fb1200f1fb9c70b4bfc20fa9bffd26561e0c6d"
+    },
+    {
+      "path": "cosign-apko-refresh.stdout",
+      "bytes": 4161,
+      "sha256": "3195e4ab7866480dc2292d999632ff20d18f12af45546207938abe111fded643"
+    },
+    {
+      "path": "cosign-index-refresh.stderr",
+      "bytes": 391,
+      "sha256": "6f9492d5deeed639085a6a6e2a1a9800f9e0aaa18648ea53c7c7624b72c1ba3c"
+    },
+    {
+      "path": "cosign-index-refresh.stdout",
+      "bytes": 6220,
+      "sha256": "8583d1f876cb5587642a87830dc5f1bc842ab97dbbaae1844d338113e0159abf"
+    },
+    {
+      "path": "cosign-platform-refresh.stderr",
+      "bytes": 391,
+      "sha256": "f782cc3c09cce6feb7797af9b9e250b2d81c8444f384e76f2f268b52cdca0feb"
+    },
+    {
+      "path": "cosign-platform-refresh.stdout",
+      "bytes": 6220,
+      "sha256": "fbb5295c0e901af2631c47dd2400d451672adc6be85848f19ccff679d63f54ac"
+    },
+    {
+      "path": "cosign-provenance-refresh.stderr",
+      "bytes": 806,
+      "sha256": "a81ff76919616b44197d7982a1fb1200f1fb9c70b4bfc20fa9bffd26561e0c6d"
+    },
+    {
+      "path": "cosign-provenance-refresh.stdout",
+      "bytes": 3001,
+      "sha256": "8e825e334cea5f43f2af76b2349fa6f25100b866611ec7231ffb9ae27e94ee1d"
+    },
+    {
+      "path": "cosign-spdx-refresh.stderr",
+      "bytes": 806,
+      "sha256": "a81ff76919616b44197d7982a1fb1200f1fb9c70b4bfc20fa9bffd26561e0c6d"
+    },
+    {
+      "path": "cosign-spdx-refresh.stdout",
+      "bytes": 276229,
+      "sha256": "bbbe71acc9fb39bcf68e23b77088ad24ae31ad4770910eb57e4e58837ab6bcb3"
+    },
+    {
+      "path": "database-proof-result.json",
+      "bytes": 1211,
+      "sha256": "a0939b5efa1edc6d9a389059255f3914c9e8d53497a6a2c74ff85f313c3dd3e6"
+    },
+    {
+      "path": "database-proof.stderr",
+      "bytes": 3062,
+      "sha256": "13cc4d1fbad9e7e7512b8d76bb489efadefbf52e72e5befe41e245b8eb673cc0"
+    },
+    {
+      "path": "database-proof.stdout",
+      "bytes": 3341,
+      "sha256": "145dbfe52325db33b0d01a701fa9059d214a390e894e99723ade8ffaae4e6f6d"
+    },
+    {
+      "path": "database-socket-mismatch.stderr",
+      "bytes": 225,
+      "sha256": "a4e09c498a455f45174089b8009282491d5d515971a6482ea7648af7736105fe"
+    },
+    {
+      "path": "database-socket-mismatch.stdout",
+      "bytes": 2159,
+      "sha256": "973f031b0f1f7ad4469f53c2c52a528a45c5ff88a2e37cb751fd4fb6a02896ca"
+    },
+    {
+      "path": "go-mod-verify.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "go-mod-verify.stdout",
+      "bytes": 21,
+      "sha256": "b4537ed75f533f993f371954de47e42a793b8e5b0587577de7e27fb3e50696bd"
+    },
+    {
+      "path": "go-modules-download-identity.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "go-modules-download-identity.stdout",
+      "bytes": 3681,
+      "sha256": "62f068677065a15d3254c0bc17ffa68657c0e8a6792d73934c146bbc09ec8d28"
+    },
+    {
+      "path": "govulncheck-module-refresh.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "govulncheck-module-refresh.stdout",
+      "bytes": 418143,
+      "sha256": "862f025be18783565b12a334c53340a23abdb11a0507b5daeb3b06daeaca87f0"
+    },
+    {
+      "path": "govulncheck-symbol-refresh.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "govulncheck-symbol-refresh.stdout",
+      "bytes": 418143,
+      "sha256": "8561942402d691aec5f19f3ebc8dc83bf99a4062a262743315746babe340c518"
+    },
+    {
+      "path": "grype-image-refresh.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "grype-image-refresh.stdout",
+      "bytes": 19800,
+      "sha256": "950f6543722f8241be3d6dbaa85ac0dc7a8916bffe810611e0f337493e21b2f2"
+    },
+    {
+      "path": "harness-check-results.json",
+      "bytes": 1068,
+      "sha256": "df369f3cf10c49e470c59d0cc7edd3667bc7f33b51c5926ce1da0a78588990a0"
+    },
+    {
+      "path": "identity-and-inventory-result.json",
+      "bytes": 7579,
+      "sha256": "61274819b341c56d98671986f1b29cab264f71c09963928a0b9e7eaee8a1de9b"
+    },
+    {
+      "path": "image-scan-command-results.json",
+      "bytes": 2402,
+      "sha256": "03333ad9b510a81692e3e42a56195867089be4d37244b80c4aae18505d395650"
+    },
+    {
+      "path": "inside.sh",
+      "bytes": 1113,
+      "sha256": "581932c59a84250781be35e97b0c3056d6b2833cab5c28b13a09bd15a59f9b28"
+    },
+    {
+      "path": "live-probe-binary-modules.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "live-probe-binary-modules.stdout",
+      "bytes": 782,
+      "sha256": "ee31d40f2d17d7297c5bce5ef40a51c521264fa2dec7a6825bd666e87cff7fd5"
+    },
+    {
+      "path": "live-probe-go-vet.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "live-probe-go-vet.stdout",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "live-probe-govulncheck-binary.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "live-probe-govulncheck-binary.stdout",
+      "bytes": 418247,
+      "sha256": "9c2f05afaec9ef82d25b83175e3f83f56a3619cd73d0f013cb2733ce628733d8"
+    },
+    {
+      "path": "live-probe-govulncheck-source.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "live-probe-govulncheck-source.stdout",
+      "bytes": 418153,
+      "sha256": "beeced43cc21dbac87ef7f41270d67b9e4d1160dcf54a796788b1939fbd39113"
+    },
+    {
+      "path": "oci/config.json",
+      "bytes": 2951,
+      "sha256": "2c8080a2751db31a08e8dc53bd4be6df2afbddb54e14b4c83a2b4f1254534755"
+    },
+    {
+      "path": "oci/index.json",
+      "bytes": 1131,
+      "sha256": "999820501e569af8d16bafe1e97c4f8b43583a71b5d8a41a0170a6d9940af8e5"
+    },
+    {
+      "path": "oci/manifest.json",
+      "bytes": 2510,
+      "sha256": "f9fe3c8946c2f696d9835598a46bc584350acb925028ea1a47977ad9b93bd7c4"
+    },
+    {
+      "path": "probe/go.mod",
+      "bytes": 349,
+      "sha256": "ea2f1415b4ad8ee5a4fb5e9cb0ccd434340ddd72fa380f06d929269931495dd0"
+    },
+    {
+      "path": "probe/go.sum",
+      "bytes": 2301,
+      "sha256": "b90c1ce39e44b933baf4b2d6c8674e41f9d66d8b71b1d94e93923d3441c5f469"
+    },
+    {
+      "path": "probe/main.go",
+      "bytes": 3203,
+      "sha256": "d42425d821e5ebbb33b38d8f83a049ffac7fb082980ea29968982ea784a4e327"
+    },
+    {
+      "path": "pull-image.mjs",
+      "bytes": 3806,
+      "sha256": "920902ef7e3287dfc2bc6a6679b6912ea2942a2d7a760d5e0e94fce1ba55dd84"
+    },
+    {
+      "path": "pull-result.json",
+      "bytes": 1351,
+      "sha256": "7f7996f3c39a9b763267fb71e5d4a335b6eaaef120f0ea30c2b9ca3c46428175"
+    },
+    {
+      "path": "refresh-command-results.json",
+      "bytes": 2925,
+      "sha256": "f3f9dc25818e340cabf08e0657b9040da352278f37e9e188a02569a8aed9886d"
+    },
+    {
+      "path": "refresh-evidence.mjs",
+      "bytes": 2566,
+      "sha256": "1ccf060b5563f9355864be106dc416739e99401ddbaf0be46e510a2caa23f8ed"
+    },
+    {
+      "path": "run-database.mjs",
+      "bytes": 2333,
+      "sha256": "5ff3f40612bae707b11c88519db1a2da1a8114d33b5fa9f597c9d3424bf51128"
+    },
+    {
+      "path": "scan-image.mjs",
+      "bytes": 2227,
+      "sha256": "06919d44e8789ef39eae20dd53a25ecc16a39e8e4a5ff1b6e414ae4dff73988b"
+    },
+    {
+      "path": "syft-image-refresh.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "syft-image-refresh.stdout",
+      "bytes": 3569744,
+      "sha256": "92491e2a87cc17173b46172c4cfc85b18546618601972fa81be587b34b0c171c"
+    },
+    {
+      "path": "trivy-image-refresh.stderr",
+      "bytes": 299,
+      "sha256": "8e0a65657ec1515f2433ee89d26d908454d4f9a3d6b171ee2ab5e635575efe40"
+    },
+    {
+      "path": "trivy-image-refresh.stdout",
+      "bytes": 343916,
+      "sha256": "5044b3b13489af8ffa4f40124d2f17edb22fa8d3a22b027f686fa4f5f00d1afe"
+    }
+  ]
+}
