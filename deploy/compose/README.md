@@ -22,7 +22,23 @@ The normal `up`, `down`, `status` and `smoke` command path is staged but remains
 fail-closed until exact service intake approvals and the real API/bootstrap,
 worker, signed-policy and HTTPS web consumers are integrated. It must not be
 reported as seven-service or Checkpoint A acceptance yet. The Docker Compose
-variant and Makefile integration remain unimplemented pending that integration.
+variant remains unimplemented pending an independently reviewed networking
+configuration compatible with the exact local-policy template. Makefile entry
+points are present and delegate to the approval-gated rootless launcher:
+
+```sh
+make dev-check  # focused launcher and authenticated worker tests; no services
+make dev       # starts only after exact dependency and bootstrap gates pass
+make dev-smoke # actual health and certificate-verified HTTPS browser-to-BFF path
+make dev-status
+make dev-down  # preserves databases, keys, notices and logs
+```
+
+`dev-smoke` is not a golden product journey or outbox-delivery claim. Worker
+readiness performs an actual bounded authenticated NATS CONNECT/PING/PONG, with
+no stream/consumer mutation and no database/provider credentials. The browser
+uses only the HTTPS Stead origin; consciously trust this checkout's local TLS
+certificate if opening it interactively. The launcher never installs that trust.
 
 Normal state is scoped to this checkout's `.cache/stead-dev` directory. Files are
 private, secrets are generated per project, normal shutdown preserves data, and
