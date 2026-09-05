@@ -117,7 +117,7 @@ func DecisionFromContext(ctx context.Context) (*Decision, bool) {
 func actionRelation(action Action, target ResourceRef) (string, bool) {
 	want, relation := "", ""
 	switch action {
-	case OrganizationCreate:
+	case OrganizationCreate, OrganizationsList:
 		want, relation = "instance", "organization_creator"
 	case OrganizationRead:
 		want, relation = "organization", "viewer"
@@ -150,7 +150,7 @@ func validState(state State, session identity.SessionRecord, target ResourceRef,
 	if session.InstanceID != binding.InstallationID {
 		return false
 	}
-	if state.Resource != target || state.InstanceID != session.InstanceID || state.SecurityDomain != session.SecurityDomain || state.SecurityDomain != binding.DeploymentPolicyID || state.Principal != session.Principal || state.SessionID != session.ID || !state.PrincipalActive || !state.SessionActive || state.TuplePending || state.ExplicitDeny || !state.ProviderPathAllowed || !state.CapabilityActive || !validRevisions(state.Revisions) || state.Revisions.Principal != session.PrincipalRevision || state.Revisions.Session != session.Revision || state.ActivationDigest != binding.Digest() || state.ActivationSetID != binding.ActivationSetID || state.ActivationSequence != binding.ActivationSequence || state.OpenFGAModelID != binding.OpenFGAModelID || state.PolicyTimeHighWater.IsZero() || state.PolicyTimeRevision == 0 || !now.Before(state.ContextExpiresAt) {
+	if state.Resource != target || state.InstanceID != session.InstanceID || state.SecurityDomain != session.SecurityDomain || state.SecurityDomain != binding.DeploymentPolicyID || state.Principal != session.Principal || state.SessionID != session.ID || !state.PrincipalActive || !state.SessionActive || state.TuplePending || !validRevisions(state.Revisions) || state.Revisions.Principal != session.PrincipalRevision || state.Revisions.Session != session.Revision || state.ActivationDigest != binding.Digest() || state.ActivationSetID != binding.ActivationSetID || state.ActivationSequence != binding.ActivationSequence || state.OpenFGAModelID != binding.OpenFGAModelID || state.PolicyTimeHighWater.IsZero() || state.PolicyTimeRevision == 0 || !now.Before(state.ContextExpiresAt) {
 		return false
 	}
 	if target.Kind == "instance" {
@@ -205,12 +205,22 @@ func (coordinator *Coordinator) Authorize(ctx context.Context, session identity.
 	state.PolicyTimeHighWater = anchor.PolicyTimeHighWater
 	state.PolicyTimeRevision = anchor.PolicyTimeRevision
 	allowed, err := coordinator.config.OpenFGA.Check(ctx, Tuple{User: session.Principal().Type + ":" + session.Principal().ID, Relation: relation, Object: target.Kind + ":" + target.ID})
-	if err != nil || !allowed {
+	if err != nil {
 		return deny("relationship_denied")
 	}
 	result, err := activation.evaluator.Evaluate(state.Label, session.Context())
-	if err != nil {
-		return deny("classification_denied")
+	if err != nil && result.DenialReason == "" {
+		return deny("context_denied")
+	}
+	policy := NativePolicyDecision(NativePolicyFacts{
+		PrincipalType: session.Principal().Type, Operation: "metadata",
+		RelationshipAllowed: allowed, ProviderPathAllowed: state.ProviderPathAllowed,
+		FenceCurrent: true, ExplicitDeny: state.ExplicitDeny,
+		TrustedAttributesValid: true, CapabilityActive: state.CapabilityActive,
+		ContextValid: true, ClassificationReason: result.DenialReason,
+	})
+	if !policy.Allowed {
+		return deny(policy.Reason)
 	}
 	finished := coordinator.config.Clock().UTC()
 	if finished.Before(now) {
@@ -225,11 +235,15 @@ func (coordinator *Coordinator) Authorize(ctx context.Context, session identity.
 	if ctx.Err() != nil || !finished.Before(expires) {
 		return deny("context_denied")
 	}
-	b := activation.binding
+	return sealDecision(state, result, session, action, target, relation, activation.binding, anchor, id, now, expires, 1), nil
+}
+
+func sealDecision(state State, result classification.Result, session identity.Authenticated, action Action, target ResourceRef, relation string, b ActivationBinding, anchor AnchorState, id string, now, expires time.Time, calls uint64) *Decision {
 	evidence := Evidence{DecisionID: id, Actor: session.Principal(), SessionID: session.SessionID(), Action: action, Target: target, InstanceID: state.InstanceID, OrganizationID: state.OrganizationID, SecurityDomain: state.SecurityDomain, Relation: relation, OpenFGAModelID: b.OpenFGAModelID, PolicyBundleID: b.PolicyBundleID, ActivationSetID: b.ActivationSetID, ActivationSequence: b.ActivationSequence, ActivationDigest: b.Digest(), ActivationEpoch: b.ActivationEpoch, TrustEpoch: b.TrustEpoch, DeploymentPolicyID: b.DeploymentPolicyID, DeploymentPolicyVersion: b.DeploymentPolicyVersion, DeploymentPolicyDigest: b.DeploymentPolicyDigest, SignedEnvelopeDigest: b.SignedEnvelopeDigest, ArchiveDigest: b.ArchiveDigest, ReleaseAttestationID: b.ReleaseAttestationID, ReleaseAttestationEnvelopeDigest: b.ReleaseAttestationEnvelopeDigest, TrustSetID: b.TrustSetID, TrustEnvelopeDigest: b.TrustEnvelopeDigest, ModelSourceDigest: b.ModelSourceDigest, EvaluatorContractVersion: b.EvaluatorContractVersion, Revisions: state.Revisions, PolicyTimeHighWater: anchor.PolicyTimeHighWater, PolicyTimeRevision: anchor.PolicyTimeRevision, EvaluatedAt: now, ExpiresAt: expires, DisclosureMode: b.DisclosureMode, OpenFGACalls: 1}
+	evidence.OpenFGACalls = calls
 	state.Label = state.Label.Copy()
 	result.Presentation.PolicyBundleID = b.PolicyBundleID
-	return &Decision{state: state, evidence: evidence, binding: b, marking: result.Marking, presentation: result.Presentation.Copy(), valid: true}, nil
+	return &Decision{state: state, evidence: evidence, binding: b, marking: result.Marking, presentation: result.Presentation.Copy(), valid: true}
 }
 
 // ValidateFinal performs no network or repository I/O. The registered root

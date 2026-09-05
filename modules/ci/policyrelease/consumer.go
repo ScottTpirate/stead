@@ -34,6 +34,10 @@ func (workflow *ObservedWorkflow) ValidateActivationArchive(archive []byte) (Uns
 }
 
 func decodeActivationArchive(archive []byte) (UnsignedActivation, []byte, error) {
+	return decodeActivationArchiveMode(archive, false)
+}
+
+func decodeActivationArchiveMode(archive []byte, localDevelopment bool) (UnsignedActivation, []byte, error) {
 	// Preflight raw blocks before archive/tar can normalize extended headers.
 	if _, err := inspectArchive(archive); err != nil {
 		return UnsignedActivation{}, nil, err
@@ -72,8 +76,10 @@ func decodeActivationArchive(archive []byte) (UnsignedActivation, []byte, error)
 	unsigned := UnsignedActivation{Manifest: manifest, ManifestPayload: parsed.Payload,
 		ActivationSetID: SHA256Digest(parsed.Payload), PolicyBundleID: manifest.PolicyBundleID,
 		EvidenceManifestBytes: contents[evidenceManifestPath], EvidenceManifestDigest: manifest.EvidenceManifestDigest}
-	if err := decodeStrict(unsigned.EvidenceManifestBytes, &unsigned.EvidenceManifest); err != nil {
-		return UnsignedActivation{}, nil, err
+	if !localDevelopment {
+		if err := decodeStrict(unsigned.EvidenceManifestBytes, &unsigned.EvidenceManifest); err != nil {
+			return UnsignedActivation{}, nil, err
+		}
 	}
 	for _, file := range manifest.Files {
 		unsigned.Files = append(unsigned.Files, File{Path: file.Path, MediaType: file.MediaType, Content: contents[file.Path]})
@@ -91,7 +97,7 @@ func decodeActivationArchive(archive []byte) (UnsignedActivation, []byte, error)
 	if err != nil {
 		return UnsignedActivation{}, nil, err
 	}
-	if err := validateUnsignedActivation(unsigned); err != nil {
+	if err := validateUnsignedActivationMode(unsigned, localDevelopment); err != nil {
 		return UnsignedActivation{}, nil, err
 	}
 	return unsigned, envelope, nil

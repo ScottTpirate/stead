@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: Apache-2.0
-import { randomBytes, createHash } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import { spawn, spawnSync } from 'node:child_process';
 import { createWriteStream, appendFileSync, readdirSync, readlinkSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, writeFile, lstat, realpath, access } from 'node:fs/promises';
@@ -47,6 +47,7 @@ async function secretState() {
   try {
     const result = JSON.parse(await readPrivate('secrets.json'));
     if (result.repository !== repository) throw new Error('Development credentials belong to another checkout');
+    if (result.securityDomain !== 'stead-local-development') throw new Error('Development state does not match the reviewed fixed policy domain');
     for (const name of ['adminPassword', 'apiPassword', 'giteaPassword', 'openfgaPassword', 'openfgaKey', 'natsPublisher', 'natsConsumer', 'natsMaintenance', 'giteaSecret', 'giteaInternalToken']) {
       if (!/^[a-f0-9]{64}$/.test(result[name])) throw new Error('Invalid generated development credential format');
     }
@@ -60,7 +61,7 @@ async function secretState() {
   const rest = randomBytes(10).toString('hex');
   secret.instanceID = `${time.slice(0, 8)}-${time.slice(8)}-7${rest.slice(0, 3)}-8${rest.slice(3, 6)}-${rest.slice(6, 18)}`;
   secret.repository = repository;
-  secret.securityDomain = `local-${createHash('sha256').update(repository).digest('hex').slice(0, 16)}`;
+  secret.securityDomain = 'stead-local-development';
   await privateFile('secrets.json', JSON.stringify(secret), true);
   return secret;
 }
@@ -280,13 +281,13 @@ GRANT CONNECT ON DATABASE openfga TO openfga;
       await stop();
       return;
     }
-    const environment = { STEAD_PUBLIC_ORIGIN: `https://localhost:${ports.web}`, STEAD_DATABASE_URL_FILE: path.join(state, 'database-url'), STEAD_OPENFGA_URL: `http://127.0.0.1:${ports.openfga}`, STEAD_OPENFGA_TOKEN_FILE: path.join(state, 'openfga-key'), STEAD_POLICY_DIR: path.join(state, 'policy'), STEAD_TLS_CERT_FILE: path.join(state, 'tls/localhost.crt'), STEAD_TLS_KEY_FILE: path.join(state, 'tls/localhost.key'), STEAD_NATS_PUBLISHER_FILE: path.join(state, 'nats-publisher.json'), STEAD_NATS_CONSUMER_FILE: path.join(state, 'nats-consumer.json') };
+    const environment = { STEAD_PUBLIC_ORIGIN: `https://localhost:${ports.web}`, STEAD_INSTANCE_ID: secret.instanceID, STEAD_SECURITY_DOMAIN: secret.securityDomain, STEAD_BOOTSTRAP_STATE_DIR: state, STEAD_DATABASE_URL_FILE: path.join(state, 'database-url'), STEAD_OPENFGA_URL: `http://127.0.0.1:${ports.openfga}`, STEAD_OPENFGA_TOKEN_FILE: path.join(state, 'openfga-key'), STEAD_POLICY_DIR: path.join(state, 'policy'), STEAD_TLS_CERT_FILE: path.join(state, 'tls/localhost.crt'), STEAD_TLS_KEY_FILE: path.join(state, 'tls/localhost.key') };
     checkedCommand(path.join(state, 'stead-api'), ['dev-bootstrap'], { env: { ...baseEnvironment, ...environment, STEAD_DATABASE_ADMIN_URL_FILE: path.join(state, 'database-admin-url'), STEAD_DATABASE_PASSWORD_FILE: path.join(state, 'database-password'), STEAD_INSTANCE_ID: secret.instanceID, STEAD_SECURITY_DOMAIN: secret.securityDomain, STEAD_BOOTSTRAP_STATE_DIR: state, STEAD_NATS_MAINTENANCE_FILE: path.join(state, 'nats-maintenance.json') }, stdio: 'pipe' });
     const auth = JSON.parse(await readPrivate('bootstrap.json'));
     environment.STEAD_OPENFGA_STORE_ID = auth.openfga_store_id;
     environment.STEAD_OPENFGA_MODEL_ID = auth.openfga_model_id;
     start('stead-api', path.join(state, 'stead-api'), [], { ...environment, STEAD_LISTEN: `127.0.0.1:${ports.api}` });
-    start('stead-worker', path.join(state, 'stead-worker'), [], { ...environment, STEAD_WORKER_LISTEN: `127.0.0.1:${ports.worker}` });
+    start('stead-worker', path.join(state, 'stead-worker'), [], { STEAD_NATS_PUBLISHER_FILE: path.join(state, 'nats-publisher.json'), STEAD_WORKER_LISTEN: `127.0.0.1:${ports.worker}` });
     await waitHTTP('Stead API', `http://127.0.0.1:${ports.api}/health/ready`);
     await waitHTTP('Stead worker', `http://127.0.0.1:${ports.worker}/health/ready`);
     start('stead-web', path.join(state, 'stead-api'), ['dev-web', '--listen', `127.0.0.1:${ports.web}`, '--origin', `https://localhost:${ports.web}`, '--upstream', `http://127.0.0.1:${ports.api}`, '--assets', path.join(repository, 'apps/web/dist'), '--tls-cert', environment.STEAD_TLS_CERT_FILE, '--tls-key', environment.STEAD_TLS_KEY_FILE], {});
