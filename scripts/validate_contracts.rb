@@ -493,6 +493,8 @@ failures << "OWGP AuditChangeContext must define hashes, controlled delta, and n
 
 production_code_paths = Dir.glob(ROOT.join("{apps,internal,modules,providers}/**/*.{go,js,jsx,mjs,ts,tsx}"), File::FNM_EXTGLOB).select { |path| File.file?(path) }
 production_code_paths.each do |path|
+  next if path.end_with?("_test.go") # Go excludes test fixtures from production binaries.
+
   source = File.read(path, encoding: "UTF-8")
   next unless source.match?(/\b(?:commercial|us_government|us-government)\b/)
 
