@@ -485,3 +485,12 @@ successor_approval:
       activation_allowed: true
       rescan: PASS
       functional_proof: PASS
+    DEP-APP-OCI-CHAINGUARD-POSTGRES-18-6-R2-99982050:
+      candidate_revision: ceab7242064bb9330b78cd4014b8b9976280ae38
+      evidence_manifest_sha256: 578ccc9b0374a4f40ea56aa527b809781630d4ddc4a7c41f47c2f2bad70dfb71
+      approvers: [/root/adr_inspection, /root/local_inventory]
+      approved_at: "2026-09-05T09:34:10Z"
+      activation_allowed: true
+      rescan: PASS
+      functional_proof: PASS
+      license_review: Independently compared all 56 extracted APK name/version/license records and re-fetched the exact upstream gosu, moby/sys/user, and x/sys licenses; matched intake inventory. Non-distributed development and CI only.

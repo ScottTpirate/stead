@@ -626,11 +626,11 @@ records:
     usage:
       owner: WS-02 local/integration fixtures; WS-13 supply-chain gate
       directories: [deploy/compose, .github/workflows, tests/integration/core]
-      purpose: Security-reviewed PostgreSQL 18.6-r2 service candidate for disposable local-development and CI integration tests; final independent image license/architecture review remains pending and activation is not yet approved.
+      purpose: Approved PostgreSQL 18.6-r2 service for disposable local-development and CI integration tests after separate exact image architecture/license and security reviews; distribution is not approved.
       relationship: test
       distributed_in: []
       linkage_or_interface: Non-distributed, digest-pinned OCI service on an isolated test network using only synthetic data and disposable credentials; excluded from every Stead product, release image, installer, SBOM, downloadable asset, air-gap artifact, and customer deployment.
-    decision: { category: REVIEW-NONRUNTIME, status: REVIEWED_PENDING_INDEPENDENT_APPROVAL, independent_approval_required: true, approvers: [], approved_at: null }
+    decision: { category: REVIEW-NONRUNTIME, status: APPROVED, independent_approval_required: true, approvers: [/root/adr_inspection, /root/local_inventory], approved_at: '2026-09-05T09:34:10Z' }
     obligations:
       notices: []
       source_or_offer: Non-distributed development/CI service. The exact 56-package APK license inventory and four embedded Go-module license resolutions are retained in dependency evidence; any distribution requires a new runtime/distribution license review.
