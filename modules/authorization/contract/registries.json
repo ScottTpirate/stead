@@ -1,0 +1,1 @@
+{"schema_version":"1.0.0","required_context_ids":["local-metadata","local-session","trusted-principal"],"reason_code_ids":["classification_denied","context_denied","relationship_denied","stale_authorization_input"],"obligation_ids":["audit_access","display_marking"],"explicit_deny_ids":["explicit-deny"]}

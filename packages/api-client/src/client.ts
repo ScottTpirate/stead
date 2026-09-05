@@ -74,6 +74,7 @@ interface JsonSchema {
   readonly minimum?: number;
   readonly maximum?: number;
   readonly minItems?: number;
+  readonly maxItems?: number;
   readonly minProperties?: number;
   readonly required?: readonly string[];
   readonly properties?: Readonly<Record<string, JsonSchema>>;
@@ -206,6 +207,7 @@ function schemaMatches(value: unknown, schema: JsonSchema): boolean {
   }
   if (Array.isArray(value)) {
     if (schema.minItems !== undefined && value.length < schema.minItems) return false;
+    if (schema.maxItems !== undefined && value.length > schema.maxItems) return false;
     if (schema.items && value.some((item) => !schemaMatches(item, schema.items!))) {
       return false;
     }

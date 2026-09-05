@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect } from "react";
+import { useEffect, useLayoutEffect, type ReactNode } from "react";
 
 import { EmptyState } from "../../../packages/design-system/src/index";
 
@@ -20,6 +20,8 @@ import { ThemeControl } from "./ThemeControl";
 interface AppShellProps {
   readonly route: RouteMatch;
   readonly navigate: (href: string) => void;
+  readonly children?: ReactNode;
+  readonly sessionLabel?: ReactNode;
 }
 
 function NavigationGlyph({ route }: { readonly route: PrimaryRouteId }) {
@@ -38,7 +40,7 @@ function NavigationGlyph({ route }: { readonly route: PrimaryRouteId }) {
   );
 }
 
-function RouteSurface({ route }: { readonly route: RouteMatch }) {
+function RouteSurface({ route, children }: { readonly route: RouteMatch; readonly children?: ReactNode }) {
   useLayoutEffect(() => {
     endPerformanceSpan("route-useful-content");
     endPerformanceSpan("cold-interactive");
@@ -59,12 +61,12 @@ function RouteSurface({ route }: { readonly route: RouteMatch }) {
         <p>Stead</p>
         <h1>{route.route.label}</h1>
       </header>
-      <EmptyState title={`No ${route.route.label.toLocaleLowerCase()} to show`} description={route.route.description} />
+      {children ?? <EmptyState title={`No ${route.route.label.toLocaleLowerCase()} to show`} description={route.route.description} />}
     </div>
   );
 }
 
-export function AppShell({ route, navigate }: AppShellProps) {
+export function AppShell({ route, navigate, children, sessionLabel }: AppShellProps) {
   const activeRoute = route.kind === "primary" ? route.route.id : undefined;
   const lazyBoundaries = inspectLazyCapabilityBoundaries();
 
@@ -131,10 +133,10 @@ export function AppShell({ route, navigate }: AppShellProps) {
               <span aria-hidden="true"> / </span>
               <strong>{route.kind === "primary" ? route.route.label : "Unavailable"}</strong>
             </div>
-            <span className="session-indicator">Session context pending</span>
+            <span className="session-indicator">{sessionLabel ?? "Session context pending"}</span>
           </header>
           <main id="main-content" className="main-content" tabIndex={-1}>
-            <RouteSurface route={route} />
+            <RouteSurface route={route}>{children}</RouteSurface>
           </main>
         </section>
       </div>

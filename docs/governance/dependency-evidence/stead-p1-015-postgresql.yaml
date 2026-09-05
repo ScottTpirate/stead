@@ -187,3 +187,310 @@ oci_candidate:
     version: 3.1.3
     checked_digests: ["sha256:bb3e1a57e5407e0a5280b4211980a5e537f4abd234a87014ac979849a78dd825", "sha256:1938c16e9d2f10a6a3623b344b64ae8d45f407f2c5f34f0979468bb689b9227a"]
     result: No Cosign signature or signed Cosign attestation was found for either digest.
+
+# Successor records are deliberately separate from the rejected intake above. They
+# are review evidence only until their exact approval IDs receive independent
+# approval and the validator-confirmed activation changes are made mechanically.
+successor_intake:
+  state: REVIEWED_PENDING_INDEPENDENT_APPROVAL_NOT_INTEGRATED
+  recorded_at: "2026-09-04T16:08:38Z"
+  release_eligible: false
+  activation_allowed: false
+  evidence_retention:
+    disposition: Compact hashes and exact inventories are committed here; raw JSON reports must be retained with the independent review and regenerated against the recorded databases before approval.
+    local_probe_only: true
+
+  go_candidate:
+    approval_id: DEP-APP-GO-PGXPOOL-V5-10-0-XTEXT-0-41-0
+    review_state: REVIEWED_PENDING_INDEPENDENT_APPROVAL
+    activation_allowed: false
+    release_eligible: false
+    classification: PRODUCTION_RUNTIME_DISTRIBUTED
+    module: github.com/jackc/pgx/v5
+    version: v5.10.0
+    selected_import: github.com/jackc/pgx/v5/pgxpool
+    module_sum: "h1:VhSvgU2jSli8o3AqIEOTJr7rZwAEUVo4E4XhR94Zfr0="
+    go_mod_sum: "h1:mal1tBGAFfLHvZzaYh77YS/eC6IX9OWbRV1QIIM0Jn4="
+    upstream_repository: https://github.com/jackc/pgx
+    upstream_commit: 7293fb11125be0373a92f716683f2d494f6fd4b0
+    license_expression: MIT
+    license_sha256: 467f95e074fe23079a5623ed652619682692041b8551da27e3c2ddb9659a1507
+    notice_id: NOTICE-P1-015-PGX-MIT
+    closure_tsv_sha256: 3dc0733ceacffa3dbdae841624ab5a8e0455d37b56546005524142637816012d
+    selected_module_graph_tsv_sha256: 15fc3c9002f5254bb2d7512afd0126e57ef9c4dd19e43375a0778b1a6b4fb370
+    probe_go_mod_sha256: 0a77df7c1b0efcff8e8ed4eea77b037fe21dd31c89353084b0517dc9103dd497
+    probe_go_sum_sha256: 3bcb6631edff01dac29fce9d35d543b696a9997f8339f486ea124af20172200f
+    pgxpool_runtime_closure:
+      - module: github.com/jackc/pgpassfile
+        version: v1.0.0
+        module_sum: "h1:/6Hmqy13Ss2zCq62VdNG8tM1wchn8zjSGOBJ6icpsIM="
+        go_mod_sum: "h1:CEx0iS5ambNFdcRtxPj5JhEz+xB6uRky5eyVu/W2HEg="
+        upstream_repository: https://github.com/jackc/pgpassfile
+        upstream_commit: 99d8e8e28945ffceaf75b0299fcb2bb656b8a683
+        license_expression: MIT
+        license_sha256: adb1663fda031df8f4344aa68f299fd87d80353e31339406742ded21dae65702
+        notice_id: NOTICE-P1-015-PGPASSFILE-MIT
+      - module: github.com/jackc/pgservicefile
+        version: v0.0.0-20240606120523-5a60cdf6a761
+        module_sum: "h1:iCEnooe7UlwOQYpKFhBabPMi4aNAfoODPEFNiAnClxo="
+        go_mod_sum: "h1:5TJZWKEWniPve33vlWYSoGYefn3gLQRzjfDlhSJ9ZKM="
+        upstream_repository: https://github.com/jackc/pgservicefile
+        upstream_commit: 5a60cdf6a76120dc3d5152b95f3b5fd8aa7cc9eb
+        license_expression: MIT
+        license_sha256: fc505773403fe869ed64cc2235cdd13988a427bb7e3a7e7004a3f4b27420f8fc
+        notice_id: NOTICE-P1-015-PGSERVICEFILE-MIT
+      - module: github.com/jackc/puddle/v2
+        version: v2.2.2
+        module_sum: "h1:PR8nw+E/1w0GLuRFSmiioY6UooMp6KJv0/61nB7icHo="
+        go_mod_sum: "h1:vriiEXHvEE654aYKXXjOvZM39qJ0q+azkZFrfEOc3H4="
+        upstream_repository: https://github.com/jackc/puddle
+        upstream_commit: bd09d14bd4018b6d65a9d7770e2f3ddf8b00af1c
+        license_expression: MIT
+        license_sha256: 2d50e98a4900b4d6457a38d39c1432fdc156fc2f7b365f2e33ec9344acbb0057
+        notice_id: NOTICE-P1-015-PUDDLE-MIT
+      - module: golang.org/x/sync
+        version: v0.22.0
+        module_sum: "h1:SZjpbeLmrCk4xhRSZFNZW5gFUeCeFgjekvI/+gfScek="
+        go_mod_sum: "h1:9xrNwdLfx4jkKbNva9FpL6vEN7evnE43NNNJQ2LF3+0="
+        upstream_repository: https://go.googlesource.com/sync
+        upstream_commit: 1eb64d4bc0cde6da1bb8ebc7f178bb577508e5d0
+        license_expression: BSD-3-Clause
+        license_sha256: 911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad
+        notice_id: NOTICE-P1-015-GO-X-SYNC-BSD-3-CLAUSE
+      - module: golang.org/x/text
+        version: v0.41.0
+        module_sum: "h1:vz/seA0lnX87Othu2f/0L24RcgrXD9/YFTSuGjj3rH8="
+        go_mod_sum: "h1:jvf1O8ajNzZqhSrQBPbutR/EB83Cc0CFrezNQIwbb5M="
+        upstream_repository: https://go.googlesource.com/text
+        upstream_commit: acdba6655fd45cdb5ab73c9d6a8981333bd65a39
+        license_expression: BSD-3-Clause
+        license_sha256: 911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad
+        notice_id: NOTICE-P1-015-GO-X-TEXT-BSD-3-CLAUSE
+    resolution_and_test_graph:
+      status: PERMISSIVE_LICENSES_REVIEWED
+      selected_module_count: 15
+      runtime_closure_count: 6
+      additional_modules:
+        - { module: github.com/davecgh/go-spew, version: v1.1.1, module_sum: "h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=", go_mod_sum: "h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=", license_expression: ISC }
+        - { module: github.com/kr/pretty, version: v0.3.0, module_sum: "h1:WgNl7dwNpEZ6jJ9k1snq4pZsg7DOEN8hP9Xw0Tsjwk0=", go_mod_sum: "h1:640gp4NfQd8pI5XOwp5fnNeVWj67G7CFk/SaSQn7NBk=", license_expression: MIT }
+        - { module: github.com/pmezard/go-difflib, version: v1.0.0, module_sum: "h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=", go_mod_sum: "h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=", license_expression: BSD-3-Clause }
+        - { module: github.com/stretchr/objx, version: v0.1.0, module_sum: "h1:4G4v2dO3VZwixGIRoQ5Lfboy6nUhCyYzaqnIAPPhYs4=", go_mod_sum: "h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=", license_expression: MIT }
+        - { module: github.com/stretchr/testify, version: v1.11.1, module_sum: "h1:7s2iGBzp5EwR7/aIZr8ao5+dra3wiQyKjjFuvgVKu7U=", go_mod_sum: "h1:wZwfW3scLgRK+23gO65QZefKpKQRnfz6sD981Nm4B6U=", license_expression: MIT }
+        - { module: golang.org/x/mod, version: v0.38.0, module_sum: "h1:MECBjubtXD7yj4HrhIUcywNaGeNVUdfVnxmPajOk4yk=", go_mod_sum: "h1:V6Xz0pq8TQ3dGqVQ1FVHuelZpAL0uNhSkk9ogYP3c40=", license_expression: BSD-3-Clause }
+        - { module: golang.org/x/tools, version: v0.48.0, module_sum: "h1:3+hClM1aLL5mjMKm5ovokw9epgRXPuu2tILgismM6RE=", go_mod_sum: "h1:08xX0orndb/F7jJxGDicx061tyd5pcMto75YMAXr6lk=", license_expression: BSD-3-Clause }
+        - { module: gopkg.in/check.v1, version: v1.0.0-20201130134442-10cb98267c6c, module_sum: "h1:Hei/4ADfdWqJk1ZMxUNpqntNwaWcugrBjAiHlqqRiVk=", go_mod_sum: "h1:JHkPIbrfpd72SG/EVd6muEfDQjcINNoR0C8j2r3qZ4Q=", license_expression: BSD-2-Clause }
+        - { module: gopkg.in/yaml.v3, version: v3.0.1, module_sum: "h1:fxVm/GzAzEWqLHuvctI91KS9hhNmmWOoWu0XTYJS7CA=", go_mod_sum: "h1:K4uyk7z7BCEPqu6E+C64Yfv1cQ7kz7rIZviUmN+EgEM=", license_expression: MIT AND Apache-2.0 }
+    vulnerability_scans:
+      - scope: SYMBOL_REACHABILITY
+        completed_at: "2026-09-04T16:03:18Z"
+        tool: { name: govulncheck, version: v1.7.0, go_version: go1.27.0, database: https://vuln.go.dev, database_updated_at: "2026-09-02T19:12:04Z" }
+        findings: 0
+        report_sha256: 43d10c35ca22c964d1c4aedb557e512cde347bea5e6d3fa5f2ff079b711b5704
+      - scope: MODULE
+        completed_at: "2026-09-04T16:03:18Z"
+        tool: { name: govulncheck, version: v1.7.0, go_version: go1.27.0, database: https://vuln.go.dev, database_updated_at: "2026-09-02T19:12:04Z" }
+        findings: 0
+        report_sha256: 862f025be18783565b12a334c53340a23abdb11a0507b5daeb3b06daeaca87f0
+    probe_tests:
+      status: PASS_LOCAL_INTAKE_PROBE
+      commands: [go_mod_verify, go_test_all, go_test_race_all, go_vet_all, go_build_all]
+      limitation: The probe compiled and exercised pgxpool construction only; repository, transaction, audit/outbox, and live PostgreSQL tests must accompany bounded activation.
+    usage_constraints:
+      - Activation requires this exact approval ID to be independently approved and selected uniquely by version plus both Go checksums.
+      - go.mod must explicitly select x/sync v0.22.0 and x/text v0.41.0 so MVS cannot reproduce the rejected x/text v0.29.0 closure.
+      - Use only behind WS-02 PostgreSQL repository and transaction interfaces with scoped database credentials.
+      - Release activation must regenerate the module graph, licenses, notices, govulncheck reports, binary SBOM, and compatibility evidence from the actual repository lock.
+    rollback:
+      target: git:e24a4d9d05ad6df19c5bcaa9c385ee74fd5d8c31
+      constraints: Remove before persisted use; afterward replace only with an independently approved non-vulnerable driver after transaction, migration, outbox, failure-injection, and PostgreSQL compatibility tests.
+
+  oci_candidate:
+    approval_id: DEP-APP-OCI-CHAINGUARD-POSTGRES-18-6-R2-99982050
+    review_state: REVIEWED_PENDING_INDEPENDENT_APPROVAL
+    activation_allowed: false
+    distribution_allowed: false
+    classification: DEVELOPMENT_CI_ONLY_NON_DISTRIBUTED
+    reference: cgr.dev/chainguard/postgres@sha256:999820501e569af8d16bafe1e97c4f8b43583a71b5d8a41a0170a6d9940af8e5
+    registry_repository: cgr.dev/chainguard/postgres
+    source: https://images.chainguard.dev/directory/image/postgres/overview
+    version: 18.6-r2
+    index_digest: "sha256:999820501e569af8d16bafe1e97c4f8b43583a71b5d8a41a0170a6d9940af8e5"
+    selected_platform:
+      os: linux
+      architecture: amd64
+      manifest_digest: "sha256:f9fe3c8946c2f696d9835598a46bc584350acb925028ea1a47977ad9b93bd7c4"
+      config_digest: "sha256:2c8080a2751db31a08e8dc53bd4be6df2afbddb54e14b4c83a2b4f1254534755"
+    created: "2026-09-04T08:27:38Z"
+    os_release: { family: wolfi, version: "20230201" }
+    postgres_package: { name: postgresql-18, version: 18.6-r2, license_expression: BSD-3-Clause }
+    locked_configuration:
+      repository: https://github.com/chainguard-images/images
+      source_path: images/postgres/configs/latest.apko.yaml
+      source_commit: c55435f47c0d12fd0de0de3dbc01d0df1c002bd1
+      synchronized_release_commit: 7e0fb5004496080bb887847a55d199c0cea43942
+      blob_sha1: 5c227bffb2ae548e49f249d9af9fe3271ec271d2
+      content_sha256: 0bf2a86048764bc34a6fcce22f33b575d3187bc10c215b034f2c4a47b2d80371
+    signature_and_attestations:
+      status: VERIFIED_KEYLESS_SIGNATURES_AND_ATTESTATIONS
+      completed_at: "2026-09-04T16:08:38Z"
+      tool: { name: cosign, version: 3.1.3 }
+      issuer: https://token.actions.githubusercontent.com
+      identity: https://github.com/chainguard-images/images/.github/workflows/release.yaml@refs/heads/main
+      workflow_commit: 7e0fb5004496080bb887847a55d199c0cea43942
+      transparency_log_inclusion_verified: true
+      certificate_chain_verified: true
+      predicates: [https://slsa.dev/provenance/v1, https://spdx.dev/Document, https://apko.dev/image-configuration]
+      builder: { id: https://github.com/chainguard-dev/terraform-provider-apko, apko: v1.2.43, terraform_provider_apko: v1.2.20 }
+      report_sha256:
+        index_signature: 2ec7806b434040cd362c226f81d37cc035f6c16d52b7c828cbe0df1a2d7a0e21
+        amd64_signature: 2ea6e152e12f9d1311346bce40e2330165e21f60d4f47c5e54db5fa9ae371b1c
+        index_attestations: b545b603ca1e336ee56cfd0747c66ec8321c319a56d8bc353c24b863f8c83c8b
+        amd64_attestations: 4a276f5cfe4a05b61811241efddcd44f49c7029acc1b984e75b6713f6998ce36
+    vulnerability_scans:
+      - tool: trivy
+        version: 0.74.0
+        database_version: 2
+        database_updated_at: "2026-09-04T13:08:55.575059601Z"
+        report_created_at: "2026-09-04T16:00:02.017626024Z"
+        report_sha256: d19c04ba130062dd179d52fe6503ecd9a138bd167332d53a14a4f478a6f83f68
+        findings: { critical: 0, high: 0, medium: 0, low: 0, unknown: 0 }
+      - tool: grype
+        version: 0.118.0
+        database_schema: v6.1.9
+        database_built_at: "2026-09-04T06:30:46Z"
+        database_archive_sha256: d588f263d59606363b9e499aa5631c1c8a504cb447304797ca5c92cb7ff44a29
+        report_created_at: "2026-09-04T16:05:13Z"
+        report_sha256: 957d4517fb4eec61cbda8e306e8668824687eb49719047c117a0d0cb0eade746
+        findings: { critical: 0, high: 0, medium: 1, low: 0, negligible: 0, unknown: 0 }
+        contextual_medium:
+          id: CVE-2026-18374
+          package: glibc-2.44
+          installed_version: 2.44-r4
+          fix_state: unknown
+          match_basis: CPE_ONLY
+          affected_operation: GNU libc fopen mode parsing with an effectively empty ccs parameter
+          bounded_use_evaluation: The image entrypoint and PostgreSQL integration path do not accept attacker-controlled fopen mode strings; tests use repository-controlled startup arguments, synthetic data, disposable credentials, and no untrusted extensions. Re-evaluate on any usage change and rescan before activation.
+          disposition: CONTEXTUALLY_ACCEPTABLE_FOR_SCOPED_NON_DISTRIBUTED_TEST_USE_PENDING_INDEPENDENT_REVIEW
+    package_license_inventory:
+      status: EXACT_INSTALLED_APK_INVENTORY_RECORDED
+      tool: { name: syft, version: 1.51.1 }
+      completed_at: "2026-09-04T16:00:23Z"
+      report_sha256: 92491e2a87cc17173b46172c4cfc85b18546618601972fa81be587b34b0c171c
+      apk_package_count: 56
+      signed_build_inventory_count: 56
+      installed_apk_inventory_canonical_sha256: 34cfa78089abaf038e968c9591d9ddaa55b95f81b422e843353d9adb2eed264a
+      embedded_go_modules_canonical_sha256: 7627333069cf8e1839deb6b9514450cc7a4c96cbc0dffbea809bb8e99302de28
+      published_spdx_license_concluded: NOASSERTION
+      disposition: The vendor SPDX conclusion is not used as the license decision; the exact installed APK metadata below and source resolutions for embedded Go modules form the non-distributed-use review evidence.
+      installed_apk_packages:
+        bash: { version: 5.3-r13, license_expression: GPL-3.0-or-later }
+        busybox: { version: 1.38.0-r2, license_expression: GPL-2.0-only }
+        ca-certificates-bundle: { version: 20260611-r1, license_expression: MPL-2.0 AND MIT }
+        cyrus-sasl-heimdal-libs: { version: 2.1.28-r55, license_expression: BSD-3-Clause }
+        ecpg-18: { version: 18.6-r2, license_expression: BSD-3-Clause }
+        gdbm: { version: 1.26-r6, license_expression: GPL-3.0-or-later }
+        glibc-2.44: { version: 2.44-r4, license_expression: LGPL-2.1-or-later }
+        glibc-2.44-locale-en: { version: 2.44-r4, license_expression: LGPL-2.1-or-later }
+        glibc-2.44-locale-posix: { version: 2.44-r4, license_expression: LGPL-2.1-or-later }
+        gosu: { version: 1.19-r17, license_expression: Apache-2.0 }
+        heimdal-libs: { version: 7.8.0-r52, license_expression: BSD-3-Clause }
+        icu78-data-full: { version: 78.3-r3, license_expression: MIT }
+        keyutils-libs: { version: 1.6.3-r40, license_expression: GPL-2.0-or-later OR LGPL-2.0-or-later }
+        krb5-conf: { version: 1.0-r9, license_expression: MIT }
+        krb5-libs: { version: 1.22.2-r3, license_expression: MIT }
+        ld-linux-2.44: { version: 2.44-r4, license_expression: LGPL-2.1-or-later }
+        libLLVM-19: { version: 19.1.7-r28, license_expression: Apache-2.0 }
+        libcom_err: { version: 1.47.4-r2, license_expression: GPL-2.0-or-later AND LGPL-2.0-or-later AND BSD-3-Clause AND MIT }
+        libcrypt1-2.44: { version: 2.44-r4, license_expression: LGPL-2.1-or-later }
+        libcrypto3: { version: 3.6.4-r3, license_expression: Apache-2.0 }
+        libedit: { version: 3.1-r19, license_expression: BSD-3-Clause }
+        libffi: { version: 3.8.0-r1, license_expression: MIT }
+        libgcc: { version: 16.2.0-r1, license_expression: GPL-3.0-or-later WITH GCC-exception-3.1 }
+        libicu78: { version: 78.3-r3, license_expression: MIT }
+        libldap-2.7: { version: 2.7.0-r1, license_expression: OLDAP-2.8 }
+        liblz4-1: { version: 1.10.0-r10, license_expression: BSD-2-Clause AND GPL-2.0-only }
+        libpcre2-8-0: { version: 10.48-r0, license_expression: BSD-3-Clause }
+        libpq-18: { version: 18.6-r2, license_expression: BSD-3-Clause }
+        libselinux: { version: 3.11-r0, license_expression: libselinux-1.0 }
+        libsepol: { version: 3.11-r2, license_expression: LGPL-2.1 }
+        libssl3: { version: 3.6.4-r3, license_expression: Apache-2.0 }
+        libstdc++: { version: 16.2.0-r1, license_expression: GPL-3.0-or-later WITH GCC-exception-3.1 }
+        libuuid: { version: 2.42.3-r0, license_expression: GPL-3.0-or-later AND GPL-2.0-or-later AND GPL-2.0-only AND GPL-1.0-only AND LGPL-2.1-or-later AND BSD-1-Clause AND BSD-2-Clause AND BSD-3-Clause AND BSD-4-Clause-UC AND MIT AND CC-PDDC }
+        libverto: { version: 0.3.2-r8, license_expression: MIT }
+        libxcrypt: { version: 4.5.2-r5, license_expression: GPL-2.0-or-later AND LGPL-2.1-or-later }
+        libxml2-16: { version: 2.15.3-r4, license_expression: MIT }
+        libxslt: { version: 1.1.45-r4, license_expression: MIT }
+        libzstd1: { version: 1.5.7-r10, license_expression: BSD-2-Clause AND GPL-2.0-only }
+        linux-pam: { version: 1.7.2-r5, license_expression: BSD-3-Clause }
+        ncurses: { version: 6.6.20260829-r1, license_expression: MIT }
+        ncurses-terminfo-base: { version: 6.6.20260829-r1, license_expression: MIT }
+        pgaudit-18: { version: 18.0-r5, license_expression: BSD-3-Clause }
+        posix-libc-utils-2.44: { version: 2.44-r4, license_expression: LGPL-2.1-or-later }
+        posix-libc-utils-bin-2.44: { version: 2.44-r4, license_expression: LGPL-2.1-or-later }
+        postgresql-18: { version: 18.6-r2, license_expression: BSD-3-Clause }
+        postgresql-18-base: { version: 18.6-r2, license_expression: BSD-3-Clause }
+        postgresql-18-client: { version: 18.6-r2, license_expression: BSD-3-Clause }
+        postgresql-18-client-base: { version: 18.6-r2, license_expression: BSD-3-Clause }
+        postgresql-18-contrib: { version: 18.6-r2, license_expression: BSD-3-Clause }
+        postgresql-18-oci-entrypoint: { version: 18.6-r2, license_expression: BSD-3-Clause }
+        postgresql-18-oci-entrypoint-base: { version: 18.6-r2, license_expression: BSD-3-Clause }
+        readline: { version: 8.3-r3, license_expression: GPL-3.0-or-later }
+        sqlite-libs: { version: 3.53.4-r2, license_expression: blessing }
+        tzdata: { version: 2026c-r0, license_expression: CC-PDDC }
+        wolfi-baselayout: { version: 20230201-r29, license_expression: MIT }
+        zlib: { version: 1.3.2-r5, license_expression: MPL-2.0 AND MIT }
+      embedded_go_modules:
+        - { module: github.com/tianon/gosu, version: v0.0.0-20250923190938-6456aaa0f3c8, upstream_commit: 6456aaa0f3c854d199d0f037f068eb97515b7513, license_expression: Apache-2.0, license_blob_sha1: d645695673349e3947e8e5ae42332d0ac3164cd7 }
+        - { module: github.com/moby/sys/user, version: v0.1.0, upstream_commit: c0711cde08c8fa33857a2c28721659267f49b5e2, license_expression: Apache-2.0, license_blob_sha1: d645695673349e3947e8e5ae42332d0ac3164cd7 }
+        - { module: golang.org/x/sys, version: v0.1.0, upstream_commit: 95e765b1cc43ac521bd4fd501e00774e34401449, license_expression: BSD-3-Clause, license_blob_sha1: 6a66aea5eafe0ca6a688840c47219556c552488e }
+        - { module: stdlib, version: go1.27.1, license_expression: BSD-3-Clause }
+    usage_constraints:
+      - Exact digest and Linux amd64 only; any other platform, tag, digest, or package set is a new intake.
+      - Synthetic data and disposable credentials only on an isolated local/CI network; no protected or production data or credentials.
+      - No public CI port, privileged mode, host mounts, host networking, external publication, untrusted extensions, or reuse as a product/runtime database image.
+      - Exclude the image from every release, product SBOM, installer, downloadable asset, air-gap artifact, and customer deployment.
+      - Rescan the exact manifest and repeat signature, attestation, license, startup, readiness, persistence, and teardown checks immediately before activation.
+    functional_test:
+      status: PENDING_REQUIRED_BEFORE_APPROVAL
+      blocker: Local Docker daemon access is denied in the intake environment; no claim of container startup or PostgreSQL protocol compatibility is made.
+      required_checks: [signature_reverification, clean_pull, startup_without_privileged_mode_or_added_capabilities, readiness, pgx_connect, transaction_commit_and_rollback, persistence_with_disposable_volume, clean_teardown]
+    rollback:
+      target: git:e24a4d9d05ad6df19c5bcaa9c385ee74fd5d8c31
+      constraints: Remove the pinned service and disposable volume and return tests to the approved non-service baseline; retain no test state and do not modify product schema or data.
+
+# The immutable intake above remains historical evidence; this is its superseding approval.
+successor_approval:
+  recorded_at: "2026-09-05T09:11:05Z"
+  evidence_manifest: dependency-evidence/postgresql-live-proof-20260905.json
+  evidence_manifest_sha256: 578ccc9b0374a4f40ea56aa527b809781630d4ddc4a7c41f47c2f2bad70dfb71
+  raw_bundle_sha256: 2d60f47627c65c305ab0bc366ce267fe70f0cae70a26840cd3a766ab1e281e08
+  retained_bundle: stead-db-proof.hVZZmP/evidence.tar.gz
+  architecture_and_license: /root/adr_inspection
+  independent_security: /root/local_inventory
+  medium_disposition:
+    advisory: CVE-2026-18374
+    source: https://sourceware.org/pipermail/libc-announce/2026/000060.html
+    conclusion: Inapplicable to fixed PostgreSQL startup and synthetic tests without attacker-controlled fopen mode strings or untrusted extensions. Re-review any scope expansion.
+  limits:
+    - Runtime driver approval covers only the exact six-module closure.
+    - Image approval covers only non-distributed development and CI with synthetic data and disposable credentials.
+    - Raw proof used rootless bubblewrap, original entrypoint, private sockets, UID70, no capabilities, read-only rootfs, and disposable writable directories; it did not test Compose or TCP/TLS.
+    - Stead ACL, API authorization, atomic audit/outbox, and actual binary SBOM and rescan remain required integration and release checks.
+  candidates:
+    DEP-APP-GO-PGXPOOL-V5-10-0-XTEXT-0-41-0:
+      candidate_revision: ceab7242064bb9330b78cd4014b8b9976280ae38
+      evidence_manifest_sha256: 578ccc9b0374a4f40ea56aa527b809781630d4ddc4a7c41f47c2f2bad70dfb71
+      approvers: [/root/adr_inspection, /root/local_inventory]
+      approved_at: "2026-09-05T09:11:05Z"
+      activation_allowed: true
+      rescan: PASS
+      functional_proof: PASS
+    DEP-APP-OCI-CHAINGUARD-POSTGRES-18-6-R2-99982050:
+      candidate_revision: ceab7242064bb9330b78cd4014b8b9976280ae38
+      evidence_manifest_sha256: 578ccc9b0374a4f40ea56aa527b809781630d4ddc4a7c41f47c2f2bad70dfb71
+      approvers: [/root/adr_inspection, /root/local_inventory]
+      approved_at: "2026-09-05T09:34:10Z"
+      activation_allowed: true
+      rescan: PASS
+      functional_proof: PASS
+      license_review: Independently compared all 56 extracted APK name/version/license records and re-fetched the exact upstream gosu, moby/sys/user, and x/sys licenses; matched intake inventory. Non-distributed development and CI only.

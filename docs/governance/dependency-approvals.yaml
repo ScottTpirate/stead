@@ -579,3 +579,70 @@ records:
       rollback_constraints: Candidate is not activated. If later approved and activated, remove the digest-pinned workflow service and return integration tests to the approved non-service baseline; no product state may be retained.
     adr: ADR-0007
     legal_approval: null
+
+  - approval_id: DEP-APP-GO-PGXPOOL-V5-10-0-XTEXT-0-41-0
+    component:
+      name: github.com/jackc/pgx/v5
+      kind: go_module
+      ecosystem: go
+      source_url: https://github.com/jackc/pgx
+      version: v5.10.0
+      digest: { algorithm: go-h1, value: "h1:VhSvgU2jSli8o3AqIEOTJr7rZwAEUVo4E4XhR94Zfr0=" }
+      module_file_digest: { algorithm: go-h1, value: "h1:mal1tBGAFfLHvZzaYh77YS/eC6IX9OWbRV1QIIM0Jn4=" }
+      license_expression: MIT
+    usage:
+      owner: WS-02 stead-api PostgreSQL repositories and transactional-outbox composition
+      directories: [apps/core, internal, go.mod, go.sum]
+      purpose: Approved production/runtime PostgreSQL driver and pgxpool boundary for STEAD-P1-015 using the exact raised x/sync v0.22.0 and x/text v0.41.0 closure; independent exact-candidate approval and refreshed proof are recorded in successor_approval evidence.
+      relationship: runtime
+      distributed_in: [stead-api]
+      linkage_or_interface: In-process Go module limited to WS-02-owned PostgreSQL repositories and transaction ports; the exact six-module runtime closure and full selected module graph are approval-ID-bound in dependency-evidence/stead-p1-015-postgresql.yaml.
+    decision: { category: ALLOW-PERMISSIVE, status: APPROVED, independent_approval_required: true, approvers: [/root/adr_inspection, /root/local_inventory], approved_at: '2026-09-05T09:11:05Z' }
+    obligations:
+      notices: [NOTICE-P1-015-PGX-MIT, NOTICE-P1-015-PGPASSFILE-MIT, NOTICE-P1-015-PGSERVICEFILE-MIT, NOTICE-P1-015-PUDDLE-MIT, NOTICE-P1-015-GO-X-SYNC-BSD-3-CLAUSE, NOTICE-P1-015-GO-X-TEXT-BSD-3-CLAUSE]
+      source_or_offer: Maintain release-notice entries distinct from the rejected quarantine for all MIT and BSD-3-Clause modules compiled into stead-api and verify them against the approved go.mod/go.sum closure.
+      modifications: Modules are unmodified; any fork, patch, vendoring, checksum, selected-version, or closure change requires a new approval ID and review.
+    security:
+      vulnerability_result: Fresh govulncheck module, source, and actual live-proof binary scans report zero findings; exact hashes, commands, and database dates are retained in the 2026-09-05 successor_approval evidence manifest.
+      provenance_result: Exact Go proxy sums, go.mod sums, upstream commits, license-file SHA-256 values, six-module closure SHA-256, and fifteen-module selected-graph SHA-256 were reproduced and recorded under this approval ID.
+      maintenance_risk: pgx v5.10.0 still declares older x/sync and x/text floors, so the safe closure depends on explicit minimum-version selection of x/sync v0.22.0 and x/text v0.41.0. Every module graph change requires rescan, compatibility tests, and fresh approval.
+      permissions_and_network: stead-api may open PostgreSQL connections only through the WS-02 repository boundary with deployment-scoped credentials; no provider, browser, telemetry, filesystem-wide, or arbitrary outbound authority is granted.
+    change:
+      update_policy: Review every direct version, MVS-selected module, module and go.mod checksum, source commit, license, notice, vulnerability database snapshot, compatibility result, permission, and binary/SBOM diff on every change.
+      rollback_version: git:e24a4d9d05ad6df19c5bcaa9c385ee74fd5d8c31
+      rollback_constraints: Before persisted use, rollback removes the driver and repository wiring. After persisted use, rollback must use an independently approved non-vulnerable driver and pass transaction, migration, outbox, failure-injection, and PostgreSQL compatibility tests without reverting schema or data.
+    adr: ADR-0007
+    legal_approval: null
+
+  - approval_id: DEP-APP-OCI-CHAINGUARD-POSTGRES-18-6-R2-99982050
+    component:
+      name: cgr.dev/chainguard/postgres
+      kind: oci_image
+      ecosystem: oci
+      source_url: https://images.chainguard.dev/directory/image/postgres/overview
+      version: 18.6-r2
+      digest: { algorithm: sha256, value: "sha256:999820501e569af8d16bafe1e97c4f8b43583a71b5d8a41a0170a6d9940af8e5" }
+      license_expression: LicenseRef-Composite-OCI-Inventory
+    usage:
+      owner: WS-02 local/integration fixtures; WS-13 supply-chain gate
+      directories: [deploy/compose, .github/workflows, tests/integration/core]
+      purpose: Approved PostgreSQL 18.6-r2 service for disposable local-development and CI integration tests after separate exact image architecture/license and security reviews; distribution is not approved.
+      relationship: test
+      distributed_in: []
+      linkage_or_interface: Non-distributed, digest-pinned OCI service on an isolated test network using only synthetic data and disposable credentials; excluded from every Stead product, release image, installer, SBOM, downloadable asset, air-gap artifact, and customer deployment.
+    decision: { category: REVIEW-NONRUNTIME, status: APPROVED, independent_approval_required: true, approvers: [/root/adr_inspection, /root/local_inventory], approved_at: '2026-09-05T09:34:10Z' }
+    obligations:
+      notices: []
+      source_or_offer: Non-distributed development/CI service. The exact 56-package APK license inventory and four embedded Go-module license resolutions are retained in dependency evidence; any distribution requires a new runtime/distribution license review.
+      modifications: Image is unmodified at the exact index and Linux amd64 manifest/config digests; no derived or redistributed image is authorized.
+    security:
+      vulnerability_result: Independent security review of refreshed evidence approved bounded use. Trivy 0.74.0 found zero findings; Grype 0.118.0 found zero Critical/High and one CPE-only Medium, CVE-2026-18374 in glibc-2.44 2.44-r4. The fopen empty-ccs trigger is outside the bounded PostgreSQL test path; this contextual disposition is not a release waiver and requires rescan on any scope or pin change.
+      provenance_result: Cosign 3.1.3 verified keyless signatures plus SLSA v1, SPDX 2.3, and apko configuration attestations for the exact index and Linux amd64 manifest, with GitHub Actions issuer/identity, Rekor inclusion, signed package inventory, and report hashes recorded in successor evidence.
+      maintenance_risk: Digest refreshes may change PostgreSQL, Wolfi packages, entrypoint behavior, license inventory, architecture manifests, or vulnerability posture. Linux amd64 original-entrypoint startup, SCRAM authentication, commit/rollback, and restart persistence passed under rootless bubblewrap; Compose networking, TLS, and Stead ACL correctness remain separate integration obligations.
+      permissions_and_network: Use only synthetic data and disposable credentials on an isolated local/CI network; no public port in CI, protected or production data, production credentials, privileged mode, non-disposable host mounts, host networking, external publication, or runtime download is allowed.
+    change:
+      update_policy: Every index/platform/config digest, package/version/license inventory, signature, attestation, vulnerability database, platform, entrypoint, network/privilege scope, or distribution change requires a new approval ID, exact rescan, functional tests, and independent review.
+      rollback_version: git:e24a4d9d05ad6df19c5bcaa9c385ee74fd5d8c31
+      rollback_constraints: Remove the digest-pinned local/CI service and its disposable volume and return integration tests to the approved non-service baseline; no test state is retained or migrated, and no product schema or data rollback is permitted.
+    adr: ADR-0007
+    legal_approval: null

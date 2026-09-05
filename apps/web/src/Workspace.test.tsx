@@ -1,0 +1,161 @@
+import { cleanup, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { afterEach, expect, it, vi } from "vitest";
+
+import { PlatformApiError, type PlatformResponse, type PlatformRequestOptions } from "../../../packages/api-client/src/client";
+import { platformClient } from "./platform";
+import { matchRoute } from "./routes";
+import { Workspace } from "./Workspace";
+
+const session = {
+  principal: { type: "user", id: "fixture-user" }, instance_id: "fixture-instance",
+  expires_at: new Date(Date.now() + 60_000).toISOString(), session_revision: 1,
+};
+const organization = {
+  id: "fixture-org", kind: "organization", title: "Authorized server title",
+  key: "OPS", version: 1, security_presentation: { markings: [] },
+};
+const response = <T,>(data: T): PlatformResponse<T> => ({ data, status: 200, responseBytes: 0 });
+
+afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+
+// Isolated UI behavior tests: generated-client transport validation and live
+// product acceptance are separate. No listener, browser, or DB is simulated here.
+it("clears the disposable credential and creates through the generated client", async () => {
+  let created = false;
+  const request = vi.spyOn(platformClient, "request").mockImplementation(async <T,>(operation: string) => {
+    if (operation === "getSession") throw new PlatformApiError(401);
+    if (operation === "createSession") return response(session as T);
+    if (operation === "createOrganization") { created = true; return response(organization as T); }
+    if (operation === "listOrganizations") return response({ items: created ? [organization] : [] } as T);
+    return response({ items: [] } as T);
+  });
+  const user = userEvent.setup();
+  render(<Workspace route={matchRoute("/")} navigate={() => {}} />);
+  const credential = await screen.findByLabelText("Setup credential") as HTMLInputElement;
+  const token = "a".repeat(43);
+  await user.type(credential, token);
+  await user.click(screen.getByRole("button", { name: "Sign in" }));
+  await screen.findByRole("button", { name: "Sign out" });
+  expect(screen.getByRole("note").textContent).toBe("Local development · synthetic data only");
+  expect(credential.value).toBe("");
+  expect(request).toHaveBeenCalledWith("createSession", { body: { token } });
+  await user.type(screen.getByLabelText("Key"), "OPS");
+  await user.type(screen.getByLabelText("Name"), "User input title");
+  await user.click(screen.getByRole("button", { name: "Create Organization" }));
+  await screen.findByRole("button", { name: "OPS Authorized server title" });
+  expect(screen.queryByText("User input title")).toBeNull();
+  expect(request).toHaveBeenCalledWith("createOrganization", {
+    body: { key: "OPS", name: "User input title" }, idempotencyKey: expect.any(String),
+  });
+  expect((screen.getByLabelText("Key") as HTMLInputElement).value).toBe("");
+  await user.click(screen.getByRole("button", { name: "Sign out" }));
+  await screen.findByLabelText("Setup credential");
+  expect(screen.queryByText("Authorized server title")).toBeNull();
+  expect(request).toHaveBeenCalledWith("deleteSession");
+});
+
+it("does not render a resource from a denied mutation", async () => {
+  vi.spyOn(platformClient, "request").mockImplementation(async <T,>(operation: string) => {
+    if (operation === "getSession") return response(session as T);
+    if (operation === "createOrganization") throw new PlatformApiError(404);
+    return response({ items: [] } as T);
+  });
+  const user = userEvent.setup();
+  render(<Workspace route={matchRoute("/")} navigate={() => {}} />);
+  await screen.findByRole("button", { name: "Sign out" });
+  await user.type(screen.getByLabelText("Key"), "OPS");
+  await user.type(screen.getByLabelText("Name"), "Denied title");
+  await user.click(screen.getByRole("button", { name: "Create Organization" }));
+  await screen.findByRole("alert");
+  expect(screen.queryByRole("region", { name: "Resource details" })).toBeNull();
+  expect(screen.queryByText("Denied title")).toBeNull();
+});
+
+it("loads another authorized page without replacing the first page", async () => {
+  const later = { ...organization, id: "fixture-later-org", key: "ENG", title: "Later authorized Organization" };
+  const request = vi.spyOn(platformClient, "request").mockImplementation(async <T,>(operation: string, options?: PlatformRequestOptions) => {
+    if (operation === "getSession") return response(session as T);
+    if (operation === "listOrganizations") return response((options?.query?.after
+      ? { items: [later] }
+      : { items: [organization], next_after: organization.id }) as T);
+    return response({ items: [] } as T);
+  });
+  const user = userEvent.setup();
+  render(<Workspace route={matchRoute("/")} navigate={() => {}} />);
+  await user.click(await screen.findByRole("button", { name: "Load more Organizations" }));
+  await screen.findByRole("button", { name: "ENG Later authorized Organization" });
+  expect(screen.getByRole("button", { name: "OPS Authorized server title" })).toBeTruthy();
+  expect(request).toHaveBeenCalledWith("listOrganizations", { query: { page_size: 20, after: organization.id } });
+  expect(screen.queryByRole("button", { name: "Load more Organizations" })).toBeNull();
+});
+
+it("can select an owning Team beyond the first page without leaving the Project form", async () => {
+  const first = { ...organization, kind: "team", id: "fixture-team", title: "First Team" };
+  const later = { ...first, id: "fixture-later-team", title: "Later Team" };
+  const request = vi.spyOn(platformClient, "request").mockImplementation(async <T,>(operation: string, options?: PlatformRequestOptions) => {
+    if (operation === "getSession") return response(session as T);
+    if (operation === "listOrganizations") return response({ items: [organization] } as T);
+    if (operation === "listTeams") return response((options?.query?.after
+      ? { items: [later] }
+      : { items: [first], next_after: first.id }) as T);
+    return response({ items: [] } as T);
+  });
+  const user = userEvent.setup();
+  render(<Workspace route={matchRoute("/projects")} navigate={() => {}} />);
+  await user.click(await screen.findByRole("button", { name: "Load more owning Teams" }));
+  await screen.findByRole("option", { name: "Later Team" });
+  await user.selectOptions(screen.getByLabelText("Owning Team"), later.id);
+  expect((screen.getByLabelText("Owning Team") as HTMLSelectElement).value).toBe(later.id);
+  expect(screen.getByRole("option", { name: "First Team" })).toBeTruthy();
+  expect(request).toHaveBeenCalledWith("listTeams", { path: { organization_id: organization.id }, query: { page_size: 20, after: first.id } });
+});
+
+it("Refresh retries the displayed collections after a transient failure", async () => {
+  const team = { ...organization, kind: "team", id: "fixture-team", title: "Owning Team" };
+  const project = { ...organization, kind: "project", id: "fixture-project", title: "Saved Project" };
+  let projectReads = 0;
+  const request = vi.spyOn(platformClient, "request").mockImplementation(async <T,>(operation: string) => {
+    if (operation === "getSession") return response(session as T);
+    if (operation === "listOrganizations") return response({ items: [organization] } as T);
+    if (operation === "listTeams") return response({ items: [team] } as T);
+    if (operation === "listProjects") {
+      if (++projectReads === 1) throw new PlatformApiError(503);
+      return response({ items: [project] } as T);
+    }
+    throw new Error("unexpected operation");
+  });
+  const user = userEvent.setup();
+  render(<Workspace route={matchRoute("/projects")} navigate={() => {}} />);
+  await screen.findByRole("alert");
+  expect(screen.queryByRole("button", { name: "OPS Saved Project" })).toBeNull();
+  await user.click(screen.getByRole("button", { name: "Refresh" }));
+  await screen.findByRole("button", { name: "OPS Saved Project" });
+  expect(screen.getByRole("option", { name: "Owning Team" })).toBeTruthy();
+  expect(screen.queryByRole("alert")).toBeNull();
+  expect(request.mock.calls.filter(([operation]) => operation === "listTeams")).toHaveLength(2);
+  expect(projectReads).toBe(2);
+});
+
+it("Refresh clears a rejected session without retrying its prior collections", async () => {
+  let organizationReads = 0;
+  const project = { ...organization, kind: "project", id: "fixture-project", title: "Saved Project" };
+  const request = vi.spyOn(platformClient, "request").mockImplementation(async <T,>(operation: string) => {
+    if (operation === "getSession") return response(session as T);
+    if (operation === "listOrganizations") {
+      if (++organizationReads > 1) throw new PlatformApiError(401);
+      return response({ items: [organization] } as T);
+    }
+    if (operation === "listProjects") return response({ items: [project] } as T);
+    return response({ items: [] } as T);
+  });
+  const user = userEvent.setup();
+  render(<Workspace route={matchRoute("/projects")} navigate={() => {}} />);
+  await screen.findByRole("button", { name: "OPS Saved Project" });
+  await user.click(screen.getByRole("button", { name: "Refresh" }));
+  await screen.findByLabelText("Setup credential");
+  expect(screen.queryByText("Saved Project")).toBeNull();
+  expect(screen.queryByText("Authorized server title")).toBeNull();
+  expect(request.mock.calls.filter(([operation]) => operation === "listProjects")).toHaveLength(1);
+  expect(request.mock.calls.filter(([operation]) => operation === "listTeams")).toHaveLength(1);
+});

@@ -1,6 +1,7 @@
 .PHONY: foundation-check go-check contract-check
 
 foundation-check: go-check contract-check
+	scripts/run_pinned_node.sh node --test scripts/checkpoint_a_smoke.test.mjs scripts/checkpoint_a_denial.test.mjs
 	scripts/run_pinned_node.sh npm run typecheck
 	scripts/run_pinned_node.sh npm run test:unit --workspace=@stead/web
 	scripts/run_pinned_node.sh npm run test --workspace=@stead/web
@@ -29,3 +30,24 @@ contract-check:
 	scripts/run_pinned_node.sh node --test tests/contract/gitea/provider_reconciliation_contract.test.mjs
 	scripts/run_pinned_node.sh node scripts/validate_owgp_examples.js
 	scripts/validate_openfga.sh
+
+.PHONY: dev dev-prepare dev-down dev-status dev-smoke dev-check
+
+dev:
+	scripts/run_pinned_node.sh node scripts/dev_stack.mjs up
+
+dev-prepare:
+	scripts/run_pinned_node.sh node scripts/dev_stack.mjs prepare
+
+dev-down:
+	scripts/run_pinned_node.sh node scripts/dev_stack.mjs down
+
+dev-status:
+	scripts/run_pinned_node.sh node scripts/dev_stack.mjs status
+
+dev-smoke:
+	scripts/run_pinned_node.sh node scripts/dev_stack.mjs smoke
+
+dev-check:
+	scripts/run_pinned_node.sh node --test scripts/dev_stack.test.mjs
+	scripts/run_pinned_go.sh go test -race ./apps/worker

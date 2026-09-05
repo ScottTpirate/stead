@@ -112,6 +112,16 @@ func validateP256DERSignature(signature []byte) error {
 // needed by the builder handoff. It intentionally does not establish signer
 // trust or activation authority.
 func ParseDSSEEnvelope(envelope []byte) (ParsedEnvelope, error) {
+	return parseDSSEEnvelope(envelope, false)
+}
+
+// ParseLocalDevelopmentEnvelope is deliberately separate: production parsing
+// continues to reject the domain-separated local derivation payload type.
+func ParseLocalDevelopmentEnvelope(envelope []byte) (ParsedEnvelope, error) {
+	return parseDSSEEnvelope(envelope, true)
+}
+
+func parseDSSEEnvelope(envelope []byte, localDerivation bool) (ParsedEnvelope, error) {
 	if len(envelope) == 0 || len(envelope) > MaxEnvelopeBytes {
 		return ParsedEnvelope{}, contractError("envelope_size_limit", "envelope", nil)
 	}
@@ -128,7 +138,8 @@ func ParseDSSEEnvelope(envelope []byte) (ParsedEnvelope, error) {
 	if err := json.Unmarshal(envelope, &raw); err != nil {
 		return ParsedEnvelope{}, contractError("malformed_dsse_envelope", "envelope", nil)
 	}
-	if raw.PayloadType != ActivationManifestPayloadType && raw.PayloadType != TrustSetPayloadType && raw.PayloadType != ReleaseAttestationPayloadType {
+	knownProduction := raw.PayloadType == ActivationManifestPayloadType || raw.PayloadType == TrustSetPayloadType || raw.PayloadType == ReleaseAttestationPayloadType
+	if (!localDerivation && !knownProduction) || (localDerivation && raw.PayloadType != LocalDevelopmentDerivationPayloadType) {
 		return ParsedEnvelope{}, contractError("unknown_dsse_payload_type", "payloadType", nil)
 	}
 	payload, err := decodeCanonicalBase64("payload", raw.Payload, MaxDecodedPayloadBytes)

@@ -23,9 +23,33 @@ body {
 
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
 }
+
+.product-workspace { display: grid; gap: var(--stead-space-5); }
+.product-columns { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(16rem, 1fr); gap: var(--stead-space-5); align-items: start; }
+.product-panel { padding: var(--stead-space-5); border: 1px solid var(--stead-color-border); border-radius: var(--stead-radius-lg); background: var(--stead-color-surface); }
+.product-panel h2 { margin-block: 0 var(--stead-space-4); font-size: var(--stead-text-lg); }
+.product-panel p, .resource-detail small { color: var(--stead-color-text-muted); line-height: 1.6; }
+.product-panel form, .product-workspace label { display: grid; gap: var(--stead-space-2); }
+.product-panel form { gap: var(--stead-space-4); }
+.product-workspace input, .product-workspace select, .product-workspace textarea { min-height: 2.65rem; width: 100%; padding: var(--stead-space-2) var(--stead-space-3); color: var(--stead-color-text); background: var(--stead-color-canvas); border: 1px solid var(--stead-color-border); border-radius: var(--stead-radius-md); }
+.product-workspace textarea { min-height: 6rem; resize: vertical; }
+.product-workspace button, .session-indicator button { min-height: 2.65rem; padding: var(--stead-space-2) var(--stead-space-4); color: var(--stead-color-text); background: var(--stead-color-surface); border: 1px solid var(--stead-color-border); border-radius: var(--stead-radius-md); cursor: pointer; }
+.product-workspace button[type="submit"] { color: var(--stead-color-on-accent); background: var(--stead-color-accent); border-color: transparent; font-weight: 650; }
+.product-workspace button:disabled { opacity: .55; cursor: wait; }
+.organization-switcher { display: flex; align-items: end; gap: var(--stead-space-3); }
+.organization-switcher label { flex: 1; max-width: 28rem; }
+.resource-list { display: grid; gap: var(--stead-space-2); margin: 0; padding: 0; list-style: none; }
+.resource-list button { display: grid; width: 100%; gap: var(--stead-space-2); text-align: left; }
+.resource-list button:hover { background: var(--stead-color-canvas); }
+.resource-key { color: var(--stead-color-text-muted); font-size: var(--stead-text-sm); }
+.resource-list small { color: var(--stead-color-text-muted); }
+.product-error { padding: var(--stead-space-3); border: 1px solid currentColor; border-radius: var(--stead-radius-md); }
+.close-detail { float: right; }
+@media (max-width: 54rem) { .product-columns { grid-template-columns: 1fr; } }
 
 button,
 a,

@@ -1,0 +1,53 @@
+{
+  "scope": "One fresh private nondistributed real Stead adapter contract fixture; not product or release activation",
+  "date": "2026-09-05",
+  "adapter_source_revision": "f04a008e8a4638ef228f8b4b185db2d17c33566b",
+  "adapter_source_tree": "fd8f059c776b39406e358c42faaf6d7a9fc1cec8",
+  "adapter_binary_sha256": "1c52eae7e0ea4c20493d6cd147d1cb282257c1e9f5812e3ddbb2e979d10eac1a",
+  "toolchain": "Pinned Go 1.27.0, linux/amd64/v1, CGO_ENABLED=0, trimpath; independent byte-identical rebuilds; no dynamic interpreter or library section",
+  "upstream_gitea_revision": "cf0f4dce72a8799e8afe5307be7470caf6936dba",
+  "upstream_gitea_binary_sha256": "baa9f7f8d3acd4e92e9e009d4e1356377a4371074a16d207a92b309f907eec68",
+  "controller_source_sha256": "6b55434369b930c4fc82bab84606bf757e11bcb14dc89e9d74375c4b65cd1cc0",
+  "controller_binary_sha256": "b304018270aecddb5a4e2ebd34840c3880809660a297e53b3a15901ca4f373dd",
+  "profile_sha256": "4339bae77c5a98b9306ec53be2d1839105531b3221036c8ed683b380522441bb",
+  "inputs_sha256": "1d59cb61542a21fd602fd26f5ed3db96b5e3557d3396c812580c471244162368",
+  "full_notices_sha256": "d2dfd73e2a4c569042a844da8b4e2216a31f4b6f566e6c44f782a12f1f384185",
+  "input_records_verified": 8503,
+  "original_input_records_unchanged": 8500,
+  "result": {
+    "status": "passed",
+    "controller_exit_code": 0,
+    "adapter_owner_calls": 16,
+    "adapter_denied_calls": 8,
+    "controller_recorded_http_operations": 28,
+    "total_recorded_operations": 52,
+    "readiness_polling_excluded": true,
+    "adapter_stale_issue_status": 409,
+    "adapter_stale_file_status": 422,
+    "adapter_known_unknown_denial_status": 404,
+    "private_repositories": 4,
+    "synthetic_principals": 2,
+    "result_sha256": "f2d5074c0b37087811108f199f35061c453f4d90fcaf14e1294ca2dffde9205b",
+    "adapter_log_sha256": "6df33a704d508326e387185bf7c82f42fa57a9f10d4be5be7ae7c0537369ceb8",
+    "controller_observations_sha256": "3a5cbf42b8e9d5f86ffe27b8e40a346f1edabcb5f78af86800060baa16f83e15"
+  },
+  "reviews": {
+    "contract_owner_sha256": "728fc995415a6adae9bde6791a2cff8d6e7234ab1866a754d89cd7064d641d05",
+    "source_qa_sha256": "04b2c96218ad06772a9e82c4bffe5c80d66844f31233b4d8afaf217716f09ed9",
+    "runtime_qa_sha256": "8d1321f03101f81b3e2aaac5e9483815f886c7ce35a67c6d6d7c002d0e2be7d6",
+    "security_sha256": "948f5b2f302fd83bb54e7a004f9af514827f6fd4a9ce4e16bd8ca4fdb34c2554",
+    "qa_before_sha256": "2921d482546f21a4640e4bd6632313d1f47c730818bee73be494bc19e363e24a",
+    "qa_after_sha256": "57f8b95ca3a14e2a8476e1401667d3306572e7b08a656baf2ce3a35efe764654",
+    "full_foundation_check_sha256": "ea35e71f54bafc844924e1e6ebcffe1fdf5026918b68bdbbe17446c1696c1ce2"
+  },
+  "cleanup": "Controller exited successfully; independent QA verified provider shutdown, empty socket directory, absent PostgreSQL PID file and no candidate among inspectable same-UID executable/mount/network identities. Two pre-existing system processes retain documented inspection limits. All nine retained Stead listener identities are unchanged.",
+  "retained_limits": [
+    "Prior exact Gitea, PostgreSQL and native closure vulnerability/license findings and nonproduction-only acceptance remain; no release/runtime waiver or new dependency admission.",
+    "Only original Stead and standard-library test inputs were added; complete notices and all previous inputs remain unchanged.",
+    "Real consumer uses stock APIs inside a fresh isolated network, not the existing Stead installation, browser cookies or database state.",
+    "No application mutation dispatcher, central provider authorization, durable effect persistence, read scopes, hidden mappings, Work projection, OKF, product latency, compatibility matrix, TEST-009 or release completion is claimed.",
+    "A nil adapter result or rejected/conflict classification is not durable terminal proof; uncertain writes require separately authorized recovery and are never retried automatically.",
+    "The consumer log retains aggregate method/status/count assertions, not a separate 24-row HTTP log or provider body-equality proof. The controller retains its own 28 observations.",
+    "All prior failed fixtures, superseded dynamic binaries and preparation drafts remain preserved and inactive. No existing fixture was reused."
+  ]
+}
