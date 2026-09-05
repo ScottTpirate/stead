@@ -316,6 +316,9 @@ func (store *Store) finalParticipant(ctx context.Context, session *runtimeSessio
 	if err != nil {
 		return authorization.ErrDenied
 	}
+	// Lock acquisition and durable compare-max may have consumed the remaining
+	// decision lifetime. Never validate using the pre-wait clock sample.
+	now = time.Now().UTC()
 	for index, decision := range decisions {
 		session.states[index].PolicyTimeHighWater = anchor.PolicyTimeHighWater
 		session.states[index].PolicyTimeRevision = anchor.PolicyTimeRevision

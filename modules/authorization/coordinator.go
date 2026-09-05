@@ -25,6 +25,17 @@ type Coordinator struct{ config Config }
 // rollback beyond this bound denies, even though compare-max never decreases.
 const MaxPolicyClockSkew = 5 * time.Second
 
+// readCurrentAnchor brackets repository reads with independently retained host
+// state. A concurrent request may legitimately advance both host and DB copies
+// after the first snapshot; the database may never lead this later host read.
+func (coordinator *Coordinator) readCurrentAnchor(ctx context.Context, prior AnchorState) (AnchorState, error) {
+	current, err := coordinator.config.Anchor.Read(ctx)
+	if err != nil || current.Binding != prior.Binding || current.Binding != coordinator.config.Activation.binding || current.PolicyTimeRevision < prior.PolicyTimeRevision || current.PolicyTimeHighWater.Before(prior.PolicyTimeHighWater) {
+		return AnchorState{}, ErrDenied
+	}
+	return current, nil
+}
+
 // VerifiedActivation is sealed by VerifyActivation after archive, both
 // signatures, trust, model read-back, runtime policy and anchor verification.
 type VerifiedActivation struct {
@@ -194,8 +205,34 @@ func (coordinator *Coordinator) Authorize(ctx context.Context, session identity.
 	if !session.ValidAt(now) || now.Before(activation.issuedAt) || !now.Before(activation.expiresAt) {
 		return deny("context_denied")
 	}
+	expires := now.Add(2 * time.Second)
+	for _, bound := range []time.Time{session.ExpiresAt(), activation.expiresAt} {
+		if bound.Before(expires) {
+			expires = bound
+		}
+	}
 	state, err := coordinator.config.Repository.ReadState(ctx, session.Principal(), session.SessionID(), target)
-	if err != nil || !validState(state, session.Context(), target, activation.binding, now) {
+	if err != nil {
+		return deny("stale_authorization_input")
+	}
+	anchor, err = coordinator.readCurrentAnchor(ctx, anchor)
+	if err != nil {
+		return deny("stale_authorization_input")
+	}
+	fresh := coordinator.config.Clock().UTC()
+	if anchor.PolicyTimeHighWater.Sub(fresh) > MaxPolicyClockSkew {
+		return deny("context_denied")
+	}
+	if fresh.After(now) {
+		now = fresh
+	}
+	if now.Before(anchor.PolicyTimeHighWater) {
+		now = anchor.PolicyTimeHighWater
+	}
+	if !session.ValidAt(now) || now.Before(activation.issuedAt) || !now.Before(activation.expiresAt) || !now.Before(expires) {
+		return deny("context_denied")
+	}
+	if !validState(state, session.Context(), target, activation.binding, now) {
 		return deny("stale_authorization_input")
 	}
 	// A DB observed time copy may lag its independent anchor, never lead it.
@@ -223,14 +260,14 @@ func (coordinator *Coordinator) Authorize(ctx context.Context, session identity.
 		return deny(policy.Reason)
 	}
 	finished := coordinator.config.Clock().UTC()
+	if anchor.PolicyTimeHighWater.Sub(finished) > MaxPolicyClockSkew {
+		return deny("context_denied")
+	}
 	if finished.Before(now) {
 		finished = now
 	}
-	expires := now.Add(2 * time.Second)
-	for _, bound := range []time.Time{session.ExpiresAt(), state.ContextExpiresAt, activation.expiresAt} {
-		if bound.Before(expires) {
-			expires = bound
-		}
+	if state.ContextExpiresAt.Before(expires) {
+		expires = state.ContextExpiresAt
 	}
 	if ctx.Err() != nil || !finished.Before(expires) {
 		return deny("context_denied")

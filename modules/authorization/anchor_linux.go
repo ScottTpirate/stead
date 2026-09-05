@@ -5,6 +5,7 @@ package authorization
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"syscall"
@@ -15,6 +16,8 @@ import (
 // application database and its backups. This first implementation is for one
 // local-development host only; no production HA, restore or rotation claim.
 type LocalAnchor struct{ path string }
+
+const localAnchorLockWait = 100 * time.Millisecond
 
 func safeAnchorPath(path string) bool {
 	if !filepath.IsAbs(path) || filepath.Clean(path) != path {
@@ -81,7 +84,7 @@ func validAnchorState(state AnchorState) bool {
 }
 
 func (anchor *LocalAnchor) locked(ctx context.Context, action func() error) error {
-	if anchor == nil || ctx.Err() != nil || !safeAnchorPath(anchor.path) {
+	if anchor == nil || ctx == nil || ctx.Err() != nil || !safeAnchorPath(anchor.path) {
 		return ErrDenied
 	}
 	lockPath := anchor.path + ".lock"
@@ -93,12 +96,32 @@ func (anchor *LocalAnchor) locked(ctx context.Context, action func() error) erro
 	if !safeAnchorFile(lockPath) {
 		return ErrDenied
 	}
-	// Non-blocking flock avoids waiting past a request's disclosure deadline.
-	if syscall.Flock(int(file.Fd()), syscall.LOCK_EX|syscall.LOCK_NB) != nil {
-		return ErrDenied
+	// A concurrent compare-max includes fsync. Brief contention is not a stale
+	// anchor, but neither a stuck holder nor an unbounded context may stall a
+	// request indefinitely. Only contention is retried; all other failures deny.
+	wait, cancel := context.WithTimeout(ctx, localAnchorLockWait)
+	defer cancel()
+	for {
+		if wait.Err() != nil {
+			return ErrDenied
+		}
+		err := syscall.Flock(int(file.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
+		if err == nil {
+			break
+		}
+		if !errors.Is(err, syscall.EWOULDBLOCK) && !errors.Is(err, syscall.EAGAIN) {
+			return ErrDenied
+		}
+		timer := time.NewTimer(time.Millisecond)
+		select {
+		case <-wait.Done():
+			timer.Stop()
+			return ErrDenied
+		case <-timer.C:
+		}
 	}
 	defer syscall.Flock(int(file.Fd()), syscall.LOCK_UN)
-	if ctx.Err() != nil {
+	if wait.Err() != nil {
 		return ErrDenied
 	}
 	return action()

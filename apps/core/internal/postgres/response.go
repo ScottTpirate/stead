@@ -123,6 +123,8 @@ func (store *Store) finalResponseOperation(ctx context.Context, binding transact
 	if err != nil {
 		return authorization.ErrDenied
 	}
+	// Include bounded host-lock waiting and fsync in the sealed expiry check.
+	now = time.Now().UTC()
 	expires := primary.ExpiresAt
 	for index, decision := range decisions {
 		states[index].PolicyTimeHighWater = anchor.PolicyTimeHighWater
@@ -167,45 +169,64 @@ func (store *Store) Recheck(ctx context.Context, revision transaction.BoundRevis
 	if len(revision.OpaqueCopy()) > 1<<20 || json.Unmarshal(revision.OpaqueCopy(), &proof) != nil || len(proof.States) == 0 || len(proof.States) > 101 {
 		return transaction.RecheckReceipt{}, authorization.ErrDenied
 	}
-	now := time.Now().UTC()
-	anchor, err := store.config.Anchor.Read(ctx)
-	if err != nil || anchor.Binding != proof.Binding {
+	if err := recheckResponseStates(ctx, proof, store.config.Anchor, store, time.Now); err != nil {
 		return transaction.RecheckReceipt{}, authorization.ErrDenied
 	}
+	return issuer.Confirm(revision)
+}
+
+// recheckResponseStates holds no authority itself: only Recheck can turn a
+// committed issuer-bound revision into a receipt. Existing read-only owner
+// ports make the snapshot ordering and terminal fence independently testable.
+func recheckResponseStates(ctx context.Context, proof responseProof, host authorization.AnchorReader, repository authorization.SetRepository, clock func() time.Time) error {
+	if ctx == nil || ctx.Err() != nil || len(proof.States) == 0 || len(proof.States) > 101 {
+		return authorization.ErrDenied
+	}
+	now := clock().UTC()
+	anchor, err := host.Read(ctx)
+	if err != nil || anchor.Binding != proof.Binding {
+		return authorization.ErrDenied
+	}
 	if _, err = boundedPolicyTime(now, anchor.PolicyTimeHighWater, proof.ExpiresAt); err != nil {
-		return transaction.RecheckReceipt{}, authorization.ErrDenied
+		return authorization.ErrDenied
 	}
 	refs := make([]authorization.ResourceRef, len(proof.States))
 	for index, prior := range proof.States {
-		if prior.Principal != proof.States[0].Principal || prior.SessionID != proof.States[0].SessionID {
-			return transaction.RecheckReceipt{}, authorization.ErrDenied
+		if prior.Principal != proof.States[0].Principal || prior.SessionID != proof.States[0].SessionID || anchor.PolicyTimeHighWater.Before(prior.PolicyTimeHighWater) || anchor.PolicyTimeRevision < prior.PolicyTimeRevision {
+			return authorization.ErrDenied
 		}
 		refs[index] = prior.Resource
 	}
-	currents, err := store.ReadStates(ctx, proof.States[0].Principal, proof.States[0].SessionID, refs)
-	if err != nil {
-		return transaction.RecheckReceipt{}, authorization.ErrDenied
+	currents, err := repository.ReadStates(ctx, proof.States[0].Principal, proof.States[0].SessionID, refs)
+	if err != nil || len(currents) != len(proof.States) {
+		return authorization.ErrDenied
+	}
+	// Compare database copies with a host snapshot taken after those reads, not
+	// a snapshot that a concurrent response could already have advanced.
+	latest, err := host.Read(ctx)
+	if err != nil || latest.Binding != proof.Binding || latest.PolicyTimeRevision < anchor.PolicyTimeRevision || latest.PolicyTimeHighWater.Before(anchor.PolicyTimeHighWater) {
+		return authorization.ErrDenied
 	}
 	for index, prior := range proof.States {
 		current := currents[index]
-		if current.PolicyTimeHighWater.After(anchor.PolicyTimeHighWater) || current.PolicyTimeRevision > anchor.PolicyTimeRevision || anchor.PolicyTimeHighWater.Before(prior.PolicyTimeHighWater) || anchor.PolicyTimeRevision < prior.PolicyTimeRevision {
-			return transaction.RecheckReceipt{}, authorization.ErrDenied
+		if current.PolicyTimeHighWater.After(latest.PolicyTimeHighWater) || current.PolicyTimeRevision > latest.PolicyTimeRevision || latest.PolicyTimeHighWater.Before(prior.PolicyTimeHighWater) || latest.PolicyTimeRevision < prior.PolicyTimeRevision {
+			return authorization.ErrDenied
 		}
 		current.PolicyTimeHighWater = prior.PolicyTimeHighWater
 		current.PolicyTimeRevision = prior.PolicyTimeRevision
 		if !reflect.DeepEqual(current, prior) {
-			return transaction.RecheckReceipt{}, authorization.ErrDenied
+			return authorization.ErrDenied
 		}
 	}
 	// A bounded list can take longer to recheck than one resource. The proof
 	// must still be current at the end, not merely when the loop started.
-	latest, err := store.config.Anchor.Read(ctx)
-	if err != nil || latest.Binding != proof.Binding || latest.PolicyTimeRevision < anchor.PolicyTimeRevision || latest.PolicyTimeHighWater.Before(anchor.PolicyTimeHighWater) {
-		return transaction.RecheckReceipt{}, authorization.ErrDenied
+	terminal, err := host.Read(ctx)
+	if err != nil || terminal.Binding != proof.Binding || terminal.PolicyTimeRevision < latest.PolicyTimeRevision || terminal.PolicyTimeHighWater.Before(latest.PolicyTimeHighWater) {
+		return authorization.ErrDenied
 	}
-	finished := time.Now().UTC()
-	if _, err = boundedPolicyTime(finished, latest.PolicyTimeHighWater, proof.ExpiresAt); err != nil {
-		return transaction.RecheckReceipt{}, authorization.ErrDenied
+	finished := clock().UTC()
+	if _, err = boundedPolicyTime(finished, terminal.PolicyTimeHighWater, proof.ExpiresAt); err != nil || ctx.Err() != nil {
+		return authorization.ErrDenied
 	}
-	return issuer.Confirm(revision)
+	return nil
 }
