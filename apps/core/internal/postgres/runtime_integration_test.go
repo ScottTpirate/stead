@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/url"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -81,7 +82,7 @@ func TestLivePostgresBootstrapRolesSessionAndAtomicity(t *testing.T) {
 		t.Fatal(err)
 	}
 	now := time.Now().UTC().Truncate(time.Microsecond)
-	binding := authorization.ActivationBinding{ActivationSetID: "test-only-activation", OpenFGAModelID: "test-only-model", OpenFGAStoreID: "test-only-store", ActivationSequence: 1, DeploymentPolicyID: "test-only-domain"}
+	binding := authorization.ActivationBinding{InstallationID: instance, ActivationSetID: "test-only-activation", OpenFGAModelID: "test-only-model", OpenFGAStoreID: "test-only-store", ActivationSequence: 1, DeploymentPolicyID: "test-only-domain"}
 	anchor := &databaseTestAnchor{state: authorization.AnchorState{Binding: binding, PolicyTimeHighWater: now, PolicyTimeRevision: 1}}
 	session := identity.SessionRecord{ID: sessionID, Principal: identity.Principal{Type: "user", ID: principal}, InstanceID: instance, SecurityDomain: binding.DeploymentPolicyID, Authority: "stead_local_identity", AuthenticationStrength: "local_bootstrap", NetworkZone: "loopback", DeviceTrust: "local", Environment: "local-development", ClassificationCeilings: map[string]string{"local": "internal"}, IssuedAt: now, ExpiresAt: now.Add(time.Hour), Revision: 1, PrincipalRevision: 1, Active: true, PrincipalActive: true}
 	bootstrap := BootstrapConfig{AdminDSN: adminDSN, AppPassword: runtimePassword, InstanceID: instance, SecurityDomain: binding.DeploymentPolicyID, OpenFGAStoreID: binding.OpenFGAStoreID, ActivationBinding: binding, PolicyTimeHighWater: now, PolicyTimeRevision: 1, LabelID: labelID, Label: classification.Label{ProfileID: "local", SensitivityLevel: "internal", Version: 1}, Session: session, TokenDigest: digest}
@@ -143,6 +144,7 @@ func TestLivePostgresBootstrapRolesSessionAndAtomicity(t *testing.T) {
 		t.Fatal("unsealed create accepted")
 	}
 	t.Run("real_transaction_commit_rollback_outbox", func(t *testing.T) { testAtomicBackend(t, store) })
+	t.Run("real_keyset_candidate_pages", func(t *testing.T) { testCandidatePages(t, store) })
 	var serverVersion int
 	var grantor string
 	db, err := pgx.Connect(ctx, adminDSN)
@@ -164,6 +166,42 @@ func TestLivePostgresBootstrapRolesSessionAndAtomicity(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Logf("LIVE PostgreSQL %d: SCRAM, runtime NOINHERIT owner isolation, token one-use/revocation, commit+rollback+outbox and complete catalog PASS", serverVersion)
+}
+
+func testCandidatePages(t *testing.T, store *Store) {
+	ctx := context.Background()
+	org, _ := NewID()
+	teamIDs := []string{}
+	for index := 0; index < 105; index++ {
+		id, _ := NewID()
+		teamIDs = append(teamIDs, id)
+	}
+	slices.Sort(teamIDs)
+	if err := store.owned(ctx, "organization", true, func(tx pgx.Tx) error {
+		for _, id := range teamIDs {
+			if _, err := tx.Exec(ctx, `INSERT INTO organization.teams(id,organization_id,key,depth,record) VALUES($1,$2,$3,0,'{}')`, id, org, id); err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	first, err := store.ListTeamPageIDs(ctx, org, "", 100)
+	if err != nil || !slices.Equal(first, teamIDs[:100]) {
+		t.Fatal("first real keyset chunk differs", err)
+	}
+	second, err := store.ListTeamPageIDs(ctx, org, first[99], 100)
+	if err != nil || !slices.Equal(second, teamIDs[100:]) {
+		t.Fatal("later real keyset rows were starved", err)
+	}
+	empty, err := store.ListTeamPageIDs(ctx, store.config.InstanceID, "", 100)
+	if err != nil || len(empty) != 0 {
+		t.Fatal("candidate scope crossed Organizations")
+	}
+	if _, err = store.ListTeamPageIDs(ctx, org, "malformed", 100); err == nil {
+		t.Fatal("malformed cursor reached SQL")
+	}
 }
 
 func testDSN(user, password, database string) string {

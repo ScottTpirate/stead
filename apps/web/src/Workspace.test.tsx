@@ -2,7 +2,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
 
-import { PlatformApiError, type PlatformResponse } from "../../../packages/api-client/src/client";
+import { PlatformApiError, type PlatformResponse, type PlatformRequestOptions } from "../../../packages/api-client/src/client";
 import { platformClient } from "./platform";
 import { matchRoute } from "./routes";
 import { Workspace } from "./Workspace";
@@ -27,8 +27,8 @@ it("clears the disposable credential and creates through the generated client", 
     if (operation === "getSession") throw new PlatformApiError(401);
     if (operation === "createSession") return response(session as T);
     if (operation === "createOrganization") { created = true; return response(organization as T); }
-    if (operation === "listOrganizations") return response((created ? [organization] : []) as T);
-    return response([] as T);
+    if (operation === "listOrganizations") return response({ items: created ? [organization] : [] } as T);
+    return response({ items: [] } as T);
   });
   const user = userEvent.setup();
   render(<Workspace route={matchRoute("/")} navigate={() => {}} />);
@@ -58,7 +58,7 @@ it("does not render a resource from a denied mutation", async () => {
   vi.spyOn(platformClient, "request").mockImplementation(async <T,>(operation: string) => {
     if (operation === "getSession") return response(session as T);
     if (operation === "createOrganization") throw new PlatformApiError(404);
-    return response([] as T);
+    return response({ items: [] } as T);
   });
   const user = userEvent.setup();
   render(<Workspace route={matchRoute("/")} navigate={() => {}} />);
@@ -69,4 +69,22 @@ it("does not render a resource from a denied mutation", async () => {
   await screen.findByRole("alert");
   expect(screen.queryByRole("region", { name: "Resource details" })).toBeNull();
   expect(screen.queryByText("Denied title")).toBeNull();
+});
+
+it("loads another authorized page without replacing the first page", async () => {
+  const later = { ...organization, id: "fixture-later-org", key: "ENG", title: "Later authorized Organization" };
+  const request = vi.spyOn(platformClient, "request").mockImplementation(async <T,>(operation: string, options?: PlatformRequestOptions) => {
+    if (operation === "getSession") return response(session as T);
+    if (operation === "listOrganizations") return response((options?.query?.after
+      ? { items: [later] }
+      : { items: [organization], next_after: organization.id }) as T);
+    return response({ items: [] } as T);
+  });
+  const user = userEvent.setup();
+  render(<Workspace route={matchRoute("/")} navigate={() => {}} />);
+  await user.click(await screen.findByRole("button", { name: "Load more Organizations" }));
+  await screen.findByRole("button", { name: "ENG Later authorized Organization" });
+  expect(screen.getByRole("button", { name: "OPS Authorized server title" })).toBeTruthy();
+  expect(request).toHaveBeenCalledWith("listOrganizations", { query: { page_size: 20, after: organization.id } });
+  expect(screen.queryByRole("button", { name: "Load more Organizations" })).toBeNull();
 });

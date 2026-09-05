@@ -27,6 +27,7 @@ interface Resource {
 }
 
 type MutationForm = "organization" | "team" | "project";
+interface ResourcePage { items: Resource[]; next_after?: string }
 
 // Authorized presentation is memory-only. A generation fence prevents responses
 // from a prior session or Organization from repopulating a newly cleared view.
@@ -40,6 +41,7 @@ export function Workspace({ route, navigate }: { readonly route: RouteMatch; rea
   const [teams, setTeams] = useState<Resource[]>([]);
   const [projects, setProjects] = useState<Resource[]>([]);
   const [peek, setPeek] = useState<Resource | null>(null);
+  const [continuations, setContinuations] = useState<Record<MutationForm, string>>({ organization: "", team: "", project: "" });
   const generation = useRef(0);
   const mutationKey = useRef<{ fingerprint: string; value: string } | null>(null);
 
@@ -51,6 +53,7 @@ export function Workspace({ route, navigate }: { readonly route: RouteMatch; rea
     setTeams([]);
     setProjects([]);
     setPeek(null);
+    setContinuations({ organization: "", team: "", project: "" });
     mutationKey.current = null;
     clearAuthorizedPresentationState();
   }, []);
@@ -60,12 +63,18 @@ export function Workspace({ route, navigate }: { readonly route: RouteMatch; rea
     setError("The request could not be completed. Please refresh or try again.");
   }, [clear]);
 
-  const loadOrganizations = useCallback(async (revision: number) => {
-    const result = await platformClient.request<Resource[]>("listOrganizations");
-    if (revision !== generation.current) return;
-    setOrganizations(result.data);
-    setOrganizationID((current) => result.data.some((item) => item.id === current) ? current : result.data[0]?.id ?? "");
+  const applyPage = useCallback((kind: MutationForm, page: ResourcePage, append: boolean) => {
+    const update = (prior: Resource[]) => append ? [...new Map([...prior, ...page.items].map((item) => [item.id, item])).values()] : page.items;
+    ({ organization: setOrganizations, team: setTeams, project: setProjects })[kind](update);
+    setContinuations((prior) => ({ ...prior, [kind]: page.next_after ?? "" }));
   }, []);
+
+  const loadOrganizations = useCallback(async (revision: number, after = "") => {
+    const result = await platformClient.request<ResourcePage>("listOrganizations", { query: { page_size: 20, ...(after ? { after } : {}) } });
+    if (revision !== generation.current) return;
+    applyPage("organization", result.data, after !== "");
+    if (!after) setOrganizationID((current) => result.data.items.some((item) => item.id === current) ? current : result.data.items[0]?.id ?? "");
+  }, [applyPage]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -84,19 +93,20 @@ export function Workspace({ route, navigate }: { readonly route: RouteMatch; rea
     setTeams([]);
     setProjects([]);
     setPeek(null);
+    setContinuations((prior) => ({ ...prior, team: "", project: "" }));
     if (!session || !organizationID) return;
     const controller = new AbortController();
     const revision = generation.current;
     void Promise.all([
-      platformClient.request<Resource[]>("listTeams", { path: { organization_id: organizationID }, signal: controller.signal }),
-      platformClient.request<Resource[]>("listProjects", { path: { organization_id: organizationID }, signal: controller.signal }),
+      platformClient.request<ResourcePage>("listTeams", { path: { organization_id: organizationID }, query: { page_size: 20 }, signal: controller.signal }),
+      platformClient.request<ResourcePage>("listProjects", { path: { organization_id: organizationID }, query: { page_size: 20 }, signal: controller.signal }),
     ]).then(([teamList, projectList]) => {
       if (controller.signal.aborted || generation.current !== revision) return;
-      setTeams(teamList.data);
-      setProjects(projectList.data);
+      applyPage("team", teamList.data, false);
+      applyPage("project", projectList.data, false);
     }).catch((cause: unknown) => { if (!controller.signal.aborted) failed(cause); });
     return () => { controller.abort(); };
-  }, [organizationID, session, failed]);
+  }, [organizationID, session, failed, applyPage]);
 
   useEffect(() => {
     if (!session) return;
@@ -127,6 +137,20 @@ export function Workspace({ route, navigate }: { readonly route: RouteMatch; rea
     try { await platformClient.request("deleteSession"); }
     catch (cause) { failed(cause); }
     finally { clear(); setBusy(false); }
+  }
+
+  async function loadMore(kind: MutationForm) {
+    const after = continuations[kind];
+    if (!after || busy) return;
+    const revision = generation.current;
+    setBusy(true); setError("");
+    try {
+      if (kind === "organization") await loadOrganizations(revision, after);
+      else {
+        const result = await platformClient.request<ResourcePage>(kind === "team" ? "listTeams" : "listProjects", { path: { organization_id: organizationID }, query: { page_size: 20, after } });
+        if (revision === generation.current) applyPage(kind, result.data, true);
+      }
+    } catch (cause) { failed(cause); } finally { setBusy(false); }
   }
 
   async function create(event: FormEvent<HTMLFormElement>, kind: MutationForm) {
@@ -160,10 +184,13 @@ export function Workspace({ route, navigate }: { readonly route: RouteMatch; rea
       setPeek(result.data);
       if (kind === "organization") {
         await loadOrganizations(revision);
-        if (revision === generation.current) setOrganizationID(result.data.id);
+        if (revision === generation.current) {
+          setOrganizations((prior) => prior.some((item) => item.id === result.data.id) ? prior : [...prior, result.data]);
+          setOrganizationID(result.data.id);
+        }
       } else {
-        const list = await platformClient.request<Resource[]>(kind === "team" ? "listTeams" : "listProjects", { path: { organization_id: organizationID } });
-        if (revision === generation.current) (kind === "team" ? setTeams : setProjects)(list.data);
+        const list = await platformClient.request<ResourcePage>(kind === "team" ? "listTeams" : "listProjects", { path: { organization_id: organizationID }, query: { page_size: 20 } });
+        if (revision === generation.current) applyPage(kind, list.data, false);
       }
     } catch (cause) { failed(cause); } finally { setBusy(false); }
   }
@@ -197,6 +224,7 @@ export function Workspace({ route, navigate }: { readonly route: RouteMatch; rea
             {organizations.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}
           </select></label>
           <button type="button" disabled={busy} onClick={() => { setError(""); void loadOrganizations(generation.current).catch(failed); }}>Refresh</button>
+          {area !== "home" && continuations.organization && <button type="button" disabled={busy} onClick={() => { void loadMore("organization"); }}>Load more Organizations</button>}
         </div>
         {(area === "home" || area === "teams" || area === "projects") ? <div className="product-columns">
           <section className="product-panel">
@@ -207,6 +235,7 @@ export function Workspace({ route, navigate }: { readonly route: RouteMatch; rea
                 {item.parent_team_id && <small>Child Team · access granted separately</small>}
               </button></li>)}
             </ul>}
+            {continuations[area === "teams" ? "team" : area === "projects" ? "project" : "organization"] && <button type="button" disabled={busy} onClick={() => { void loadMore(area === "teams" ? "team" : area === "projects" ? "project" : "organization"); }}>Load more {area === "teams" ? "Teams" : area === "projects" ? "Projects" : "Organizations"}</button>}
           </section>
           {(area === "home" || organizationID) && <section className="product-panel">
             <h2>Create {area === "home" ? "an Organization" : area === "teams" ? "a Team" : "a general Project"}</h2>

@@ -99,6 +99,7 @@ const SUPPORTED_REQUEST_SCHEMA_KEYWORDS = new Set([
   "minimum",
   "maximum",
   "minItems",
+  "maxItems",
   "minProperties",
   "required",
   "properties",

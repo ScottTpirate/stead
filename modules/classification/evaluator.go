@@ -97,26 +97,40 @@ func CompileValidatedProfile(profileJSON, domainJSON []byte) (*Evaluator, error)
 }
 
 type Result struct {
+	DenialReason string
 	Marking      string
 	Obligations  []string
 	Presentation SecurityPresentation
 }
 
 func (evaluator *Evaluator) Evaluate(label Label, session identity.SessionRecord) (Result, error) {
-	if evaluator == nil || label.ProfileID != evaluator.profile.ID || label.Version == 0 || session.SecurityDomain != evaluator.domain.ID || !slices.Contains(evaluator.domain.Authorities, session.Authority) || !slices.Contains(evaluator.domain.Network.Zones, session.NetworkZone) {
-		return Result{}, ErrDenied
+	deny := func(reason string) (Result, error) { return Result{DenialReason: reason}, ErrDenied }
+	if evaluator == nil || label.ProfileID != evaluator.profile.ID || label.Version == 0 || session.SecurityDomain != evaluator.domain.ID || !slices.Contains(evaluator.domain.Network.Zones, session.NetworkZone) {
+		return deny("context_denied")
+	}
+	if !slices.Contains(evaluator.domain.Authorities, session.Authority) {
+		return deny("trusted_attribute_invalid")
+	}
+	if len(label.Compartments) != 0 {
+		return deny("compartment_missing")
+	}
+	if len(label.DisseminationControls)+len(label.ExportControls) != 0 {
+		return deny("dissemination_denied")
+	}
+	if len(label.ReleasableTo) != 0 {
+		return deny("affiliation_denied")
 	}
 	// There are no trusted compartment/handling/export assertions on bootstrap
 	// sessions. No restricted label is reduced to a sensitivity-only label.
 	if len(label.HandlingRegimes)+len(label.Categories)+len(label.Compartments)+len(label.DisseminationControls)+len(label.ReleasableTo)+len(label.ExportControls)+len(label.DerivationSources) != 0 || label.Originator != "" || label.ClassificationAuthority != "" || label.DeclassificationOrReviewInstructions != "" {
-		return Result{}, ErrDenied
+		return deny("profile_handling_denied")
 	}
 	levels := evaluator.profile.Sensitivity
 	rank := slices.Index(levels, label.SensitivityLevel)
 	sessionRank := slices.Index(levels, session.ClassificationCeilings[label.ProfileID])
 	deploymentRank := slices.Index(levels, evaluator.domain.Ceilings[label.ProfileID].Level)
 	if rank < 0 || sessionRank < 0 || deploymentRank < 0 || rank > sessionRank || rank > deploymentRank {
-		return Result{}, ErrDenied
+		return deny("ceiling_exceeded")
 	}
 	present := func(value term) bool { return value.Dimension == "sensitivity" && value.ID == label.SensitivityLevel }
 	all := func(terms []term) bool {
@@ -129,29 +143,29 @@ func (evaluator *Evaluator) Evaluate(label Label, session identity.SessionRecord
 	}
 	for _, rule := range evaluator.profile.Semantics.Implications {
 		if all(rule.When) && !all(rule.Require) {
-			return Result{}, ErrDenied
+			return deny("profile_handling_denied")
 		}
 	}
 	for _, rule := range evaluator.profile.Semantics.Incompatibilities {
 		if all(rule.All) {
-			return Result{}, ErrDenied
+			return deny("profile_handling_denied")
 		}
 	}
 	for _, rule := range evaluator.profile.Semantics.Constraints {
 		for _, value := range rule.When {
 			if present(value) && !slices.Contains(rule.Allowed, label.SensitivityLevel) {
-				return Result{}, ErrDenied
+				return deny("profile_handling_denied")
 			}
 		}
 	}
 	for _, rule := range evaluator.profile.Semantics.Dimensions {
 		if all(rule.When) {
-			return Result{}, ErrDenied
+			return deny("profile_handling_denied")
 		}
 	}
 	for _, rule := range evaluator.profile.Semantics.Contexts {
 		if all(rule.When) {
-			return Result{}, ErrDenied
+			return deny("profile_handling_denied")
 		}
 	}
 	for _, marking := range evaluator.profile.Presentation.Markings {
@@ -160,5 +174,5 @@ func (evaluator *Evaluator) Evaluate(label Label, session identity.SessionRecord
 			return Result{Marking: marking.Text, Obligations: []string{"display_marking", "audit_access"}, Presentation: presentation}, nil
 		}
 	}
-	return Result{}, ErrDenied
+	return deny("context_denied")
 }

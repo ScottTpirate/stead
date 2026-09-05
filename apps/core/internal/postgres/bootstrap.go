@@ -54,6 +54,9 @@ var schemaTables = map[string]map[string]string{
 
 func Bootstrap(ctx context.Context, config BootstrapConfig) (BootstrapResult, error) {
 	binding := config.ActivationBinding
+	if binding.InstallationID != config.InstanceID {
+		return BootstrapResult{}, errors.New("bootstrap installation binding mismatch")
+	}
 	digest := binding.Digest()
 	if !identity.ValidID(config.InstanceID) || !identity.ValidID(config.LabelID) || !identity.ValidID(config.Session.ID) || !config.Session.Principal.Valid() || config.Session.Principal.Type != "user" || config.Session.InstanceID != config.InstanceID || config.Session.SecurityDomain != config.SecurityDomain || config.SecurityDomain == "" || config.OpenFGAStoreID == "" || binding.OpenFGAStoreID != config.OpenFGAStoreID || binding.DeploymentPolicyID != config.SecurityDomain || binding.ActivationSetID == "" || binding.ActivationSequence == 0 || binding.OpenFGAModelID == "" || config.PolicyTimeHighWater.IsZero() || config.PolicyTimeRevision == 0 || len(config.AppPassword) < 24 || config.TokenDigest == ([32]byte{}) || config.Label.Version == 0 || config.Label.ProfileID == "" || config.Session.Revision != 1 || config.Session.PrincipalRevision != 1 || !config.Session.Active || !config.Session.PrincipalActive || !config.Session.ExpiresAt.After(time.Now()) {
 		return BootstrapResult{}, errors.New("invalid bootstrap configuration")

@@ -71,6 +71,29 @@ const validOperationOptions = {
   },
 };
 
+test("authorized pages enforce bounded query and generated page envelopes", async () => {
+  let calls = 0;
+  const headers = { "content-type": "application/json", "stead-schema-version": "1.0" };
+  let payload = { items: [], next_after: VALID_UUID };
+  const client = createPlatformClient({ fetchImplementation: async (url) => {
+    calls += 1;
+    assert.match(String(url), /page_size=2/u);
+    assert.match(String(url), new RegExp(`after=${VALID_UUID}`, "u"));
+    return new Response(JSON.stringify(payload), { status: 200, headers });
+  } });
+  const options = { path: { organization_id: VALID_UUID }, query: { page_size: 2, after: VALID_UUID } };
+  assert.deepEqual((await client.request("listProjects", options)).data, payload);
+  for (const query of [{ page_size: 0 }, { page_size: 21 }, { page_size: 1.5 }, { after: "hidden-id" }, { total: 100 }]) {
+    await assert.rejects(client.request("listProjects", { path: options.path, query }), /(?:query parameter|unknown query)/u);
+  }
+  assert.equal(calls, 1);
+  const item = schemaFixture(operationDefinitions.listProjects.response.successSchemas[200]["application/json"].properties.items.items);
+  payload = { items: Array.from({ length: 21 }, () => item) };
+  await assert.rejects(client.request("listProjects", options), (error) => error instanceof PlatformApiError && error.status === 502);
+  payload = { items: [], next_after: "not-an-authorized-resource-coordinate" };
+  await assert.rejects(client.request("listProjects", options), (error) => error instanceof PlatformApiError && error.status === 502);
+});
+
 function schemaFixture(schema) {
   const constraints = flattenAllOf(schema);
   const constValues = constraints

@@ -54,7 +54,8 @@ paths:
       tags: [Organizations]
       summary: List only individually authorized Organizations
       operationId: listOrganizations
-      description: Bounded to 100 authorized results, without unfiltered totals or existence metadata.
+      description: Returns an authorized page, without unfiltered totals or existence metadata. Continuation is the last returned authorized ID, and is emitted only after finding another authorized row. A revoked or cross-scope cursor denies; bounded discovery exhaustion returns a generic failure, never a truncated page.
+      parameters: [{$ref: '#/components/parameters/PageSize'}, {$ref: '#/components/parameters/After'}]
       responses: {'200': {$ref: '#/components/responses/OrganizationList'}, default: {$ref: '#/components/responses/Problem'}}
     post:
       tags: [Organizations]
@@ -76,7 +77,7 @@ paths:
       summary: List authorized Teams in an Organization
       operationId: listTeams
       description: Hierarchy is returned only after authorization; parentage does not grant access.
-      parameters: [{$ref: '#/components/parameters/OrganizationId'}]
+      parameters: [{$ref: '#/components/parameters/OrganizationId'}, {$ref: '#/components/parameters/PageSize'}, {$ref: '#/components/parameters/After'}]
       responses: {'200': {$ref: '#/components/responses/TeamList'}, default: {$ref: '#/components/responses/Problem'}}
     post:
       tags: [Teams]
@@ -97,7 +98,7 @@ paths:
       tags: [Projects]
       summary: List individually authorized Project views
       operationId: listProjects
-      parameters: [{$ref: '#/components/parameters/OrganizationId'}]
+      parameters: [{$ref: '#/components/parameters/OrganizationId'}, {$ref: '#/components/parameters/PageSize'}, {$ref: '#/components/parameters/After'}]
       responses: {'200': {$ref: '#/components/responses/ProjectList'}, default: {$ref: '#/components/responses/Problem'}}
     post:
       tags: [Projects]
@@ -180,6 +181,8 @@ components:
     oidc: {type: openIdConnect, openIdConnectUrl: '/.well-known/openid-configuration'}
     localSession: {type: apiKey, in: cookie, name: __Host-stead_session, description: Explicit local-development-only bootstrap identity; still subject to the central authorization boundary}
   parameters:
+    PageSize: {name: page_size, in: query, description: Maximum authorized items per page; omitted means 20., schema: {type: integer, minimum: 1, maximum: 20}}
+    After: {name: after, in: query, description: Last returned authorized resource ID; reauthorized in the requested scope on every use. Not an access token., schema: {$ref: '#/components/schemas/UuidV7'}}
     OrganizationId: {name: organization_id, in: path, required: true, schema: {$ref: '#/components/schemas/UuidV7'}}
     TeamId: {name: team_id, in: path, required: true, schema: {$ref: '#/components/schemas/UuidV7'}}
     ProjectId: {name: project_id, in: path, required: true, schema: {$ref: '#/components/schemas/UuidV7'}}
@@ -190,6 +193,27 @@ components:
     ETag: {schema: {type: string}, description: Strong resource version validator}
     SteadSchemaVersion: {schema: {type: string, pattern: '^[1-9][0-9]*\.[0-9]+$'}, description: Exact response representation schema version}
   schemas:
+    OrganizationPage:
+      type: object
+      required: [items]
+      properties:
+        items: {type: array, maxItems: 20, items: {$ref: '#/components/schemas/Organization'}}
+        next_after: {$ref: '#/components/schemas/UuidV7'}
+      additionalProperties: false
+    TeamPage:
+      type: object
+      required: [items]
+      properties:
+        items: {type: array, maxItems: 20, items: {$ref: '#/components/schemas/Team'}}
+        next_after: {$ref: '#/components/schemas/UuidV7'}
+      additionalProperties: false
+    ProjectPage:
+      type: object
+      required: [items]
+      properties:
+        items: {type: array, maxItems: 20, items: {$ref: '#/components/schemas/ProjectView'}}
+        next_after: {$ref: '#/components/schemas/UuidV7'}
+      additionalProperties: false
     Session:
       type: object
       required: [principal, instance_id, expires_at, session_revision]
@@ -318,11 +342,11 @@ components:
       additionalProperties: false
   responses:
     Session: {description: Authenticated identity context without resource grants, content: {application/json: {schema: {$ref: '#/components/schemas/Session'}}}}
-    OrganizationList: {description: Authorized Organizations only, headers: {Stead-Schema-Version: {$ref: '#/components/headers/SteadSchemaVersion'}}, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/Organization'}}}}}
+    OrganizationList: {description: Authorized Organization page only, headers: {Stead-Schema-Version: {$ref: '#/components/headers/SteadSchemaVersion'}}, content: {application/json: {schema: {$ref: '#/components/schemas/OrganizationPage'}}}}
     Team: {description: Authorized Team, headers: {ETag: {$ref: '#/components/headers/ETag'}, Stead-Schema-Version: {$ref: '#/components/headers/SteadSchemaVersion'}}, content: {application/json: {schema: {$ref: '#/components/schemas/Team'}}}}
-    ProjectList: {description: Authorized Projects only, headers: {Stead-Schema-Version: {$ref: '#/components/headers/SteadSchemaVersion'}}, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/ProjectView'}}}}}
+    ProjectList: {description: Authorized Project page only, headers: {Stead-Schema-Version: {$ref: '#/components/headers/SteadSchemaVersion'}}, content: {application/json: {schema: {$ref: '#/components/schemas/ProjectPage'}}}}
     Organization: {description: Organization, headers: {ETag: {$ref: '#/components/headers/ETag'}, Stead-Schema-Version: {$ref: '#/components/headers/SteadSchemaVersion'}}, content: {application/json: {schema: {$ref: '#/components/schemas/Organization'}}}}
-    TeamList: {description: Authorized Teams only, headers: {Stead-Schema-Version: {$ref: '#/components/headers/SteadSchemaVersion'}}, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/Team'}}}}}
+    TeamList: {description: Authorized Team page only, headers: {Stead-Schema-Version: {$ref: '#/components/headers/SteadSchemaVersion'}}, content: {application/json: {schema: {$ref: '#/components/schemas/TeamPage'}}}}
     ProjectView: {description: Authorization-filtered Project summary with capability-derived visible areas, headers: {ETag: {$ref: '#/components/headers/ETag'}, Stead-Schema-Version: {$ref: '#/components/headers/SteadSchemaVersion'}}, content: {application/json: {schema: {$ref: '#/components/schemas/ProjectView'}}}}
     WorkItem: {description: Work Item, headers: {ETag: {$ref: '#/components/headers/ETag'}, Stead-Schema-Version: {$ref: '#/components/headers/SteadSchemaVersion'}}, content: {application/json: {schema: {$ref: '#/components/schemas/WorkItem'}}}}
     WorkItemList: {description: Authorized Work Items only, headers: {Stead-Schema-Version: {$ref: '#/components/headers/SteadSchemaVersion'}}, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/WorkItem'}}}}}
