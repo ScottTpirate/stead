@@ -39,6 +39,9 @@ type Repository interface {
 	ListOrganizationPageIDs(context.Context, string, string, int) ([]string, error)
 	ListTeamPageIDs(context.Context, string, string, int) ([]string, error)
 	ListProjectPageIDs(context.Context, string, string, int) ([]string, error)
+	GetOrganizations(context.Context, []*authorization.Decision) ([]organization.Organization, error)
+	GetTeams(context.Context, []*authorization.Decision) ([]organization.Team, error)
+	GetProjects(context.Context, []*authorization.Decision) ([]project.Project, error)
 	FinalizeResponse(context.Context, []*authorization.Decision) (transaction.BoundRevision, error)
 }
 

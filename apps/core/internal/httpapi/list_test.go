@@ -2,13 +2,22 @@ package httpapi
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
-
-	"github.com/ScottTpirate/stead/modules/authorization"
 )
 
 func candidateID(number int) string { return fmt.Sprintf("019ed5bf-0000-7000-8000-%012x", number) }
+
+func candidateEligibility(predicate func(string) bool) func(context.Context, []string) ([]bool, error) {
+	return func(_ context.Context, ids []string) ([]bool, error) {
+		result := make([]bool, len(ids))
+		for index, id := range ids {
+			result[index] = predicate(id)
+		}
+		return result, nil
+	}
+}
 
 func TestClosedPageParameters(t *testing.T) {
 	for _, raw := range []string{"", "page_size=1", "page_size=20&after=" + candidateID(1)} {
@@ -41,12 +50,7 @@ func TestDiscoveryCrossesDeniedChunksAndUsesAuthorizedLookahead(t *testing.T) {
 		}
 		return ids, nil
 	}
-	eligible := func(_ context.Context, id string) error {
-		if id < candidateID(151) || id > candidateID(154) {
-			return authorization.ErrDenied
-		}
-		return nil
-	}
+	eligible := candidateEligibility(func(id string) bool { return id >= candidateID(151) && id <= candidateID(154) })
 	selected, err := discoverPage(context.Background(), "", 2, fetch, eligible)
 	if err != nil || calls != 2 || len(selected) != 3 || selected[0] != candidateID(151) || selected[2] != candidateID(153) {
 		t.Fatal("authorized rows after hidden first chunk were lost", selected, err)
@@ -68,12 +72,7 @@ func TestDiscoveryBudgetNeverReturnsPartialOrRawCursor(t *testing.T) {
 		return ids, nil
 	}
 	for _, allowOne := range []bool{false, true} {
-		selected, err := discoverPage(context.Background(), "", 2, fetch, func(_ context.Context, id string) error {
-			if allowOne && id == candidateID(1) {
-				return nil
-			}
-			return authorization.ErrDenied
-		})
+		selected, err := discoverPage(context.Background(), "", 2, fetch, candidateEligibility(func(id string) bool { return allowOne && id == candidateID(1) }))
 		if err == nil || selected != nil {
 			t.Fatal("scan exhaustion returned a partial or false empty page")
 		}
@@ -81,7 +80,7 @@ func TestDiscoveryBudgetNeverReturnsPartialOrRawCursor(t *testing.T) {
 }
 func TestDiscoveryRejectsNonMonotonicCandidatesAndCancellation(t *testing.T) {
 	for _, ids := range [][]string{{candidateID(2), candidateID(1)}, {candidateID(1), candidateID(1)}, {"invalid"}} {
-		result, err := discoverPage(context.Background(), "", 20, func(context.Context, string, int) ([]string, error) { return ids, nil }, func(context.Context, string) error { return authorization.ErrDenied })
+		result, err := discoverPage(context.Background(), "", 20, func(context.Context, string, int) ([]string, error) { return ids, nil }, candidateEligibility(func(string) bool { t.Fatal("invalid candidate set reached authorization"); return false }))
 		if err == nil || result != nil {
 			t.Fatal("untrusted candidate order accepted")
 		}
@@ -93,5 +92,23 @@ func TestDiscoveryRejectsNonMonotonicCandidatesAndCancellation(t *testing.T) {
 		return nil, nil
 	}, nil); err == nil {
 		t.Fatal("canceled scan accepted")
+	}
+}
+
+func TestDiscoveryRejectsIncompleteOrFailedAuthorizationSet(t *testing.T) {
+	fetch := func(context.Context, string, int) ([]string, error) {
+		return []string{candidateID(1), candidateID(2)}, nil
+	}
+	for _, result := range [][]bool{nil, {true}, {true, true, true}} {
+		selected, err := discoverPage(context.Background(), "", 1, fetch, func(context.Context, []string) ([]bool, error) { return result, nil })
+		if err == nil || selected != nil {
+			t.Fatal("incomplete or extra authorization result produced a partial page")
+		}
+	}
+	selected, err := discoverPage(context.Background(), "", 1, fetch, func(context.Context, []string) ([]bool, error) {
+		return []bool{true, true}, errors.New("batch transport failed")
+	})
+	if err == nil || selected != nil {
+		t.Fatal("failed authorization batch disclosed a page")
 	}
 }
