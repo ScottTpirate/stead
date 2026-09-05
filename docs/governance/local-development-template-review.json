@@ -3,52 +3,52 @@
   "status": "accepted",
   "scope": "Initial synthetic local-development template/compiler/test source only; not an instance artifact, production approval or Phase 1 release.",
   "owner_decision_revision": "83d2bfef6c08227f2d15d465c7ada316c5934a31",
-  "source_revision": "1a5506e6ebac953644a15d00561e2340a7801877",
-  "source_tree": "8fb92a1a1c73c90644dd997276f25d28af398772",
-  "core_digest": "sha256:987d41634fe71cab99eda565de1e260d5c1e5f841ab397f504f6194ce5ba4b43",
+  "source_revision": "27c6198c90a658c3e2f46a1fb5858893c3d7a7ac",
+  "source_tree": "a914b9b4f6c2795e1f06035458a87715462de579",
+  "core_digest": "sha256:2b1522350f873bab0437dda6f51c8a2e406b9590feb7713ed214f7bace237315",
   "reviews": [
     {
       "role": "architecture-contract-owner",
       "reviewer_id": "/root/template_architecture_review",
       "disposition": "accept",
       "independent_non_author": true,
-      "evidence": "Independently recomputed updated core, ten bound files, compiler/driver and full 17,349-entry toolchain hash; reproduced ordered inventories. Focused exact-source delta tests passed. The fixed toolchain directory resolves stripped daemon startup without expanding policy authority."
+      "evidence": "Independently recomputed exact core, ten file bindings, compiler/driver and all 17,349 toolchain entries, and reproduced ordered 32/93/3/1 inventories. Focused exact-source consumer tests passed. Separately verified project .npmrc tracked blob 0ff3cf12fad4ffb911389d194bac8f4ba7b221c5 with normal H index flag and withdrew the unverified absence hypothesis. No new locked decision or expanded authority."
     },
     {
       "role": "qa",
       "reviewer_id": "/root/template_qa_daemon_fix",
       "disposition": "accept",
       "independent_non_author": true,
-      "evidence": "Fresh independent non-author reviewer recomputed exact core/input/toolchain digests and ordered 32/93/3/1 inventories. Own seven race suites, focused vet, fifteen launcher/generated-SDK boundary tests and poisoned-GOROOT wrapper check passed. Inspected security's exact-source live proof and matched its reviewed binary to root's actual API; live security execution is attributed, not claimed as QA execution. No unresolved scoped QA defect."
+      "evidence": "Independently verified clean source, core/file/inventory bindings, core/localdev race suites and vet, fifteen launcher/SDK boundary tests, and actual new dependency runner 3/3 at this source. Private capture was verified owner-only, single-link, byte/digest preserving. Proof /home/skilgore/stead-qa-daemon-review.SdVuYw/stead-local-dependency-capture-proof-3470721142; record SHA256 d6c7c84d115fbbd483e005cb9939b5c89af2adc464a5cecb15ecfc5d3421b2eb. Tracked .npmrc verified; no unresolved scoped QA defect."
     },
     {
       "role": "security",
-      "reviewer_id": "/root/template_security_review",
+      "reviewer_id": "/root/template_security_check_runner",
       "disposition": "accept",
       "independent_non_author": true,
-      "evidence": "Independently verified seven-file correction, updated exact core/input bindings and unchanged policy/dependency/toolchain/check inventories. Focused tests passed; actual exact-source stripped-daemon, poisoned-GOROOT, ancestor-workspace and compiled-overlay test passed in 22.933 seconds. Proof /tmp/stead-local-rebuild-proof-3207616256; earlier quota-failed attempt is preserved and receives no credit. No unresolved scoped security finding."
+      "evidence": "Fresh independent non-author reviewer verified four-file correction, mandatory receipt denial on retention errors, ten files, full 17,349-entry toolchain digest, ordered inventories/thresholds and exact core. Own core/localdev race/vet and actual dependency runner 3/3 passed; proof /tmp/stead-local-dependency-capture-proof-3082521832. Root actual binary/self-rebuild, foundation and scanner executions were inspected and attributed to root. Verified tracked project .npmrc is already bound by clean/index/source checks and withdrew its preliminary hypothesis. No unresolved scoped security finding."
     }
   ],
   "evidence": [
     {
-      "path": "/tmp/stead-foundation-daemon-fixed.log",
-      "sha256": "119dcde3b44ebe3f2997c1afe27cacfa11e6ade35a016f25b93ad3acb3a70c37",
+      "path": "/tmp/stead-foundation-check-runner-fixed.log",
+      "sha256": "1f9b8fc21f621f4a02125e9e1f6422bf8d56ac242b8ad2b4fea5963e3a5d94d8",
       "result": "make foundation-check exit 0 at updated reviewed source"
     },
     {
-      "path": "/tmp/stead-api-govulncheck-daemon-fixed.json",
+      "path": "/tmp/stead-api-govulncheck-check-runner-fixed.json",
       "sha256": "3605e9139d1be9a911536fb413fabad639a3d2a9cf1209137fec194cc01f2aea",
-      "result": "actual updated API binary scan, govulncheck v1.7.0, database 2026-09-02T19:12:04Z, exit 0, no findings; actual binary SBOM included"
+      "result": "actual updated API binary scan, govulncheck v1.7.0, database 2026-09-02T19:12:04Z, exit 0, no findings; binary SBOM included"
     },
     {
-      "path": "/tmp/stead-daemon-fixed-api",
-      "sha256": "a2d58a399747b924ab3ef1cee9a5287d3e8f8b8382648c0f58f2e5179b39d429",
-      "result": "actual fixed-recipe API, stripped PATH/LANG-only daemon inspection passed and equals independent security proof binary"
+      "path": "/tmp/stead-check-runner-fixed-api",
+      "sha256": "18f98c04a14992ebbb078303bec5e551a03ad6cda743686bf0a895afa0b46394",
+      "result": "actual fixed-recipe updated API; stripped PATH/LANG-only daemon inspection and independent reviewed-source executable comparison passed"
     },
     {
-      "path": "/tmp/stead-template-core-daemon-fixed.json",
-      "sha256": "d779ee86592dbc219afb7303c4e9f0a3ea173692e95d1f15196da7ca30871bfc",
-      "result": "actual stripped-daemon dev-template-inspect and derived ordered runner inventory"
+      "path": "/tmp/stead-template-core-check-runner-fixed.json",
+      "sha256": "cc63df723ef359f82d40c8780a65a73fcddcd2e19243334204ba0a18050b2cdb",
+      "result": "actual stripped-daemon dev-template-inspect plus derived ordered runner inventory"
     },
     {
       "path": "/tmp/stead-mutation-6edd21e.json",
@@ -69,6 +69,6 @@
     "No renewal, rotation, recovery, upgrade, promotion, untrusted data or provider-object use is approved by this record.",
     "Startup full catalog inspection is read-only and uses a transient separate administrative process; it is not continuous privileged API monitoring."
   ],
-  "supersedes_source_revision": "6edd21e077180231fa1bc9b853d9ce907ecd325a",
-  "correction": "The first unactivated installation exposed ambient runtime.GOROOT dependence under the stripped daemon environment. Seven-file correction binds the same reviewed fixed toolchain path; no policy, dependency, contract, substitution, inventory or threshold changes. Failed state and quota-failed test attempts are preserved, not counted as passing evidence."
+  "supersedes_source_revision": "1a5506e6ebac953644a15d00561e2340a7801877",
+  "correction": "The second unactivated installation exposed npm rejecting a shared /dev/null user/global config path. The four-file consumer correction provides distinct private empty configs and durable bounded check captures, failing closed on retention errors. No policy, dependency, authorization, toolchain, substitution, inventory or threshold change. The existing tracked project .npmrc remains unchanged and covered by immutable-source/index checks; an initially suspected ignored-file gap was independently withdrawn after checking its tracked identity."
 }
