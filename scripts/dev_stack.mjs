@@ -14,6 +14,7 @@ import { serviceNames, servicePorts as ports, postgresURL, giteaConfig, natsConf
 const repository = await realpath(path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'));
 let state = path.join(repository, '.cache', 'stead-dev');
 const pins = JSON.parse(await readFile(path.join(repository, 'deploy/compose/dev-services.json'), 'utf8'));
+const localTemplate = JSON.parse(await readFile(path.join(repository, 'modules/authorization/localdata/approved-template.json'), 'utf8'));
 const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 const baseEnvironment = { PATH: '/usr/local/bin:/usr/bin:/bin', LANG: 'C.UTF-8' };
 
@@ -80,6 +81,10 @@ function requireApproval() {
   for (const [name, pin] of Object.entries(pins.services)) {
     if (pin.review !== 'approved') throw new Error(`${name} exact candidate still requires recorded independent review/activation`);
   }
+  // Early UX guard only; the compiled source/signature/actual-check verifier
+  // remains authoritative. Do not create an inert partial installation merely
+  // because a developer tried make dev before template reviews were complete.
+  if (localTemplate.status !== 'approved') throw new Error('Exact local compiler/template review is still pending; no development state was changed');
 }
 
 async function verifyHostPrerequisites() {
@@ -301,7 +306,11 @@ GRANT CONNECT ON DATABASE openfga TO openfga;
       return;
     }
     const environment = { STEAD_PUBLIC_ORIGIN: `https://localhost:${ports.web}`, STEAD_INSTANCE_ID: secret.instanceID, STEAD_SECURITY_DOMAIN: secret.securityDomain, STEAD_BOOTSTRAP_STATE_DIR: state, STEAD_DATABASE_URL_FILE: path.join(state, 'database-url'), STEAD_OPENFGA_URL: `http://127.0.0.1:${ports.openfga}`, STEAD_OPENFGA_TOKEN_FILE: path.join(state, 'openfga-key'), STEAD_POLICY_DIR: path.join(state, 'policy'), STEAD_TLS_CERT_FILE: path.join(state, 'tls/localhost.crt'), STEAD_TLS_KEY_FILE: path.join(state, 'tls/localhost.key') };
-    checkedCommand(path.join(state, 'stead-api'), ['dev-bootstrap'], { env: { ...baseEnvironment, ...environment, STEAD_DATABASE_ADMIN_URL_FILE: path.join(state, 'database-admin-url'), STEAD_DATABASE_PASSWORD_FILE: path.join(state, 'database-password'), STEAD_INSTANCE_ID: secret.instanceID, STEAD_SECURITY_DOMAIN: secret.securityDomain, STEAD_BOOTSTRAP_STATE_DIR: state }, stdio: 'pipe' });
+    let completed = false;
+    try { await readPrivate('bootstrap.json'); completed = true; } catch (error) { if (error.code !== 'ENOENT') throw error; }
+    if (!completed) checkedCommand(path.join(state, 'stead-api'), ['dev-bootstrap'], { env: { ...baseEnvironment, ...environment, STEAD_DATABASE_ADMIN_URL_FILE: path.join(state, 'database-admin-url'), STEAD_DATABASE_PASSWORD_FILE: path.join(state, 'database-password'), STEAD_INSTANCE_ID: secret.instanceID, STEAD_SECURITY_DOMAIN: secret.securityDomain, STEAD_BOOTSTRAP_STATE_DIR: state }, stdio: 'pipe' });
+    // Restart only loads the exact retained activation; API startup verifies
+    // signature/trust/source/model/anchor/expiry and never renews an installation.
     const auth = JSON.parse(await readPrivate('bootstrap.json'));
     environment.STEAD_OPENFGA_STORE_ID = auth.openfga_store_id;
     environment.STEAD_OPENFGA_MODEL_ID = auth.openfga_model_id;
