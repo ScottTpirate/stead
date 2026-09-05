@@ -3,8 +3,11 @@ package authorization
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	_ "embed"
+	"encoding/hex"
 	"encoding/json"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -87,6 +90,19 @@ func LocalPolicyDecisionCaseIDs() []string {
 // assembly. It confers no approval and cannot enable the runtime constructor.
 func InspectLocalTemplateSource(ctx context.Context, root string) (LocalTemplateCore, error) {
 	core := LocalTemplateCore{GoVersion: runtime.Version(), PublicOrigin: "https://localhost:18443", OpenFGAURL: "http://127.0.0.1:18080", SecurityDomain: LocalDevelopmentSecurityDomain, ValiditySeconds: 86400, AllowedSubstitutions: append([]string{}, localSubstitutionFields...)}
+	if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" {
+		return LocalTemplateCore{}, ErrDenied
+	}
+	for _, item := range []struct {
+		field *string
+		path  string
+	}{{&core.GoBinaryDigest, filepath.Join(runtime.GOROOT(), "bin/go")}, {&core.GoCompilerDigest, filepath.Join(runtime.GOROOT(), "pkg/tool/linux_amd64/compile")}} {
+		digest, err := localToolDigest(item.path)
+		if err != nil {
+			return LocalTemplateCore{}, err
+		}
+		*item.field = digest
+	}
 	status, err := gitLocal(ctx, root, "status", "--porcelain=v1", "--untracked-files=all")
 	if err != nil || len(status) != 0 {
 		return LocalTemplateCore{}, ErrDenied
@@ -141,8 +157,29 @@ func InspectLocalTemplateSource(ctx context.Context, root string) (LocalTemplate
 	return core, nil
 }
 
+func localToolDigest(path string) (string, error) {
+	info, err := os.Lstat(path)
+	if err != nil || !info.Mode().IsRegular() || info.Size() <= 0 || info.Size() > 128<<20 {
+		return "", ErrDenied
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		return "", ErrDenied
+	}
+	defer file.Close()
+	hash := sha256.New()
+	count, err := io.Copy(hash, io.LimitReader(file, 128<<20+1))
+	if err != nil || count != info.Size() {
+		return "", ErrDenied
+	}
+	return "sha256:" + hex.EncodeToString(hash.Sum(nil)), nil
+}
+
 func validateLocalTemplate(manifest LocalTemplateManifest) error {
 	core := manifest.Core
+	if !digestPattern.MatchString(core.GoBinaryDigest) || !digestPattern.MatchString(core.GoCompilerDigest) {
+		return ErrDenied
+	}
 	if manifest.SchemaVersion != "1.0.0" || manifest.Status != "approved" || !gitObjectPattern.MatchString(core.SourceRevision) || !gitObjectPattern.MatchString(core.SourceTree) || core.GoVersion == "" || core.SecurityDomain != LocalDevelopmentSecurityDomain || core.PublicOrigin != "https://localhost:18443" || core.OpenFGAURL != "http://127.0.0.1:18080" || core.ValiditySeconds != 86400 || !slices.Equal(core.AllowedSubstitutions, localSubstitutionFields) || len(core.Files) != len(localSourceFiles) || len(core.Checks) != 4 || len(manifest.Reviews) != 3 || !digestPattern.MatchString(core.DependencyLockDigest) {
 		return ErrDenied
 	}
@@ -190,7 +227,7 @@ func loadLocalTemplate(ctx context.Context, root string) (LocalTemplateManifest,
 	}
 	core := manifest.Core
 	actual, err := InspectLocalTemplateSource(ctx, root)
-	if err != nil || actual.GoVersion != core.GoVersion || actual.DependencyLockDigest != core.DependencyLockDigest || !slices.Equal(actual.Files, core.Files) {
+	if err != nil || actual.GoVersion != core.GoVersion || actual.GoBinaryDigest != core.GoBinaryDigest || actual.GoCompilerDigest != core.GoCompilerDigest || actual.DependencyLockDigest != core.DependencyLockDigest || !slices.Equal(actual.Files, core.Files) {
 		return LocalTemplateManifest{}, ErrDenied
 	}
 	tree, err := gitLocal(ctx, root, "rev-parse", "--verify", core.SourceRevision+"^{tree}")
@@ -231,6 +268,9 @@ func loadLocalTemplate(ctx context.Context, root string) (LocalTemplateManifest,
 		settings[setting.Key] = setting.Value
 	}
 	if settings["vcs.revision"] != actual.SourceRevision || settings["vcs.modified"] != "false" {
+		return LocalTemplateManifest{}, ErrDenied
+	}
+	if settings["GOOS"] != "linux" || settings["GOARCH"] != "amd64" || settings["GOAMD64"] != "v1" || settings["CGO_ENABLED"] != "0" || settings["-buildmode"] != "exe" || settings["-compiler"] != "gc" || settings["-tags"] != "" || settings["GOEXPERIMENT"] != "" || settings["-ldflags"] != "" {
 		return LocalTemplateManifest{}, ErrDenied
 	}
 	return manifest, nil
