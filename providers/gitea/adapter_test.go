@@ -351,6 +351,10 @@ func TestInvalidAndCrossBoundInputsNeverDispatch(t *testing.T) {
 		_, err := c.createIssue(ctx, repoFixture(c), "Synthetic", body)
 		wantCompletion(t, err, NotDispatched)
 	}
+	for _, title := range []string{" Synthetic", "Synthetic ", "\tSynthetic", "Synthetic\t", "\u00a0Synthetic", "Synthetic\u2003", "\u3000Synthetic\u3000"} {
+		_, err := c.createIssue(ctx, repoFixture(c), title, "body")
+		wantCompletion(t, err, NotDispatched)
+	}
 	i := issueFixture(c)
 	wrong := i.Revision
 	wrong.ref.number++
@@ -402,6 +406,22 @@ func TestClientRejectsAmbientAndUnprovenOrigins(t *testing.T) {
 				t.Fatal("opaque value formatting leaked")
 			}
 		}
+	}
+}
+
+func TestOriginMustMatchCompleteCanonicalBytes(t *testing.T) {
+	c, calls := testClient(t, func(http.ResponseWriter, *http.Request) {
+		t.Error("noncanonical origin dispatched")
+	})
+	for _, origin := range []string{c.origin + "#", c.origin + "?", c.origin + "?#", c.origin + "#ignored", "HTTP" + strings.TrimPrefix(c.origin, "http")} {
+		bad, err := newClient(origin, "probe-admin", syntheticToken)
+		wantCompletion(t, err, NotDispatched)
+		if bad != nil {
+			t.Fatal("noncanonical origin produced a client")
+		}
+	}
+	if calls.Load() != 0 {
+		t.Fatal("noncanonical origin reached provider")
 	}
 }
 

@@ -63,7 +63,9 @@ func newClient(origin, owner, token string) (*client, error) {
 		return nil, failure(NotDispatched)
 	}
 	port, err := strconv.Atoi(u.Port())
-	if err != nil || port < 1 || port > 65535 || u.Host != "127.0.0.1:"+strconv.Itoa(port) {
+	// An empty fragment is discarded by url.Parse but would swallow the API
+	// path on concatenation. Admit only the complete canonical origin bytes.
+	if err != nil || port < 1 || port > 65535 || u.Host != "127.0.0.1:"+strconv.Itoa(port) || origin != "http://"+u.Host {
 		return nil, failure(NotDispatched)
 	}
 	t := &http.Transport{
@@ -270,7 +272,9 @@ func textOK(s string) bool {
 	return len(s) <= maxContentBytes && utf8.ValidString(s) && !strings.ContainsRune(s, 0)
 }
 func titleOK(s string) bool {
-	return textOK(s) && strings.TrimSpace(s) != "" && utf8.RuneCountInString(s) <= 160 && !strings.ContainsAny(s, "\r\n")
+	// Stock creation trims surrounding Unicode whitespace. Reject it before
+	// dispatch so the exact bound input cannot become a different stored title.
+	return textOK(s) && s != "" && strings.TrimSpace(s) == s && utf8.RuneCountInString(s) <= 160 && !strings.ContainsAny(s, "\r\n")
 }
 func markdownPathOK(s string) bool {
 	return strings.HasSuffix(s, ".md") && nameOK(strings.TrimSuffix(s, ".md"))
