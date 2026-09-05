@@ -56,6 +56,9 @@ type ActivationInput struct {
 var digestPattern = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
 
 func validBinding(binding ActivationBinding) bool {
+	if binding.EvidenceKind != "" && binding.EvidenceKind != "local-development-derivation-v1" {
+		return false
+	}
 	if !identity.ValidID(binding.InstallationID) {
 		return false
 	}
@@ -133,7 +136,7 @@ func verifySignatures(parsed policyrelease.ParsedEnvelope, keys []TrustedKey, th
 // trust. Production bootstrap, strict mode, rotation, recovery and unknown ABI
 // are rejected, not downshifted to a weaker policy or test-fixture allowance.
 func VerifyActivation(input ActivationInput) (*VerifiedActivation, error) {
-	if !input.LocalDevelopment || input.Workflow == nil || input.Model == nil || input.Now.IsZero() || !validAnchorState(input.Anchor) {
+	if !input.LocalDevelopment || input.Workflow == nil || input.Model == nil || input.Now.IsZero() || !validAnchorState(input.Anchor) || input.Anchor.Binding.EvidenceKind != "" {
 		return nil, ErrDenied
 	}
 	now := input.Now.UTC()
