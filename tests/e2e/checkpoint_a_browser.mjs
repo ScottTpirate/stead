@@ -78,7 +78,11 @@ export async function proveSandbox(browser) {
 const AXE_RESULT = ` (async () => {
   if (globalThis.axe?.version !== '4.13.0') return null;
   try {
-    const raw = await globalThis.axe.run(document);
+    // Evaluate visible glyph contrast too; merge this per-run override with
+    // unchanged upstream thresholds/ignoreLength, never replace configuration.
+    const raw = await globalThis.axe.run(document, {
+      checks: { 'color-contrast': { options: { ignoreUnicode: false } } }
+    });
     const filter = (items) => {
       if (!Array.isArray(items) || items.length > 64) return null;
       const output = [];
