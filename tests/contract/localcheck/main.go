@@ -271,7 +271,7 @@ func mutations() ([]mutant, error) {
 	selected := map[string]map[string]bool{
 		"modules/authorization/native_policy.go": {"NativePolicyDecision": true},
 		"modules/authorization/coordinator.go":   {"Authorize": true, "ValidateFinal": true, "validState": true, "readCurrentAnchor": true},
-		"modules/authorization/read_set.go":      {"AuthorizeSet": true},
+		"modules/authorization/read_set.go":      {"AuthorizeSet": true, "AuthorizeCollection": true, "collectionShape": true, "authorizeSet": true},
 		"modules/authorization/openfga_batch.go": {"BatchCheck": true},
 		"modules/classification/evaluator.go":    {"Evaluate": true},
 	}
@@ -292,11 +292,13 @@ func mutations() ([]mutant, error) {
 		if err != nil {
 			return nil, err
 		}
+		found := map[string]bool{}
 		for _, declaration := range file.Decls {
 			function, ok := declaration.(*ast.FuncDecl)
 			if !ok || !selected[path][function.Name.Name] {
 				continue
 			}
+			found[function.Name.Name] = true
 			ast.Inspect(function.Body, func(node ast.Node) bool {
 				condition, ok := node.(*ast.IfStmt)
 				if !ok {
@@ -343,6 +345,11 @@ func mutations() ([]mutant, error) {
 				return true
 			})
 		}
+		for name := range selected[path] {
+			if !found[name] {
+				return nil, fmt.Errorf("selected mutation function missing: %s %s", path, name)
+			}
+		}
 	}
 	if len(result) == 0 {
 		return nil, errors.New("empty critical mutation inventory")
@@ -350,12 +357,14 @@ func mutations() ([]mutant, error) {
 	return result, nil
 }
 
+const criticalTestSelection = "^(TestNativePolicy|TestNativeClassification|TestCoordinator|TestCollection|TestOpenFGABatch|TestActivationRejects|TestHostAnchor)"
+
 func critical(ctx context.Context) ([]authorization.LocalCheckCase, error) {
 	inventory, err := mutations()
 	if err != nil {
 		return nil, err
 	}
-	selection := "^(TestNativePolicy|TestNativeClassification|TestCoordinator|TestOpenFGABatch|TestActivationRejects|TestHostAnchor)"
+	selection := criticalTestSelection
 	control, code, err := execute(ctx, "test", "-json", "-count=1", "./modules/authorization", "./modules/classification", "-run", selection)
 	if err != nil {
 		return nil, fmt.Errorf("unmutated policy positive control failed: %w", err)
