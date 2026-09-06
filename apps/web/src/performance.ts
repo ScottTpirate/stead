@@ -1,8 +1,12 @@
 export type FrontendMetricName =
+  | "cold-shell-acknowledgement"
+  | "cold-useful-content"
   | "cold-interactive"
   | "command-open-acknowledgement"
   | "command-local-results"
   | "route-useful-content"
+  | "route-shell-acknowledgement"
+  | "route-interactive"
   | "first-contentful-paint"
   | "largest-contentful-paint"
   | "cumulative-layout-shift"
@@ -20,10 +24,14 @@ export interface FrontendMetric {
 }
 
 const METRIC_UNITS = Object.freeze({
+  "cold-shell-acknowledgement": "milliseconds",
+  "cold-useful-content": "milliseconds",
   "cold-interactive": "milliseconds",
   "command-open-acknowledgement": "milliseconds",
   "command-local-results": "milliseconds",
   "route-useful-content": "milliseconds",
+  "route-shell-acknowledgement": "milliseconds",
+  "route-interactive": "milliseconds",
   "first-contentful-paint": "milliseconds",
   "largest-contentful-paint": "milliseconds",
   "cumulative-layout-shift": "score",
@@ -36,10 +44,14 @@ const METRIC_UNITS = Object.freeze({
 }) satisfies Readonly<Record<FrontendMetricName, FrontendMetric["unit"]>>;
 
 const SPAN_METRIC_NAMES = new Set<FrontendMetricName>([
+  "cold-shell-acknowledgement",
+  "cold-useful-content",
   "cold-interactive",
   "command-open-acknowledgement",
   "command-local-results",
   "route-useful-content",
+  "route-shell-acknowledgement",
+  "route-interactive",
 ]);
 
 declare global {
@@ -143,6 +155,12 @@ export function endPerformanceSpan(name: FrontendMetricName): void {
   });
 }
 
+// Cancellation is absence of a successful sample, not a zero-duration result.
+export function cancelPerformanceSpan(name: FrontendMetricName): void {
+  assertSpanMetricName(name);
+  activeSpans.delete(name);
+}
+
 export function observePlatformRequest(observation: {
   readonly durationMs: number;
   readonly responseBytes: number;
@@ -196,6 +214,8 @@ function observeEntryType(
 }
 
 export function startBrowserPerformanceInstrumentation(): () => void {
+  activeSpans.set("cold-shell-acknowledgement", 0);
+  activeSpans.set("cold-useful-content", 0);
   activeSpans.set("cold-interactive", 0);
   const observers = [
     observeEntryType("paint", (entry) => {
@@ -240,6 +260,7 @@ export function startBrowserPerformanceInstrumentation(): () => void {
 
   return () => {
     for (const observer of observers) observer.disconnect();
+    activeSpans.clear();
   };
 }
 

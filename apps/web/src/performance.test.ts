@@ -2,11 +2,23 @@ import { describe, expect, it } from "vitest";
 
 import {
   beginPerformanceSpan,
+  cancelPerformanceSpan,
   emitPerformanceMetric,
   endPerformanceSpan,
 } from "./performance";
 
 describe("frontend performance boundary", () => {
+  it("cancels a failed span without manufacturing a successful zero sample", () => {
+    const values: unknown[] = [];
+    const record = (event: WindowEventMap["stead:performance"]) => { values.push(event.detail); };
+    window.addEventListener("stead:performance", record);
+    try {
+      beginPerformanceSpan("route-useful-content");
+      cancelPerformanceSpan("route-useful-content");
+      endPerformanceSpan("route-useful-content");
+      expect(values).toEqual([]);
+    } finally { window.removeEventListener("stead:performance", record); }
+  });
   it("reconstructs an exact frozen allowlisted event detail", () => {
     let detail: unknown;
     window.addEventListener(
