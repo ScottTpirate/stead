@@ -12,7 +12,7 @@ import { allowedRequest, byteBudget, absolute, readBounded, privateDirectory,
   preserveSession, validatePreservedSession, SESSION_FILES, openedDirectoryMatches } from './checkpoint_a_browser_boundary.mjs';
 import { main as controller, verifyHarness, verifyIdentity, verifyInputs } from './checkpoint_a_browser.mjs';
 import { main as namespace, auditSurface } from '../tests/e2e/checkpoint_a_browser.mjs';
-import { runCheckpointAJourney } from '../tests/e2e/checkpoint_a_browser_journey.mjs';
+import { runCheckpointAJourney, workspaceSelect } from '../tests/e2e/checkpoint_a_browser_journey.mjs';
 
 const uuid = '01991962-1234-7000-8000-123456789abc';
 const digest = 'a'.repeat(64), revision = 'b'.repeat(40);
@@ -42,6 +42,18 @@ function fixture(task) {
   // Only this test's freshly created, exact private fixture is removed.
   try { return task(directory); } finally { rmSync(directory, { recursive: true }); }
 }
+test('workspace select locators use exact combobox accessible names, not option-inclusive label text', () => {
+  const calls = [], locator = {};
+  const page = { getByRole: (role, options) => { calls.push({ role, options }); return locator; },
+    getByLabel: () => { throw new Error('Option-inclusive label engine must not be used'); } };
+  for (const name of ['Organization', 'Parent Team', 'Owning Team']) {
+    assert.equal(workspaceSelect(page, name), locator);
+    assert.deepEqual(calls.at(-1), { role: 'combobox', options: { name, exact: true } });
+  }
+  assert.throws(() => workspaceSelect(page, 'OrganizationCreate your first Organization'));
+  assert.equal(calls.length, 3);
+});
+
 test('importing both entry points does not execute native tools or the journey', () => {
   assert.equal(typeof controller, 'function'); assert.equal(typeof namespace, 'function');
   assert.equal(typeof runCheckpointAJourney, 'function');
