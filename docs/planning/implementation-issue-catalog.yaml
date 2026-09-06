@@ -484,7 +484,7 @@ issues:
     epic_id: "EPIC-P1"
     phase: "phase-1"
     status: IMPLEMENTATION_IN_PROGRESS
-    status_detail: "Partial implementation only: the dependency intake, PostgreSQL catalog-conformance harness, and dependency-free transaction-port slices are merged. Completion remains blocked on an approved runtime PostgreSQL driver and viable pinned development/CI database path; no live PostgreSQL migration, repository, transaction, or failure-path integration has been demonstrated."
+    status_detail: "Partial implementation on the persistent phase1 integration branch: the approved runtime PostgreSQL driver, scoped development database path, owned repositories, real transactions, audit/outbox atomicity, role/catalog checks and isolated storage failure tests are implemented and have bounded live evidence. The retained older synthetic installation also exercised the core API/UI path; that is not activation of current source. Fresh current-source integration, concurrent product performance, durable publication/consumer recovery and supported migration/upgrade/recovery evidence remain required. Issue completion and Phase 1 acceptance are not established."
     requirement_ids: ["PRIN-005", "ARCH-003", "EVT-002", "AUD-001", "AUD-002", "PERF-003", "PERF-004"]
     owner: "WS-02"
     contributors: ["WS-06", "WS-07"]
