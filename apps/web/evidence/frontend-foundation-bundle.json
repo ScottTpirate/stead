@@ -27,7 +27,7 @@
   "distribution_artifacts": [
     {
       "file": ".vite/manifest.json",
-      "sha256": "684b76629ca655ff33042178702c7f616b796d77d493e1d6c77b67624dd47604",
+      "sha256": "335ec759df79dcf705aa9afe1b26ef8c3892c6017ff8c76a23d1a78a06cf6c6a",
       "uncompressed_bytes": 1546
     },
     {
@@ -56,14 +56,14 @@
       "uncompressed_bytes": 59
     },
     {
-      "file": "assets/index-CTo4Bph1.css",
-      "sha256": "74cb8f55dff4437cbfc7fe38da4dda165a50058d1a88699ab56a87168248bb25",
-      "uncompressed_bytes": 19391
+      "file": "assets/index-CwzQs1fy.css",
+      "sha256": "58198e2909962b993fe160c7746e4491354b5ea186156f7609e794ea7d5f7a4e",
+      "uncompressed_bytes": 19389
     },
     {
-      "file": "assets/index-lGOODv4H.js",
-      "sha256": "228cd24f8c3d3ba0869345d1b94f92f97d916344046619d6b48930376e3f69ac",
-      "uncompressed_bytes": 412580
+      "file": "assets/index-DHjUMFln.js",
+      "sha256": "81f3d67b14398561e3e5ba6d5d2e9a14596e71966717d32c25564e67d7179d2c",
+      "uncompressed_bytes": 412551
     },
     {
       "file": "assets/migration-BtQwf3v_.js",
@@ -72,7 +72,7 @@
     },
     {
       "file": "index.html",
-      "sha256": "a0765a102f457b18948b20cd82fd4bcd6fa99a4a24e7e2f4bce478b63536da63",
+      "sha256": "6397d277dcca7dfcc0b7e14ccb702f50494ce81a987403efa6eeb7a77fb65d57",
       "uncompressed_bytes": 444
     }
   ],
@@ -163,7 +163,7 @@
       "unsafeStaticNetworkTargets": []
     },
     {
-      "file": "assets/index-lGOODv4H.js",
+      "file": "assets/index-DHjUMFln.js",
       "dynamicResourceTargets": 19,
       "dynamicNetworkCalls": 1,
       "externalDestinations": [],
@@ -202,16 +202,16 @@
     }
   ],
   "eager_javascript": {
-    "uncompressed_bytes": 412580,
-    "gzip_bytes": 78555,
-    "delta_bytes_gzip": 17747,
+    "uncompressed_bytes": 412551,
+    "gzip_bytes": 78547,
+    "delta_bytes_gzip": 17739,
     "files": [
       {
         "source": "index.html",
-        "file": "assets/index-lGOODv4H.js",
-        "sha256": "228cd24f8c3d3ba0869345d1b94f92f97d916344046619d6b48930376e3f69ac",
-        "uncompressed_bytes": 412580,
-        "gzip_bytes": 78555
+        "file": "assets/index-DHjUMFln.js",
+        "sha256": "81f3d67b14398561e3e5ba6d5d2e9a14596e71966717d32c25564e67d7179d2c",
+        "uncompressed_bytes": 412551,
+        "gzip_bytes": 78547
       }
     ]
   },

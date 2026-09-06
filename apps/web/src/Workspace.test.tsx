@@ -32,10 +32,11 @@ it.each([
   });
   render(<Workspace route={matchRoute(route)} navigate={() => {}} />);
   if (route !== "/") await screen.findByRole("option", { name: "Authorized server title" });
-  const select = await screen.findByRole("combobox", { name, exact: true }) as HTMLSelectElement;
+  // Testing Library's string role name is exact; Playwright additionally takes exact: true.
+  const select = await screen.findByRole("combobox", { name }) as HTMLSelectElement;
   // Matches the native label text Playwright 1.63's label engine traverses.
   // This DOM regression is not a Playwright/browser execution claim.
-  expect(select.labels?.[0].textContent).toBe(name + optionText);
+  expect(select.labels?.[0]?.textContent).toBe(name + optionText);
   expect(select.disabled).toBe(route === "/");
 });
 
