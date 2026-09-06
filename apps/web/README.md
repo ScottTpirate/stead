@@ -44,6 +44,8 @@ produce useful-content samples. Home does not wait for secondary Team/Project re
 enabled and a rendering opportunity (two animation frames); a route/auth/readiness change
 cancels the pending callback. A resolved sign-in form may be interactive without being
 authorized content. Failed/canceled spans emit no success sample, not a zero duration.
+Unmatched routes cancel pending spans; hidden Workspace forms cannot complete a sample,
+and later matched navigation cannot revive the canceled cold measurement.
 These are application readiness markers, not browser input-delay measurements or proof
 that every possible interaction works; actual browser/golden-path measurements remain
 separate. Cold spans start at the navigation time origin; route spans start on in-app or

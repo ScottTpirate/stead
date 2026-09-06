@@ -27,7 +27,7 @@
   "distribution_artifacts": [
     {
       "file": ".vite/manifest.json",
-      "sha256": "78943c168174ca61c70eedca5f1c1a4d9f1c1b82fc889d0e57bf6b1a9cf3ec1c",
+      "sha256": "684b76629ca655ff33042178702c7f616b796d77d493e1d6c77b67624dd47604",
       "uncompressed_bytes": 1546
     },
     {
@@ -56,14 +56,14 @@
       "uncompressed_bytes": 59
     },
     {
-      "file": "assets/index-C7AtAWxF.js",
-      "sha256": "cb2dfc19b07563d24538807245ecd21ce9f270a1613d7dcc34c1a2035a673567",
-      "uncompressed_bytes": 412510
-    },
-    {
       "file": "assets/index-CTo4Bph1.css",
       "sha256": "74cb8f55dff4437cbfc7fe38da4dda165a50058d1a88699ab56a87168248bb25",
       "uncompressed_bytes": 19391
+    },
+    {
+      "file": "assets/index-lGOODv4H.js",
+      "sha256": "228cd24f8c3d3ba0869345d1b94f92f97d916344046619d6b48930376e3f69ac",
+      "uncompressed_bytes": 412580
     },
     {
       "file": "assets/migration-BtQwf3v_.js",
@@ -72,7 +72,7 @@
     },
     {
       "file": "index.html",
-      "sha256": "03f9178b1f8b4ddb2e581a385c446000fbd8b87559890e7746876c4b56b6bd49",
+      "sha256": "a0765a102f457b18948b20cd82fd4bcd6fa99a4a24e7e2f4bce478b63536da63",
       "uncompressed_bytes": 444
     }
   ],
@@ -163,7 +163,7 @@
       "unsafeStaticNetworkTargets": []
     },
     {
-      "file": "assets/index-C7AtAWxF.js",
+      "file": "assets/index-lGOODv4H.js",
       "dynamicResourceTargets": 19,
       "dynamicNetworkCalls": 1,
       "externalDestinations": [],
@@ -202,16 +202,16 @@
     }
   ],
   "eager_javascript": {
-    "uncompressed_bytes": 412510,
-    "gzip_bytes": 78540,
-    "delta_bytes_gzip": 17732,
+    "uncompressed_bytes": 412580,
+    "gzip_bytes": 78555,
+    "delta_bytes_gzip": 17747,
     "files": [
       {
         "source": "index.html",
-        "file": "assets/index-C7AtAWxF.js",
-        "sha256": "cb2dfc19b07563d24538807245ecd21ce9f270a1613d7dcc34c1a2035a673567",
-        "uncompressed_bytes": 412510,
-        "gzip_bytes": 78540
+        "file": "assets/index-lGOODv4H.js",
+        "sha256": "228cd24f8c3d3ba0869345d1b94f92f97d916344046619d6b48930376e3f69ac",
+        "uncompressed_bytes": 412580,
+        "gzip_bytes": 78555
       }
     ]
   },

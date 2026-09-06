@@ -248,15 +248,16 @@ export function Workspace({ route, navigate }: { readonly route: RouteMatch; rea
     readyCollections.refreshRevision === refreshRevision;
   const contentReady = !checking && !error && Boolean(session) && implementedArea &&
     organizationsReady && (area === "home" || !organizationID || collectionsReady);
-  const loginReady = !checking && !session && !error;
+  // Unmatched RouteSurface renders its own unavailable state, not these forms.
+  const loginReady = route.kind === "primary" && !checking && !session && !error;
   const interactiveReady = !busy && (contentReady || loginReady);
 
   useLayoutEffect(() => {
-    if (error || (!checking && (!session || !implementedArea))) {
+    if (route.kind === "unmatched" || error || (!checking && (!session || !implementedArea))) {
       cancelPerformanceSpan("cold-useful-content");
       cancelPerformanceSpan("route-useful-content");
     }
-    if (error || (session && !implementedArea)) {
+    if (route.kind === "unmatched" || error || (session && !implementedArea)) {
       cancelPerformanceSpan("cold-interactive");
       cancelPerformanceSpan("route-interactive");
     }

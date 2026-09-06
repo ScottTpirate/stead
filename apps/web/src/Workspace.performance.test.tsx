@@ -196,6 +196,26 @@ it("counts a resolved sign-in surface as interactive, never as authorized conten
   expect(samples("cold-interactive")).toEqual([40]);
 });
 
+it.each([true, false])("cancels unmatched-route cold spans before a later rendered sign-in form (session resolves while unmatched: %s)", async (resolveWhileUnmatched) => {
+  open("/unavailable-route");
+  expect(screen.getByText("This view is unavailable")).toBeDefined();
+  expect(screen.queryByRole("button", { name: "Sign in" })).toBeNull();
+  if (resolveWhileUnmatched) await reject("getSession", 401, 20);
+  frame(30); frame(40);
+  expect(samples("cold-shell-acknowledgement")).toEqual([10]);
+  expect(samples("cold-useful-content")).toEqual([]);
+  expect(samples("cold-interactive")).toEqual([]);
+  navigate("Home", 50);
+  if (!resolveWhileUnmatched) await reject("getSession", 401, 60);
+  expect(screen.getByRole("button", { name: "Sign in" })).toBeDefined();
+  frame(70); frame(80);
+  expect(samples("cold-useful-content")).toEqual([]);
+  expect(samples("cold-interactive")).toEqual([]);
+  expect(samples("route-shell-acknowledgement")).toEqual([0]);
+  expect(samples("route-useful-content")).toEqual([]);
+  expect(samples("route-interactive")).toEqual([30]);
+});
+
 it("does not finish an authorized-view timing after logout replaces that view", async () => {
   open("/"); await authorizedOrganization();
   frame(40);
