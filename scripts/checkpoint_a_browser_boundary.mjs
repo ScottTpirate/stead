@@ -40,6 +40,11 @@ export const STAGES = Object.freeze(['preflight', 'primary_login', 'organization
   'parent_team_create_read', 'child_team_create_read', 'general_project_create_read',
   'reload_refresh_read', 'keyboard_palette_focus', 'denied_login_empty_views',
   'denied_organization_mutation', 'one_shot_counts']);
+export const JOURNEY_KEYBOARD_SUBSTEPS = Object.freeze(['trigger_focus', 'first_open_key',
+  'first_dialog_visible', 'search_focus', 'audit', 'escape_key', 'dialog_hidden',
+  'return_focus', 'second_open_key', 'second_dialog_visible', 'filter', 'tab_key',
+  'teams_focus', 'enter_key', 'teams_route', 'second_dialog_hidden', 'child_read',
+  'skip_focus', 'skip_enter', 'main_focus', 'projects_navigation', 'project_read']);
 export const SURFACES = Object.freeze(['primary_login', 'organization_detail', 'child_team_detail',
   'general_project_detail', 'command_palette', 'denied_projects_empty', 'denied_organization_alert']);
 export const OPERATIONS = Object.freeze(['session_get', 'session_create', 'organization_list',
@@ -174,8 +179,14 @@ export function validateAxe(value, surface) {
   return value;
 }
 export function validateJourney(value) {
-  keys(value, ['format', 'status', 'failedStage', 'completed', 'timings', 'elapsedMs', 'network', 'accessibility', 'denialEvidence', 'contextsPreserved']);
-  check(value.format === 'stead-checkpoint-a-browser-journey-v1' && ['completed', 'failed'].includes(value.status));
+  const detailed = value?.format === 'stead-checkpoint-a-browser-journey-v2';
+  keys(value, ['format', 'status', 'failedStage', 'completed', 'timings', 'elapsedMs', 'network', 'accessibility', 'denialEvidence', 'contextsPreserved',
+    ...(detailed ? ['failedKeyboardSubstep'] : [])]);
+  check((detailed || value.format === 'stead-checkpoint-a-browser-journey-v1') && ['completed', 'failed'].includes(value.status));
+  if (detailed) {
+    check(value.failedKeyboardSubstep === null || JOURNEY_KEYBOARD_SUBSTEPS.includes(value.failedKeyboardSubstep));
+    check(value.failedKeyboardSubstep === null || value.status === 'failed' && value.failedStage === 'keyboard_palette_focus');
+  }
   check(value.failedStage === null || STAGES.includes(value.failedStage));
   check(Array.isArray(value.completed) && value.completed.length <= 10 && value.completed.every((stage, i) => stage === STAGES[i + 1]));
   check(Array.isArray(value.timings) && value.timings.length === value.completed.length);

@@ -217,6 +217,15 @@ The failed browser attempts so far do not satisfy this command's prerequisites.
 
 ## Credential-free real-shell keyboard diagnostic
 
+New full-journey results use `stead-checkpoint-a-browser-journey-v2` with one
+closed `failedKeyboardSubstep` identifier. It identifies the first failed native
+action/assertion within the authenticated keyboard stage, including the linked
+Team/Project reads; it records no exception, DOM, selector, or credential. The
+action order, assertions, network limits and one-shot policy are unchanged.
+Historical v1 evidence remains readable and does not acquire missing detail.
+An anonymous diagnostic success does not fix an authenticated journey failure;
+run the next full journey only on a separately admitted fresh installation.
+
 `scripts/checkpoint_a_keyboard.mjs` is a separate diagnostic for the current
 login shell's unchanged CommandPalette, not a retry of the failed authenticated
 journey. It needs exact non-author architecture/license, QA and security reviews

@@ -7,12 +7,12 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { allowedRequest, byteBudget, absolute, readBounded, privateDirectory,
   claimAttempt, validateAdmission, validateInnerProof, validateJourney, validateAxe,
-  SOURCE_FILES, ORIGIN, FORBIDDEN_STATE, STAGES, SURFACES, OPERATIONS, sha256,
+  SOURCE_FILES, ORIGIN, FORBIDDEN_STATE, STAGES, SURFACES, OPERATIONS, JOURNEY_KEYBOARD_SUBSTEPS, sha256,
   verifyDistribution, processStat, serviceCommand, listenerInodes, browserCookie,
   preserveSession, validatePreservedSession, SESSION_FILES, openedDirectoryMatches } from './checkpoint_a_browser_boundary.mjs';
 import { main as controller, verifyHarness, verifyIdentity, verifyInputs } from './checkpoint_a_browser.mjs';
 import { main as namespace, auditSurface } from '../tests/e2e/checkpoint_a_browser.mjs';
-import { runCheckpointAJourney, workspaceSelect } from '../tests/e2e/checkpoint_a_browser_journey.mjs';
+import { runCheckpointAJourney, workspaceSelect, keyboardSubsteps } from '../tests/e2e/checkpoint_a_browser_journey.mjs';
 
 const uuid = '01991962-1234-7000-8000-123456789abc';
 const digest = 'a'.repeat(64), revision = 'b'.repeat(40);
@@ -42,6 +42,38 @@ function fixture(task) {
   // Only this test's freshly created, exact private fixture is removed.
   try { return task(directory); } finally { rmSync(directory, { recursive: true }); }
 }
+test('fixed authenticated keyboard substeps preserve first failure without retry or raw exception evidence', async () => {
+  for (const failure of [null, ...JOURNEY_KEYBOARD_SUBSTEPS]) {
+    const seen = [], evidence = { failedKeyboardSubstep: null };
+    const actions = Object.fromEntries(JOURNEY_KEYBOARD_SUBSTEPS.map(name => [name, async () => {
+      seen.push(name); if (name === failure) throw new Error('owned secret canary');
+    }]));
+    if (failure === null) await keyboardSubsteps(actions, evidence);
+    else await assert.rejects(keyboardSubsteps(actions, evidence));
+    assert.equal(evidence.failedKeyboardSubstep, failure);
+    const length = failure === null ? JOURNEY_KEYBOARD_SUBSTEPS.length : JOURNEY_KEYBOARD_SUBSTEPS.indexOf(failure) + 1;
+    assert.deepEqual(seen, JOURNEY_KEYBOARD_SUBSTEPS.slice(0, length));
+    assert.deepEqual(Object.keys(evidence), ['failedKeyboardSubstep']);
+    assert(!JSON.stringify(evidence).includes('canary'));
+  }
+});
+test('journey v2 adds one closed failure field and preserves historical v1 read compatibility', () => {
+  const legacy = journey(); assert.deepEqual(validateJourney(legacy), legacy);
+  const current = { ...journey(), format: 'stead-checkpoint-a-browser-journey-v2', failedKeyboardSubstep: null };
+  assert.deepEqual(validateJourney(current), current);
+  const failed = { ...current, status: 'failed', failedStage: 'keyboard_palette_focus',
+    completed: STAGES.slice(1, 7), timings: current.timings.slice(0, 6), failedKeyboardSubstep: 'child_read' };
+  assert.deepEqual(validateJourney(failed), failed);
+  for (const change of [
+    { failedKeyboardSubstep: 'raw private error' }, { failedKeyboardSubstep: {} },
+    { failedKeyboardSubstep: ['child_read'] }, { failedKeyboardSubstep: 'child_read', status: 'completed' },
+    { failedKeyboardSubstep: 'child_read', failedStage: 'primary_login' },
+    { exception: 'owned private canary' }, { format: 'stead-checkpoint-a-browser-journey-v3' },
+  ]) assert.throws(() => validateJourney({ ...failed, ...change }));
+  const missing = { ...current }; delete missing.failedKeyboardSubstep;
+  assert.throws(() => validateJourney(missing));
+  assert.throws(() => validateJourney({ ...legacy, failedKeyboardSubstep: null }));
+});
 test('workspace select locators use exact combobox accessible names, not option-inclusive label text', () => {
   const calls = [], locator = {};
   const page = { getByRole: (role, options) => { calls.push({ role, options }); return locator; },
