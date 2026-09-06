@@ -23,7 +23,7 @@ import (
 	"github.com/ScottTpirate/stead/modules/authorization"
 )
 
-type event struct{ Action, Test, Package, Output string }
+type event struct{ Action, Test, Package, ImportPath, Output string }
 type mutant struct {
 	ID, Path  string
 	Function  string
@@ -35,12 +35,52 @@ type mutant struct {
 const authorizationPackage = "github.com/ScottTpirate/stead/modules/authorization"
 const classificationPackage = "github.com/ScottTpirate/stead/modules/classification"
 
+const diagnosticNameBytes, diagnosticOutputBytes = 256, 4096
+
+// Only private check stderr receives this bounded diagnostic, not a check
+// report. Validation always examines the original events before truncation.
+// Even worst-case JSON escaping stays below 57 KiB per diagnostic.
+func evidenceError(reason string, code int, entry *event, following ...event) error {
+	truncated := false
+	clip := func(value string, limit int) string {
+		if len(value) > limit {
+			truncated = true
+			value = value[:limit]
+		}
+		return value
+	}
+	reason = clip(reason, diagnosticNameBytes)
+	var detail *event
+	if entry != nil {
+		detail = &event{Action: clip(entry.Action, diagnosticNameBytes), Test: clip(entry.Test, diagnosticNameBytes),
+			Package: clip(entry.Package, diagnosticNameBytes), ImportPath: clip(entry.ImportPath, diagnosticNameBytes),
+			Output: clip(entry.Output, diagnosticOutputBytes)}
+	}
+	// Go can emit a header-only build-output before the actual error line.
+	// Retain only a bounded continuation for that exact build, not other test
+	// output. A later build-fail never rehabilitates the invalid first event.
+	buildOutput := ""
+	for _, next := range following {
+		if entry != nil && next.ImportPath == entry.ImportPath && next.Action == "build-output" {
+			buildOutput += clip(next.Output, diagnosticOutputBytes-len(buildOutput))
+		}
+	}
+	data, _ := json.Marshal(struct {
+		Reason               string `json:"reason"`
+		ExitCode             int    `json:"exit_code"`
+		Event                *event `json:"event"`
+		FollowingBuildOutput string `json:"following_build_output,omitempty"`
+		Truncated            bool   `json:"truncated"`
+	}{reason, code, detail, buildOutput, truncated})
+	return errors.New(string(data))
+}
+
 // processResult requires actual executed tests and completed package results.
 // A compiler failure, missing output, skipped-only selection, interruption, or
 // package failure without a failing test is not a killed policy mutant.
 func processResult(events []event, code int, packages []string) (bool, error) {
 	if code != 0 && code != 1 {
-		return false, errors.New("test process did not exit normally")
+		return false, evidenceError("test process did not exit normally", code, nil)
 	}
 	allowed := map[string]bool{}
 	for _, name := range packages {
@@ -48,23 +88,23 @@ func processResult(events []event, code int, packages []string) (bool, error) {
 	}
 	terminal, ran, completed := map[string]string{}, map[string]bool{}, map[string]bool{}
 	failed, counts := false, map[string]int{}
-	for _, entry := range events {
-		if entry.Action == "build-fail" || strings.Contains(entry.Output, "[build failed]") {
-			return false, errors.New("compiler failure is not a mutation kill")
+	for index, entry := range events {
+		if entry.Action == "build-output" || entry.Action == "build-fail" || strings.Contains(entry.Output, "[build failed]") {
+			return false, evidenceError("compiler output or failure is not a mutation kill", code, &entry, events[index+1:]...)
 		}
 		if !allowed[entry.Package] {
-			return false, errors.New("unexpected test package")
+			return false, evidenceError("unexpected test package", code, &entry)
 		}
 		key := entry.Package + "/" + entry.Test
 		if entry.Test != "" && entry.Action == "run" {
 			if ran[key] {
-				return false, errors.New("duplicate test execution")
+				return false, evidenceError("duplicate test execution", code, &entry)
 			}
 			ran[key] = true
 		}
 		if entry.Test != "" && (entry.Action == "pass" || entry.Action == "fail" || entry.Action == "skip") {
 			if !ran[key] || completed[key] {
-				return false, errors.New("unmatched or duplicate test result")
+				return false, evidenceError("unmatched or duplicate test result", code, &entry)
 			}
 			completed[key] = true
 			if entry.Action != "skip" {
@@ -74,25 +114,25 @@ func processResult(events []event, code int, packages []string) (bool, error) {
 		}
 		if entry.Test == "" && (entry.Action == "pass" || entry.Action == "fail" || entry.Action == "skip") {
 			if terminal[entry.Package] != "" {
-				return false, errors.New("duplicate package result")
+				return false, evidenceError("duplicate package result", code, &entry)
 			}
 			terminal[entry.Package] = entry.Action
 		}
 	}
 	for key := range ran {
 		if !completed[key] {
-			return false, errors.New("incomplete test execution")
+			return false, evidenceError("incomplete test execution", code, nil)
 		}
 	}
 	packageFailed := false
 	for name := range allowed {
 		if counts[name] == 0 || (terminal[name] != "pass" && terminal[name] != "fail") {
-			return false, errors.New("missing actual package tests")
+			return false, evidenceError("missing actual package tests", code, nil)
 		}
 		packageFailed = packageFailed || terminal[name] == "fail"
 	}
 	if (code == 1) != failed || failed != packageFailed {
-		return false, errors.New("test and process outcomes disagree")
+		return false, evidenceError("test and process outcomes disagree", code, nil)
 	}
 	return failed, nil
 }
@@ -147,19 +187,32 @@ func captureRows(ids []string, events []event, code int) ([]authorization.LocalC
 	return cases, nil
 }
 
+func testEnvironment() []string {
+	// The approved parent already strips credentials. Keep that boundary when
+	// this development command is invoked directly too; inherit build paths and
+	// target settings only, never service credentials or compiler/proxy overrides.
+	result := []string{"GOENV=off", "GOWORK=off", "GOPROXY=off", "GOSUMDB=off", "GOTOOLCHAIN=local", "GOFLAGS=-mod=readonly"}
+	for _, name := range []string{"PATH", "GOROOT", "GOCACHE", "GOPATH", "GOMODCACHE", "GOTMPDIR", "TMPDIR", "CGO_ENABLED", "GOOS", "GOARCH", "GOAMD64", "GOEXPERIMENT", "LANG", "LC_ALL"} {
+		if value, ok := os.LookupEnv(name); ok {
+			result = append(result, name+"="+value)
+		}
+	}
+	return result
+}
+
 func execute(ctx context.Context, args ...string) ([]event, int, error) {
 	command := exec.CommandContext(ctx, "go", args...)
-	command.Env = append(os.Environ(), "GOPROXY=off", "GOSUMDB=off", "GOTOOLCHAIN=local", "GOFLAGS=-mod=readonly")
+	command.Env = testEnvironment()
 	output, err := command.Output()
 	code := 0
 	if err != nil {
 		var exit *exec.ExitError
 		if !errors.As(err, &exit) {
-			return nil, -1, err
+			return nil, -1, evidenceError("cannot execute test process: "+err.Error(), -1, nil)
 		}
 		code = exit.ExitCode()
 		if len(exit.Stderr) > 0 {
-			fmt.Fprint(os.Stderr, string(exit.Stderr))
+			fmt.Fprintln(os.Stderr, evidenceError("test process stderr", code, &event{Output: string(exit.Stderr)}))
 		}
 	}
 	decoder := json.NewDecoder(bytes.NewReader(output))
@@ -171,7 +224,7 @@ func execute(ctx context.Context, args ...string) ([]event, int, error) {
 			break
 		}
 		if err != nil {
-			return nil, code, err
+			return nil, code, evidenceError("invalid test JSON: "+err.Error(), code, &event{Output: string(output[decoder.InputOffset():])})
 		}
 		events = append(events, entry)
 	}
@@ -304,11 +357,13 @@ func critical(ctx context.Context) ([]authorization.LocalCheckCase, error) {
 	}
 	selection := "^(TestNativePolicy|TestNativeClassification|TestCoordinator|TestOpenFGABatch|TestActivationRejects|TestHostAnchor)"
 	control, code, err := execute(ctx, "test", "-json", "-count=1", "./modules/authorization", "./modules/classification", "-run", selection)
-	if err != nil || code != 0 {
-		return nil, errors.New("unmutated policy positive control failed")
+	if err != nil {
+		return nil, fmt.Errorf("unmutated policy positive control failed: %w", err)
 	}
-	if failed, err := processResult(control, code, []string{authorizationPackage, classificationPackage}); err != nil || failed {
-		return nil, errors.New("unmutated positive control did not execute valid tests")
+	if failed, err := processResult(control, code, []string{authorizationPackage, classificationPackage}); err != nil {
+		return nil, fmt.Errorf("unmutated positive control did not execute valid tests: %w", err)
+	} else if failed {
+		return nil, evidenceError("unmutated policy positive control failed", code, nil)
 	}
 	directory, err := os.MkdirTemp("", "stead-local-policy-mutations-")
 	if err != nil {
