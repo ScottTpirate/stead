@@ -157,9 +157,14 @@ it contains resource IDs and request correlations needed for the separate SQL
 check, not cookies, response bodies, protected titles or raw errors. Do not
 publish it. The console emits only a bounded scope/result/request count/file
 name. Current application files, existing browser admission and prior browser
-input-identity verification are bound before/after the run; this follow-on does
-not independently repeat the browser controller's live process/socket/dist
-attestation. Missing current runtime-identity evidence remains a separate gate.
+input-identity verification are bound before/after the run. The browser's H
+revision/tree and source blobs remain pinned separately from application D;
+the integration branch may advance after the completed browser attempt without
+relabeling that attempt or its session binding. This runner reuses the exact
+admitted read-only controller identity checks for current application executables,
+process/socket ownership and held frontend distribution before/after its reads.
+It does not invoke the controller main, browser tools, relay, or attempt claim.
+This is synthetic-demo attribution, not attestation against a malicious host.
 
 This is not browser/reload, list pagination, login/logout lifecycle, restart,
 SQL audit persistence, outbox delivery, timing-nondisclosure, physical network

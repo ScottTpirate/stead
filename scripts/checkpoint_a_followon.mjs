@@ -11,6 +11,7 @@ import { createPlatformClient, PlatformApiError } from '../packages/api-client/s
 import { ORIGIN, privateDirectory, readPrivate, joinObservations } from './checkpoint_a_smoke.mjs';
 import { denialTransport, validateDenialBootstrap, validateDenialInputs } from './checkpoint_a_denial.mjs';
 import { noSymlinks, readBounded, sha256, validateAdmission, validatePreservedSession, SESSION_FILES } from './checkpoint_a_browser_boundary.mjs';
+import { verifyIdentity } from './checkpoint_a_browser.mjs';
 
 const HERE = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const failure = () => new Error('Checkpoint A follow-on boundary rejected');
@@ -27,8 +28,9 @@ export const TIMING_FIELDS = Object.freeze([
   'anchor_sync_ns', 'anchor_sync_failures',
 ]);
 const SHARED_FILES = ['scripts/checkpoint_a_smoke.mjs', 'scripts/checkpoint_a_denial.mjs',
-  'scripts/checkpoint_a_browser_boundary.mjs', 'packages/api-client/src/client.ts',
+  'packages/api-client/src/client.ts',
   'packages/api-client/src/generated/platform-v1.ts'];
+const HARNESS_HELPERS = ['scripts/checkpoint_a_browser.mjs', 'scripts/checkpoint_a_browser_boundary.mjs'];
 
 export async function loadEstablishedSessions(directory, binding, now = Date.now()) {
   await privateDirectory(directory);
@@ -176,14 +178,22 @@ export function joinReadObservations(records, raw) {
   return joined.map((r) => ({ ...r, api: { ...r.api, timing: timing.get(r.correlation_id) } }));
 }
 
-function git(checkout, args) {
+function git(checkout, args, trim = true) {
   const result = spawnSync('/usr/bin/git', ['--no-optional-locks', '-c', 'core.fsmonitor=false',
     '-c', 'core.untrackedCache=false', '-C', checkout, ...args], {
     env: { PATH: '/usr/bin', GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null' },
     encoding: 'utf8', timeout: 5000, maxBuffer: 1 << 20, stdio: ['ignore', 'pipe', 'ignore'],
   });
   requireValue(result.status === 0 && !result.error && !result.signal);
-  return result.stdout.trim();
+  return trim ? result.stdout.trim() : result.stdout;
+}
+export function checkBrowserBinding(admission, preceding, admissionSHA256) {
+  const binding = { admissionSHA256, instanceID: admission.instance.instanceID, sourceRevision: admission.source.head };
+  requireValue(preceding.format === 'stead-checkpoint-a-browser-run-v1' && preceding.inputsUnchanged === true &&
+    preceding.admissionSHA256 === binding.admissionSHA256 && preceding.instanceID === binding.instanceID &&
+    preceding.sourceRevision === binding.sourceRevision && preceding.harnessRevision === admission.harness.head &&
+    preceding.sessions?.primary === 'preserved' && preceding.sessions?.denied === 'preserved');
+  return binding;
 }
 async function preflight(checkout, work, admissionFile, resourcesFile) {
   noSymlinks(checkout); await privateDirectory(work);
@@ -194,10 +204,19 @@ async function preflight(checkout, work, admissionFile, resourcesFile) {
   await privateDirectory(state);
   requireValue(git(checkout, ['rev-parse', 'HEAD']) === admission.source.head &&
     git(checkout, ['status', '--porcelain', '--untracked-files=normal']) === '');
-  for (const [file, digest] of Object.entries(admission.files)) {
-    requireValue(sha256(readBounded(path.join(checkout, file), 1 << 20)) === digest);
-  }
+  // The completed browser used H, while the application remains D. Root may
+  // advance its integration branch afterward: verify H's immutable blobs, not
+  // relabel current branch files or require it to remain forever checked out.
+  const harness = admission.harness;
+  noSymlinks(harness.repository);
+  requireValue(git(harness.repository, ['rev-parse', '--show-toplevel']) === harness.repository &&
+    git(harness.repository, ['rev-parse', `${harness.head}^{tree}`]) === harness.tree);
+  for (const [file, digest] of Object.entries(admission.files)) requireValue(
+    sha256(git(harness.repository, ['show', `${harness.head}:${file}`], false)) === digest);
+  for (const review of admission.reviews) requireValue(sha256(readBounded(review.path, 1 << 20)) === review.sha256);
   for (const file of SHARED_FILES) requireValue(sha256(await readFile(path.join(HERE, file))) === sha256(readBounded(path.join(checkout, file), 1 << 20)));
+  for (const file of HARNESS_HELPERS) requireValue(sha256(readBounded(path.join(HERE, file), 1 << 20)) === admission.files[file]);
+  const identity = verifyIdentity(admission);
   requireValue(sha256(readBounded(path.join(state, 'stead-api'), 512 << 20)) === admission.source.apiSHA256);
   requireValue(sha256(readBounded(path.join(checkout, 'modules/authorization/localdata/approved-template.json'), 1 << 20)) === admission.source.templateSHA256);
   requireValue(sha256(readBounded(path.join(checkout, 'docs/governance/local-development-template-review.json'), 1 << 20)) === admission.source.templateReviewSHA256);
@@ -207,14 +226,11 @@ async function preflight(checkout, work, admissionFile, resourcesFile) {
   requireValue(bootstrap.instance_id === admission.instance.instanceID && bootstrap.activation_digest === admission.instance.activationDigest);
   const certificate = await readPrivate(path.join(state, 'tls/localhost.crt'), 16384);
   requireValue(sha256(certificate) === admission.instance.certificateSHA256);
-  const binding = { admissionSHA256: sha256(admissionBytes), instanceID: admission.instance.instanceID, sourceRevision: admission.source.head };
   const preceding = JSON.parse(await readPrivate(path.join(path.dirname(work), 'result.json'), 65536));
-  requireValue(preceding.format === 'stead-checkpoint-a-browser-run-v1' && preceding.inputsUnchanged === true &&
-    preceding.admissionSHA256 === binding.admissionSHA256 && preceding.instanceID === binding.instanceID &&
-    preceding.sourceRevision === binding.sourceRevision && preceding.sessions?.primary === 'preserved' && preceding.sessions?.denied === 'preserved');
+  const binding = checkBrowserBinding(admission, preceding, sha256(admissionBytes));
   const ids = validateDenialInputs(JSON.parse(await readPrivate(resourcesFile, 4096)));
   const sessions = await loadEstablishedSessions(work, binding);
-  return { state, certificate, sessions, ids, binding,
+  return { state, certificate, sessions, ids, binding, identity, harnessRevision: harness.head,
     expected: { primary: { instance_id: bootstrap.instance_id, principal_id: bootstrap.principal_id }, denied } };
 }
 
@@ -222,7 +238,8 @@ export async function runFollowon(checkout, work, admissionFile, resourcesFile) 
   const input = await preflight(checkout, work, admissionFile, resourcesFile);
   const report = { scope: 'established-session-tls-sdk-reads-not-browser-sql-or-release', passed: false, failed_stage: 'readers',
     ...input.binding, resources: input.ids, node_version: process.version,
-    source: Object.fromEntries(await Promise.all(['scripts/checkpoint_a_followon.mjs', ...SHARED_FILES].map(async (file) => [file, sha256(await readFile(path.join(HERE, file)))]))),
+    source: Object.fromEntries(await Promise.all(['scripts/checkpoint_a_followon.mjs', ...SHARED_FILES, ...HARNESS_HELPERS].map(async (file) => [file, sha256(await readFile(path.join(HERE, file)))]))),
+    prior_browser_harness_revision: input.harnessRevision,
     runtime_process_identity_reverified: false, database_audit_persistence_proven: false,
     resource_existence_independently_proven: false, restart_proven: false, timing_nondisclosure_proven: false,
     readers: await runReaders(input.certificate, input.sessions, input.expected, input.ids) };
@@ -239,8 +256,13 @@ export async function runFollowon(checkout, work, admissionFile, resourcesFile) 
     const after = await preflight(checkout, work, admissionFile, resourcesFile);
     requireValue(JSON.stringify(after.binding) === JSON.stringify(input.binding) &&
       JSON.stringify(after.ids) === JSON.stringify(input.ids) &&
+      after.harnessRevision === input.harnessRevision &&
+      after.identity.certificate.equals(input.identity.certificate) &&
+      after.identity.distribution === input.identity.distribution &&
+      JSON.stringify(after.identity.runtime) === JSON.stringify(input.identity.runtime) &&
       ['primary', 'denied'].every((role) => after.sessions[role].cookie === input.sessions[role].cookie));
     for (const role of ['primary', 'denied']) after.sessions[role].cookie = '';
+    report.runtime_process_identity_reverified = true;
     report.passed = true; report.failed_stage = null;
   } catch { /* Preserve incomplete correlation evidence, never retry HTTP. */ }
   finally {

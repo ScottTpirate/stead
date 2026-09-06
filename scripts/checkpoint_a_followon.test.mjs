@@ -8,7 +8,7 @@ import path from 'node:path';
 import { Readable } from 'node:stream';
 import test from 'node:test';
 import { preserveSession, SESSION_FILES } from './checkpoint_a_browser_boundary.mjs';
-import { loadEstablishedSessions, checkSession, readWorker, runReaders, joinReadObservations, TIMING_FIELDS, runFollowon } from './checkpoint_a_followon.mjs';
+import { loadEstablishedSessions, checkSession, checkBrowserBinding, readWorker, runReaders, joinReadObservations, TIMING_FIELDS, runFollowon } from './checkpoint_a_followon.mjs';
 
 const id = (n) => '01991c05-1a00-7000-8000-' + n.toString(16).padStart(12, '0');
 const ids = { known_organization: id(1), unknown_organization: id(2),
@@ -90,6 +90,21 @@ function fixture(modify = () => {}) {
 
 test('import exposes only inert helpers; no live run occurs', () => {
   assert.equal(typeof runFollowon, 'function'); assert.equal(typeof readWorker, 'function');
+});
+test('prior browser proof binds distinct harness and frozen app without relabeling session source', () => {
+  const admission = { harness: { head: 'c'.repeat(40) }, source: { head: binding.sourceRevision },
+    instance: { instanceID: binding.instanceID } };
+  const preceding = { format: 'stead-checkpoint-a-browser-run-v1', inputsUnchanged: true,
+    admissionSHA256: binding.admissionSHA256, sourceRevision: binding.sourceRevision,
+    harnessRevision: admission.harness.head, instanceID: binding.instanceID,
+    sessions: { primary: 'preserved', denied: 'preserved' } };
+  assert.deepEqual(checkBrowserBinding(admission, preceding, binding.admissionSHA256), binding);
+  for (const change of [{ harnessRevision: binding.sourceRevision }, { harnessRevision: undefined },
+    { sourceRevision: admission.harness.head }, { instanceID: id(99) },
+    { admissionSHA256: 'd'.repeat(64) }, { inputsUnchanged: false },
+    { sessions: { primary: 'preserved', denied: 'absent' } }]) {
+    assert.throws(() => checkBrowserBinding(admission, { ...preceding, ...change }, binding.admissionSHA256));
+  }
 });
 test('missing and partial browser handoffs never read or replay a bootstrap token', async () => {
   const directory = await mkdtemp(path.join(tmpdir(), 'stead-followon-unit-'));
