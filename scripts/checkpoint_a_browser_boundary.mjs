@@ -27,6 +27,7 @@ export const SURFACES = Object.freeze(['primary_login', 'organization_detail', '
 export const OPERATIONS = Object.freeze(['session_get', 'session_create', 'organization_list',
   'organization_create', 'organization_read', 'team_list', 'team_create', 'team_read',
   'project_list', 'project_create', 'project_read']);
+export const SESSION_FILES = Object.freeze({ primary: 'checkpoint-a-cookie.json', denied: 'unprivileged-session-cookie' });
 export const check = (condition) => { if (!condition) throw new Error('browser_boundary'); };
 export const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
 export const hash = (value) => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
@@ -256,4 +257,51 @@ export function listenerInodes(tcp, tcp6, uid) {
     }
   }
   check(result.api && result.web && result.api !== result.web); return result;
+}
+
+function sessionBinding(value) {
+  keys(value, ['admissionSHA256', 'instanceID', 'sourceRevision']);
+  check(hash(value.admissionSHA256) && uuid(value.instanceID) && revision(value.sourceRevision));
+}
+export function browserCookie(cookies, now = Date.now()) {
+  check(Array.isArray(cookies) && cookies.length === 1);
+  const cookie = cookies[0];
+  keys(cookie, ['name', 'value', 'domain', 'path', 'expires', 'httpOnly', 'secure', 'sameSite']);
+  check(cookie.name === '__Host-stead_session' && typeof cookie.value === 'string' && /^[A-Za-z0-9_-]{43}$/.test(cookie.value));
+  check(Buffer.from(cookie.value, 'base64url').toString('base64url') === cookie.value);
+  check(cookie.domain === 'localhost' && cookie.path === '/' && cookie.secure === true && cookie.httpOnly === true && cookie.sameSite === 'Strict');
+  check(typeof cookie.expires === 'number' && Number.isFinite(cookie.expires) && cookie.expires * 1000 > now && cookie.expires * 1000 <= now + 86400_000);
+  return { credential: { origin: ORIGIN, cookie: '__Host-stead_session=' + cookie.value }, expiresAt: cookie.expires };
+}
+function exclusivePrivate(file, value) {
+  const bytes = Buffer.from(JSON.stringify(value) + '\n');
+  const descriptor = openSync(file, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
+  try {
+    let written = 0;
+    while (written < bytes.length) { const count = writeSync(descriptor, bytes, written, bytes.length - written); check(count > 0); written += count; }
+    fsyncSync(descriptor);
+  } finally { bytes.fill(0); closeSync(descriptor); }
+  const directory = openSync(path.dirname(file), constants.O_RDONLY | constants.O_DIRECTORY);
+  try { fsyncSync(directory); } finally { closeSync(directory); }
+}
+export function preserveSession(directory, role, cookies, binding, now = Date.now()) {
+  privateDirectory(directory); check(Object.hasOwn(SESSION_FILES, role)); sessionBinding(binding);
+  const { credential, expiresAt } = browserCookie(cookies, now);
+  // Two fixed private files: legacy exact {origin,cookie} format, plus private
+  // source/instance/role/expiry binding. Neither is public diagnostic evidence.
+  // Partial writes are retained and never overwritten or automatically retried.
+  exclusivePrivate(path.join(directory, SESSION_FILES[role]), credential);
+  exclusivePrivate(path.join(directory, `${role}-session-binding.json`), {
+    ...binding, role, expiresAt, cookieSHA256: sha256(credential.cookie),
+  });
+}
+export function validatePreservedSession(credential, metadata, role, binding, now = Date.now()) {
+  sessionBinding(binding); check(Object.hasOwn(SESSION_FILES, role));
+  keys(credential, ['origin', 'cookie']);
+  check(credential.origin === ORIGIN && typeof credential.cookie === 'string' && /^__Host-stead_session=[A-Za-z0-9_-]{43}$/.test(credential.cookie));
+  check(Buffer.from(credential.cookie.slice(21), 'base64url').toString('base64url') === credential.cookie.slice(21));
+  keys(metadata, ['admissionSHA256', 'instanceID', 'sourceRevision', 'role', 'expiresAt', 'cookieSHA256']);
+  check(metadata.role === role && metadata.admissionSHA256 === binding.admissionSHA256 && metadata.instanceID === binding.instanceID && metadata.sourceRevision === binding.sourceRevision);
+  check(typeof metadata.expiresAt === 'number' && Number.isFinite(metadata.expiresAt) && metadata.expiresAt * 1000 > now && metadata.expiresAt * 1000 <= now + 86400_000);
+  check(metadata.cookieSHA256 === sha256(credential.cookie));
 }

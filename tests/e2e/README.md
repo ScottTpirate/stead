@@ -16,6 +16,11 @@ reviews accept the exact source, private tool closure and **new real workload**.
 The controller does not create or approve that record. Prior compatibility-only
 acceptance is not real-workload admission. There are no downloads or additional
 runtime dependencies; absent or changed approved local tools fail closed.
+The carried manifest pins 512 browser/native files and 15 host baseline inputs;
+it is not a complete host toolchain inventory. The already installed Git/Make
+remain ordinary trusted operator/source-inspection prerequisites. Read-only Git
+inspection disables external diff, fsmonitor, untracked-cache and global/system
+configuration; it does not install a new Git dependency framework.
 
 The private 0600 record has the closed `stead-checkpoint-a-browser-admission-v1`
 shape in `validateAdmission` (scripts/checkpoint_a_browser_boundary.mjs):
@@ -66,10 +71,25 @@ each exact audited world before axe. No script tag, bypassCSP or product policy 
 That exact instrumentation still requires successful actual execution, not just
 syntax validation. Findings retain only bounded rule/impact/count metadata.
 
-The command reports a private generated result directory containing only closed
-JSON proof and unchanged public/tool execution copies. It never retains native
-stdout/stderr, DOM, screenshots, traces, cookies, tokens, headers, response bodies
-or exception messages. It closes the browser and namespace/relay; it neither
+The command reports a private generated result directory containing closed
+JSON proof and unchanged public/tool execution copies. The authorized exception
+is **private preservation of the two established BFF session cookies**, never
+the one-time setup credentials. After each completed login response, and with
+one bounded observation fallback before browser closure if needed, the runner
+reads cookies only for the fixed origin. It requires exactly one host-only
+`__Host-stead_session`, Secure/HttpOnly/Strict, path `/`, a canonical 43-character
+value and finite unexpired lifetime. The 0700 work directory receives exclusive
+fsynced 0600 `checkpoint-a-cookie.json` and `unprivileged-session-cookie` files
+in the existing `{origin,cookie}` format, plus separate private role/instance/
+source/admission/expiry bindings. Partial files are retained and never overwritten.
+The parent validates both files; proof contains only closed preservation states,
+not cookie values, hashes or bindings. Absence/forced-kill ambiguity never proves
+the setup credential unused and never authorizes login replay. These private
+cookies may support separately authorized follow-on checks; this command does
+not reuse them automatically or establish a restart/lifecycle test pass.
+
+It never retains native stdout/stderr, DOM, screenshots, traces, one-time tokens,
+headers, response bodies or exception messages. It closes the browser and namespace/relay; it neither
 logs out nor stops/changes the host Stead stack. JS strings cannot be zeroized;
 process and tmpfs disposal are part of the confinement, not a zeroization claim.
 

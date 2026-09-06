@@ -5,7 +5,7 @@ import { spawnSync } from 'node:child_process';
 import { createServer, connect } from 'node:net';
 import { pathToFileURL } from 'node:url';
 import { check, ORIGIN, CSP, byteBudget, allowedRequest, sha256, validateAxe,
-  validateJourney, validateInnerProof } from '../../scripts/checkpoint_a_browser_boundary.mjs';
+  validateJourney, validateInnerProof, preserveSession } from '../../scripts/checkpoint_a_browser_boundary.mjs';
 import { runCheckpointAJourney } from './checkpoint_a_browser_journey.mjs';
 
 const fixedEnvironment = (home) => ({ PATH: '/usr/bin', HOME: home, LANG: 'C.UTF-8', TZ: 'UTC',
@@ -125,7 +125,32 @@ export async function auditSurface(page, surface, axeSource) {
 export async function main() {
   const proof = { format: 'stead-checkpoint-a-browser-proof-v1', passed: false, phase: 'namespace',
     networkIsolated: false, rendererSandbox: false, cspPreserved: false, browserCleanup: false, journey: null };
-  let browser, tunnel, credentials, timer;
+  let browser, tunnel, credentials, timer, sessionBinding;
+  const contexts = [], sessions = { primary: 'absent', denied: 'absent' }, capturing = new Map();
+  const captureOnce = async (context, role) => {
+    check(Object.hasOwn(sessions, role));
+    check(context === contexts[role === 'primary' ? 0 : 1]);
+    if (sessions[role] === 'preserved') return;
+    check(sessions[role] === 'absent');
+    let timeout, cookies;
+    try {
+      cookies = await Promise.race([context.cookies(ORIGIN), new Promise((_, reject) => {
+        timeout = setTimeout(() => reject(new Error('session_capture')), 2000);
+      })]);
+      if (cookies.length === 0) throw new Error('session_capture');
+      sessions[role] = 'ambiguous'; // Never retry an attempted/partial file write.
+      preserveSession('/work', role, cookies, sessionBinding);
+      sessions[role] = 'preserved';
+    } finally {
+      clearTimeout(timeout);
+      if (Array.isArray(cookies)) cookies.forEach((cookie) => { cookie.value = ''; });
+    }
+  };
+  const captureSession = (context, role) => {
+    if (capturing.has(role)) return capturing.get(role);
+    const pending = captureOnce(context, role).finally(() => capturing.delete(role));
+    capturing.set(role, pending); return pending;
+  };
   let failed = false, violations = 0, seenDocuments = 0, cspChecks = 0;
   try {
     check(process.getuid() === 1000 && process.argv.length === 2);
@@ -137,6 +162,7 @@ export async function main() {
       .map((port) => deniedConnection('127.0.0.1', port)))).every(Boolean));
     proof.networkIsolated = true;
     credentials = await ingress();
+    sessionBinding = JSON.parse(await readFile('/fixture/session-binding.json', 'utf8'));
     timer = setTimeout(() => process.exit(1), 290_000);
     tunnel = await startTunnel();
     proof.phase = 'trust';
@@ -159,7 +185,6 @@ export async function main() {
       chromiumSandbox: true, timeout: 10_000, ignoreDefaultArgs: ['--enable-unsafe-swiftshader'],
       args: ['--enable-automation', '--disable-gpu', '--disable-software-rasterizer'], env: fixedEnvironment(home) });
     check(browser.version() === '152.0.7977.82');
-    const contexts = [];
     for (let i = 0; i < 2; i++) {
       const context = await browser.newContext({ viewport: { width: 1280, height: 900 },
         locale: 'en-US', timezoneId: 'UTC', serviceWorkers: 'block', acceptDownloads: false });
@@ -183,6 +208,7 @@ export async function main() {
     proof.phase = 'journey';
     proof.journey = validateJourney(await runCheckpointAJourney({ primaryContext: contexts[0], deniedContext: contexts[1],
       primaryCredential: credentials.primary, deniedCredential: credentials.denied,
+      afterLogin: captureSession,
       auditSurface: async (page, surface) => {
         check(violations === 0 && seenDocuments > 0);
         await proveSandbox(browser); proof.rendererSandbox = true;
@@ -196,6 +222,14 @@ export async function main() {
   } catch { failed = true; } // Never serialize native, Playwright or protocol errors.
   finally {
     if (credentials) { credentials.primary = ''; credentials.denied = ''; }
+    // One bounded observation fallback, before closing the contexts. It never
+    // exchanges/replays login or overwrites an attempted private handoff file.
+    for (const [index, role] of ['primary', 'denied'].entries()) {
+      if (contexts[index] && sessions[role] === 'absent') {
+        try { await captureSession(contexts[index], role); } catch { /* absence is ambiguous, never reusable setup authority */ }
+      }
+    }
+    if (sessions.primary !== 'preserved' || sessions.denied !== 'preserved') failed = true;
     try {
       if (browser) await Promise.race([browser.close(), new Promise((_, reject) => setTimeout(() => reject(new Error('close')), 5000).unref())]);
       proof.browserCleanup = true;

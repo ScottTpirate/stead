@@ -10,7 +10,7 @@ import path from 'node:path';
 import { check, sha256, readBounded, privateDirectory, noSymlinks, validateAdmission,
   validateInnerProof, claimAttempt, byteBudget, SOURCE_FILES, OUTER_NODE, INPUTS,
   INPUTS_SHA256, FORBIDDEN_STATE, verifyDistribution, processStat, serviceCommand,
-  listenerInodes } from './checkpoint_a_browser_boundary.mjs';
+  listenerInodes, SESSION_FILES, validatePreservedSession } from './checkpoint_a_browser_boundary.mjs';
 
 const environment = { PATH: '/usr/bin', HOME: '/home/controller', LANG: 'C.UTF-8', TZ: 'UTC', FONTCONFIG_FILE: '/fixture/fonts.conf' };
 const REPO = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
@@ -164,13 +164,14 @@ function verifyInputs() {
   check(digestFile('/home/skilgore/stead-browser-axe-intake.kTB8mQ/USER_TERMS_ACCEPTANCE.md') === inputs.consentSHA256);
   return inputs;
 }
-function stage(inputs, directory, admission, certificate) {
+function stage(inputs, directory, admission, certificate, sessionBinding) {
   const ready = path.join(directory, 'execution-root'), work = path.join(directory, 'work');
   mkdirSync(ready, { mode: 0o700 }); mkdirSync(work, { mode: 0o700 });
   const selected = inputs.files.filter((entry) => !['/fixture/compatibility.test.mjs', '/fixture/https-fixture'].includes(entry.destination));
   for (const file of SOURCE_FILES.filter((file) => file.endsWith('.mjs'))) selected.push({ path: path.join(REPO, file), destination: '/runner/' + file, sha256: admission.files[file], executable: false });
   const extra = [
     { name: 'localhost.crt', data: certificate },
+    { name: 'session-binding.json', data: Buffer.from(JSON.stringify(sessionBinding)) },
     { name: 'axe-pin.json', data: Buffer.from(JSON.stringify({ sha256: inputs.files.find((entry) => entry.destination === '/tools/axe-core/axe.min.js').sha256 })) },
   ];
   for (const entry of extra) {
@@ -226,7 +227,8 @@ async function execute(args, credentials) {
 }
 export async function main(argv = process.argv.slice(2)) {
   let phase = 'preflight', directory, transport, inputs, staged, admissionBytes, admission, inner = null;
-  let passed = false, inputsUnchanged = false, credentials, identity, attemptSHA256;
+  let passed = false, inputsUnchanged = false, credentials, identity, attemptSHA256, sessionBinding;
+  const sessions = { primary: 'absent_ambiguous', denied: 'absent_ambiguous' };
   try {
     check(argv.length === 2 && argv[0] === '--review');
     check(!Object.keys(process.env).some((name) => !['PATH', 'LANG', 'TZ'].includes(name)));
@@ -243,8 +245,9 @@ export async function main(argv = process.argv.slice(2)) {
     phase = 'attempt'; const attempt = claimAttempt(admission.instance.state, { format: 'stead-checkpoint-a-browser-attempt-v1',
       admissionSHA256: sha256(admissionBytes), instanceID: admission.instance.instanceID, sourceRevision: admission.source.head, startedAt: new Date().toISOString() });
     attemptSHA256 = digestFile(attempt);
+    sessionBinding = { admissionSHA256: sha256(admissionBytes), instanceID: admission.instance.instanceID, sourceRevision: admission.source.head };
     directory = mkdtempSync('/home/skilgore/stead-checkpoint-a-browser-run.'); chmodSync(directory, 0o700);
-    phase = 'staging'; staged = stage(inputs, directory, admission, certificate);
+    phase = 'staging'; staged = stage(inputs, directory, admission, certificate, sessionBinding);
     transport = await relay(path.join(directory, 'relay.sock'));
     const primary = readBounded(path.join(admission.instance.state, 'one-time-login-token'), 43, { privateMode: true });
     const denied = readBounded(path.join(admission.instance.state, 'one-time-unprivileged-login-token'), 43, { privateMode: true });
@@ -261,6 +264,24 @@ export async function main(argv = process.argv.slice(2)) {
   finally {
     credentials?.fill(0);
     try { if (transport) await transport.close(); } catch { passed = false; }
+    if (staged && sessionBinding) {
+      const cookieDigests = new Set();
+      for (const role of ['primary', 'denied']) {
+        const credentialFile = path.join(staged.work, SESSION_FILES[role]), bindingFile = path.join(staged.work, `${role}-session-binding.json`);
+        if (!existsSync(credentialFile) && !existsSync(bindingFile)) continue;
+        let bytes;
+        try {
+          bytes = readBounded(credentialFile, 512, { privateMode: true });
+          const credential = JSON.parse(bytes), metadata = JSON.parse(readBounded(bindingFile, 1024, { privateMode: true }));
+          try { validatePreservedSession(credential, metadata, role, sessionBinding);
+            check(!cookieDigests.has(metadata.cookieSHA256)); cookieDigests.add(metadata.cookieSHA256); }
+          finally { credential.cookie = ''; }
+          sessions[role] = 'preserved';
+        } catch { sessions[role] = 'invalid_or_partial'; }
+        finally { bytes?.fill(0); }
+      }
+      if (sessions.primary !== 'preserved' || sessions.denied !== 'preserved') passed = false;
+    }
     if (admission && inputs && staged) {
       try {
         verifyInputs(); check(sha256(readBounded(argv[1], 32768, { privateMode: true })) === sha256(admissionBytes));
@@ -276,7 +297,7 @@ export async function main(argv = process.argv.slice(2)) {
   const report = { format: 'stead-checkpoint-a-browser-run-v1', passed: passed && inputsUnchanged, phase,
     inputsUnchanged, inputsSHA256: INPUTS_SHA256, admissionSHA256: admissionBytes ? sha256(admissionBytes) : null,
     sourceRevision: admission?.source.head ?? null, instanceID: admission?.instance.instanceID ?? null,
-    scope: 'real-ui-only-not-sql-provider-or-release-proof', proof: inner };
+    scope: 'real-ui-only-not-sql-provider-or-release-proof', sessions, proof: inner };
   if (directory) writeFileSync(path.join(directory, 'result.json'), JSON.stringify(report) + '\n', { mode: 0o600, flag: 'wx' });
   // Path is controller-generated, never a browser/provider/exception value.
   process.stdout.write(JSON.stringify({ passed: report.passed, phase, resultDirectory: directory ?? null }) + '\n');

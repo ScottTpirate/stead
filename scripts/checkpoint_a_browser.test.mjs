@@ -8,7 +8,8 @@ import path from 'node:path';
 import { allowedRequest, byteBudget, absolute, readBounded, privateDirectory,
   claimAttempt, validateAdmission, validateInnerProof, validateJourney, validateAxe,
   SOURCE_FILES, ORIGIN, FORBIDDEN_STATE, STAGES, SURFACES, OPERATIONS, sha256,
-  verifyDistribution, processStat, serviceCommand, listenerInodes } from './checkpoint_a_browser_boundary.mjs';
+  verifyDistribution, processStat, serviceCommand, listenerInodes, browserCookie,
+  preserveSession, validatePreservedSession, SESSION_FILES } from './checkpoint_a_browser_boundary.mjs';
 import { main as controller } from './checkpoint_a_browser.mjs';
 import { main as namespace, auditSurface } from '../tests/e2e/checkpoint_a_browser.mjs';
 import { runCheckpointAJourney } from '../tests/e2e/checkpoint_a_browser_journey.mjs';
@@ -203,3 +204,42 @@ test('axe requires boolean eval/Function denial in the exact CSP-constrained CDP
     assert.equal(failed.calls.filter((call) => call.method === 'Runtime.evaluate').length, 1);
   }
 });
+const unitCookie = () => ({ name: '__Host-stead_session', value: 'A'.repeat(43), domain: 'localhost', path: '/',
+  expires: (now + 3600_000) / 1000, httpOnly: true, secure: true, sameSite: 'Strict' });
+const unitBinding = () => ({ admissionSHA256: digest, sourceRevision: revision, instanceID: uuid });
+test('private browser handoff accepts only one exact established host-only cookie', () => {
+  assert.equal(browserCookie([unitCookie()], now).credential.origin, ORIGIN);
+  for (const cookies of [[], [unitCookie(), unitCookie()]]) assert.throws(() => browserCookie(cookies, now));
+  for (const [key, value] of [
+    ['name', 'stead_session'], ['value', 'B'.repeat(43)], ['value', 'A'.repeat(42)], ['domain', '.localhost'],
+    ['domain', '127.0.0.1'], ['path', '/api'], ['httpOnly', false], ['secure', false], ['sameSite', 'Lax'],
+    ['expires', -1], ['expires', now / 1000], ['expires', Infinity], ['expires', (now + 86400_001) / 1000],
+    ['partitionKey', 'https://localhost'],
+  ]) assert.throws(() => browserCookie([{ ...unitCookie(), [key]: value }], now));
+});
+test('established session is source-bound in separate exclusive private files, never overwritten', () => fixture((directory) => {
+  const role = 'primary', binding = unitBinding(); preserveSession(directory, role, [unitCookie()], binding, now);
+  const file = path.join(directory, SESSION_FILES[role]), metadataFile = path.join(directory, 'primary-session-binding.json');
+  const bytes = readFileSync(file), metadataBytes = readFileSync(metadataFile);
+  assert.equal(lstatSync(file).mode & 0o777, 0o600); assert.equal(lstatSync(metadataFile).mode & 0o777, 0o600);
+  const credential = JSON.parse(bytes), metadata = JSON.parse(metadataBytes);
+  assert.deepEqual(Object.keys(credential).sort(), ['cookie', 'origin']);
+  validatePreservedSession(credential, metadata, role, binding, now);
+  assert.throws(() => preserveSession(directory, role, [unitCookie()], binding, now));
+  assert.deepEqual(readFileSync(file), bytes); assert.deepEqual(readFileSync(metadataFile), metadataBytes);
+  for (const [key, value] of [['role', 'denied'], ['instanceID', revision], ['sourceRevision', 'c'.repeat(40)],
+    ['admissionSHA256', 'd'.repeat(64)], ['cookieSHA256', '0'.repeat(64)], ['expiresAt', now / 1000]]) {
+    assert.throws(() => validatePreservedSession(credential, { ...metadata, [key]: value }, role, binding, now));
+  }
+  assert.throws(() => validatePreservedSession({ ...credential, body: 'not retained' }, metadata, role, binding, now));
+}));
+test('partial handoff stays preserved/ambiguous and missing cookies never create output', () => fixture((directory) => {
+  assert.throws(() => preserveSession(directory, 'denied', [], unitBinding(), now));
+  const bindingFile = path.join(directory, 'denied-session-binding.json');
+  writeFileSync(bindingFile, 'original interrupted fixture', { mode: 0o600, flag: 'wx' });
+  assert.throws(() => preserveSession(directory, 'denied', [unitCookie()], unitBinding(), now));
+  assert.equal(readFileSync(bindingFile, 'utf8'), 'original interrupted fixture');
+  const file = path.join(directory, SESSION_FILES.denied), before = readFileSync(file);
+  assert.throws(() => preserveSession(directory, 'denied', [unitCookie()], unitBinding(), now));
+  assert.deepEqual(readFileSync(file), before);
+}));
