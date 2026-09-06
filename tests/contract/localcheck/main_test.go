@@ -5,10 +5,61 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"unicode/utf8"
 )
+
+func TestMutationInventoryIncludesTheCollectionAuthorizationEngine(t *testing.T) {
+	t.Chdir(filepath.Join("..", "..", ".."))
+	inventory, err := mutations()
+	if err != nil {
+		t.Fatal(err)
+	}
+	counts := map[string]int{}
+	for _, candidate := range inventory {
+		if candidate.Path == "modules/authorization/read_set.go" {
+			counts[candidate.Function]++
+		}
+	}
+	for _, name := range []string{"authorizeSet", "AuthorizeCollection", "collectionShape"} {
+		if counts[name] == 0 {
+			t.Fatalf("actual collection security guards omitted: %s", name)
+		}
+	}
+	selected := regexp.MustCompile(criticalTestSelection)
+	for _, name := range []string{"TestCollectionRequiredDenialIsOneSafeCorrelatedDecision", "TestCollectionClosedShapeAndFailuresDoNotDoubleAudit", "TestCollectionManyHiddenCandidatesDoNotWritePerRow", "TestCollectionRequiredDenialSanitizesRequestCorrelation"} {
+		if !selected.MatchString(name) {
+			t.Fatalf("collection regression omitted from positive control and mutations: %s", name)
+		}
+	}
+}
+
+func TestMutationInventoryRejectsMissingSelectedFunction(t *testing.T) {
+	root := filepath.Join("..", "..", "..")
+	fixture := t.TempDir()
+	for _, file := range []string{"modules/authorization/native_policy.go", "modules/authorization/coordinator.go", "modules/authorization/read_set.go", "modules/authorization/openfga_batch.go", "modules/classification/evaluator.go"} {
+		data, err := os.ReadFile(filepath.Join(root, file))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.HasSuffix(file, "read_set.go") {
+			data = []byte(strings.Replace(string(data), "func (coordinator *Coordinator) authorizeSet(", "func (coordinator *Coordinator) renamedSet(", 1))
+		}
+		target := filepath.Join(fixture, file)
+		if err := os.MkdirAll(filepath.Dir(target), 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(target, data, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Chdir(fixture)
+	if inventory, err := mutations(); err == nil || inventory != nil {
+		t.Fatal("renamed security implementation silently reduced the mutation inventory")
+	}
+}
 
 func rowEvents(action string) []event {
 	return []event{
