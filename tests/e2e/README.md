@@ -100,3 +100,61 @@ calls, audit/outbox durability, hierarchy authorization, known/unknown existence
 nondisclosure, complete accessibility, TEST-009 or a release gate. Those require
 separate actual backend inspection and release evidence. Sparse-access discovery
 and provider integration are not implemented by this runner.
+
+## Established-session SDK follow-on candidate
+
+`scripts/checkpoint_a_followon.mjs` is a separate, test-only, dependency-free
+GET workload. Its source needs independent QA/security review before actual
+execution; browser-workload acceptance alone does not approve this command.
+Importing it and running its synthetic unit tests do not access live services.
+
+After the real browser attempt, provide its **private work directory**, its
+accepted admission, the exact fresh application checkout, and a private 0600
+JSON input containing six distinct UUIDv7 fields: `known_organization`,
+`unknown_organization`, `known_team`, `unknown_team`, `known_project`,
+`unknown_project`. Obtain known IDs through authorized Stead reads; the
+independent PostgreSQL check must separately establish existence/absence.
+
+```sh
+env -i PATH=/usr/bin LANG=C.UTF-8 TZ=UTC \
+  /tmp/stead-node-toolchain-26.8.1/toolchain/node-v26.8.1-linux-x64/bin/node \
+  scripts/checkpoint_a_followon.mjs --live \
+  --checkout /absolute/fresh/application-checkout \
+  --browser-work /absolute/private/browser-run/work \
+  --admission /absolute/private/browser-admission.json \
+  --resources /absolute/private/resource-ids.json
+```
+
+No fallback token, login, logout, mutation, browser launch, provider, service
+control, arbitrary SQL, download, or HTTP retry exists in this runner. Missing,
+partial, stale, foreign or mismatched handoffs fail closed; it does not copy
+cookies into the application state. Actual GET /session must match each
+expected principal/instance and completed exchange revision, and preserve the
+cookie's existing expiry. Require more than two minutes of remaining session
+life. The current bootstrap sessions last eight hours; the initial activation
+lasts 24 hours, and this command cannot renew either.
+
+Four independent serial transports/SDK observation buffers issue 80 requests
+in total: session checks before and after, and three rounds of known/unknown
+Organization/Team/Project reads. Two workers use the authorized principal and
+two use the no-grant principal. The client in-flight maximum is measured, not
+server parallelism. Each completed HTTP correlation is joined to exactly one
+matching API observation, retaining the existing numeric SQL/pool/anchor timing
+fields. Unknown/missing counters fail rather than becoming zero. Failed HTTP
+or SDK validation preserves the first failing stage and completed observations.
+Only reading delayed local telemetry is retried, at most four times.
+
+Proof is an exclusive fsynced 0600 file in the supplied private work directory;
+it contains resource IDs and request correlations needed for the separate SQL
+check, not cookies, response bodies, protected titles or raw errors. Do not
+publish it. The console emits only a bounded scope/result/request count/file
+name. Current application files, existing browser admission and prior browser
+input-identity verification are bound before/after the run; this follow-on does
+not independently repeat the browser controller's live process/socket/dist
+attestation. Missing current runtime-identity evidence remains a separate gate.
+
+This is not browser/reload, list pagination, login/logout lifecycle, restart,
+SQL audit persistence, outbox delivery, timing-nondisclosure, physical network
+round-trip/server-lock measurement, product performance, or Phase 1 acceptance.
+The unit command is `scripts/run_pinned_node.sh node --test
+scripts/checkpoint_a_followon.test.mjs` and is included in foundation-check.

@@ -220,7 +220,7 @@ async function preflight(checkout, work, admissionFile, resourcesFile) {
 
 export async function runFollowon(checkout, work, admissionFile, resourcesFile) {
   const input = await preflight(checkout, work, admissionFile, resourcesFile);
-  const report = { scope: 'established-session-tls-sdk-reads-not-browser-sql-or-release', passed: false,
+  const report = { scope: 'established-session-tls-sdk-reads-not-browser-sql-or-release', passed: false, failed_stage: 'readers',
     ...input.binding, resources: input.ids, node_version: process.version,
     source: Object.fromEntries(await Promise.all(['scripts/checkpoint_a_followon.mjs', ...SHARED_FILES].map(async (file) => [file, sha256(await readFile(path.join(HERE, file)))]))),
     runtime_process_identity_reverified: false, database_audit_persistence_proven: false,
@@ -228,17 +228,20 @@ export async function runFollowon(checkout, work, admissionFile, resourcesFile) 
     readers: await runReaders(input.certificate, input.sessions, input.expected, input.ids) };
   try {
     requireValue(report.readers.passed);
+    report.failed_stage = 'observation_join';
     for (let attempt = 0; ; attempt++) {
       try {
         report.readers.records = joinReadObservations(report.readers.records, (await readPrivate(path.join(input.state, 'stead-api.log'), 8 << 20)).toString('utf8'));
         break;
       } catch { if (attempt === 4) throw failure(); await delay(25); }
     }
+    report.failed_stage = 'binding_recheck';
     const after = await preflight(checkout, work, admissionFile, resourcesFile);
     requireValue(JSON.stringify(after.binding) === JSON.stringify(input.binding) &&
       JSON.stringify(after.ids) === JSON.stringify(input.ids) &&
       ['primary', 'denied'].every((role) => after.sessions[role].cookie === input.sessions[role].cookie));
-    report.passed = true;
+    for (const role of ['primary', 'denied']) after.sessions[role].cookie = '';
+    report.passed = true; report.failed_stage = null;
   } catch { /* Preserve incomplete correlation evidence, never retry HTTP. */ }
   finally {
     for (const role of ['primary', 'denied']) input.sessions[role].cookie = '';
