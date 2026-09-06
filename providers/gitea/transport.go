@@ -1,6 +1,7 @@
 // Package gitea contains the inactive WS-03 stock-provider adapter. No exported
-// entry point can perform I/O. WS-06 consumed-handle dispatch must land before
-// application use; provider credentials are enforcement, not Stead authority.
+// raw-I/O entry point exists. The sole public mutation consumes a real WS-06
+// handle and a sealed hidden-tracker plan; application activation remains gated.
+// Provider credentials are enforcement, not Stead authority.
 package gitea
 
 import (
