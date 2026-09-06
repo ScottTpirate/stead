@@ -4,6 +4,7 @@
 import { randomBytes } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { open, readFile } from 'node:fs/promises';
+import { request as httpsRequest } from 'node:https';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -63,7 +64,13 @@ export function checkSession(value, expected, expiresAt, now = Date.now()) {
 // requestImplementation is an owned unit-fixture seam only, never a CLI option.
 export function readWorker(certificate, session, ids, requestImplementation) {
   validateDenialInputs(ids);
-  const wire = denialTransport(certificate, { value: session.cookie }, undefined, requestImplementation);
+  let dispatches = 0;
+  const wire = denialTransport(certificate, { value: session.cookie }, undefined, (...args) => {
+    // Count entry into the transport, not successful SDK decoding. A transport
+    // exception does not establish that the server received no request.
+    dispatches++;
+    return (requestImplementation ?? httpsRequest)(...args);
+  });
   const paths = new Set(['/api/v1/session', ...READS.flatMap(([kind]) =>
     ['known', 'unknown'].map((which) => '/api/v1/' + (kind === 'organization' ? 'organizations' : kind + 's') + '/' + ids[which + '_' + kind]))]);
   const observed = [];
@@ -77,6 +84,7 @@ export function readWorker(certificate, session, ids, requestImplementation) {
   });
   return {
     close: wire.close,
+    dispatches: () => dispatches,
     async call(operation, options) {
       requireValue(!busy && ['getSession', ...READS.map(([, op]) => op)].includes(operation));
       busy = true;
@@ -85,13 +93,19 @@ export function readWorker(certificate, session, ids, requestImplementation) {
         let response, error;
         try { response = await client.request(operation, options); } catch (caught) { error = caught; }
         const actual = wire.last(), measurement = observed[before];
-        requireValue(observed.length === before + 1 && actual && measurement &&
+        requireValue(actual && /^[0-9a-f]{32}$/.test(actual.correlation_id) &&
+          Number.isSafeInteger(actual.bytes) && actual.bytes >= 0 &&
+          Number.isInteger(actual.status) && actual.status >= 200 && actual.status < 600);
+        requireValue(measurement ? observed.length === before + 1 &&
           actual.status === measurement.status && actual.bytes === measurement.responseBytes &&
-          actual.correlation_id === (response?.correlationId ?? error?.correlationId));
-        requireValue(!error || (error instanceof PlatformApiError && error.status === 404 && actual.denial));
-        return { data: response?.data, denial: actual.denial?.normalized_body,
+          Number.isFinite(measurement.durationMs) && measurement.durationMs >= 0 : observed.length === before);
+        // Keep a safely framed completed response even when SDK/schema parsing
+        // fails. No response body or raw error becomes evidence.
+        const validated = Boolean(measurement && actual.correlation_id === (response?.correlationId ?? error?.correlationId) &&
+          (!error || (error instanceof PlatformApiError && error.status === 404 && actual.denial)));
+        return { validated, data: response?.data, denial: actual.denial?.normalized_body,
           record: { operation, correlation_id: actual.correlation_id, status: actual.status,
-            response_bytes: measurement.responseBytes, duration_ms: measurement.durationMs } };
+            response_bytes: actual.bytes, duration_ms: measurement?.durationMs ?? null } };
       } finally { busy = false; }
     },
   };
@@ -99,7 +113,8 @@ export function readWorker(certificate, session, ids, requestImplementation) {
 
 export async function runReaders(certificate, sessions, expected, ids, requestImplementation) {
   validateDenialInputs(ids);
-  const report = { passed: false, failed_stage: 'sessions_before', records: [], client_max_in_flight: 0 };
+  const report = { passed: false, failed_stage: 'sessions_before', records: [], client_max_in_flight: 0,
+    dispatch_attempts: 0, sdk_validated_responses: 0, unobserved_dispatch_attempts: 0 };
   const cancel = new AbortController();
   const signal = AbortSignal.any([cancel.signal, AbortSignal.timeout(120_000)]);
   const workers = ['primary', 'denied', 'primary', 'denied'].map((role, index) => ({
@@ -112,6 +127,8 @@ export async function runReaders(certificate, sessions, expected, ids, requestIm
     try {
       const result = await worker.reader.call(operation, { ...options, signal });
       report.records.push({ worker: worker.index, principal: worker.role, sequence: worker.sequence++, sample, ...result.record });
+      requireValue(result.validated);
+      report.sdk_validated_responses++;
       return result;
     } finally { active--; }
   };
@@ -158,7 +175,11 @@ export async function runReaders(certificate, sessions, expected, ids, requestIm
       new Set(report.records.map((r) => r.correlation_id)).size === report.records.length);
     report.passed = true; report.failed_stage = null;
   } catch { /* Retain bounded first-failure stage and completed observations, never errors/DOM/cookies. */ }
-  finally { for (const worker of workers) worker.reader.close(); }
+  finally {
+    for (const worker of workers) worker.reader.close();
+    report.dispatch_attempts = workers.reduce((sum, worker) => sum + worker.reader.dispatches(), 0);
+    report.unobserved_dispatch_attempts = report.dispatch_attempts - report.records.length;
+  }
   return report;
 }
 
@@ -274,7 +295,9 @@ export async function runFollowon(checkout, work, admissionFile, resourcesFile) 
     try { await directory.sync(); } finally { await directory.close(); }
     report.proof_file = filename;
   }
-  return { scope: report.scope, passed: report.passed, requests: report.readers.records.length, proof_file: report.proof_file };
+  return { scope: report.scope, passed: report.passed,
+    dispatch_attempts: report.readers.dispatch_attempts, retained_responses: report.readers.records.length,
+    unobserved_dispatch_attempts: report.readers.unobserved_dispatch_attempts, proof_file: report.proof_file };
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

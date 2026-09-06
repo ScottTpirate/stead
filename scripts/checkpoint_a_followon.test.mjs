@@ -161,6 +161,8 @@ test('four independent workers overlap and preserve all 80 request correlations 
   const result = await runReaders(Buffer.from('unit certificate'), sessions, expected, ids, f.request);
   assert.equal(result.passed, true, JSON.stringify(result));
   assert.equal(result.records.length, 80); assert.equal(result.client_max_in_flight, 4);
+  assert.equal(result.dispatch_attempts, 80); assert.equal(result.sdk_validated_responses, 80);
+  assert.equal(result.unobserved_dispatch_attempts, 0);
   assert.equal(f.max(), 4); assert.equal(f.agents.size, 4);
   assert.equal(new Set(result.records.map((r) => r.correlation_id)).size, 80);
   for (let worker = 0; worker < 4; worker++) {
@@ -181,6 +183,27 @@ test('failed preflight sessions dispatch no resource reads and never attempt a l
   assert.equal(result.passed, false); assert.equal(result.failed_stage, 'sessions_before');
   assert.equal(f.requests.length, 4);
   assert.ok(f.requests.every((r) => r.url.pathname === '/api/v1/session'));
+});
+test('completed SDK-invalid responses retain safe correlations and never report zero requests', async () => {
+  const f = fixture((entry) => { entry.data = {}; });
+  const result = await runReaders(Buffer.from('unit certificate'), sessions, expected, ids, f.request);
+  assert.equal(result.passed, false); assert.equal(result.failed_stage, 'sessions_before');
+  assert.equal(f.requests.length, 4); assert.equal(result.dispatch_attempts, 4);
+  assert.equal(result.records.length, 4); assert.equal(result.sdk_validated_responses, 0);
+  assert.equal(result.unobserved_dispatch_attempts, 0);
+  assert.equal(new Set(result.records.map((r) => r.correlation_id)).size, 4);
+  assert.ok(result.records.every((r) => r.status === 200 && r.sample === 'session_before'));
+});
+test('unobserved transport attempts remain explicit rather than inferred as no HTTP effects', async () => {
+  let attempts = 0;
+  const result = await runReaders(Buffer.from('unit certificate'), sessions, expected, ids, () => {
+    attempts++; throw new Error('synthetic transport secret must not be retained');
+  });
+  assert.equal(result.passed, false); assert.equal(result.failed_stage, 'sessions_before');
+  assert.equal(attempts, 4); assert.equal(result.dispatch_attempts, 4);
+  assert.equal(result.records.length, 0); assert.equal(result.sdk_validated_responses, 0);
+  assert.equal(result.unobserved_dispatch_attempts, 4);
+  assert.ok(!JSON.stringify(result).includes('secret'));
 });
 test('session change denial leak or unexpected cookie fails without a read retry', async () => {
   for (const mutate of [

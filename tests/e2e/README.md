@@ -150,12 +150,17 @@ server parallelism. Each completed HTTP correlation is joined to exactly one
 matching API observation, retaining the existing numeric SQL/pool/anchor timing
 fields. Unknown/missing counters fail rather than becoming zero. Failed HTTP
 or SDK validation preserves the first failing stage and completed observations.
+The proof distinguishes transport dispatch attempts, retained safely framed
+responses and SDK-validated responses. A completed response rejected by the SDK
+still retains its safe correlation/status/byte count; unavailable SDK timing is
+`null`, never zero. A transport failure without a safe completed response is an
+explicit unobserved dispatch attempt, not evidence that no HTTP request occurred.
 Only reading delayed local telemetry is retried, at most four times.
 
 Proof is an exclusive fsynced 0600 file in the supplied private work directory;
 it contains resource IDs and request correlations needed for the separate SQL
 check, not cookies, response bodies, protected titles or raw errors. Do not
-publish it. The console emits only a bounded scope/result/request count/file
+publish it. The console emits only bounded scope/result/dispatch and response counts/file
 name. Current application files, existing browser admission and prior browser
 input-identity verification are bound before/after the run. The browser's H
 revision/tree and source blobs remain pinned separately from application D;
