@@ -145,9 +145,14 @@ Four separate namespace-only HOME/NSS/browser profiles each navigate exactly
 one document: untrusted, `C,,` comparison, `P,,` peer, and `P,,` wrong-name.
 The wrong-name URL is fixed at `https://stead-wrong-host.invalid:18443/`, resolved
 only to the same isolated 127.0.0.1 relay through one fixed Chromium host rule.
-All non-document requests, assets, scripts, API calls, methods other than GET,
-redirect destinations and arbitrary hosts are blocked; no Stead application
-JavaScript is fetched and no login action occurs. Browser sandboxes, CSP and
+The initial-request route checks block non-document requests, assets, scripts,
+API calls, methods other than GET and arbitrary hosts. This diagnostic requires
+the exact source/binary/dist-pinned application's nonredirecting `/` handler
+(`devweb/server.go` serves its static index). Playwright's context route does not
+intercept every redirect hop; the final response URL check rejects a redirect
+result after the fact, not before that network hop. This is not generic redirect
+confinement. Under that exact nonredirecting-handler prerequisite, no Stead
+application JavaScript is fetched and no login action occurs. Browser sandboxes, CSP and
 normal certificate/hostname verification remain enabled. No certificate-ignore,
 insecure-localhost, proxy or host trust flag is available.
 

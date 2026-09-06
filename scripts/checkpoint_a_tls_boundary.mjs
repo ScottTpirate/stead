@@ -48,6 +48,8 @@ export function classifyTLSError(error) {
   return 'other';
 }
 export function tlsNavigationAllowed(profile, method, url, resourceType, navigation) {
+  // Initial requests only: pinned Playwright does not route every redirect hop.
+  // Admission requires the exact application's nonredirecting static / handler.
   check(TLS_PROFILES.includes(profile));
   return method === 'GET' && resourceType === 'document' && navigation === true &&
     url === (profile === 'wrong_name' ? WRONG_ORIGIN : ORIGIN) + '/';

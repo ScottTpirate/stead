@@ -74,6 +74,8 @@ export async function main() {
         proof.phase = 'navigation';
         try {
           const response = await page.goto(target, { waitUntil: 'domcontentloaded', timeout: 12_000 });
+          // Detects a changed final URL after navigation, not a network-level
+          // redirect block. The admitted application's / must not redirect.
           check(response && response.url() === target);
           trial.status = response.status();
           if (trial.status === 200) {
