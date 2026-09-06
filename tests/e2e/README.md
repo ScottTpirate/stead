@@ -38,7 +38,9 @@ supervisor identity, canonical bootstrap, API binary and TLS peer must match.
 The two real listener processes must be direct children of that supervisor,
 with fixed argv/current cwd, unchanged PID/start identities, matching executable
 inodes and hashes, and ownership of the unique literal-loopback API/BFF socket
-inodes. BFF argv binds the exact assets and fresh TLS paths. Before and after the
+inodes. BFF argv binds the exact assets and fresh TLS paths. Its retained asset-root
+descriptor must also match the current verified directory device/inode; replacing
+the pathname cannot relabel an older opened root as the new build. Before and after the
 run, every served dist file (including the hidden Vite manifest) must match the
 existing committed frontend bundle inventory with no extra/missing entries.
 No process environment is read; this is fresh-demo source attribution, not a
