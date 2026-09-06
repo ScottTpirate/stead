@@ -119,7 +119,7 @@ function resource(page, title) {
   });
 }
 
-async function navigate(page, label, keyboard = false) {
+async function navigate(page, label, keyboard = false, collectionDenied = false) {
   const entry = NAVIGATION.find(([name]) => name === label);
   requireCondition(Boolean(entry));
   const link = page.getByRole("navigation", { name: "Primary navigation" })
@@ -128,7 +128,8 @@ async function navigate(page, label, keyboard = false) {
   else await link.click();
   await page.waitForURL(ORIGIN + entry[1]);
   await page.getByRole("heading", { name: label, level: 1, exact: true }).waitFor();
-  await settled(page);
+  if (collectionDenied) await deniedCollection(page);
+  else await settled(page);
 }
 
 async function readDetails(page, item, kind) {
@@ -148,8 +149,7 @@ async function readDetails(page, item, kind) {
   await details.getByText("Read from Stead after central authorization.", { exact: true }).waitFor();
 }
 
-async function emptyOrganization(page) {
-  await settled(page);
+async function absentOrganizationPresentation(page) {
   const organization = workspaceSelect(page, "Organization");
   requireCondition(await organization.isDisabled());
   requireCondition(await organization.locator("option").count() === 1);
@@ -157,6 +157,52 @@ async function emptyOrganization(page) {
   requireCondition(await organization.locator("option").textContent() === "Create your first Organization");
   requireCondition(await page.locator(".resource-list button").count() === 0);
   requireCondition(await page.getByRole("region", { name: "Resource details" }).count() === 0);
+}
+
+async function emptyOrganization(page) {
+  await settled(page);
+  await absentOrganizationPresentation(page);
+}
+
+// A no-grant principal cannot list Organizations. A generic denied collection
+// is not an authoritative empty 200 and must not be counted as useful content.
+async function deniedCollection(page) {
+  await page.locator('.product-workspace[aria-busy="false"]').waitFor();
+  requireCondition(new URL(page.url()).origin === ORIGIN);
+  const alert = page.getByRole("alert");
+  await alert.waitFor();
+  requireCondition(await alert.count() === 1 && await alert.textContent() === GENERIC_DENIAL);
+  await absentOrganizationPresentation(page);
+}
+
+// Importable owned-fixture seam; no browser, credential acquisition, retry or
+// authorization occurs here. The controller still supplies fresh contexts and
+// one-use credentials. A denied list never changes the expected session result.
+export async function loginCheckpointPrincipal({ page, credential, principal, audit = null, afterLogin = null }) {
+  requireCondition(principal === "primary" || principal === "denied");
+  requireCondition(typeof credential === "string" && /^[A-Za-z0-9_-]{43}$/.test(credential));
+  requireCondition(audit === null || typeof audit === "function");
+  requireCondition(afterLogin === null || typeof afterLogin === "function");
+  await page.goto(ORIGIN + "/", { waitUntil: "domcontentloaded" });
+  await settled(page);
+  await page.getByRole("heading", { name: "Open your workspace", exact: true }).waitFor();
+  requireCondition(await page.getByRole("button", { name: "Sign out", exact: true }).count() === 0);
+  if (principal === "primary" && audit) await audit(page, "primary_login");
+  await page.getByLabel("Setup credential", { exact: true }).fill(credential);
+  credential = "";
+  await actionWithResponses(page, [["organization_list", principal === "primary" ? 200 : 404]], () => Promise.all([
+    (async () => {
+      const response = await page.waitForResponse((value) => matches(value.request(), "session_create"), { timeout: TIMEOUT });
+      requireCondition(response.status() === 200);
+      requireCondition(await response.finished() === null);
+      if (afterLogin) await afterLogin(page.context(), principal);
+    })(),
+    page.getByRole("button", { name: "Sign in", exact: true }).click(),
+  ]));
+  await page.getByRole("button", { name: "Sign out", exact: true }).waitFor();
+  if (principal === "primary") await emptyOrganization(page);
+  else await deniedCollection(page);
+  requireCondition(await page.getByLabel("Setup credential", { exact: true }).count() === 0);
 }
 
 // The controller owns exact-source CDP instrumentation in a CSP-preserving
@@ -208,27 +254,6 @@ export async function runCheckpointAJourney({
     const result = await axeSurface(page, auditSurface, surface);
     if (result) accessibility.push(result);
   }
-  async function login(page, credential, beforeLogin) {
-    await page.goto(ORIGIN + "/", { waitUntil: "domcontentloaded" });
-    await settled(page);
-    await page.getByRole("heading", { name: "Open your workspace", exact: true }).waitFor();
-    requireCondition(await page.getByRole("button", { name: "Sign out", exact: true }).count() === 0);
-    if (beforeLogin) await audit(page, "primary_login");
-    await page.getByLabel("Setup credential", { exact: true }).fill(credential);
-    credential = "";
-    await actionWithResponses(page, [["organization_list", 200]], () => Promise.all([
-      (async () => {
-        const response = await page.waitForResponse((value) => matches(value.request(), "session_create"), { timeout: TIMEOUT });
-        requireCondition(response.status() === 200);
-        requireCondition(await response.finished() === null);
-        if (afterLogin) await afterLogin(page.context(), beforeLogin ? "primary" : "denied");
-      })(),
-      page.getByRole("button", { name: "Sign in", exact: true }).click(),
-    ]));
-    await page.getByRole("button", { name: "Sign out", exact: true }).waitFor();
-    await emptyOrganization(page);
-    requireCondition(await page.getByLabel("Setup credential", { exact: true }).count() === 0);
-  }
   try {
     requireCondition(primaryContext && deniedContext && primaryContext !== deniedContext);
     requireCondition(primaryContext.browser() && primaryContext.browser() === deniedContext.browser());
@@ -245,7 +270,10 @@ export async function runCheckpointAJourney({
       page.setDefaultTimeout(TIMEOUT); page.setDefaultNavigationTimeout(15_000);
       observations.push(observe(page));
     }
-    await step("primary_login", async () => { await login(primary, primaryCredential, true); primaryCredential = ""; });
+    await step("primary_login", async () => {
+      await loginCheckpointPrincipal({ page: primary, credential: primaryCredential, principal: "primary", audit, afterLogin });
+      primaryCredential = "";
+    });
     await step("organization_create_read", async () => {
       await primary.getByLabel("Key", { exact: true }).fill(SYNTHETIC.organization.key);
       await primary.getByLabel("Name", { exact: true }).fill(SYNTHETIC.organization.title);
@@ -332,21 +360,22 @@ export async function runCheckpointAJourney({
         project_read: () => readDetails(primary, SYNTHETIC.project, "project"),
       }, keyboardEvidence);
     });
-    await step("denied_login_empty_views", async () => {
-      await login(denied, deniedCredential, false); deniedCredential = "";
+    await step("denied_login_collection_denied", async () => {
+      await loginCheckpointPrincipal({ page: denied, credential: deniedCredential, principal: "denied", afterLogin });
+      deniedCredential = "";
       await denied.getByText("No authorized Organizations to show yet.", { exact: true }).waitFor();
       for (const [name, empty, create] of [
         ["Teams", "No authorized teams to show yet.", "Create Team"],
         ["Projects", "No authorized projects to show yet.", "Create Project"],
       ]) {
-        await navigate(denied, name); await emptyOrganization(denied);
+        await navigate(denied, name, false, true);
         await denied.getByText(empty, { exact: true }).waitFor();
         requireCondition(await denied.getByRole("button", { name: create, exact: true }).count() === 0);
       }
-      await audit(denied, "denied_projects_empty");
+      await audit(denied, "denied_projects_collection_error");
     });
     await step("denied_organization_mutation", async () => {
-      await navigate(denied, "Home");
+      await navigate(denied, "Home", false, true);
       await denied.getByLabel("Key", { exact: true }).fill(SYNTHETIC.denied.key);
       await denied.getByLabel("Name", { exact: true }).fill(SYNTHETIC.denied.title);
       await actionWithResponses(denied, [["organization_create", 404]],
@@ -378,7 +407,7 @@ export async function runCheckpointAJourney({
     for (const observer of observations) observer.stop();
   }
   return {
-    format: "stead-checkpoint-a-browser-journey-v2", status,
+    format: "stead-checkpoint-a-browser-journey-v3", status,
     failedStage: status === "failed" ? stage : null,
     failedKeyboardSubstep: keyboardEvidence.failedKeyboardSubstep,
     completed, timings,

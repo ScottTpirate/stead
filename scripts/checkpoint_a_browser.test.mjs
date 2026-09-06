@@ -12,7 +12,7 @@ import { allowedRequest, byteBudget, absolute, readBounded, privateDirectory,
   preserveSession, validatePreservedSession, SESSION_FILES, openedDirectoryMatches } from './checkpoint_a_browser_boundary.mjs';
 import { main as controller, verifyHarness, verifyIdentity, verifyInputs } from './checkpoint_a_browser.mjs';
 import { main as namespace, auditSurface } from '../tests/e2e/checkpoint_a_browser.mjs';
-import { runCheckpointAJourney, workspaceSelect, keyboardSubsteps } from '../tests/e2e/checkpoint_a_browser_journey.mjs';
+import { runCheckpointAJourney, workspaceSelect, keyboardSubsteps, loginCheckpointPrincipal } from '../tests/e2e/checkpoint_a_browser_journey.mjs';
 
 const uuid = '01991962-1234-7000-8000-123456789abc';
 const digest = 'a'.repeat(64), revision = 'b'.repeat(40);
@@ -30,11 +30,13 @@ function admission() {
       path: '/home/fixture/' + role + '.md', sha256: digest, independentNonAuthor: true, disposition: 'accept' })) };
 }
 function journey() {
+  const stages = STAGES.map(stage => stage === 'denied_login_collection_denied' ? 'denied_login_empty_views' : stage);
+  const surfaces = SURFACES.map(surface => surface === 'denied_projects_collection_error' ? 'denied_projects_empty' : surface);
   return { format: 'stead-checkpoint-a-browser-journey-v1', status: 'completed', failedStage: null,
-    completed: STAGES.slice(1), timings: STAGES.slice(1).map((stage) => ({ stage, elapsedMs: 1 })), elapsedMs: 10,
+    completed: stages.slice(1), timings: stages.slice(1).map((stage) => ({ stage, elapsedMs: 1 })), elapsedMs: 10,
     network: ['primary', 'denied'].map((principal) => ({ principal, counts: Object.fromEntries(OPERATIONS.map((op) => [op, 0])),
       requests: 0, responses: 0, failed: 0, forbidden: 0, unknownAPI: 0, overflow: false })),
-    accessibility: { status: 'collected_if_reached', surfaces: SURFACES.map((surface) => ({ surface, violations: [], incomplete: [], passedRules: 1 })) },
+    accessibility: { status: 'collected_if_reached', surfaces: surfaces.map((surface) => ({ surface, violations: [], incomplete: [], passedRules: 1 })) },
     denialEvidence: 'ui_only_sql_fga_and_known_unknown_checks_are_separate', contextsPreserved: true };
 }
 function fixture(task) {
@@ -56,6 +58,108 @@ test('fixed authenticated keyboard substeps preserve first failure without retry
     assert.deepEqual(Object.keys(evidence), ['failedKeyboardSubstep']);
     assert(!JSON.stringify(evidence).includes('canary'));
   }
+});
+test('journey v3 names denied collection errors without relabeling historical v1/v2 proofs', () => {
+  const legacy = journey(), v2 = { ...journey(), format: 'stead-checkpoint-a-browser-journey-v2', failedKeyboardSubstep: null };
+  for (const value of [legacy, v2]) assert.deepEqual(validateJourney(value), value);
+  const current = { ...v2, format: 'stead-checkpoint-a-browser-journey-v3',
+    completed: STAGES.slice(1), timings: STAGES.slice(1).map(stage => ({ stage, elapsedMs: 1 })),
+    accessibility: { ...v2.accessibility, surfaces: SURFACES.map(surface => ({ surface, violations: [], incomplete: [], passedRules: 1 })) } };
+  assert.deepEqual(validateJourney(current), current);
+  assert.equal(current.accessibility.surfaces.length, 7);
+  assert.equal(current.completed[7], 'denied_login_collection_denied');
+  assert.equal(current.accessibility.surfaces[5].surface, 'denied_projects_collection_error');
+  for (const format of ['stead-checkpoint-a-browser-journey-v1', 'stead-checkpoint-a-browser-journey-v2']) {
+    const mislabeled = { ...current, format };
+    if (format.endsWith('v1')) delete mislabeled.failedKeyboardSubstep;
+    assert.throws(() => validateJourney(mislabeled));
+  }
+  assert.throws(() => validateJourney({ ...v2, format: current.format }));
+  assert.throws(() => validateJourney({ ...current, accessibility: v2.accessibility }));
+  assert.throws(() => validateJourney({ ...current, accessibility: { ...current.accessibility, surfaces: current.accessibility.surfaces.slice(0, 6) } }));
+});
+
+// Owned semantic controls/response events only: no HTTP, browser, credential
+// files or native DOM. Exercise the same helper dispatched by the real journey.
+function loginFixture(options = {}) {
+  const status = options.listStatus ?? 200, sessionStatus = options.sessionStatus ?? 200;
+  const generic = 'The request could not be completed. Please refresh or try again.';
+  const counters = { dispatches: 0, observers: 0, handoffs: 0, audits: 0, emptyControls: 0 };
+  let signedIn = false;
+  const alertCount = () => signedIn ? (options.alertCount ?? (status === 200 ? 0 : 1)) : 0;
+  const page = {
+    url: () => ORIGIN + '/', context: () => page,
+    goto: async () => { if (options.navigationFailure) throw new Error('owned navigation failure'); },
+    locator: selector => {
+      if (selector === '.product-workspace[aria-busy="false"]') return { waitFor: async () => {} };
+      assert.equal(selector, '.resource-list button');
+      return { count: async () => options.resources ?? 0 };
+    },
+    getByRole: (role, optionsForRole = {}) => {
+      const name = optionsForRole.name;
+      if (role === 'alert') return { waitFor: async () => assert(alertCount() > 0), count: async () => alertCount(), textContent: async () => options.alertText ?? generic };
+      if (role === 'region') { assert.equal(name, 'Resource details'); return { count: async () => options.details ?? 0 }; }
+      if (role === 'heading') { assert.equal(name, 'Open your workspace'); return { waitFor: async () => {} }; }
+      if (role === 'combobox') {
+        assert.deepEqual(optionsForRole, { name: 'Organization', exact: true }); counters.emptyControls++;
+        return { isDisabled: async () => options.disabled ?? true, inputValue: async () => options.selectedID ?? '',
+          locator: selector => { assert.equal(selector, 'option'); return { count: async () => options.options ?? 1,
+            textContent: async () => options.optionText ?? 'Create your first Organization' }; } };
+      }
+      assert.equal(role, 'button');
+      if (name === 'Sign out') return { count: async () => signedIn ? 1 : 0, waitFor: async () => assert(signedIn && !options.missingSignOut) };
+      assert.equal(name, 'Sign in');
+      return { click: async () => { assert.equal(counters.observers, 2); counters.dispatches++;
+        if (options.clickFailure) throw new Error('owned click failure'); signedIn = true; } };
+    },
+    getByLabel: (name, exact) => {
+      assert.equal(name, 'Setup credential'); assert.deepEqual(exact, { exact: true });
+      return { fill: async value => assert.equal(value, 'x'.repeat(43)), count: async () => signedIn ? (options.retainedCredential ? 1 : 0) : 1 };
+    },
+    waitForResponse: async predicate => {
+      counters.observers++;
+      const response = (session, code) => ({ request: () => ({ method: () => session ? 'POST' : 'GET',
+        url: () => ORIGIN + (session ? '/api/v1/session' : '/api/v1/organizations?page_size=20') }),
+        status: () => code, finished: async () => options.sessionCompletionFailure ? 'owned interrupted response' : null });
+      const session = response(true, sessionStatus), list = response(false, status);
+      const selected = predicate(session) ? session : (assert(predicate(list)), list);
+      if (options.responseFailure) throw new Error('owned response failure');
+      return selected;
+    },
+  };
+  return { counters, run: principal => loginCheckpointPrincipal({ page, credential: 'x'.repeat(43), principal,
+    audit: async (_page, surface) => { assert.equal(surface, 'primary_login'); counters.audits++; },
+    afterLogin: async (context, role) => { assert.equal(context, page); assert.equal(role, principal); counters.handoffs++;
+      if (options.handoffFailure) throw new Error('owned session handoff failure'); } }) };
+}
+test('primary authoritative-empty 200 and no-grant generic 404 are distinct successful login assertions', async () => {
+  for (const [principal, listStatus] of [['primary', 200], ['denied', 404]]) {
+    const fixture = loginFixture({ listStatus }); await fixture.run(principal);
+    assert.deepEqual(fixture.counters, { dispatches: 1, observers: 2, handoffs: 1, audits: principal === 'primary' ? 1 : 0, emptyControls: 1 });
+  }
+});
+test('login never accepts an unexpected list success/error, failed session or partial login', async () => {
+  for (const [principal, options] of [
+    ['denied', { listStatus: 200 }], ['primary', { listStatus: 404 }],
+    ...[401, 403, 500, 503].map(listStatus => ['denied', { listStatus }]),
+    ...[401, 404, 500].map(sessionStatus => ['denied', { listStatus: 404, sessionStatus }]),
+    ...['navigationFailure', 'clickFailure', 'responseFailure', 'sessionCompletionFailure', 'handoffFailure', 'missingSignOut', 'retainedCredential']
+      .map(failure => ['denied', { listStatus: 404, [failure]: true }]),
+  ]) {
+    const fixture = loginFixture(options); await assert.rejects(fixture.run(principal));
+    assert(fixture.counters.dispatches <= 1); assert(fixture.counters.handoffs <= 1);
+    if (options.sessionStatus || options.sessionCompletionFailure) assert.equal(fixture.counters.handoffs, 0);
+  }
+});
+test('denied collection requires exactly the generic alert and no resource/option/detail disclosure', async () => {
+  for (const mutation of [{ alertCount: 0 }, { alertCount: 2 }, { alertText: 'owned protected canary' },
+    { resources: 1 }, { details: 1 }, { disabled: false }, { options: 2 },
+    { selectedID: uuid }, { optionText: 'owned protected canary' }]) {
+    const fixture = loginFixture({ listStatus: 404, ...mutation });
+    await assert.rejects(fixture.run('denied')); assert.equal(fixture.counters.dispatches, 1);
+  }
+  const unexpectedAlert = loginFixture({ alertCount: 1 });
+  await assert.rejects(unexpectedAlert.run('primary'));
 });
 test('journey v2 adds one closed failure field and preserves historical v1 read compatibility', () => {
   const legacy = journey(); assert.deepEqual(validateJourney(legacy), legacy);

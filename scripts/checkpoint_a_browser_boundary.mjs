@@ -38,7 +38,7 @@ export const PHASES = Object.freeze(['preflight', 'identity', 'tls', 'attempt', 
   'namespace', 'trust', 'browser', 'journey', 'cleanup', 'complete']);
 export const STAGES = Object.freeze(['preflight', 'primary_login', 'organization_create_read',
   'parent_team_create_read', 'child_team_create_read', 'general_project_create_read',
-  'reload_refresh_read', 'keyboard_palette_focus', 'denied_login_empty_views',
+  'reload_refresh_read', 'keyboard_palette_focus', 'denied_login_collection_denied',
   'denied_organization_mutation', 'one_shot_counts']);
 export const JOURNEY_KEYBOARD_SUBSTEPS = Object.freeze(['trigger_focus', 'first_open_key',
   'first_dialog_visible', 'search_focus', 'audit', 'escape_key', 'dialog_hidden',
@@ -46,7 +46,11 @@ export const JOURNEY_KEYBOARD_SUBSTEPS = Object.freeze(['trigger_focus', 'first_
   'teams_focus', 'enter_key', 'teams_route', 'second_dialog_hidden', 'child_read',
   'skip_focus', 'skip_enter', 'main_focus', 'projects_navigation', 'project_read']);
 export const SURFACES = Object.freeze(['primary_login', 'organization_detail', 'child_team_detail',
-  'general_project_detail', 'command_palette', 'denied_projects_empty', 'denied_organization_alert']);
+  'general_project_detail', 'command_palette', 'denied_projects_collection_error', 'denied_organization_alert']);
+// Historical proofs keep their original labels; never reinterpret a failed
+// denied collection as an authoritative empty result or rewrite retained proof.
+const LEGACY_STAGES = STAGES.map(stage => stage === 'denied_login_collection_denied' ? 'denied_login_empty_views' : stage);
+const LEGACY_SURFACES = SURFACES.map(surface => surface === 'denied_projects_collection_error' ? 'denied_projects_empty' : surface);
 export const OPERATIONS = Object.freeze(['session_get', 'session_create', 'organization_list',
   'organization_create', 'organization_read', 'team_list', 'team_create', 'team_read',
   'project_list', 'project_create', 'project_read']);
@@ -167,7 +171,7 @@ export function byteBudget(limit = 128 * 1024 * 1024) {
 const integer = (value, max) => Number.isSafeInteger(value) && value >= 0 && value <= max;
 export function validateAxe(value, surface) {
   keys(value, ['surface', 'violations', 'incomplete', 'passedRules']);
-  check(value.surface === surface && SURFACES.includes(surface) && integer(value.passedRules, 256));
+  check(value.surface === surface && (SURFACES.includes(surface) || LEGACY_SURFACES.includes(surface)) && integer(value.passedRules, 256));
   for (const field of ['violations', 'incomplete']) {
     check(Array.isArray(value[field]) && value[field].length <= 64);
     for (const finding of value[field]) {
@@ -179,7 +183,9 @@ export function validateAxe(value, surface) {
   return value;
 }
 export function validateJourney(value) {
-  const detailed = value?.format === 'stead-checkpoint-a-browser-journey-v2';
+  const current = value?.format === 'stead-checkpoint-a-browser-journey-v3';
+  const detailed = current || value?.format === 'stead-checkpoint-a-browser-journey-v2';
+  const stages = current ? STAGES : LEGACY_STAGES, surfaces = current ? SURFACES : LEGACY_SURFACES;
   keys(value, ['format', 'status', 'failedStage', 'completed', 'timings', 'elapsedMs', 'network', 'accessibility', 'denialEvidence', 'contextsPreserved',
     ...(detailed ? ['failedKeyboardSubstep'] : [])]);
   check((detailed || value.format === 'stead-checkpoint-a-browser-journey-v1') && ['completed', 'failed'].includes(value.status));
@@ -187,8 +193,8 @@ export function validateJourney(value) {
     check(value.failedKeyboardSubstep === null || JOURNEY_KEYBOARD_SUBSTEPS.includes(value.failedKeyboardSubstep));
     check(value.failedKeyboardSubstep === null || value.status === 'failed' && value.failedStage === 'keyboard_palette_focus');
   }
-  check(value.failedStage === null || STAGES.includes(value.failedStage));
-  check(Array.isArray(value.completed) && value.completed.length <= 10 && value.completed.every((stage, i) => stage === STAGES[i + 1]));
+  check(value.failedStage === null || stages.includes(value.failedStage));
+  check(Array.isArray(value.completed) && value.completed.length <= 10 && value.completed.every((stage, i) => stage === stages[i + 1]));
   check(Array.isArray(value.timings) && value.timings.length === value.completed.length);
   value.timings.forEach((entry, i) => { keys(entry, ['stage', 'elapsedMs']); check(entry.stage === value.completed[i] && integer(entry.elapsedMs, 240_000)); });
   check(integer(value.elapsedMs, 240_000) && Array.isArray(value.network) && value.network.length <= 2);
@@ -201,7 +207,7 @@ export function validateJourney(value) {
   });
   keys(value.accessibility, ['status', 'surfaces']);
   check(value.accessibility.status === 'collected_if_reached' && Array.isArray(value.accessibility.surfaces) && value.accessibility.surfaces.length <= 7);
-  value.accessibility.surfaces.forEach((surface, i) => validateAxe(surface, SURFACES[i]));
+  value.accessibility.surfaces.forEach((surface, i) => validateAxe(surface, surfaces[i]));
   check(value.denialEvidence === 'ui_only_sql_fga_and_known_unknown_checks_are_separate' && value.contextsPreserved === true);
   if (value.status === 'completed') check(value.completed.length === 10 && value.failedStage === null && value.network.length === 2 && value.accessibility.surfaces.length === 7);
   return value;
