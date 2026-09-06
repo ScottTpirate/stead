@@ -56,3 +56,24 @@ func TestCoordinatorDenialRetainsOnlyBoundedRequestCorrelation(t *testing.T) {
 		}
 	}
 }
+
+func TestCollectionRequiredDenialSanitizesRequestCorrelation(t *testing.T) {
+	for _, input := range []string{"0123456789abcdef0123456789abcdef", "", "untrusted-resource-or-credential"} {
+		t.Run(input, func(t *testing.T) {
+			coordinator, repo, session, _ := coordinatorFixture(t, false)
+			coordinator.config.Repository = &setTestRepo{testRepo: repo, states: []State{{Resource: repo.state.Resource}}}
+			ctx := WithoutDecisions(telemetry.WithCorrelationID(context.Background(), input))
+			decisions, err := coordinator.AuthorizeCollection(ctx, session, []ReadAuthorization{{OrganizationRead, repo.state.Resource}}, true)
+			if err != nil || len(decisions) != 1 || decisions[0] != nil || len(repo.denials) != 1 {
+				t.Fatal("required missing parent was not one aligned audited denial")
+			}
+			want := ""
+			if input == "0123456789abcdef0123456789abcdef" {
+				want = input
+			}
+			if repo.denials[0].RequestID != want {
+				t.Fatal("untrusted request metadata entered the denial")
+			}
+		})
+	}
+}

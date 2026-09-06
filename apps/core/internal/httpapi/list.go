@@ -144,7 +144,7 @@ func (server *Server) list(w http.ResponseWriter, r *http.Request, kind string) 
 	if after != "" {
 		initialIDs = append(initialIDs, after)
 	}
-	initial, err := server.config.Authorization.AuthorizeSet(base, session, inputs(initialIDs))
+	initial, err := server.config.Authorization.AuthorizeCollection(base, session, inputs(initialIDs), true)
 	if err != nil {
 		problem(w, 503)
 		return
@@ -157,7 +157,7 @@ func (server *Server) list(w http.ResponseWriter, r *http.Request, kind string) 
 		if len(ids) == 0 {
 			return []bool{}, nil
 		}
-		decisions, err := server.config.Authorization.AuthorizeSet(ctx, session, inputs(ids))
+		decisions, err := server.config.Authorization.AuthorizeCollection(ctx, session, inputs(ids), false)
 		if err != nil || len(decisions) != len(ids)+1 || decisions[0] == nil {
 			return nil, errCollectionUnavailable
 		}
@@ -186,7 +186,7 @@ func (server *Server) list(w http.ResponseWriter, r *http.Request, kind string) 
 	if after != "" {
 		freshIDs = append([]string{after}, ids...)
 	}
-	decisions, err := server.config.Authorization.AuthorizeSet(base, session, inputs(freshIDs))
+	decisions, err := server.config.Authorization.AuthorizeCollection(base, session, inputs(freshIDs), true)
 	if err != nil {
 		problem(w, 503)
 		return
