@@ -180,6 +180,32 @@ round-trip/server-lock measurement, product performance, or Phase 1 acceptance.
 The unit command is `scripts/run_pinned_node.sh node --test
 scripts/checkpoint_a_followon.test.mjs` and is included in foundation-check.
 
+## Fixed resource discovery candidate
+
+After separate exact-source execution review, a **successful** browser run with
+both preserved sessions can supply the follow-on's private six-ID input using:
+
+```sh
+scripts/run_pinned_node.sh node scripts/checkpoint_a_discovery.mjs --live \
+  --checkout /absolute/fresh/application-checkout \
+  --browser-work /absolute/private/browser-run/work \
+  --admission /absolute/private/browser-admission.json
+```
+
+Five GETs only: verify both current sessions, then read one page of 20 each for
+Organizations, Teams and Projects. BJA7ORG/BJA7PAR/BJA7CHD must be unique and the
+child must reference the parent. Project.key is not exposed by this API, so the
+unique exact browser fixture title/purpose, Organization, owning child and
+Work/Docs-only capabilities/areas are checked; BJA7PRJ key and creation provenance
+remain unproven. Any continuation/missing/duplicate match fails, without retry.
+The private work directory receives exclusive fsynced 0600
+`checkpoint-a-discovery.json` (closed correlations/counts/bindings) and, only on
+success, `checkpoint-a-discovered-resources.json` (six UUIDv7 IDs). Existing files
+are never overwritten. Synthetic unknown IDs are **not** evidence of absence;
+the separate SQL check must establish that. No cookie/body/error is published,
+and no login/logout, mutation, SQL, provider, browser or service action exists.
+The failed browser attempts so far do not satisfy this command's prerequisites.
+
 ## Credential-free real-origin TLS diagnostic
 
 `scripts/checkpoint_a_tls.mjs` and `tests/e2e/checkpoint_a_tls.mjs` diagnose the
