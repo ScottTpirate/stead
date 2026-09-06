@@ -3,104 +3,104 @@
   "status": "accepted",
   "scope": "Initial synthetic local-development template/compiler/test source only; not an instance artifact, production approval or Phase 1 release.",
   "owner_decision_revision": "83d2bfef6c08227f2d15d465c7ada316c5934a31",
-  "source_revision": "f8346ba399e979d47d95fa3dd3a1951406f8976c",
-  "source_tree": "5d7c77b60398a2d87612dd8ea153922996bec264",
-  "core_digest": "sha256:974da8768b9cdb88ea21c1058b680f9b7c23500fa3796c43551065e9042cd18d",
+  "source_revision": "0727c87381b8a191401fc3d4aeb3e8ce200a0f87",
+  "source_tree": "f22ef875cbe4d62913bc38bc126e282c8051a610",
+  "core_digest": "sha256:d6480b61371b9feae60f0bb19e225b0964246e584cb9b415b4066165d32f88f3",
   "reviews": [
     {
       "role": "architecture-contract-owner",
-      "reviewer_id": "/root/fresh_template_architecture",
+      "reviewer_id": "/root/fresh_browser_architecture",
       "disposition": "accept",
       "independent_non_author": true,
-      "evidence": "Independently verified exact clean source/tree, actual Go CoreDigest, ten inputs, full toolchain and fresh 32/111 inventory. Inspected source campaigns and exact-binary real PostgreSQL results. Metadata ABI, dependency scopes and final fences unchanged; provider remains inactive. Additional own executable self-check failed from compiler disk quota; preserved separately from root's successful exact self-rebuild. Fresh execution requires safely recovered capacity and successful final-binary checks."
+      "evidence": "Independently executed actual Go source/Core and fresh 32/111 inventory checks, reproduced static API 21e4bbe3 and passed 71 focused named Go cases with zero skips. Reviewed exact app/selector and discovery integration; runtime Go, policy, dependencies and metadata ABI unchanged. Source-only acceptance; final binary, fresh installation and separate browser workload remain required."
     },
     {
       "role": "qa",
-      "reviewer_id": "/root/frontend_timing_qa",
+      "reviewer_id": "/root/fresh_template_architecture",
       "disposition": "accept",
       "independent_non_author": true,
-      "evidence": "Independently reproduced exact API b71ea3cf and PostgreSQL test 09417651 binaries, CoreDigest and fresh inventory; focused Go checks and all 39 Node tests passed. Inspected root full foundation/dev checks and real PostgreSQL 17 RUN/PASS, zero skips. Seven mutation survivors remain counted; source campaign does not establish complete provider-effect coverage. Fresh installation and actual browser/backend correlation remain unexecuted."
+      "evidence": "Independently verified actual Go source/Core, ten inputs, 32/111 inventory and exact API/distribution. Own 80 Go, 45 Node and 15 frontend tests passed with zero skips. Complete mutation rerun is 104/111 with seven survivors counted. First campaign, compiler and reviewer-command failures remain preserved; no live product pass inferred."
     },
     {
       "role": "security",
       "reviewer_id": "/root/effects_security_review",
       "disposition": "accept",
       "independent_non_author": true,
-      "evidence": "Independently reproduced fixed-recipe static API and actual Go CoreDigest; verified current browser bytes and unchanged Go/module source since reviewed live-PG storage implementation. Source campaigns, full-check logs and actual binary scan inspected. All seven survivors counted at 104/111, unchanged 90 percent floor; no waiver or provider activation. Two metadata files only, followed by actual final executable verification and new subject-bound installation checks."
+      "evidence": "Independently reproduced actual Go Core and static API; verified source, toolchain, unchanged dependency/policy boundaries and all 111 mutation events. All seven survivors remain counted under the unchanged 90 percent floor. Verified safe completed-cache relocation; failed evidence retained. Initial metadata-only derivation, not provider, production or release admission."
     }
   ],
   "evidence": [
     {
-      "path": "/home/skilgore/stead-template-f8346ba-architecture-20260905.KPUiOBH1/review.md",
-      "sha256": "849c6e72f4f52318e549aab175f935d841b08e0d4b01a78d900415b0c8f5ad0d",
-      "result": "Distinct non-author architecture/contract-owner source/Core ACCEPT; preserved compiler-quota failure is not a pass. Final execution prerequisite remains."
+      "path": "/home/skilgore/stead-template-0727c87-architecture-20260905.gBipk62S/REVIEW.md",
+      "sha256": "0ce5a1f58080d0b14c11065502f2586c9d3f4a9526a689c4555a9376289325d2",
+      "result": "Distinct non-author architecture/contract-owner exact source/Core ACCEPT only."
     },
     {
-      "path": "/home/skilgore/stead-integrated-template-qa.RthTAxv8/REVIEW.md",
-      "sha256": "1f8d74ba91b13830a0e866838679a0b64a01f37e1bf8f77da0d9805c3fa1ec16",
-      "result": "Distinct non-author QA source/Core ACCEPT only."
+      "path": "/home/skilgore/stead-core-0727-qa-20260905.h6fpCooj/REVIEW.md",
+      "sha256": "213f7c6a00469a5b9282874884d3a6acb79435e837557285f3cb65d12ef4d71b",
+      "result": "Distinct non-author QA exact source/Core ACCEPT only; original failures retained."
     },
     {
-      "path": "/home/skilgore/stead-template-f8346ba-security-20260905.tF2PP7U8/REVIEW.md",
-      "sha256": "e7780b2da051fd86da1a5d816ec798ea8282f9779bd34470bcd3973abd60e895",
-      "result": "Distinct non-author security source/Core ACCEPT only."
+      "path": "/home/skilgore/stead-template-0727-security-20260905.YA9eXQXr/REVIEW.md",
+      "sha256": "5ab38618e5faafe1b57ed609364fe6302873cc094e74595e838c1a745e1ec798",
+      "result": "Distinct non-author security exact source/Core ACCEPT only; no provider or release clearance."
     },
     {
-      "path": "/home/skilgore/stead-template-f8346ba-20260905.G8hzyVXD/foundation-rerun.log",
-      "sha256": "84b0c6ae67fa0bf6d7d99b0b6f890e2d687bb0261fef5c3441ebce7f64e8670a",
-      "result": "Actual exact-source full foundation-check exit 0. Original orchestration/status incident retained separately; explicit rerun status observed."
+      "path": "/home/skilgore/stead-template-0727c87-20260905.oUVOyoGb/foundation.log",
+      "sha256": "8f322ed48095d818c1fbd84521cf080e1d2e3ad02c9d125a71511cb56eddc377",
+      "result": "Actual exact-source full foundation-check exit 0."
     },
     {
-      "path": "/home/skilgore/stead-template-f8346ba-20260905.G8hzyVXD/dev-check-rerun.log",
-      "sha256": "df0f4a2e7f181a058a5d1169af46d0bf2dd30f6f3a8f7c603e4c03d5c19fe401",
+      "path": "/home/skilgore/stead-template-0727c87-20260905.oUVOyoGb/dev-check.log",
+      "sha256": "31fd3b0d16fc21a76c1cb5501a393cd5f4797b5ae656b607030eba951e1b8578",
       "result": "Actual exact-source dev-check exit 0."
     },
     {
-      "path": "/home/skilgore/stead-template-f8346ba-20260905.G8hzyVXD/api-vulnerability.json",
+      "path": "/home/skilgore/stead-template-0727c87-20260905.oUVOyoGb/api-vulnerability.json",
       "sha256": "3605e9139d1be9a911536fb413fabad639a3d2a9cf1209137fec194cc01f2aea",
-      "result": "Actual fixed API binary scan, govulncheck v1.7.0, exit 0, zero findings; database timestamp 2026-09-02. No broader native/provider clearance."
+      "result": "Actual static API binary govulncheck 1.7.0 scan exit 0, zero findings; database 2026-09-02. No native/provider clearance."
     },
     {
-      "path": "/home/skilgore/stead-template-f8346ba-20260905.G8hzyVXD/stead-api-rerun",
-      "sha256": "b71ea3cfe5a41d4fa25f0f1e4abfa293d7e3f7ead041194b3393a073402a1d1c",
-      "result": "Fixed-recipe source executable independently reproduced by QA and security; not the final metadata-descendant executable."
+      "path": "/home/skilgore/stead-template-0727c87-20260905.oUVOyoGb/stead-api",
+      "sha256": "21e4bbe372452f626d187f1bfdb50af9096f57fdbdb751c5933855639f60730c",
+      "result": "Exact fixed-recipe source executable, independently reproduced; not the final metadata-descendant executable or older-activation authority."
     },
     {
-      "path": "/home/skilgore/stead-template-f8346ba-20260905.G8hzyVXD/source-inspection.json",
-      "sha256": "0c992fe60c0f5b84ad63b61f658f71c017b2d44955871f52e472f7d004a6ed4e",
-      "result": "Root actual stripped-environment API source inspection and tracked-source executable self-rebuild exit 0."
+      "path": "/home/skilgore/stead-template-0727c87-20260905.oUVOyoGb/source-inspection.json",
+      "sha256": "5d963b79d4b520ba1a0fa88e436bf13019b551371997734841a114e08dc6bccd",
+      "result": "Actual clean exact-source inspection and tracked-source executable self-rebuild exit 0."
     },
     {
-      "path": "/home/skilgore/stead-template-f8346ba-20260905.G8hzyVXD/core.json",
-      "sha256": "b69f3761c61c7854fd446d590be0a27dab6a0b055f08c5b0dd3e16e99320937d",
-      "result": "Actual source inspection and fresh ordered inventories; all three reviewers independently match CoreDigest."
+      "path": "/home/skilgore/stead-template-0727c87-20260905.oUVOyoGb/core.json",
+      "sha256": "42dff6436319c8043d8626350d0d58fbf583da5cb84088ec606ad0c8963daf2b",
+      "result": "Actual source inspection and ordered inventories; all three reviewers independently confirmed actual Go CoreDigest."
     },
     {
-      "path": "/home/skilgore/stead-template-f8346ba-20260905.G8hzyVXD/mutations.json",
-      "sha256": "5d88addcff267ead1f7317580f771db0b8dc290fbc78013b16b28182fab2701d",
-      "result": "Actual source campaign exit 0: 104/111 (93.69 percent); guard-009/010/011/017/018/025/086 survive and remain counted. Seven unchanged exclusions, 90 percent floor. Empty artifact subject: never an installation receipt or provider activation approval."
+      "path": "/home/skilgore/stead-template-0727c87-20260905.oUVOyoGb/mutations-rerun.json",
+      "sha256": "98ac693586f11b1f8edea7ac97da085fc9873e901e1bf1ea5af295cfd97a28c3",
+      "result": "Unchanged source campaign rerun exit 0: 104/111; all seven guard-009/010/011/017/018/025/086 survivors counted at unchanged 90 percent floor. Original failed campaign retained. Empty subject: source evidence, not installation or provider approval."
     },
     {
-      "path": "/home/skilgore/stead-template-f8346ba-20260905.G8hzyVXD/conformance-rerun.json",
-      "sha256": "3fe64d5f2909ca12671db0a4f42ac861e1761b41af3a8751926832f1e1f66381",
-      "result": "Actual source policy campaign exit 0: 32/32. Empty artifact subject: never an installation receipt."
+      "path": "/home/skilgore/stead-template-0727c87-20260905.oUVOyoGb/conformance.json",
+      "sha256": "c1f0ed562621061a50359f10790392468ccb60bc5b181eb14b41cbf0564e402f",
+      "result": "Actual source conformance campaign exit 0, 32/32. Empty subject, not installation evidence."
     },
     {
-      "path": "/home/skilgore/stead-core-read-pg-proof-20260905.GoqhBzyL/stdout.log",
-      "sha256": "264f66cc8652345be4b27f2241ef359bf2509e013a5f534ecea4226a8694629d",
-      "result": "Real isolated PostgreSQL 18.6: 17 RUN/PASS, zero skips/failures. Current source independently reproduces executed test binary 09417651. 100-state grouped read uses 11 SQL/control calls and one pool acquisition; owner-role, fresh state, rollback, cancellation, transaction/outbox/effect storage assertions passed. Not product latency, dispatch or restore evidence."
+      "path": "/home/skilgore/stead-template-0727c87-20260905.oUVOyoGb/EXECUTION-NOTE.md",
+      "sha256": "eeb0508fdea3594eab6c16bf3545a7f003cf9aa303185d4c41c83953f54716b5",
+      "result": "Preserves first campaign failure, bounded quota diagnosis, verified completed-cache relocation and explicitly separate successful unchanged rerun."
     }
   ],
   "conditions": [
     "Only approved-template.json and this review record may differ from the reviewed source.",
     "Each fresh initial installation must execute actual subject-bound conformance, mutation and dependency checks and completed-archive offline verification; no results here may be copied into receipts.",
-    "Preserve the prior installation and its browser-created Organization, parent/child Teams, general Project, audit/outbox and diagnostic evidence. This source is not approved to upgrade or relabel that activation.",
+    "Preserve all prior stopped installations, their database/Git/blob/audit/outbox/configuration/keys/policy-anchor state, failed browser evidence and private session material. This source is not approved to upgrade or relabel those activations.",
     "Production and nonlocal consumers reject development trust and evidence.",
     "No renewal, rotation, recovery, upgrade, promotion, untrusted data or provider-object use is approved by this record.",
     "Startup catalog inspection uses a transient separate read-only administrative process, not continuous privileged API monitoring.",
-    "Safely restore compiler scratch capacity and pass actual final metadata-descendant executable self-verification and scan before fresh startup; preserved source review failures are not passes.",
+    "Pass actual final metadata-descendant executable self-verification and scan before fresh startup; recovered scratch capacity and source review are not substitutes for successful final checks.",
     "Real-browser source approval is not fresh workload admission; exact running instance, tools and workload need their separately required distinct reviews. Session cookies and all installation evidence remain private."
   ],
-  "supersedes_source_revision": "5cff5956979acb76c34eec4a93f7831e0869f3e6",
-  "correction": "Admits integrated metadata application source with grouped fresh PostgreSQL reads, measured SQL/pool/anchor overhead, denial request-ID propagation, final fences and session-lifetime checks; separate frontend acknowledgement/useful-content/interactivity timing and the reviewed real-browser entrypoint. Inactive provider effects/storage remain inadmissible to the metadata ABI. No new dependency, policy semantics, production identity authority, existing activation mutation or completed product/release claim."
+  "supersedes_source_revision": "f8346ba399e979d47d95fa3dd3a1951406f8976c",
+  "correction": "Admits the reviewed actual-screen landmark/subtle-text corrections and exact accessible-name browser selectors, plus inert test-only discovery, established-session reads and denial-audit SQL evidence commands. Runtime Go, policy, metadata evaluator ABI and dependency closure remain unchanged. Actual rendered accessibility and fresh product journeys are still unverified; no provider activation, production authority, old-instance mutation or completed product/release claim."
 }
