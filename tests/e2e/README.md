@@ -186,11 +186,20 @@ After separate exact-source execution review, a **successful** browser run with
 both preserved sessions can supply the follow-on's private six-ID input using:
 
 ```sh
-scripts/run_pinned_node.sh node scripts/checkpoint_a_discovery.mjs --live \
+ulimit -S -c 0 && ulimit -H -c 0 && \
+exec env -i PATH=/usr/bin LANG=C.UTF-8 TZ=UTC \
+  /tmp/stead-node-toolchain-26.8.1/toolchain/node-v26.8.1-linux-x64/bin/node \
+  scripts/checkpoint_a_discovery.mjs --live \
   --checkout /absolute/fresh/application-checkout \
   --browser-work /absolute/private/browser-run/work \
   --admission /absolute/private/browser-admission.json
 ```
+
+Run this exact reviewed launch in a disposable shell from the clean harness
+checkout. Clearing the environment before Node starts prevents inherited
+NODE_OPTIONS/preloads and NODE_DEBUG from exposing cookie-bearing requests;
+disabling both core limits prevents a later child from raising the soft limit.
+The script cannot undo a preload or debug hook installed before it starts.
 
 Five GETs only: verify both current sessions, then read one page of 20 each for
 Organizations, Teams and Projects. BJA7ORG/BJA7PAR/BJA7CHD must be unique and the
