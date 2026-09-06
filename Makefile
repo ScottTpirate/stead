@@ -1,7 +1,7 @@
 .PHONY: foundation-check go-check contract-check
 
 foundation-check: go-check contract-check
-	scripts/run_pinned_node.sh node --test scripts/checkpoint_a_smoke.test.mjs scripts/checkpoint_a_denial.test.mjs
+	scripts/run_pinned_node.sh node --test scripts/checkpoint_a_smoke.test.mjs scripts/checkpoint_a_denial.test.mjs scripts/checkpoint_a_browser.test.mjs
 	scripts/run_pinned_node.sh npm run typecheck
 	scripts/run_pinned_node.sh npm run test:unit --workspace=@stead/web
 	scripts/run_pinned_node.sh npm run test --workspace=@stead/web
@@ -51,3 +51,12 @@ dev-smoke:
 dev-check:
 	scripts/run_pinned_node.sh node --test scripts/dev_stack.test.mjs
 	scripts/run_pinned_go.sh go test -race ./apps/worker
+
+.PHONY: checkpoint-a-browser
+# Exact installed tools only; never download or reuse compatibility acceptance.
+# The shell clears inherited preload/proxy/debug variables before starting Node.
+checkpoint-a-browser:
+	@test -n "$$STEAD_BROWSER_REVIEW" && ulimit -S -c 0 && ulimit -H -c 0 && \
+	  exec /usr/bin/env -i PATH=/usr/bin LANG=C.UTF-8 TZ=UTC \
+	  /tmp/stead-node-toolchain-26.8.1/toolchain/node-v26.8.1-linux-x64/bin/node \
+	  scripts/checkpoint_a_browser.mjs --review "$$STEAD_BROWSER_REVIEW"
