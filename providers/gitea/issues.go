@@ -79,6 +79,18 @@ func (c *client) repository(v repositoryWire, name string) (Repository, bool) {
 	return Repository{RepositoryRef{origin: c.origin, owner: c.owner, name: name, id: v.ID}}, true
 }
 
+type repositoryCreatePayload struct {
+	Name          string `json:"name"`
+	Private       bool   `json:"private"`
+	AutoInit      bool   `json:"auto_init"`
+	DefaultBranch string `json:"default_branch"`
+	Readme        string `json:"readme"`
+}
+
+func repositoryCreateInput(name string) repositoryCreatePayload {
+	return repositoryCreatePayload{name, true, true, "main", "Default"}
+}
+
 // createRepository creates only a private initialized main-branch repository.
 // Hidden-tracker mapping, managed labels/board, permissions and idempotency are
 // NOT implemented here and this response alone does not make a Project ready.
@@ -86,13 +98,7 @@ func (c *client) createRepository(ctx context.Context, name string) (Repository,
 	if !nameOK(name) {
 		return Repository{}, failure(NotDispatched)
 	}
-	p := struct {
-		Name          string `json:"name"`
-		Private       bool   `json:"private"`
-		AutoInit      bool   `json:"auto_init"`
-		DefaultBranch string `json:"default_branch"`
-		Readme        string `json:"readme"`
-	}{name, true, true, "main", "Default"}
+	p := repositoryCreateInput(name)
 	var v repositoryWire
 	if err := c.request(ctx, http.MethodPost, "/api/v1/user/repos", p, 201, false, &v); err != nil {
 		return Repository{}, err

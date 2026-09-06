@@ -1,10 +1,35 @@
 # providers/gitea
 
 Inactive WS-03 stock Gitea adapter, using only Go's existing standard library.
-There is **no exported network constructor or dispatcher**, API/worker wiring,
-credential loader, or permission assertion. WS-06 consumed-handle enforcement
-must be integrated before application calls. Provider tokens are not Stead
+There is no exported **raw-I/O** client, API/worker wiring, credential loader,
+or permission assertion. The sole exported I/O operation now consumes a real
+WS-06 `EffectExecution` and an opaque WS-03 hidden-tracker plan. It remains
+inactive under the approved metadata activation. Provider tokens are not Stead
 authorization. Ordinary UI reads remain local-projection-backed.
+
+`NewHiddenTrackerAdapter` constructs protected loopback configuration without
+I/O. `PlanHiddenTracker` fixes `create_hidden_tracker`, POST `/api/v1/user/repos`,
+the private initialized main-branch input, `stead-tracker-<canonical Project ID>`,
+installation, profile, revision and operation/request lifetime into its digest.
+Neither constructor accepts a provider path/body/operation or an asserted permit.
+The returned binding is private authorization/persistence input, not authority.
+`CreateHiddenTracker` accepts only that adapter's sealed plan and the concrete
+consumed handle; copied or concurrently used handles still allow one dispatch.
+It cannot perform a retry or verification GET. Any failed dispatched callback
+remains conservatively reconciling through WS-06, including provider rejection;
+this does not turn cancellation into proof that no effect occurred.
+
+Successful responses remain in opaque `HiddenTrackerPending`, without a public
+locator/content/receipt accessor or terminalization method. This is not a ready
+Project or an authoritative backing mapping. The next actual composition slice
+must atomically persist the protected WS-03 plan with the issuing operation,
+retain it for recovery, verify operation-bound provider/transport terminal proof,
+and complete fresh authorization/final-fence validation plus the owned mapping,
+canonical and audit/outbox transaction. The existing effect-store digest is not
+a durable full-plan record. A deterministic repository name is not immutable
+provider-enforced operation uniqueness or permission to adopt/replay a create.
+Managed permissions, boards/labels, Docs backing and the product route remain
+unfinished. No current installation, provider scope or policy template changed.
 
 The private executor supports one bounded call for each of:
 
@@ -51,8 +76,16 @@ was copied/imported. [Official API usage](https://docs.gitea.com/development/api
 Run the synthetic HTTP contract tests with the pinned Go toolchain:
 
 ```sh
-scripts/run_pinned_go.sh go test -race ./providers/gitea
+scripts/run_pinned_go.sh go test -race ./providers/gitea ./modules/authorization
 ```
+
+The cross-owner `TestGiteaConsumedTracker*` cases run actual WS-06
+issue/consume/dispatch and actual adapter HTTP against owned synthetic handlers.
+They explicitly reuse a test-only synthetic successor activation and fake owner
+store; they do not run Gitea, PostgreSQL or the product. The test helper is only
+exported in Go's test variant, never in an application build. They cover fixed
+bytes, binding substitutions, zero/foreign/copy/concurrent handles, cancellation,
+lost/invalid responses and no retry, read or false terminal result.
 
 `real_contract_test.go` is Linux-only and excluded unless built with
 `-tags=gitea_contract`. It must **not** run against an existing installation.
@@ -72,6 +105,6 @@ result and shutdown. This is not application authorization, provider activation,
 or a product journey. See the [bounded execution evidence](../../docs/governance/dependency-evidence/gitea-adapter-functional-proof-20260905.json).
 
 This slice does not complete P1-003: hidden Project mappings, board/labels,
-permission sync, durable permits, bounded read scopes/claims, projections,
+permission sync, full durable-effect composition, bounded read scopes/claims, projections,
 webhooks, reconciliation and provider-version matrix remain separate real
 producer/consumer integrations, not empty scaffolds in this package.
