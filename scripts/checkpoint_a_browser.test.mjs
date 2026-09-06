@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync, chmodSync, symlinkSync, linkSync, readFileSync, rmSync, lstatSync, openSync, closeSync, renameSync, constants } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { runInNewContext } from 'node:vm';
 import { allowedRequest, byteBudget, absolute, readBounded, privateDirectory,
   claimAttempt, validateAdmission, validateInnerProof, validateJourney, validateAxe,
   SOURCE_FILES, ORIGIN, FORBIDDEN_STATE, STAGES, SURFACES, OPERATIONS, JOURNEY_KEYBOARD_SUBSTEPS, sha256,
@@ -381,6 +382,41 @@ test('axe requires boolean eval/Function denial in the exact CSP-constrained CDP
   for (const negative of [{ result: { value: false } }, { result: { value: 'true' } }, { result: { value: true }, exceptionDetails: {} }, { result: {} }]) {
     const failed = await run(negative); assert.ok(failed.error); assert.equal(failed.detached, true);
     assert.equal(failed.calls.filter((call) => call.method === 'Runtime.evaluate').length, 1);
+  }
+});
+test('actual axe result expression uses only the stricter per-run Unicode option and retains nonpasses', async () => {
+  for (const outcome of ['passed', 'incomplete', 'violation']) {
+    const document = {}, calls = []; let evaluations = 0, audits = 0, detached = false;
+    const rawRule = { id: 'color-contrast', impact: 'serious', nodes: [{ target: ['owned-protected-canary'] }] };
+    const raw = { violations: outcome === 'violation' ? [rawRule] : [], incomplete: outcome === 'incomplete' ? [rawRule] : [],
+      passes: outcome === 'passed' ? [{ id: 'color-contrast' }] : [] };
+    const session = { send: async (method, args) => {
+      calls.push({ method, args });
+      if (method === 'Page.getFrameTree') return { frameTree: { frame: { id: 'owned-fixture-frame' } } };
+      if (method === 'Page.createIsolatedWorld') return { executionContextId: 7 };
+      assert.equal(method, 'Runtime.evaluate'); evaluations++;
+      assert.equal(args.allowUnsafeEvalBlockedByCSP, false); assert.equal(args.contextId, 7);
+      if (evaluations === 1) return { result: { value: true } };
+      if (evaluations === 2) { assert.equal(args.expression, 'owned_source_not_executed'); return { result: {} }; }
+      assert.equal(evaluations, 3);
+      const value = await runInNewContext(args.expression, { document, axe: { version: '4.13.0',
+        configure: () => { throw new Error('Global replacement is forbidden'); },
+        run: async (actualDocument, options) => {
+          audits++; assert.equal(actualDocument, document);
+          assert.deepEqual(JSON.parse(JSON.stringify(options)), { checks: { 'color-contrast': { options: { ignoreUnicode: false } } } });
+          return raw;
+        } } }, { timeout: 1000 });
+      return { result: { value: JSON.parse(JSON.stringify(value)) } };
+    }, detach: async () => { detached = true; } };
+    const page = { context: () => ({ newCDPSession: async () => session }) };
+    const result = await auditSurface(page, SURFACES[0], 'owned_source_not_executed');
+    assert.equal(audits, 1); assert.equal(detached, true);
+    const world = calls.find(call => call.method === 'Page.createIsolatedWorld').args;
+    assert.equal(world.grantUniveralAccess, false); assert.match(world.contentSecurityPolicy, /script-src 'self'/);
+    const finding = { rule: 'color-contrast', impact: 'serious', affectedNodes: 1 };
+    assert.deepEqual(result, { surface: SURFACES[0], violations: outcome === 'violation' ? [finding] : [],
+      incomplete: outcome === 'incomplete' ? [finding] : [], passedRules: outcome === 'passed' ? 1 : 0 });
+    assert(!JSON.stringify(result).includes('canary'));
   }
 });
 const unitCookie = () => ({ name: '__Host-stead_session', value: 'A'.repeat(43), domain: 'localhost', path: '/',
