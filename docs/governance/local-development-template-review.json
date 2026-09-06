@@ -3,87 +3,102 @@
   "status": "accepted",
   "scope": "Initial synthetic local-development template/compiler/test source only; not an instance artifact, production approval or Phase 1 release.",
   "owner_decision_revision": "83d2bfef6c08227f2d15d465c7ada316c5934a31",
-  "source_revision": "9a58b48aa2de87ecca176e35252bb9e64ef72900",
-  "source_tree": "ea818e7d2024b8a4858cb7e11312e8466ac3cc4e",
-  "core_digest": "sha256:40a6ec79c106011450391dbef8b368bea38bcb0252a2587d5ea34808e7abaadb",
+  "source_revision": "0d2917235e205f275039b817cc17b7d8966cf377",
+  "source_tree": "03d0e5b3079e514e53a495438c26c8f6b91d3806",
+  "core_digest": "sha256:2830ae6c16ef18c3a73643115e0236645a94ac6e19bbdd12bba2f57ed26696b4",
   "reviews": [
     {
       "role": "architecture-contract-owner",
       "reviewer_id": "/root/current_template_architecture",
       "disposition": "accept",
       "independent_non_author": true,
-      "evidence": "Independently executed actual Go Core and inventory, reproduced the static API, and passed 77 focused Go and 74 Node tests. Verified root conformance, all mutation cases and scanner evidence; unchanged metadata-only ABI. Fresh source-only acceptance."
+      "evidence": "Independently computed actual Go Core and ordered inventory, reproduced static API and passed 48 local-boundary tests. Verified the complete cold rerun, foundation/dev checks and scan; first quota failure preserved. Initial metadata-only source acceptance."
     },
     {
       "role": "qa",
-      "reviewer_id": "/root/commonplace_probe_qa",
+      "reviewer_id": "/root/integrated_candidate_qa",
       "disposition": "accept",
       "independent_non_author": true,
-      "evidence": "Independently verified actual Go Core, ten inputs, ordered 32/111/3/1 checks and API dependency closure. Own 82 top-level Go, 74 Node, 33 frontend tests and corrected typecheck passed. Original wrong-path and root CGO command failures retained; no live pass inferred."
+      "evidence": "Independently verified actual Go Core, 32/111/3/1 inventory, static API and bundle. Own 28 localcheck race, 318 focused Go, 74 Node and 42 frontend tests passed. Full actual root rerun verified; optional wrong-path build failure and corrected rerun retained."
     },
     {
       "role": "security",
-      "reviewer_id": "/root/commonplace_probe_review",
+      "reviewer_id": "/root/focused_corrections_security",
       "disposition": "accept",
       "independent_non_author": true,
-      "evidence": "Independently verified actual Go Core, full toolchain, exact cases, static API and root campaign/scan evidence. Own pure tracker tests and 74 Node tests passed. Metadata ABI and provider activation gate unchanged; initial synthetic source-only acceptance."
+      "evidence": "Independently verified actual Go Core, whole pinned archive/toolchain, static API, 77 focused Go and 66 Node tests. Verified first EDQUOT, scoped evidence relocation and full unchanged-floor cold rerun. Provider and production gates remain unchanged."
     }
   ],
   "evidence": [
     {
-      "path": "/home/skilgore/stead-template-9a58b48-architecture-20260906.15clACJN/REVIEW.md",
-      "sha256": "d936f68602156e8f1563e283362a95a73e109ec7361c09174cab944896039297",
+      "path": "/home/skilgore/stead-template-0d29172-architecture-20260906.mddPYgAp/REVIEW.md",
+      "sha256": "1d839ef7f4ba26059d394a349bbd163eeec7ce748f682a9c9e1a1e9791ea6e2c",
       "result": "Distinct non-author architecture-contract-owner ACCEPT for this exact source/Core only."
     },
     {
-      "path": "/home/skilgore/stead-template-9a58-qa-20260906.YTMYiF0s/REVIEW.md",
-      "sha256": "e6702df343030a3c22eb96476566df44fe8bcb91e80b0a56f8795433bfece894",
+      "path": "/home/skilgore/stead-integrated-source-qa-20260906.oavmxKqe/REVIEW.md",
+      "sha256": "e108221674cd3952a53ef475e0cab9278bb2ad879894f1b434038c1920d56e28",
       "result": "Distinct non-author qa ACCEPT for this exact source/Core only."
     },
     {
-      "path": "/home/skilgore/stead-template-9a58-security-20260906.H177ROMF/REVIEW.md",
-      "sha256": "8e004c9b437d97428ee1518b32f072d008ef4ee250dd98209d35a61982c11896",
+      "path": "/home/skilgore/stead-template-0d29172-security-20260906.DjmwcaxZ/REVIEW.md",
+      "sha256": "7588488b15a20f6a93cfaaac02c5355d6a359f47d0b6ca23f605fe3ef3b3effe",
       "result": "Distinct non-author security ACCEPT for this exact source/Core only."
     },
     {
-      "path": "/home/skilgore/stead-template-9a58b48-20260906.z0qFVGA6/source-inspection.stdout",
-      "sha256": "71209fdbcbe8d51d514b7204a06a54df456fa53eb58e37916922a4d0eec6aea4",
+      "path": "/home/skilgore/stead-template-corrections-20260906.M0bMwb0C/source-inspection.stdout",
+      "sha256": "f686214aed3ce92b32ae54e6c2f075e497526ca1d12dbf3b930f6e2f414c8df8",
       "result": "Actual exact-source inspection and tracked-source executable self-rebuild exit 0."
     },
     {
-      "path": "/home/skilgore/stead-template-9a58b48-20260906.z0qFVGA6/core.json",
-      "sha256": "6bb91dbacd4d4f67fedf00c560c24a072b6265205d344bc714058ca4066cb7cc",
-      "result": "Actual source Core; all three reviewers independently verified the Go CoreDigest and ordered inventories."
+      "path": "/home/skilgore/stead-template-corrections-20260906.M0bMwb0C/core.json",
+      "sha256": "0a782b532858c623cf812cd6b498f75a05f179474c04e22c5cb2173d8dabb1e6",
+      "result": "Actual source Core; all three reviewers independently verified Go CoreDigest and ordered inventories."
     },
     {
-      "path": "/home/skilgore/stead-template-9a58b48-20260906.z0qFVGA6/conformance.stdout",
-      "sha256": "3d4f6e55de67e9faf9c0263571a09f55273767a4aeceb25c87ac530b35397e44",
-      "result": "Actual source conformance exit 0: 32/32. Empty artifact subject; not installation evidence."
+      "path": "/home/skilgore/stead-template-corrections-20260906.M0bMwb0C/conformance.stderr",
+      "sha256": "ffce5ec3960cf150211a4fd449a6ed5acd97acefefb198038cd7f1c373d6c151",
+      "result": "First cold source conformance failed with explicit linker disk-quota error; retained without test credit."
     },
     {
-      "path": "/home/skilgore/stead-template-9a58b48-20260906.z0qFVGA6/mutations.stdout",
-      "sha256": "ec48ac938ab1c78b3bb0e76769572c9e60beffe5db9f2e74f96e9b7241fccc16",
-      "result": "Actual source mutation exit 0: 104/111, all seven survivors retained at the unchanged 90 percent floor. Empty artifact subject; no provider or installation approval."
+      "path": "/home/skilgore/stead-template-corrections-20260906.M0bMwb0C/conformance-after-quota.stdout",
+      "sha256": "9e9d3371c343eb3e72874ba3fe77118ba7d0deb9558d079bcd648012c29af24b",
+      "result": "Actual explicit cold source conformance rerun exit 0: 32/32. Empty artifact subject, not installation evidence."
     },
     {
-      "path": "/home/skilgore/stead-template-9a58b48-20260906.z0qFVGA6/api-vulnerability.stdout",
+      "path": "/home/skilgore/stead-template-corrections-20260906.M0bMwb0C/mutations-after-quota.stdout",
+      "sha256": "e6456de4ba8618a051f0c700f5eef93a129fd1b0127972332a4b82767853fdc9",
+      "result": "Actual full cold source mutation campaign exit 0: 104/111, all seven survivors retained at unchanged 90 percent floor. Empty artifact subject."
+    },
+    {
+      "path": "/home/skilgore/stead-template-corrections-20260906.M0bMwb0C/api-vulnerability.stdout",
       "sha256": "3605e9139d1be9a911536fb413fabad639a3d2a9cf1209137fec194cc01f2aea",
-      "result": "Actual source static API govulncheck 1.7.0 exit 0, zero findings; database 2026-09-02. No native/provider clearance."
+      "result": "Actual static API govulncheck 1.7.0 exit 0, zero findings; database 2026-09-02. No native/provider scope expansion."
     },
     {
-      "path": "/home/skilgore/stead-template-9a58b48-20260906.z0qFVGA6/stead-api",
-      "sha256": "f84e1c8c547460a4b6f70ba6be0a442fd19b50a522f4fedde7e1769957ff6a85",
-      "result": "Exact fixed-recipe source binary independently reproduced; final metadata-descendant binary must be separately verified."
+      "path": "/home/skilgore/stead-template-corrections-20260906.M0bMwb0C/stead-api",
+      "sha256": "9f63fed27079c9d07ae829193d1dcf61b1a43631a0334546b7a6f23629a82630",
+      "result": "Exact fixed-recipe source binary independently reproduced; final metadata-descendant binary requires separate verification."
     },
     {
-      "path": "/home/skilgore/stead-template-9a58b48-20260906.z0qFVGA6/dev-check-cgo-rerun.log",
-      "sha256": "87de84ff4657c52e46404407d070d7ef4852b0ce0a168cb5c3050a7ee18e6b5a",
-      "result": "Actual corrected test-only cgo=1 dev-check exit 0. Original cgo=0 race-launch failure remains preserved."
+      "path": "/home/skilgore/stead-template-corrections-20260906.M0bMwb0C/foundation.stdout",
+      "sha256": "79b1e066bf2bf8a7e0e61398a479e71dfa709b4ea9815b13e17cb397cbc3f5f3",
+      "result": "Actual complete current foundation-check exit 0 after verified inactive build-evidence relocation."
     },
     {
-      "path": "/home/skilgore/stead-template-9a58b48-20260906.z0qFVGA6/EXECUTION-NOTE.md",
-      "sha256": "44300a7c0510be0f832d5d09836060a796b3ecb2c036e19145743a1f27a3eaad",
-      "result": "Actual source/full-foundation execution and first runner failure versus corrected rerun; no fabricated all-pass first campaign."
+      "path": "/home/skilgore/stead-template-corrections-20260906.M0bMwb0C/dev-check.stdout",
+      "sha256": "a5c107c612e82188d0c886be1c999ca60090d04d50a91e3a11cae99e9766fd33",
+      "result": "Actual dev-check exit 0; CGO=1 only for test/race execution, not static API recipe."
+    },
+    {
+      "path": "/home/skilgore/stead-template-corrections-20260906.M0bMwb0C/EXECUTION-NOTE.md",
+      "sha256": "91e4fd22295d7eb97f11b1d400bcc7462c3dbf79455037291734e5ae95d64cdc",
+      "result": "First actual quota failure, read-only diagnosis, retained evidence relocation and explicit same-source rerun; no installation or product pass."
+    },
+    {
+      "path": "/home/skilgore/stead-template-corrections-20260906.M0bMwb0C/source-check-rerun-results.json",
+      "sha256": "a28952087e038fb1a85e6d1ddce8d9af269bc4d705ceb692286eb68834e75be1",
+      "result": "Actual complete cold rerun plus foundation/dev execution records; original failed sequence remains preserved."
     }
   ],
   "conditions": [
@@ -96,6 +111,6 @@
     "Pass actual final metadata-descendant executable self-verification and scan before fresh startup; source review and matching older binary bytes do not activate this revision.",
     "Real-browser source approval is not fresh workload admission; exact running instance, tools and workload need their separately required distinct reviews. Session cookies and all installation evidence remain private."
   ],
-  "supersedes_source_revision": "0727c87381b8a191401fc3d4aeb3e8ce200a0f87",
-  "correction": "Admits the independently reviewed inactive consumed-effect tracker source, separate anonymous diagnostic and closed authenticated-keyboard failure-substep instrumentation. Reachable API/worker/frontend code, policy, metadata evaluator ABI, dependency closure and evidence floors remain unchanged. This initial synthetic metadata-only derivation does not activate provider use, fix the authenticated failure, authorize old-instance mutation or accept any product/release gate."
+  "supersedes_source_revision": "9a58b48aa2de87ecca176e35252bb9e64ef72900",
+  "correction": "Admits independently reviewed displayed-collection readiness and bounded compiler-event diagnostics. Actual cold-source checks passed only after a preserved quota failure and scoped relocation of completed inactive build evidence. Guard generation, case denominators, evidence floors, metadata evaluator ABI, dependencies and provider gates remain unchanged. This initial synthetic derivation does not activate provider use, fix the prior authenticated keyboard failure, modify retained instances or accept any product/release gate."
 }
