@@ -15,7 +15,8 @@ const environment = { PATH: '/usr/bin', HOME: '/home/controller', LANG: 'C.UTF-8
 const REPO = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const digestFile = (file, options) => sha256(readBounded(file, 512 * 1024 * 1024, options));
 function git(repository, args) {
-  const run = spawnSync('/usr/bin/git', ['--no-optional-locks', '-C', repository, ...args], {
+  const run = spawnSync('/usr/bin/git', ['--no-optional-locks', '-c', 'core.fsmonitor=false',
+    '-c', 'core.untrackedCache=false', '-C', repository, ...args], {
     env: { PATH: '/usr/bin', GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null' },
     timeout: 5000, maxBuffer: 1 << 20, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'],
   });
