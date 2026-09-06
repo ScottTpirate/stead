@@ -19,6 +19,9 @@ export const SOURCE_FILES = Object.freeze([
 export const TLS_SOURCE_FILES = Object.freeze([...SOURCE_FILES,
   'scripts/checkpoint_a_tls.mjs', 'scripts/checkpoint_a_tls_boundary.mjs',
   'tests/e2e/checkpoint_a_tls.mjs']);
+export const KEYBOARD_SOURCE_FILES = Object.freeze([...TLS_SOURCE_FILES,
+  'scripts/checkpoint_a_keyboard.mjs', 'scripts/checkpoint_a_keyboard_boundary.mjs',
+  'tests/e2e/checkpoint_a_keyboard.mjs']);
 // Chromium's Linux NSS guidance distinguishes server-peer trust from CA trust.
 // These are fresh namespace-only homes, never a host/browser user's trust DB.
 export function serverTrustCommands(profile) {

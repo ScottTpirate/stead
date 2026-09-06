@@ -215,6 +215,55 @@ the separate SQL check must establish that. No cookie/body/error is published,
 and no login/logout, mutation, SQL, provider, browser or service action exists.
 The failed browser attempts so far do not satisfy this command's prerequisites.
 
+## Credential-free real-shell keyboard diagnostic
+
+`scripts/checkpoint_a_keyboard.mjs` is a separate diagnostic for the current
+login shell's unchanged CommandPalette, not a retry of the failed authenticated
+journey. It needs exact non-author architecture/license, QA and security reviews
+using `stead-checkpoint-a-keyboard-admission-v1`, scope
+`one-credential-free-real-shell-keyboard-diagnostic`, and the eleven
+`KEYBOARD_SOURCE_FILES` pins. Reuse the existing closed source/instance/reviewer
+fields, but never relabel a browser or TLS admission. A new private exclusive
+`<admission>.keyboard-attempt.json` sidecar permits one attempt; the application
+browser marker and all retained data/sessions remain untouched.
+
+From the clean reviewed harness checkout, after exact execution admission:
+
+```sh
+STEAD_KEYBOARD_REVIEW=/absolute/private/accepted-keyboard.json make checkpoint-a-keyboard
+```
+
+The recipe clears the environment before pinned Node starts and sets both core
+limits to zero. Existing 512+15 input hashes, approved application D/source
+bindings, actual process/listener/asset-root identity, public certificate and
+staged bytes are checked before/after. No new application build/activation is
+inferred when only the harness advances. The namespace reuses fixed P,, peer
+trust, normal TLS/CSP/renderer sandbox, and the literal-loopback BFF byte relay.
+There is no stdin, setup-token, session-cookie, private-key or host-trust ingress.
+
+Two empty contexts/pages are created in the original order; only the first
+navigates. Allowed requests are one GET `/`, each exact committed JS/CSS asset
+at most once, and one GET `/api/v1/session` with expected 401. No Cookie,
+Authorization, Set-Cookie, redirect, arbitrary API, login, mutation or download
+is accepted. Routing is secondary assertion, not generic redirect interception;
+the exact Stead static/session handlers must remain nonredirecting. The probe
+does not focus the page forward, add sleeps, patch the DOM or change the app.
+
+The original open/audit/Escape/return-focus/reopen/filter/Tab/Enter/route/skip
+actions record finite substep IDs and dialog/focus/visibility booleans only,
+including the first failed substep. No DOM, screenshot, selectors, raw exception,
+headers, bodies, credentials or native stdout/stderr is retained. The outer
+proof preserves the actual child exit/signal as well as closed inner evidence;
+absence cannot become a successful exit. No automatic retry. Preserve failures
+and independently inspect post-run cleanup and exact runtime/input continuity.
+
+Axe is executed in the existing CSP-preserving isolated world only to reproduce
+the original keyboard-stage ordering; this probe is not an accessibility audit,
+authenticated/denied journey, Checkpoint A or Phase 1 pass. If the anonymous
+shell does not reproduce the fault, do not infer the authenticated path fixed.
+Owned synthetic tests are `scripts/run_pinned_node.sh node --test
+scripts/checkpoint_a_keyboard.test.mjs`; they perform no live/browser operation.
+
 ## Credential-free real-origin TLS diagnostic
 
 `scripts/checkpoint_a_tls.mjs` and `tests/e2e/checkpoint_a_tls.mjs` diagnose the
