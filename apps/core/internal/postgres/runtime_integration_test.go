@@ -21,6 +21,7 @@ import (
 	"github.com/ScottTpirate/stead/modules/identity"
 	"github.com/ScottTpirate/stead/modules/organization"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // This fixture is deliberately not an activation verifier or an authorizing
@@ -252,6 +253,7 @@ func TestLivePostgresBootstrapRolesSessionAndAtomicity(t *testing.T) {
 	t.Run("real_transaction_commit_rollback_outbox", func(t *testing.T) { testAtomicBackend(t, store) })
 	t.Run("real_keyset_candidate_pages", func(t *testing.T) { testCandidatePages(t, store) })
 	t.Run("bounded_set_security_reads", func(t *testing.T) { testStateSets(t, store, session, labelID) })
+	t.Run("actual_driver_measurement_boundaries", func(t *testing.T) { testDriverMeasurements(t, store, session) })
 	t.Run("real_effect_storage_not_provider_authorization", func(t *testing.T) { testEffectStorage(t, store, unprivileged) })
 	var serverVersion int
 	var grantor string
@@ -371,8 +373,11 @@ func testStateSets(t *testing.T, store *Store, session identity.SessionRecord, l
 	if err != nil || len(states) != len(refs) {
 		t.Fatal("real set state read failed", err)
 	}
-	if queries := counters.Snapshot().SQLQueries; queries != 17 {
-		t.Fatal("100-resource security set did not use fixed 17 statements including transaction/role controls", queries)
+	if queries := counters.Snapshot().SQLQueries; queries != 11 {
+		t.Fatal("100-resource security set did not use fixed 11 statements including transaction/role controls", queries)
+	}
+	if measured := counters.Snapshot().Timing; measured.SQLClientCalls != 11 || measured.PoolAcquireCalls != 1 || measured.SQLClientNS == 0 || measured.PoolAcquireNS == 0 || measured.SQLClientFailures != 0 || measured.PoolAcquireFailures != 0 {
+		t.Fatalf("actual driver and single pool-acquire timings missing: %+v", measured)
 	}
 	for index, state := range states {
 		if state.Resource != refs[index] || state.OrganizationID != org || state.SessionActive || state.Revisions.Session != 3 || state.Label.Version != 1 {
@@ -405,7 +410,88 @@ func testStateSets(t *testing.T, store *Store, session identity.SessionRecord, l
 	if err != nil || !reflect.DeepEqual(locked, states) {
 		t.Fatal("locked aggregate state differs", err)
 	}
-	t.Log("100 resources: 17 actual SQL statements; aligned missing-resource denial and locked aggregate state PASS")
+	if err := tx.Rollback(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.ReadState(ctx, session.Principal, session.ID, withMissing[100]); err == nil {
+		t.Fatal("single missing-resource state accepted")
+	}
+	// A later call must reload authoritative changes, not reuse earlier positive
+	// or negative state. The locked final-fence loader above remains unchanged.
+	if err := store.owned(ctx, "authorization", true, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `UPDATE "authorization".resources SET explicit_deny=true,revision=revision+1 WHERE id=$1`, refs[0].ID)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	fresh, err := store.ReadStates(ctx, session.Principal, session.ID, refs[:1])
+	if err != nil || len(fresh) != 1 || !fresh[0].ExplicitDeny || fresh[0].Revisions.Resource != states[0].Revisions.Resource+1 {
+		t.Fatal("fresh state call reused stale resource state", err)
+	}
+	// An identity failure rolls back its owner role; every idle pooled connection
+	// must still be the NOINHERIT API login, never a leaked module executor.
+	if _, err := store.ReadStates(ctx, identity.Principal{Type: "user", ID: missing}, session.ID, refs[:1]); err == nil {
+		t.Fatal("mismatched principal state accepted")
+	}
+	idle := store.pool.AcquireAllIdle(ctx)
+	if len(idle) == 0 {
+		t.Fatal("no real connection for role-reset verification")
+	}
+	roleReset := true
+	for _, connection := range idle {
+		var role string
+		err := connection.QueryRow(ctx, `SELECT current_user`).Scan(&role)
+		connection.Release()
+		if err != nil || role != RuntimeRole(store.config.InstanceID) {
+			roleReset = false
+		}
+	}
+	if !roleReset {
+		t.Fatal("owner role leaked after failed state read")
+	}
+	t.Log("100 resources: 11 actual SQL statements; missing-resource denial, locked equivalence, fresh revocation and role rollback PASS")
+}
+
+func testDriverMeasurements(t *testing.T, store *Store, session identity.SessionRecord) {
+	ctx := context.Background()
+	measured, counters := telemetry.Begin(ctx)
+	rows, err := store.pool.Query(measured, `SELECT 1`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if counters.Snapshot().Timing.SQLClientCalls != 0 {
+		rows.Close()
+		t.Fatal("driver query completed before Rows.Close")
+	}
+	rows.Close()
+	if m := counters.Snapshot().Timing; m.SQLClientCalls != 1 || m.SQLClientNS == 0 || m.PoolAcquireCalls != 1 {
+		t.Fatalf("actual Rows.Close timing absent: %+v", m)
+	}
+	// Saturate only this test-owned pool. The result is acquisition wall time,
+	// including queue wait, never fabricated per-request server-lock duration.
+	held := []*pgxpool.Conn{}
+	defer func() {
+		for _, connection := range held {
+			connection.Release()
+		}
+	}()
+	for index := int32(0); index < store.pool.Config().MaxConns; index++ {
+		connection, err := store.pool.Acquire(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		held = append(held, connection)
+	}
+	blocked, cancel := context.WithTimeout(ctx, 20*time.Millisecond)
+	defer cancel()
+	blocked, blockedCounters := telemetry.Begin(blocked)
+	if _, err := store.ReadStates(blocked, session.Principal, session.ID, []authorization.ResourceRef{{Kind: "instance", ID: store.config.InstanceID}}); err == nil {
+		t.Fatal("saturated pool admitted read")
+	}
+	if m := blockedCounters.Snapshot().Timing; m.PoolAcquireCalls != 1 || m.PoolAcquireFailures != 1 || m.PoolAcquireNS == 0 || m.SQLClientCalls != 0 {
+		t.Fatalf("failed pool wait misattributed as SQL: %+v", m)
+	}
+	t.Log("actual Rows.Close completion and saturated-pool cancellation measured; no wire-round-trip or pure server-lock timing claim")
 }
 
 func testCandidatePages(t *testing.T, store *Store) {

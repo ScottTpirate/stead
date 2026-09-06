@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"syscall"
 	"time"
+
+	"github.com/ScottTpirate/stead/internal/telemetry"
 )
 
 // LocalAnchor is independently retained protected host state, outside the
@@ -101,6 +103,14 @@ func (anchor *LocalAnchor) locked(ctx context.Context, action func() error) erro
 	// request indefinitely. Only contention is retried; all other failures deny.
 	wait, cancel := context.WithTimeout(ctx, localAnchorLockWait)
 	defer cancel()
+	started := time.Now()
+	var contentions uint64
+	acquired := false
+	defer func() {
+		if !acquired {
+			telemetry.RecordAnchorLock(ctx, time.Since(started), contentions, true)
+		}
+	}()
 	for {
 		if wait.Err() != nil {
 			return ErrDenied
@@ -112,6 +122,7 @@ func (anchor *LocalAnchor) locked(ctx context.Context, action func() error) erro
 		if !errors.Is(err, syscall.EWOULDBLOCK) && !errors.Is(err, syscall.EAGAIN) {
 			return ErrDenied
 		}
+		contentions++
 		timer := time.NewTimer(time.Millisecond)
 		select {
 		case <-wait.Done():
@@ -120,7 +131,13 @@ func (anchor *LocalAnchor) locked(ctx context.Context, action func() error) erro
 		case <-timer.C:
 		}
 	}
-	defer syscall.Flock(int(file.Fd()), syscall.LOCK_UN)
+	acquired = true
+	held := time.Now()
+	telemetry.RecordAnchorLock(ctx, held.Sub(started), contentions, false)
+	defer func() {
+		_ = syscall.Flock(int(file.Fd()), syscall.LOCK_UN)
+		telemetry.RecordAnchorHeld(ctx, time.Since(held))
+	}()
 	if wait.Err() != nil {
 		return ErrDenied
 	}
@@ -174,7 +191,7 @@ func (anchor *LocalAnchor) CompareMax(ctx context.Context, binding ActivationBin
 		name := file.Name()
 		defer os.Remove(name)
 		if _, err = file.Write(data); err == nil {
-			err = file.Sync()
+			err = syncAnchor(ctx, file)
 		}
 		closeErr := file.Close()
 		if err != nil || closeErr != nil {
@@ -188,7 +205,7 @@ func (anchor *LocalAnchor) CompareMax(ctx context.Context, binding ActivationBin
 			return ErrDenied
 		}
 		defer directory.Close()
-		if directory.Sync() != nil {
+		if syncAnchor(ctx, directory) != nil {
 			return ErrDenied
 		}
 		return nil
@@ -197,4 +214,11 @@ func (anchor *LocalAnchor) CompareMax(ctx context.Context, binding ActivationBin
 		return AnchorState{}, ErrDenied
 	}
 	return state, nil
+}
+
+func syncAnchor(ctx context.Context, file *os.File) error {
+	started := time.Now()
+	err := file.Sync()
+	telemetry.RecordAnchorSync(ctx, time.Since(started), err != nil)
+	return err
 }

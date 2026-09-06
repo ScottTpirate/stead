@@ -159,40 +159,13 @@ func applyIdentity(state *authorization.State, session identity.SessionRecord) {
 }
 
 func (store *Store) ReadState(ctx context.Context, principal identity.Principal, sessionID string, ref authorization.ResourceRef) (authorization.State, error) {
-	if !principal.Valid() || !identity.ValidID(sessionID) || !identity.ValidID(ref.ID) {
+	states, err := store.ReadStates(ctx, principal, sessionID, []authorization.ResourceRef{ref})
+	// Sets preserve missing rows as closed aligned slots. The single-resource
+	// interface still returns denial, never an apparently complete missing state.
+	if err != nil || len(states) != 1 || states[0].Principal != principal {
 		return authorization.State{}, authorization.ErrDenied
 	}
-	var session identity.SessionRecord
-	if err := store.owned(ctx, "identity", false, func(tx pgx.Tx) error {
-		var err error
-		session, err = loadSession(ctx, tx, "s.id=$1", sessionID, false)
-		return err
-	}); err != nil || session.Principal != principal || session.InstanceID != store.config.InstanceID || session.SecurityDomain != store.config.SecurityDomain {
-		return authorization.State{}, authorization.ErrDenied
-	}
-	var security resourceSecurity
-	if err := store.owned(ctx, "authorization", false, func(tx pgx.Tx) error {
-		var err error
-		security, err = loadSecurity(ctx, tx, principal, sessionID, ref, false)
-		return err
-	}); err != nil {
-		return authorization.State{}, authorization.ErrDenied
-	}
-	if err := store.owned(ctx, "classification", false, func(tx pgx.Tx) error {
-		var err error
-		security.state.Label, err = loadLabel(ctx, tx, security.labelID, false)
-		return err
-	}); err != nil {
-		return authorization.State{}, authorization.ErrDenied
-	}
-	applyIdentity(&security.state, session)
-	security.state.Revisions.Label = security.state.Label.Version
-	if ref.Kind != "instance" {
-		if err := store.canonicalExists(ctx, ref, security.state.OrganizationID); err != nil {
-			return authorization.State{}, authorization.ErrDenied
-		}
-	}
-	return security.state, nil
+	return states[0], nil
 }
 
 func canonicalQuery(kind string) (string, string) {

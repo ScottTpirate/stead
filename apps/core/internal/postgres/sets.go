@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"encoding/json"
+	"errors"
 
 	"github.com/ScottTpirate/stead/modules/authorization"
 	"github.com/ScottTpirate/stead/modules/classification"
@@ -19,9 +20,46 @@ type ownerRead func(string, func(pgx.Tx) error) error
 // Missing resources have only Resource populated and cannot pass central auth.
 // Query/integrity failure aborts the complete set rather than omitting rows.
 func (store *Store) ReadStates(ctx context.Context, principal identity.Principal, sessionID string, refs []authorization.ResourceRef) ([]authorization.State, error) {
-	return store.readStates(ctx, principal, sessionID, refs, false, func(owner string, read func(pgx.Tx) error) error {
-		return store.owned(ctx, owner, false, read)
+	if ctx == nil || ctx.Err() != nil {
+		return nil, authorization.ErrDenied
+	}
+	// One fresh read-only transaction per invocation, not one per owner. Open
+	// lazily so readStates rejects malformed inputs before acquiring a connection.
+	// READ COMMITTED retains fresh statement snapshots; nothing survives into
+	// the later OpenFGA call or replaces the separately locked disclosure fence.
+	var tx pgx.Tx
+	defer func() {
+		if tx != nil {
+			if err := tx.Rollback(ctx); !errors.Is(err, pgx.ErrTxClosed) {
+				count(ctx, 1, 0, 0, 0)
+			}
+		}
+	}()
+	states, err := store.readStates(ctx, principal, sessionID, refs, false, func(owner string, read func(pgx.Tx) error) error {
+		if tx == nil {
+			var err error
+			tx, err = store.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted, AccessMode: pgx.ReadOnly})
+			count(ctx, 1, 0, 0, 0)
+			if err != nil {
+				return err
+			}
+		}
+		_, err := tx.Exec(ctx, "SET LOCAL ROLE "+pgx.Identifier{store.prefix + owner + "_execute"}.Sanitize())
+		count(ctx, 1, 0, 0, 0)
+		if err != nil {
+			return err
+		}
+		return read(tx)
 	})
+	if err != nil || tx == nil {
+		return nil, authorization.ErrDenied
+	}
+	err = tx.Commit(ctx)
+	count(ctx, 1, 0, 0, 0)
+	if err != nil {
+		return nil, authorization.ErrDenied
+	}
+	return states, nil
 }
 
 func (store *Store) readStates(ctx context.Context, principal identity.Principal, sessionID string, refs []authorization.ResourceRef, lock bool, owned ownerRead) ([]authorization.State, error) {

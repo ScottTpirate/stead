@@ -21,6 +21,10 @@ func TestInvalidStateSetsNeverReachSQL(t *testing.T) {
 		if err == nil {
 			t.Fatal("invalid state set accepted")
 		}
+		// Public wrapper must preserve validation before its lazy transaction.
+		if _, err := store.ReadStates(context.Background(), identity.Principal{Type: "user", ID: id}, id, refs); err == nil {
+			t.Fatal("public invalid state set accepted")
+		}
 	}
 }
 

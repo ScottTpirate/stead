@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/ScottTpirate/stead/internal/telemetry"
 )
 
 func TestHostAnchorTimeSurvivesDatabaseRollbackAndRejectsReplacement(t *testing.T) {
@@ -91,12 +93,13 @@ func TestHostAnchorWaitsForBriefActualFileLockContention(t *testing.T) {
 			}()
 			<-held
 			result := make(chan error, 1)
+			measured, counters := telemetry.Begin(context.Background())
 			go func() {
 				var err error
 				if operation == "read" {
-					_, err = anchor.Read(context.Background())
+					_, err = anchor.Read(measured)
 				} else {
-					_, err = anchor.CompareMax(context.Background(), binding, now.Add(time.Second))
+					_, err = anchor.CompareMax(measured, binding, now.Add(time.Second))
 				}
 				result <- err
 			}()
@@ -113,6 +116,16 @@ func TestHostAnchorWaitsForBriefActualFileLockContention(t *testing.T) {
 			}
 			if err := <-result; err != nil {
 				t.Fatal("valid independent anchor denied after lock release", err)
+			}
+			measuredTiming := counters.Snapshot().Timing
+			if measuredTiming.AnchorLockAttempts != 1 || measuredTiming.AnchorLockWaitNS == 0 || measuredTiming.AnchorLockHeldNS == 0 || measuredTiming.AnchorLockContentions == 0 || measuredTiming.AnchorLockFailures != 0 {
+				t.Fatalf("actual flock contention not measured: %+v", measuredTiming)
+			}
+			if operation == "compare-max" && (measuredTiming.AnchorSyncCalls != 2 || measuredTiming.AnchorSyncNS == 0 || measuredTiming.AnchorSyncFailures != 0) {
+				t.Fatal("actual file and directory fsync not measured")
+			}
+			if operation == "read" && measuredTiming.AnchorSyncCalls != 0 {
+				t.Fatal("read fabricated fsync")
 			}
 			current, err := anchor.Read(context.Background())
 			if err != nil || current.Binding != binding || current.PolicyTimeHighWater.Before(now) {
@@ -154,7 +167,8 @@ func TestHostAnchorLockWaitRemainsBoundedAndCancellationAware(t *testing.T) {
 				defer timer.Stop()
 			}
 			started := time.Now()
-			if _, err := anchor.Read(ctx); err != ErrDenied {
+			measured, counters := telemetry.Begin(ctx)
+			if _, err := anchor.Read(measured); err != ErrDenied {
 				t.Fatal("held anchor admitted")
 			}
 			elapsed := time.Since(started)
@@ -163,6 +177,10 @@ func TestHostAnchorLockWaitRemainsBoundedAndCancellationAware(t *testing.T) {
 			}
 			if name != "hard-cap" && ctx.Err() == nil {
 				t.Fatal("context did not govern waiting")
+			}
+			m := counters.Snapshot().Timing
+			if m.AnchorLockAttempts != 1 || m.AnchorLockFailures != 1 || m.AnchorLockWaitNS == 0 || m.AnchorLockHeldNS != 0 || m.AnchorSyncCalls != 0 {
+				t.Fatalf("failed wait measurement: %+v", m)
 			}
 		})
 	}

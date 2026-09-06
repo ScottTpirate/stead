@@ -62,6 +62,7 @@ func Open(ctx context.Context, config Config) (*Store, error) {
 	}
 	parsed.MaxConns = 8
 	parsed.MinConns = 0
+	parsed.ConnConfig.Tracer = requestTrace{}
 	parsed.ConnConfig.RuntimeParams["search_path"] = "pg_catalog, pg_temp"
 	parsed.ConnConfig.RuntimeParams["statement_timeout"] = "5000"
 	parsed.ConnConfig.RuntimeParams["lock_timeout"] = "2000"
