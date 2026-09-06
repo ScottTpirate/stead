@@ -108,3 +108,70 @@ calls, audit/outbox durability, hierarchy authorization, known/unknown existence
 nondisclosure, complete accessibility, TEST-009 or a release gate. Those require
 separate actual backend inspection and release evidence. Sparse-access discovery
 and provider integration are not implemented by this runner.
+
+## Actual HTTP denial to persisted audit collector
+
+`make checkpoint-a-sql` is a separately reviewed, test-only, read-only collector;
+it is not the mutating PostgreSQL fixture/bootstrap suite. Before actual use,
+obtain independent QA/security review of the exact integrated collector/build
+and bounded execution scope. Browser or follow-on source acceptance alone does
+not activate this collector. Its private prerequisites are:
+
+```sh
+STEAD_CHECKPOINT_A_ADMISSION=/absolute/private/browser-admission.json \
+STEAD_CHECKPOINT_A_ADMISSION_SHA256=<exact-64-lowerhex-file-hash> \
+STEAD_CHECKPOINT_A_FOLLOWON=/absolute/private/completed-followon.json \
+STEAD_CHECKPOINT_A_FOLLOWON_SHA256=<exact-64-lowerhex-file-hash> \
+STEAD_CHECKPOINT_A_SQL_PROOF=/absolute/private/new-sql-proof.json \
+make checkpoint-a-sql
+```
+
+All inputs/output parents must be owned 0700 and input files exclusive 0600,
+with exact hashes, no symlinks/hardlinks and bounded closed JSON. Output must not
+exist. The tagged `TestCheckpointADenialEvidenceLive` fails missing/invalid
+prerequisites, never skips. Ordinary `go test` does not compile that live test;
+`TestCheckpointEvidence*` checks only owned parser/role/query/row fixtures and
+is included in normal Go testing. The opt-in target disables inherited core
+dumps. No `PG*` environment override, alternate host, admin/service DSN or
+arbitrary SQL is accepted. Keep failure output and do not retry HTTP to fill a
+missing audit row.
+
+The complete follow-on proof must have 80 unique actual response correlations,
+80 dispatches and SDK-valid responses, zero unobserved dispatches, exact four
+worker/role/sequence/operation/sample/status structure and matching numeric API
+observations. Only its 54 genuine read-404 correlations are selected: 36 from
+the no-grant principal and 18 authorized-principal unknown-resource reads.
+Application/instance/harness/admission and helper source bytes remain bound.
+The pinned Node is used only for the previously reviewed read-only public
+`verifyIdentity` export before/after; no browser/native tools, login, TLS request
+or credentials are acquired through that path.
+
+The sole secret file read is the exact fresh state's `database-url`, validated
+for its instance-derived NOINHERIT API login, `127.0.0.1:15432/stead`, disabled TLS
+for that approved loopback-development database path, and optional five-second
+connect timeout. Neither administrator, identity token/session, OpenFGA, key nor
+secret service configuration is read. The collector does not call `localdev.Load`,
+`postgres.Open`, an initializer or the catalog administrative connection.
+
+One bounded pgx connection starts one `REPEATABLE READ READ ONLY` transaction.
+Fixed existing authorization/organization/project/audit execute roles are set
+locally in sequence. Public namespace identity/activation, all six known/unknown
+IDs across canonical domain and authorization sets, and all 54 request IDs in
+`audit.records.evidence->>'RequestID'` are checked in that same snapshot. Known
+records must be active/nonpending and share the expected organization; unknown
+IDs must be absent across every queried set. Each request requires exactly one
+deny row, correct outer/nested actor/action, NULL resource, closed safe evidence,
+separate valid audit/decision IDs and matching timestamps within PostgreSQL's
+microsecond precision. Known/unknown private denial reasons are not compared.
+Queries have parameter/output/time bounds, not an indexed scan-work guarantee.
+The transaction always rolls back, including success; no schema/grant/data
+mutation, public audit endpoint, provider effect or HTTP retry is introduced.
+
+The exclusive fsynced private proof contains only bound source/evidence hashes,
+instance, correlation IDs, counts, stage and booleans—not DSNs/passwords, raw SQL
+errors, audit rows/actors/decision IDs, labels, resource names or unrelated logs.
+Private credential byte buffers are cleared; garbage-collected strings are not
+claimed zeroized. Preserve the exact source/build and first failures privately.
+This establishes current canonical existence and persisted denial correlation,
+not that the resources were created by the browser, timing nondisclosure,
+outbox delivery, restart/backup/restore, TEST-009 or Phase 1 acceptance.
