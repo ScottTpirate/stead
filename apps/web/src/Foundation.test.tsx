@@ -29,6 +29,22 @@ afterEach(() => {
 });
 
 describe("Foundation", () => {
+  it("presents command results as a named group of native buttons", async () => {
+    const user = userEvent.setup();
+    render(<Foundation />);
+    await user.click(screen.getByRole("button", { name: /Search or jump/u }));
+    const group = screen.getByRole("group", { name: "Command results" });
+    expect(within(group).getAllByRole("button").map((button) => button.textContent?.replace("↵", ""))).toEqual([
+      "Home", "Inbox", "My Work", "Projects", "Knowledge", "Teams",
+    ]);
+    expect(within(group).queryAllByRole("option")).toHaveLength(0);
+    await user.type(screen.getByRole("textbox", { name: "Search commands" }), "Teams");
+    const result = within(group).getByRole("button", { name: "Teams" });
+    result.focus();
+    await user.keyboard("{Enter}");
+    expect(window.location.pathname).toBe("/teams");
+  });
+
   it("exposes one top-level main landmark reachable by the skip link", () => {
     render(<Foundation />);
     const main = screen.getByRole("main");

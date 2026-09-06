@@ -122,7 +122,7 @@ export function CommandPalette({ navigate }: CommandPaletteProps) {
             setQuery(event.currentTarget.value);
           }}
         />
-        <div className="command-results" aria-label="Command results">
+        <div className="command-results" role="group" aria-label="Command results">
           {results.length ? (
             results.map((item) => (
               <button
