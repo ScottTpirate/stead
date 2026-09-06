@@ -7,6 +7,8 @@
 // screenshots, traces, response bodies or credential file reads. A reviewed
 // controller may preserve only the established session via afterLogin.
 
+import { JOURNEY_KEYBOARD_SUBSTEPS } from '../../scripts/checkpoint_a_browser_boundary.mjs';
+
 const ORIGIN = "https://localhost:18443";
 const TIMEOUT = 10_000;
 const LIMIT = 256;
@@ -164,6 +166,16 @@ async function axeSurface(page, auditSurface, surface) {
   return auditSurface(page, surface);
 }
 
+// Fixed substep identifier only; no exception, locator, DOM, or secret is read.
+// Preserve the first failing action without retries or changing its assertions.
+export async function keyboardSubsteps(actions, evidence) {
+  for (const name of JOURNEY_KEYBOARD_SUBSTEPS) {
+    evidence.failedKeyboardSubstep = name;
+    await actions[name]();
+  }
+  evidence.failedKeyboardSubstep = null;
+}
+
 /**
  * Future reviewed controller entry point; never auto-executed.
  * Credentials are used once and not saved. JS strings cannot be zeroized; the
@@ -179,6 +191,7 @@ export async function runCheckpointAJourney({
   let stage = "preflight";
   const completed = [], accessibility = [], timings = [];
   const observations = [];
+  const keyboardEvidence = { failedKeyboardSubstep: null };
   const start = Date.now();
   let status = "failed";
   async function step(name, task) {
@@ -291,25 +304,33 @@ export async function runCheckpointAJourney({
     await step("keyboard_palette_focus", async () => {
       const trigger = primary.getByRole("button", { name: /Search or jump/ });
       const dialog = primary.getByRole("dialog", { name: "Search or jump", exact: true });
-      await trigger.focus(); await primary.keyboard.press("Control+k");
-      await dialog.waitFor();
       const search = dialog.getByLabel("Search commands", { exact: true });
-      requireCondition(await search.evaluate((element) => element === document.activeElement));
-      await audit(primary, "command_palette");
-      await primary.keyboard.press("Escape"); await dialog.waitFor({ state: "hidden" });
-      await primary.waitForFunction(() => document.activeElement?.matches("button.command-trigger"));
-      await primary.keyboard.press("Control+k"); await dialog.waitFor();
-      await search.fill("Teams"); await search.press("Tab");
-      requireCondition(await dialog.getByRole("button", { name: "Teams", exact: true })
-        .evaluate((element) => element === document.activeElement));
-      await primary.keyboard.press("Enter");
-      await primary.waitForURL(ORIGIN + "/teams"); await dialog.waitFor({ state: "hidden" });
-      await readDetails(primary, SYNTHETIC.child, "team");
       const skip = primary.getByRole("link", { name: "Skip to content", exact: true });
-      await skip.focus(); await skip.press("Enter");
-      await primary.waitForFunction(() => document.activeElement?.id === "main-content");
-      await navigate(primary, "Projects", true);
-      await readDetails(primary, SYNTHETIC.project, "project");
+      await keyboardSubsteps({
+        trigger_focus: () => trigger.focus(),
+        first_open_key: () => primary.keyboard.press("Control+k"),
+        first_dialog_visible: () => dialog.waitFor(),
+        search_focus: async () => requireCondition(await search.evaluate((element) => element === document.activeElement)),
+        audit: () => audit(primary, "command_palette"),
+        escape_key: () => primary.keyboard.press("Escape"),
+        dialog_hidden: () => dialog.waitFor({ state: "hidden" }),
+        return_focus: () => primary.waitForFunction(() => document.activeElement?.matches("button.command-trigger")),
+        second_open_key: () => primary.keyboard.press("Control+k"),
+        second_dialog_visible: () => dialog.waitFor(),
+        filter: () => search.fill("Teams"),
+        tab_key: () => search.press("Tab"),
+        teams_focus: async () => requireCondition(await dialog.getByRole("button", { name: "Teams", exact: true })
+          .evaluate((element) => element === document.activeElement)),
+        enter_key: () => primary.keyboard.press("Enter"),
+        teams_route: () => primary.waitForURL(ORIGIN + "/teams"),
+        second_dialog_hidden: () => dialog.waitFor({ state: "hidden" }),
+        child_read: () => readDetails(primary, SYNTHETIC.child, "team"),
+        skip_focus: () => skip.focus(),
+        skip_enter: () => skip.press("Enter"),
+        main_focus: () => primary.waitForFunction(() => document.activeElement?.id === "main-content"),
+        projects_navigation: () => navigate(primary, "Projects", true),
+        project_read: () => readDetails(primary, SYNTHETIC.project, "project"),
+      }, keyboardEvidence);
     });
     await step("denied_login_empty_views", async () => {
       await login(denied, deniedCredential, false); deniedCredential = "";
@@ -357,8 +378,9 @@ export async function runCheckpointAJourney({
     for (const observer of observations) observer.stop();
   }
   return {
-    format: "stead-checkpoint-a-browser-journey-v1", status,
+    format: "stead-checkpoint-a-browser-journey-v2", status,
     failedStage: status === "failed" ? stage : null,
+    failedKeyboardSubstep: keyboardEvidence.failedKeyboardSubstep,
     completed, timings,
     elapsedMs: Math.min(240_000, Math.max(0, Date.now() - start)),
     network: observations.map(({ counts, stats }, index) => ({ principal: index === 0 ? "primary" : "denied", counts, ...stats })),
