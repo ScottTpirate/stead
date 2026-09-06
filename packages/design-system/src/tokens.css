@@ -8,7 +8,7 @@
   --stead-color-surface-hover: oklch(0.94 0.016 140);
   --stead-color-text: oklch(0.24 0.025 145);
   --stead-color-text-muted: oklch(0.48 0.025 145);
-  --stead-color-text-subtle: oklch(0.61 0.02 145);
+  --stead-color-text-subtle: oklch(0.52 0.02 145);
   --stead-color-border: oklch(0.88 0.018 125);
   --stead-color-border-strong: oklch(0.7 0.03 135);
   --stead-color-accent: oklch(0.48 0.09 151);
@@ -68,7 +68,7 @@
   --stead-color-surface-hover: oklch(0.31 0.022 145);
   --stead-color-text: oklch(0.94 0.012 125);
   --stead-color-text-muted: oklch(0.76 0.02 135);
-  --stead-color-text-subtle: oklch(0.64 0.018 135);
+  --stead-color-text-subtle: oklch(0.7 0.018 135);
   --stead-color-border: oklch(0.34 0.02 145);
   --stead-color-border-strong: oklch(0.48 0.03 145);
   --stead-color-accent: oklch(0.7 0.11 151);
@@ -97,7 +97,7 @@
     --stead-color-surface-hover: oklch(0.31 0.022 145);
     --stead-color-text: oklch(0.94 0.012 125);
     --stead-color-text-muted: oklch(0.76 0.02 135);
-    --stead-color-text-subtle: oklch(0.64 0.018 135);
+    --stead-color-text-subtle: oklch(0.7 0.018 135);
     --stead-color-border: oklch(0.34 0.02 145);
     --stead-color-border-strong: oklch(0.48 0.03 145);
     --stead-color-accent: oklch(0.7 0.11 151);

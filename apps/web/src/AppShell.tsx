@@ -128,7 +128,7 @@ export function AppShell({ route, navigate, children, sessionLabel }: AppShellPr
             <ThemeControl />
           </div>
         </aside>
-        <section className="app-workspace" aria-label="Workspace">
+        <div className="app-workspace">
           <header className="workspace-header">
             <div>
               <span className="workspace-header__context">Organization</span>
@@ -140,7 +140,7 @@ export function AppShell({ route, navigate, children, sessionLabel }: AppShellPr
           <main id="main-content" className="main-content" tabIndex={-1}>
             <RouteSurface route={route}>{children}</RouteSurface>
           </main>
-        </section>
+        </div>
       </div>
     </div>
   );
