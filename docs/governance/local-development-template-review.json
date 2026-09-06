@@ -3,72 +3,92 @@
   "status": "accepted",
   "scope": "Initial synthetic local-development template/compiler/test source only; not an instance artifact, production approval or Phase 1 release.",
   "owner_decision_revision": "83d2bfef6c08227f2d15d465c7ada316c5934a31",
-  "source_revision": "5cff5956979acb76c34eec4a93f7831e0869f3e6",
-  "source_tree": "ca490b806aa1032a21191f83933699c083666cee",
-  "core_digest": "sha256:9926c73ca8f3090036c3c322831e7f068e4dfa92a3a0b52bcde923138866144c",
+  "source_revision": "f8346ba399e979d47d95fa3dd3a1951406f8976c",
+  "source_tree": "5d7c77b60398a2d87612dd8ea153922996bec264",
+  "core_digest": "sha256:974da8768b9cdb88ea21c1058b680f9b7c23500fa3796c43551065e9042cd18d",
   "reviews": [
     {
       "role": "architecture-contract-owner",
-      "reviewer_id": "/root/template_architecture_review",
+      "reviewer_id": "/root/fresh_template_architecture",
       "disposition": "accept",
       "independent_non_author": true,
-      "evidence": "Independently reviewed fixed fresh two-user bootstrap; only the original principal has an OpenFGA grant. Own race and 20 Node tests passed. Recomputed exact CoreDigest, ten inputs, full 17,349-entry toolchain and API hashes. Core differs only in source revision/tree; ordered 32/108/3/1 cases, rates and seven exclusions unchanged. Root completed foundation, actual PG rollback/exchange, campaigns and scan evidence verified. No locked-boundary change."
+      "evidence": "Independently verified exact clean source/tree, actual Go CoreDigest, ten inputs, full toolchain and fresh 32/111 inventory. Inspected source campaigns and exact-binary real PostgreSQL results. Metadata ABI, dependency scopes and final fences unchanged; provider remains inactive. Additional own executable self-check failed from compiler disk quota; preserved separately from root's successful exact self-rebuild. Fresh execution requires safely recovered capacity and successful final-binary checks."
     },
     {
       "role": "qa",
-      "reviewer_id": "/root/unprivileged_qa_review",
+      "reviewer_id": "/root/frontend_timing_qa",
       "disposition": "accept",
       "independent_non_author": true,
-      "evidence": "Own uncached Go/race/vet and 20 Node tests passed, including ambiguous identity and context rejection. Independently matched exact source/tree/CoreDigest, all inputs, API hash and freshly derived inventories. Inspected actual isolated PostgreSQL harness, late two-user rollback and collision/replay results and clean shutdown; independently rebuilt its test binary byte-for-byte equal to executed c700e0803a26e3c4350b8c604c5eede81d74e02e89553c2b5f644fb793f7ae33. Completed foundation/dev/campaign/scan evidence verified. HTTP denial, existence/no-effects and new instance checks remain unexecuted."
+      "evidence": "Independently reproduced exact API b71ea3cf and PostgreSQL test 09417651 binaries, CoreDigest and fresh inventory; focused Go checks and all 39 Node tests passed. Inspected root full foundation/dev checks and real PostgreSQL 17 RUN/PASS, zero skips. Seven mutation survivors remain counted; source campaign does not establish complete provider-effect coverage. Fresh installation and actual browser/backend correlation remain unexecuted."
     },
     {
       "role": "security",
-      "reviewer_id": "/root/unprivileged_security_review",
+      "reviewer_id": "/root/effects_security_review",
       "disposition": "accept",
       "independent_non_author": true,
-      "evidence": "Own five-package race/vet and 20 Node tests passed. Independently verified exact source/tree/CoreDigest, ten inputs, complete toolchain and fresh ordered inventory, seven exclusions and four counted survivors. Own stripped-environment actual API source inspection/self-rebuild passed; own exact binary scan exit 0, zero findings. Separate no-overwrite credentials, no primary-token fallback, one-use exchange, fixed signed contexts and no second grant verified. Root real PostgreSQL rollback/exchange and full evidence hashes inspected. No blocking finding or production/provider-use expansion."
+      "evidence": "Independently reproduced fixed-recipe static API and actual Go CoreDigest; verified current browser bytes and unchanged Go/module source since reviewed live-PG storage implementation. Source campaigns, full-check logs and actual binary scan inspected. All seven survivors counted at 104/111, unchanged 90 percent floor; no waiver or provider activation. Two metadata files only, followed by actual final executable verification and new subject-bound installation checks."
     }
   ],
   "evidence": [
     {
-      "path": "/tmp/stead-foundation-unprivileged-5cff595-root.log",
-      "sha256": "8eb61067c8d069a08899199624fe466a99d531fdde39492b0b01e48d4bd0948a",
-      "result": "Root full make foundation-check exit 0 at exact source. An earlier isolated-worktree attempt stopped for missing installed ajv; that incomplete log is retained and is not a pass."
+      "path": "/home/skilgore/stead-template-f8346ba-architecture-20260905.KPUiOBH1/review.md",
+      "sha256": "849c6e72f4f52318e549aab175f935d841b08e0d4b01a78d900415b0c8f5ad0d",
+      "result": "Distinct non-author architecture/contract-owner source/Core ACCEPT; preserved compiler-quota failure is not a pass. Final execution prerequisite remains."
     },
     {
-      "path": "/tmp/stead-dev-check-unprivileged-5cff595.log",
-      "sha256": "7d3d6d3783205d8b46b63635e29b48e53ba7d2a9eedd3e66679ed5421a412fba",
-      "result": "Root make dev-check exit 0; launcher tests and worker race suite passed."
+      "path": "/home/skilgore/stead-integrated-template-qa.RthTAxv8/REVIEW.md",
+      "sha256": "1f8d74ba91b13830a0e866838679a0b64a01f37e1bf8f77da0d9805c3fa1ec16",
+      "result": "Distinct non-author QA source/Core ACCEPT only."
     },
     {
-      "path": "/tmp/stead-api-govulncheck-unprivileged-5cff595.json",
+      "path": "/home/skilgore/stead-template-f8346ba-security-20260905.tF2PP7U8/REVIEW.md",
+      "sha256": "e7780b2da051fd86da1a5d816ec798ea8282f9779bd34470bcd3973abd60e895",
+      "result": "Distinct non-author security source/Core ACCEPT only."
+    },
+    {
+      "path": "/home/skilgore/stead-template-f8346ba-20260905.G8hzyVXD/foundation-rerun.log",
+      "sha256": "84b0c6ae67fa0bf6d7d99b0b6f890e2d687bb0261fef5c3441ebce7f64e8670a",
+      "result": "Actual exact-source full foundation-check exit 0. Original orchestration/status incident retained separately; explicit rerun status observed."
+    },
+    {
+      "path": "/home/skilgore/stead-template-f8346ba-20260905.G8hzyVXD/dev-check-rerun.log",
+      "sha256": "df0f4a2e7f181a058a5d1169af46d0bf2dd30f6f3a8f7c603e4c03d5c19fe401",
+      "result": "Actual exact-source dev-check exit 0."
+    },
+    {
+      "path": "/home/skilgore/stead-template-f8346ba-20260905.G8hzyVXD/api-vulnerability.json",
       "sha256": "3605e9139d1be9a911536fb413fabad639a3d2a9cf1209137fec194cc01f2aea",
-      "result": "Actual fixed API binary scan, govulncheck v1.7.0, exit 0, zero findings; binary SBOM included."
+      "result": "Actual fixed API binary scan, govulncheck v1.7.0, exit 0, zero findings; database timestamp 2026-09-02. No broader native/provider clearance."
     },
     {
-      "path": "/tmp/stead-unprivileged-api",
-      "sha256": "850e3047696b58b018baecac9027709727b6cfc72c87cd1aa7840c6a51552409",
-      "result": "Fixed-recipe source binary. Root and independent security stripped-environment actual source inspection and executable self-rebuild passed."
+      "path": "/home/skilgore/stead-template-f8346ba-20260905.G8hzyVXD/stead-api-rerun",
+      "sha256": "b71ea3cfe5a41d4fa25f0f1e4abfa293d7e3f7ead041194b3393a073402a1d1c",
+      "result": "Fixed-recipe source executable independently reproduced by QA and security; not the final metadata-descendant executable."
     },
     {
-      "path": "/tmp/stead-template-core-unprivileged-5cff595.json",
-      "sha256": "89321c5c596797a4042452b5a1b351c033ea501d86b538678fe7162b2feab660",
-      "result": "Actual source inspection plus freshly executed ordered inventories; all three independent reviewers match CoreDigest."
+      "path": "/home/skilgore/stead-template-f8346ba-20260905.G8hzyVXD/source-inspection.json",
+      "sha256": "0c992fe60c0f5b84ad63b61f658f71c017b2d44955871f52e472f7d004a6ed4e",
+      "result": "Root actual stripped-environment API source inspection and tracked-source executable self-rebuild exit 0."
     },
     {
-      "path": "/tmp/stead-mutations-unprivileged-5cff595.json",
-      "sha256": "7b0947ee539f0e7008493217dd407593b27a52765ccca9b0ac760225591f8b5d",
-      "result": "Actual source campaign exit 0: 104/108; four counted survivors, seven unchanged exclusions, 90% floor. Empty artifact subject: never an installation receipt."
+      "path": "/home/skilgore/stead-template-f8346ba-20260905.G8hzyVXD/core.json",
+      "sha256": "b69f3761c61c7854fd446d590be0a27dab6a0b055f08c5b0dd3e16e99320937d",
+      "result": "Actual source inspection and fresh ordered inventories; all three reviewers independently match CoreDigest."
     },
     {
-      "path": "/tmp/stead-conformance-unprivileged-5cff595.json",
-      "sha256": "780379023aa260567a4e61e474710e96642fc0e2badf1be5276f6c10c7d4d83e",
+      "path": "/home/skilgore/stead-template-f8346ba-20260905.G8hzyVXD/mutations.json",
+      "sha256": "5d88addcff267ead1f7317580f771db0b8dc290fbc78013b16b28182fab2701d",
+      "result": "Actual source campaign exit 0: 104/111 (93.69 percent); guard-009/010/011/017/018/025/086 survive and remain counted. Seven unchanged exclusions, 90 percent floor. Empty artifact subject: never an installation receipt or provider activation approval."
+    },
+    {
+      "path": "/home/skilgore/stead-template-f8346ba-20260905.G8hzyVXD/conformance-rerun.json",
+      "sha256": "3fe64d5f2909ca12671db0a4f42ac861e1761b41af3a8751926832f1e1f66381",
       "result": "Actual source policy campaign exit 0: 32/32. Empty artifact subject: never an installation receipt."
     },
     {
-      "path": "/home/skilgore/stead-two-user-pg-proof-20260905.Jndrm8/stdout.log",
-      "sha256": "67300c5007c57bc03bcf03466f844e7e39de2c52158f1b0b8b9c22aadebac632",
-      "result": "Real isolated PostgreSQL 18.6 storage test PASS 0.41s: late two-user bootstrap rollback, distinct credential collision/replay, roles, transactions, outbox, keyset reads and catalog. QA independently reproduced executed binary. No product activation/HTTP proof inferred."
+      "path": "/home/skilgore/stead-core-read-pg-proof-20260905.GoqhBzyL/stdout.log",
+      "sha256": "264f66cc8652345be4b27f2241ef359bf2509e013a5f534ecea4226a8694629d",
+      "result": "Real isolated PostgreSQL 18.6: 17 RUN/PASS, zero skips/failures. Current source independently reproduces executed test binary 09417651. 100-state grouped read uses 11 SQL/control calls and one pool acquisition; owner-role, fresh state, rollback, cancellation, transaction/outbox/effect storage assertions passed. Not product latency, dispatch or restore evidence."
     }
   ],
   "conditions": [
@@ -77,8 +97,10 @@
     "Preserve the prior installation and its browser-created Organization, parent/child Teams, general Project, audit/outbox and diagnostic evidence. This source is not approved to upgrade or relabel that activation.",
     "Production and nonlocal consumers reject development trust and evidence.",
     "No renewal, rotation, recovery, upgrade, promotion, untrusted data or provider-object use is approved by this record.",
-    "Startup catalog inspection uses a transient separate read-only administrative process, not continuous privileged API monitoring."
+    "Startup catalog inspection uses a transient separate read-only administrative process, not continuous privileged API monitoring.",
+    "Safely restore compiler scratch capacity and pass actual final metadata-descendant executable self-verification and scan before fresh startup; preserved source review failures are not passes.",
+    "Real-browser source approval is not fresh workload admission; exact running instance, tools and workload need their separately required distinct reviews. Session cookies and all installation evidence remain private."
   ],
-  "supersedes_source_revision": "5cc1f030c4d4dd81eb188e00ceb9f41ea2b7a498",
-  "correction": "Adds exactly one second canonical synthetic User/session at fresh initial bootstrap, with the same signed default ceilings and bounded context but no relationship grant. Distinct private one-time credentials and one atomic bootstrap audit bind both users. The generated-client TLS denial runner verifies its own second principal and compares generic known/unknown denials, while explicitly reserving resource existence and database no-effect evidence for independent inspection. No new API, production identity authority, dependency, policy semantics or existing-activation mutation. Normal CI executes the two bounded smoke/denial transport suites."
+  "supersedes_source_revision": "5cff5956979acb76c34eec4a93f7831e0869f3e6",
+  "correction": "Admits integrated metadata application source with grouped fresh PostgreSQL reads, measured SQL/pool/anchor overhead, denial request-ID propagation, final fences and session-lifetime checks; separate frontend acknowledgement/useful-content/interactivity timing and the reviewed real-browser entrypoint. Inactive provider effects/storage remain inadmissible to the metadata ABI. No new dependency, policy semantics, production identity authority, existing activation mutation or completed product/release claim."
 }
