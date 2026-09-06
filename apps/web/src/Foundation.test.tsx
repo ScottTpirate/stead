@@ -29,6 +29,13 @@ afterEach(() => {
 });
 
 describe("Foundation", () => {
+  it("exposes one top-level main landmark reachable by the skip link", () => {
+    render(<Foundation />);
+    const main = screen.getByRole("main");
+    expect(main.parentElement?.closest("section[aria-label], section[aria-labelledby], aside, nav, header, footer, main, [role='region']")).toBeNull();
+    expect(screen.getByRole("link", { name: "Skip to content" }).getAttribute("href")).toBe("#" + main.id);
+  });
+
   it("keeps the universal navigation keyboard-operable", async () => {
     const user = userEvent.setup();
 
