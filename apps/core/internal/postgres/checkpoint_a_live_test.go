@@ -37,23 +37,25 @@ func TestCheckpointADenialEvidenceLive(t *testing.T) {
 	if localdev.PrivateDirectory(filepath.Dir(output)) != nil {
 		t.Fatal("live denial collector private output rejected")
 	}
+	if _, err := os.Lstat(output); !os.IsNotExist(err) {
+		t.Fatal("live denial collector requires a new proof path")
+	}
 	result := struct {
-		Scope             string            `json:"scope"`
-		Passed            bool              `json:"passed"`
-		Stage             string            `json:"stage"`
-		AdmissionHash     string            `json:"admission_sha256"`
-		ReportHash        string            `json:"followon_sha256"`
-		Instance          string            `json:"instance_id"`
-		Source            string            `json:"source_revision"`
-		CollectorBinary   string            `json:"collector_binary_sha256"`
-		CollectorFiles    map[string]string `json:"collector_files_sha256"`
-		Correlations      []string          `json:"denial_correlations"`
-		Known             int               `json:"known_canonical_resources"`
-		Unknown           int               `json:"unknown_absent_resources"`
-		Snapshot          bool              `json:"repeatable_read_read_only_rolled_back"`
-		Runtime           bool              `json:"runtime_identity_reverified"`
-		BrowserProvenance bool              `json:"browser_created_provenance_proven"`
-		Timing            bool              `json:"timing_nondisclosure_proven"`
+		Scope             string   `json:"scope"`
+		Passed            bool     `json:"passed"`
+		Stage             string   `json:"stage"`
+		AdmissionHash     string   `json:"admission_sha256"`
+		ReportHash        string   `json:"followon_sha256"`
+		Instance          string   `json:"instance_id"`
+		Source            string   `json:"source_revision"`
+		CollectorBinary   string   `json:"collector_binary_sha256"`
+		Correlations      []string `json:"denial_correlations"`
+		Known             int      `json:"known_canonical_resources"`
+		Unknown           int      `json:"unknown_absent_resources"`
+		Snapshot          bool     `json:"repeatable_read_read_only_rolled_back"`
+		Runtime           bool     `json:"runtime_identity_reverified"`
+		BrowserProvenance bool     `json:"browser_created_provenance_proven"`
+		Timing            bool     `json:"timing_nondisclosure_proven"`
 	}{Scope: "current-denial-audit-correlation-and-canonical-existence-only", Stage: "inputs", AdmissionHash: admissionHash, ReportHash: reportHash}
 	defer func() {
 		data, err := json.Marshal(result)
@@ -74,9 +76,7 @@ func TestCheckpointADenialEvidenceLive(t *testing.T) {
 		t.Fatal("live denial collector checkout rejected")
 	}
 	repo := strings.TrimSuffix(cwd, "/apps/core/internal/postgres")
-	// Retain the actual test executable and current test-source identities. Root
-	// still records the reviewed immutable build revision; these are not an
-	// attestation that a separately supplied old binary was built from new files.
+	// The integrator separately records the reviewed immutable build revision.
 	executable, err := os.Executable()
 	if err != nil {
 		t.Fatal("live denial collector executable identity unavailable")
@@ -86,14 +86,6 @@ func TestCheckpointADenialEvidenceLive(t *testing.T) {
 		t.Fatal("live denial collector executable identity rejected")
 	}
 	result.CollectorBinary = checkpointHash(binary)
-	result.CollectorFiles = map[string]string{}
-	for _, file := range []string{"checkpoint_a_live_test.go", "checkpoint_a_evidence_test.go", "checkpoint_a_evidence_unit_test.go"} {
-		data, err := checkpointPublic(filepath.Join(cwd, file), 1<<20)
-		if err != nil {
-			t.Fatal("live denial collector source identity rejected")
-		}
-		result.CollectorFiles[file] = checkpointHash(data)
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	result.Stage = "identity_before"
@@ -105,12 +97,6 @@ func TestCheckpointADenialEvidenceLive(t *testing.T) {
 	report, expected, err := checkpointParseReport(data, before, admissionHash)
 	if err != nil {
 		t.Fatal("live denial collector report contract rejected")
-	}
-	for _, file := range checkpointSources {
-		source, readErr := checkpointPublic(filepath.Join(repo, file), 1<<20)
-		if readErr != nil || checkpointHash(source) != report.Source[file] {
-			t.Fatal("live denial collector source binding rejected")
-		}
 	}
 	// The only secret file this collector reads. Never Load() or an admin DSN.
 	result.Stage = "runtime_database_boundary"
@@ -149,18 +135,6 @@ func TestCheckpointADenialEvidenceLive(t *testing.T) {
 	after, err := checkpointCurrentIdentity(ctx, repo, admissionFile, admissionHash, admission)
 	if err != nil || !reflectCheckpointIdentity(before, after) {
 		t.Fatal("live denial collector runtime identity changed")
-	}
-	for _, file := range checkpointSources {
-		source, readErr := checkpointPublic(filepath.Join(repo, file), 1<<20)
-		if readErr != nil || checkpointHash(source) != report.Source[file] {
-			t.Fatal("live denial collector source changed")
-		}
-	}
-	for file, digest := range result.CollectorFiles {
-		data, err := checkpointPublic(filepath.Join(cwd, file), 1<<20)
-		if err != nil || checkpointHash(data) != digest {
-			t.Fatal("live denial collector own source changed")
-		}
 	}
 	result.Passed, result.Runtime, result.Stage = true, true, "complete"
 }

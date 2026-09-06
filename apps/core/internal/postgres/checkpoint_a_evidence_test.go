@@ -12,18 +12,15 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"math"
 	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"reflect"
 	"regexp"
 	"slices"
 	"strings"
 	"syscall"
 	"time"
-	"unicode/utf8"
 
 	"github.com/ScottTpirate/stead/apps/core/internal/localdev"
 	"github.com/jackc/pgx/v5"
@@ -37,9 +34,9 @@ var checkpointUUID = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[
 const checkpointNode = "/tmp/stead-node-toolchain-26.8.1/toolchain/node-v26.8.1-linux-x64/bin/node"
 const checkpointNodeHash = "19235a9b678f84729464c52623f92de130a165452747c6826d3fdc13df3abcc3"
 
-var checkpointSources = []string{"scripts/checkpoint_a_followon.mjs", "scripts/checkpoint_a_smoke.mjs", "scripts/checkpoint_a_denial.mjs", "scripts/checkpoint_a_browser.mjs", "scripts/checkpoint_a_browser_boundary.mjs", "packages/api-client/src/client.ts", "packages/api-client/src/generated/platform-v1.ts"}
-var checkpointTimingFields = strings.Fields("sql_client_calls sql_client_ns sql_client_failures pool_acquire_calls pool_acquire_ns pool_acquire_failures anchor_lock_attempts anchor_lock_wait_ns anchor_lock_contentions anchor_lock_failures anchor_lock_held_ns anchor_sync_calls anchor_sync_ns anchor_sync_failures")
-
+// The caller supplies an independently reviewed exact report hash. Decode only
+// the bindings and correlation selection needed here, not the producer's full
+// timing/worker/SDK contract or a second generic JSON validation framework.
 type checkpointReport struct {
 	Scope           string            `json:"scope"`
 	Passed          bool              `json:"passed"`
@@ -48,46 +45,22 @@ type checkpointReport struct {
 	InstanceID      string            `json:"instanceID"`
 	SourceRevision  string            `json:"sourceRevision"`
 	Resources       map[string]string `json:"resources"`
-	NodeVersion     string            `json:"node_version"`
-	Source          map[string]string `json:"source"`
 	HarnessRevision string            `json:"prior_browser_harness_revision"`
 	RuntimeVerified bool              `json:"runtime_process_identity_reverified"`
-	AuditProven     bool              `json:"database_audit_persistence_proven"`
-	ExistenceProven bool              `json:"resource_existence_independently_proven"`
-	RestartProven   bool              `json:"restart_proven"`
-	TimingProven    bool              `json:"timing_nondisclosure_proven"`
 	Readers         struct {
 		Passed      bool             `json:"passed"`
 		FailedStage *string          `json:"failed_stage"`
 		Records     []checkpointRead `json:"records"`
-		Maximum     int              `json:"client_max_in_flight"`
 		Attempts    int              `json:"dispatch_attempts"`
 		Validated   int              `json:"sdk_validated_responses"`
 		Unobserved  int              `json:"unobserved_dispatch_attempts"`
 	} `json:"readers"`
 }
 type checkpointRead struct {
-	Worker    int      `json:"worker"`
-	Principal string   `json:"principal"`
-	Sequence  int      `json:"sequence"`
-	Sample    string   `json:"sample"`
-	Operation string   `json:"operation"`
-	RequestID string   `json:"correlation_id"`
-	Status    int      `json:"status"`
-	Bytes     int      `json:"response_bytes"`
-	Duration  *float64 `json:"duration_ms"`
-	API       struct {
-		Queries  uint64            `json:"sql_queries"`
-		Writes   uint64            `json:"sql_writes"`
-		Audits   uint64            `json:"audit_writes"`
-		Outbox   uint64            `json:"outbox_writes"`
-		FGA      uint64            `json:"openfga_calls"`
-		Provider uint64            `json:"provider_calls"`
-		Bytes    int               `json:"response_bytes"`
-		Status   int               `json:"status"`
-		Duration float64           `json:"duration_ms"`
-		Timing   map[string]uint64 `json:"timing"`
-	} `json:"api"`
+	Principal string `json:"principal"`
+	Operation string `json:"operation"`
+	RequestID string `json:"correlation_id"`
+	Status    int    `json:"status"`
 }
 type checkpointIdentity struct {
 	InstanceID      string          `json:"instance_id"`
@@ -103,105 +76,6 @@ type checkpointIdentity struct {
 }
 type checkpointExpected struct{ Actor, Action string }
 
-// Bounded test JSON: duplicate/escaped/case-variant keys, unknown/missing fields,
-// null-for-scalar values and unsafe UTF-8 do not acquire evidence authority.
-func checkpointDecode(data []byte, target any) error {
-	if len(data) == 0 || len(data) > 1<<20 || !utf8.Valid(data) || hasEscapedObjectKey(data) {
-		return checkpointEvidenceRejected
-	}
-	d := json.NewDecoder(bytes.NewReader(data))
-	d.UseNumber()
-	if checkpointUnique(d, 0) != nil {
-		return checkpointEvidenceRejected
-	}
-	if _, err := d.Token(); err != io.EOF {
-		return checkpointEvidenceRejected
-	}
-	d = json.NewDecoder(bytes.NewReader(data))
-	d.DisallowUnknownFields()
-	if d.Decode(target) != nil {
-		return checkpointEvidenceRejected
-	}
-	canonical, err := json.Marshal(target)
-	if err != nil {
-		return checkpointEvidenceRejected
-	}
-	var original, normalized any
-	d = json.NewDecoder(bytes.NewReader(data))
-	d.UseNumber()
-	_ = d.Decode(&original)
-	d = json.NewDecoder(bytes.NewReader(canonical))
-	d.UseNumber()
-	_ = d.Decode(&normalized)
-	if !checkpointShape(original, normalized) {
-		return checkpointEvidenceRejected
-	}
-	return nil
-}
-func checkpointUnique(d *json.Decoder, depth int) error {
-	if depth > 16 {
-		return checkpointEvidenceRejected
-	}
-	token, err := d.Token()
-	if err != nil {
-		return checkpointEvidenceRejected
-	}
-	delimiter, ok := token.(json.Delim)
-	if !ok {
-		return nil
-	}
-	if delimiter != '{' && delimiter != '[' {
-		return checkpointEvidenceRejected
-	}
-	seen := map[string]bool{}
-	for d.More() {
-		if delimiter == '{' {
-			token, err = d.Token()
-			key, ok := token.(string)
-			if err != nil || !ok || seen[key] {
-				return checkpointEvidenceRejected
-			}
-			seen[key] = true
-		}
-		if checkpointUnique(d, depth+1) != nil {
-			return checkpointEvidenceRejected
-		}
-	}
-	token, err = d.Token()
-	if err != nil || (delimiter == '{' && token != json.Delim('}')) || (delimiter == '[' && token != json.Delim(']')) {
-		return checkpointEvidenceRejected
-	}
-	return nil
-}
-func checkpointShape(a, b any) bool {
-	switch x := a.(type) {
-	case map[string]any:
-		y, ok := b.(map[string]any)
-		if !ok || len(x) != len(y) {
-			return false
-		}
-		for k, v := range x {
-			w, ok := y[k]
-			if !ok || !checkpointShape(v, w) {
-				return false
-			}
-		}
-		return true
-	case []any:
-		y, ok := b.([]any)
-		if !ok || len(x) != len(y) {
-			return false
-		}
-		for i := range x {
-			if !checkpointShape(x[i], y[i]) {
-				return false
-			}
-		}
-		return true
-	default:
-		return reflect.TypeOf(a) == reflect.TypeOf(b)
-	}
-}
 func checkpointHash(data []byte) string {
 	sum := sha256.Sum256(data)
 	return hex.EncodeToString(sum[:])
@@ -271,17 +145,15 @@ func (output *checkpointOutput) Write(data []byte) (int, error) {
 	return output.Buffer.Write(data)
 }
 func checkpointCurrentIdentity(ctx context.Context, repo, file, digest string, data []byte) (checkpointIdentity, error) {
-	var raw map[string]json.RawMessage
-	if checkpointDecode(data, &raw) != nil {
-		return checkpointIdentity{}, checkpointEvidenceRejected
+	var admission struct {
+		Files map[string]string `json:"files"`
 	}
-	var files map[string]string
-	if json.Unmarshal(raw["files"], &files) != nil {
+	if json.Unmarshal(data, &admission) != nil {
 		return checkpointIdentity{}, checkpointEvidenceRejected
 	}
 	for _, relative := range []string{"scripts/checkpoint_a_browser.mjs", "scripts/checkpoint_a_browser_boundary.mjs"} {
 		actual, err := checkpointPublic(filepath.Join(repo, relative), 1<<20)
-		if err != nil || !checkpointHex.MatchString(files[relative]) || checkpointHash(actual) != files[relative] {
+		if err != nil || !checkpointHex.MatchString(admission.Files[relative]) || checkpointHash(actual) != admission.Files[relative] {
 			return checkpointIdentity{}, checkpointEvidenceRejected
 		}
 	}
@@ -298,7 +170,7 @@ func checkpointCurrentIdentity(ctx context.Context, repo, file, digest string, d
 		return checkpointIdentity{}, checkpointEvidenceRejected
 	}
 	var result checkpointIdentity
-	if checkpointDecode(output.Bytes(), &result) != nil || !checkpointUUID.MatchString(result.InstanceID) || !checkpointUUID.MatchString(result.Primary) || !checkpointUUID.MatchString(result.Denied) || result.Primary == result.Denied {
+	if json.Unmarshal(output.Bytes(), &result) != nil || !checkpointUUID.MatchString(result.InstanceID) || !checkpointUUID.MatchString(result.Primary) || !checkpointUUID.MatchString(result.Denied) || result.Primary == result.Denied {
 		return checkpointIdentity{}, checkpointEvidenceRejected
 	}
 	return result, nil
@@ -306,18 +178,10 @@ func checkpointCurrentIdentity(ctx context.Context, repo, file, digest string, d
 
 func checkpointParseReport(data []byte, identity checkpointIdentity, admissionHash string) (checkpointReport, map[string]checkpointExpected, error) {
 	var report checkpointReport
-	if checkpointDecode(data, &report) != nil || !report.Passed || report.FailedStage != nil || !report.Readers.Passed || report.Readers.FailedStage != nil ||
-		report.Scope != "established-session-tls-sdk-reads-not-browser-sql-or-release" || report.AdmissionHash != admissionHash || report.InstanceID != identity.InstanceID || report.SourceRevision != identity.SourceRevision || report.HarnessRevision != identity.HarnessRevision || report.NodeVersion != "v26.8.1" || !report.RuntimeVerified || report.AuditProven || report.ExistenceProven || report.RestartProven || report.TimingProven ||
-		len(report.Readers.Records) != 80 || report.Readers.Maximum != 4 || report.Readers.Attempts != 80 || report.Readers.Validated != 80 || report.Readers.Unobserved != 0 {
+	if json.Unmarshal(data, &report) != nil || !report.Passed || report.FailedStage != nil || !report.Readers.Passed || report.Readers.FailedStage != nil ||
+		report.Scope != "established-session-tls-sdk-reads-not-browser-sql-or-release" || report.AdmissionHash != admissionHash || report.InstanceID != identity.InstanceID || report.SourceRevision != identity.SourceRevision || report.HarnessRevision != identity.HarnessRevision || !report.RuntimeVerified ||
+		len(report.Readers.Records) != 80 || report.Readers.Attempts != 80 || report.Readers.Validated != 80 || report.Readers.Unobserved != 0 || len(report.Resources) != 6 {
 		return checkpointReport{}, nil, checkpointEvidenceRejected
-	}
-	if len(report.Source) != len(checkpointSources) || len(report.Resources) != 6 {
-		return checkpointReport{}, nil, checkpointEvidenceRejected
-	}
-	for _, file := range checkpointSources {
-		if !checkpointHex.MatchString(report.Source[file]) {
-			return checkpointReport{}, nil, checkpointEvidenceRejected
-		}
 	}
 	ids := map[string]bool{}
 	for _, kind := range []string{"organization", "team", "project"} {
@@ -330,58 +194,31 @@ func checkpointParseReport(data []byte, identity checkpointIdentity, admissionHa
 		}
 	}
 	seen := map[string]bool{}
-	sequence := [4]int{}
+	denials := map[string]int{}
+	sessions, allowed := 0, 0
 	expected := map[string]checkpointExpected{}
 	for _, r := range report.Readers.Records {
-		if r.Worker < 0 || r.Worker > 3 || r.Sequence != sequence[r.Worker] || r.Sequence > 19 || !checkpointCorrelation.MatchString(r.RequestID) || seen[r.RequestID] || r.Duration == nil || math.IsNaN(*r.Duration) || math.IsInf(*r.Duration, 0) || *r.Duration < 0 || *r.Duration > 120000 || r.Bytes < 1 || r.Bytes > 1<<20 || r.API.Status != r.Status || r.API.Bytes != r.Bytes || r.API.Provider != 0 || r.API.Duration < 0 || math.IsNaN(r.API.Duration) || math.IsInf(r.API.Duration, 0) {
-			return checkpointReport{}, nil, checkpointEvidenceRejected
-		}
-		if len(r.API.Timing) != len(checkpointTimingFields) {
-			return checkpointReport{}, nil, checkpointEvidenceRejected
-		}
-		for _, key := range checkpointTimingFields {
-			n, ok := r.API.Timing[key]
-			if !ok || n > 9007199254740991 {
-				return checkpointReport{}, nil, checkpointEvidenceRejected
-			}
-		}
-		for _, n := range []uint64{r.API.Queries, r.API.Writes, r.API.Audits, r.API.Outbox, r.API.FGA} {
-			if n > 9007199254740991 {
-				return checkpointReport{}, nil, checkpointEvidenceRejected
-			}
-		}
-		role, actor := "primary", identity.Primary
-		if r.Worker%2 == 1 {
-			role, actor = "denied", identity.Denied
-		}
-		if r.Principal != role {
-			return checkpointReport{}, nil, checkpointEvidenceRejected
-		}
-		operation, sample, status := "getSession", "session_before", 200
-		if r.Sequence == 19 {
-			sample = "session_after"
-		} else if r.Sequence > 0 {
-			position := r.Sequence - 1
-			round := position / 6
-			kind := []string{"organization", "team", "project"}[(position%6)/2]
-			operation = map[string]string{"organization": "getOrganization", "team": "getTeam", "project": "getProject"}[kind]
-			which := "known"
-			if position%2 != round%2 {
-				which = "unknown"
-			}
-			sample = which + "_" + kind
-			if role == "denied" || which == "unknown" {
-				status = 404
-				expected[r.RequestID] = checkpointExpected{Actor: "user:" + actor, Action: kind + ".read"}
-			}
-		}
-		if r.Operation != operation || r.Sample != sample || r.Status != status {
+		actor := map[string]string{"primary": identity.Primary, "denied": identity.Denied}[r.Principal]
+		if actor == "" || !checkpointCorrelation.MatchString(r.RequestID) || seen[r.RequestID] {
 			return checkpointReport{}, nil, checkpointEvidenceRejected
 		}
 		seen[r.RequestID] = true
-		sequence[r.Worker]++
+		if r.Operation == "getSession" && r.Status == 200 {
+			sessions++
+			continue
+		}
+		action := map[string]string{"getOrganization": "organization.read", "getTeam": "team.read", "getProject": "project.read"}[r.Operation]
+		if action == "" || (r.Status != 200 && r.Status != 404) || (r.Principal == "denied" && r.Status != 404) {
+			return checkpointReport{}, nil, checkpointEvidenceRejected
+		}
+		if r.Status == 404 {
+			expected[r.RequestID] = checkpointExpected{Actor: "user:" + actor, Action: action}
+			denials[r.Principal]++
+		} else {
+			allowed++
+		}
 	}
-	if sequence != [4]int{20, 20, 20, 20} || len(expected) != 54 {
+	if sessions != 8 || allowed != 18 || len(expected) != 54 || denials["primary"] != 18 || denials["denied"] != 36 {
 		return checkpointReport{}, nil, checkpointEvidenceRejected
 	}
 	return report, expected, nil

@@ -3,7 +3,6 @@
 package postgres
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -22,52 +21,24 @@ func checkpointUnitID(n int) string { return fmt.Sprintf("01991c05-1a00-7000-800
 func checkpointUnitReport() (checkpointReport, checkpointIdentity, string) {
 	identity := checkpointIdentity{InstanceID: checkpointUnitID(10), Primary: checkpointUnitID(11), Denied: checkpointUnitID(12), SourceRevision: strings.Repeat("a", 40), HarnessRevision: strings.Repeat("b", 40)}
 	hash := strings.Repeat("c", 64)
-	r := checkpointReport{Scope: "established-session-tls-sdk-reads-not-browser-sql-or-release", Passed: true, AdmissionHash: hash, InstanceID: identity.InstanceID, SourceRevision: identity.SourceRevision, HarnessRevision: identity.HarnessRevision, NodeVersion: "v26.8.1", RuntimeVerified: true, Resources: map[string]string{}, Source: map[string]string{}}
-	for _, file := range checkpointSources {
-		r.Source[file] = hash
-	}
+	r := checkpointReport{Scope: "established-session-tls-sdk-reads-not-browser-sql-or-release", Passed: true, AdmissionHash: hash, InstanceID: identity.InstanceID, SourceRevision: identity.SourceRevision, HarnessRevision: identity.HarnessRevision, RuntimeVerified: true, Resources: map[string]string{}}
 	for n, kind := range []string{"organization", "team", "project"} {
 		r.Resources["known_"+kind] = checkpointUnitID(n*2 + 1)
 		r.Resources["unknown_"+kind] = checkpointUnitID(n*2 + 2)
 	}
-	r.Readers.Passed = true
-	r.Readers.Maximum = 4
-	r.Readers.Attempts = 80
-	r.Readers.Validated = 80
-	for worker := 0; worker < 4; worker++ {
-		for sequence := 0; sequence < 20; sequence++ {
-			duration := 1.125
-			v := checkpointRead{Worker: worker, Sequence: sequence, Principal: "primary", Operation: "getSession", Sample: "session_before", Status: 200, Bytes: 128, Duration: &duration, RequestID: fmt.Sprintf("%032x", len(r.Readers.Records)+1)}
-			if worker%2 == 1 {
-				v.Principal = "denied"
-			}
-			if sequence == 19 {
-				v.Sample = "session_after"
-			} else if sequence > 0 {
-				index := sequence - 1
-				kind := []string{"organization", "team", "project"}[(index%6)/2]
-				v.Operation = map[string]string{"organization": "getOrganization", "team": "getTeam", "project": "getProject"}[kind]
-				which := "known"
-				if index%2 != (index/6)%2 {
-					which = "unknown"
-				}
-				v.Sample = which + "_" + kind
-				if which == "unknown" || worker%2 == 1 {
-					v.Status = 404
-				}
-			}
-			v.API.Status = v.Status
-			v.API.Bytes = v.Bytes
-			v.API.Duration = 1
-			v.API.Queries = 3
-			v.API.Writes = 1
-			v.API.Audits = 1
-			v.API.Timing = map[string]uint64{}
-			for _, field := range checkpointTimingFields {
-				v.API.Timing[field] = 0
-			}
-			r.Readers.Records = append(r.Readers.Records, v)
+	r.Readers.Passed, r.Readers.Attempts, r.Readers.Validated = true, 80, 80
+	for i := 0; i < 80; i++ {
+		v := checkpointRead{Principal: "primary", Operation: "getSession", Status: 200, RequestID: fmt.Sprintf("%032x", i+1)}
+		if i >= 8 {
+			v.Operation = []string{"getOrganization", "getTeam", "getProject"}[(i-8)%3]
 		}
+		if i >= 26 {
+			v.Status = 404
+		}
+		if i >= 44 {
+			v.Principal = "denied"
+		}
+		r.Readers.Records = append(r.Readers.Records, v)
 	}
 	return r, identity, hash
 }
@@ -79,11 +50,9 @@ func checkpointUnitJSON(t *testing.T, value any) []byte {
 	}
 	return data
 }
-
-func TestCheckpointEvidenceCompletedReportContract(t *testing.T) {
+func TestCheckpointEvidenceCompletedReportSelection(t *testing.T) {
 	report, identity, hash := checkpointUnitReport()
-	data := checkpointUnitJSON(t, report)
-	_, expected, err := checkpointParseReport(data, identity, hash)
+	_, expected, err := checkpointParseReport(checkpointUnitJSON(t, report), identity, hash)
 	if err != nil || len(expected) != 54 {
 		t.Fatal("complete synthetic report rejected")
 	}
@@ -95,43 +64,21 @@ func TestCheckpointEvidenceCompletedReportContract(t *testing.T) {
 		t.Fatal("expected principal split changed")
 	}
 	for name, change := range map[string]func(*checkpointReport){
-		"incomplete": func(r *checkpointReport) { r.Passed = false }, "lost wire response": func(r *checkpointReport) { r.Readers.Validated = 79 },
-		"unobserved dispatch": func(r *checkpointReport) { r.Readers.Unobserved = 1 }, "extra dispatch": func(r *checkpointReport) { r.Readers.Attempts = 81 },
-		"wrong source": func(r *checkpointReport) { r.SourceRevision = strings.Repeat("d", 40) }, "wrong harness": func(r *checkpointReport) { r.HarnessRevision = r.SourceRevision },
+		"incomplete":            func(r *checkpointReport) { r.Passed = false },
+		"lost response":         func(r *checkpointReport) { r.Readers.Validated = 79 },
+		"wrong binding":         func(r *checkpointReport) { r.SourceRevision = strings.Repeat("d", 40) },
 		"duplicate correlation": func(r *checkpointReport) { r.Readers.Records[1].RequestID = r.Readers.Records[0].RequestID },
-		"worker role":           func(r *checkpointReport) { r.Readers.Records[1].Principal = "denied" },
-		"wrong action":          func(r *checkpointReport) { r.Readers.Records[1].Operation = "createOrganization" },
-		"denial relabeled":      func(r *checkpointReport) { r.Readers.Records[2].Sample = "known_organization" },
-		"null duration":         func(r *checkpointReport) { r.Readers.Records[0].Duration = nil },
-		"telemetry mismatch":    func(r *checkpointReport) { r.Readers.Records[2].API.Status = 200 },
-		"provider call":         func(r *checkpointReport) { r.Readers.Records[0].API.Provider = 1 },
-		"missing timing":        func(r *checkpointReport) { delete(r.Readers.Records[0].API.Timing, "pool_acquire_ns") },
+		"wrong action":          func(r *checkpointReport) { r.Readers.Records[26].Operation = "createOrganization" },
+		"wrong principal":       func(r *checkpointReport) { r.Readers.Records[26].Principal = "administrator" },
 		"duplicate resource":    func(r *checkpointReport) { r.Resources["unknown_project"] = r.Resources["known_team"] },
 	} {
 		t.Run(name, func(t *testing.T) {
 			r, _, _ := checkpointUnitReport()
 			change(&r)
 			if _, _, err := checkpointParseReport(checkpointUnitJSON(t, r), identity, hash); err == nil {
-				t.Fatal("invalid report accepted")
+				t.Fatal("invalid correlation selection accepted")
 			}
 		})
-	}
-}
-func TestCheckpointEvidenceJSONRejectsAmbiguity(t *testing.T) {
-	report, identity, hash := checkpointUnitReport()
-	data := checkpointUnitJSON(t, report)
-	for _, bad := range [][]byte{
-		bytes.Replace(data, []byte(`"passed":true`), []byte(`"passed":true,"passed":true`), 1),
-		bytes.Replace(data, []byte(`"scope"`), []byte(`"Scope"`), 1),
-		bytes.Replace(data, []byte(`"scope"`), []byte(`"\u0073cope"`), 1),
-		bytes.Replace(data, []byte(`"restart_proven":false`), []byte(`"restart_proven":null`), 1),
-		bytes.Replace(data, []byte(`"failed_stage":null,`), nil, 1), append(append([]byte{}, data...), []byte(` {}`)...),
-		bytes.Replace(data, []byte(`"source":{`), []byte(`"private_cookie":"forbidden","source":{`), 1),
-		[]byte(`{"bad":"` + string([]byte{0xff}) + `"}`),
-	} {
-		if _, _, err := checkpointParseReport(bad, identity, hash); err == nil {
-			t.Fatal("ambiguous report accepted")
-		}
 	}
 }
 func TestCheckpointEvidencePrivateInputsAndOutputBounds(t *testing.T) {

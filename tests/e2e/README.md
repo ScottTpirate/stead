@@ -111,11 +111,9 @@ and provider integration are not implemented by this runner.
 
 ## Actual HTTP denial to persisted audit collector
 
-`make checkpoint-a-sql` is a separately reviewed, test-only, read-only collector;
-it is not the mutating PostgreSQL fixture/bootstrap suite. Before actual use,
-obtain independent QA/security review of the exact integrated collector/build
-and bounded execution scope. Browser or follow-on source acceptance alone does
-not activate this collector. Its private prerequisites are:
+`make checkpoint-a-sql` is a separate test-only, read-only collector. Before live
+use, independently review the exact collector/build, completed follow-on report
+hash and execution scope; browser/follow-on acceptance does not activate it.
 
 ```sh
 STEAD_CHECKPOINT_A_ADMISSION=/absolute/private/browser-admission.json \
@@ -126,52 +124,33 @@ STEAD_CHECKPOINT_A_SQL_PROOF=/absolute/private/new-sql-proof.json \
 make checkpoint-a-sql
 ```
 
-All inputs/output parents must be owned 0700 and input files exclusive 0600,
-with exact hashes, no symlinks/hardlinks and bounded closed JSON. Output must not
-exist. The tagged `TestCheckpointADenialEvidenceLive` fails missing/invalid
-prerequisites, never skips. Ordinary `go test` does not compile that live test;
-`TestCheckpointEvidence*` checks only owned parser/role/query/row fixtures and
-is included in normal Go testing. The opt-in target disables inherited core
-dumps. No `PG*` environment override, alternate host, admin/service DSN or
-arbitrary SQL is accepted. Keep failure output and do not retry HTTP to fill a
-missing audit row.
+Owned 0700 parents, exclusive 0600 inputs, exact hashes and no symlink/hardlink
+aliases are required; output must not exist. The tagged live test fails missing
+prerequisites, never skips, and is absent from ordinary unit selection. Normal
+`TestCheckpointEvidence*` tests use only synthetic owned fixtures. The target
+disables core dumps. Preserve the exact source/build and first failures privately.
 
-The complete follow-on proof must have 80 unique actual response correlations,
-80 dispatches and SDK-valid responses, zero unobserved dispatches, exact four
-worker/role/sequence/operation/sample/status structure and matching numeric API
-observations. Only its 54 genuine read-404 correlations are selected: 36 from
-the no-grant principal and 18 authorized-principal unknown-resource reads.
-Application/instance/harness/admission and helper source bytes remain bound.
-The pinned Node is used only for the previously reviewed read-only public
-`verifyIdentity` export before/after; no browser/native tools, login, TLS request
-or credentials are acquired through that path.
+The externally reviewed report hash binds trusted runner output. Ordinary JSON
+parsing checks completion, app/instance/harness/admission bindings, six distinct
+resource IDs, 80 unique correlations and the 54 read-404 selections (18 primary,
+36 no-grant); it does not duplicate the producer's timing/worker/SDK validation.
+Pinned existing Node helpers check public runtime/process/dist identity before
+and after, with helper bytes verified before import and no browser or HTTP call.
 
-The sole secret file read is the exact fresh state's `database-url`, validated
-for its instance-derived NOINHERIT API login, `127.0.0.1:15432/stead`, disabled TLS
-for that approved loopback-development database path, and optional five-second
-connect timeout. Neither administrator, identity token/session, OpenFGA, key nor
-secret service configuration is read. The collector does not call `localdev.Load`,
-`postgres.Open`, an initializer or the catalog administrative connection.
+The only secret input is the fresh state's `database-url`: its instance-derived
+NOINHERIT API login at fixed `127.0.0.1:15432/stead`, with loopback-development
+`sslmode=disable`. PG environment overrides, administrator/service DSNs, other
+credentials/configuration, arbitrary SQL, initialization and provider calls are
+not allowed. One bounded `REPEATABLE READ READ ONLY` transaction uses fixed
+existing authorization/organization/project/audit execute roles and always rolls
+back. It verifies namespace identity, three active/nonpending known resources,
+three unknown IDs absent across all four canonical sets, and exactly one safe
+NULL-resource denial per actual HTTP request ID with correct actor/action and
+separate decision identity. Queries bound output and time, not scanned rows.
 
-One bounded pgx connection starts one `REPEATABLE READ READ ONLY` transaction.
-Fixed existing authorization/organization/project/audit execute roles are set
-locally in sequence. Public namespace identity/activation, all six known/unknown
-IDs across canonical domain and authorization sets, and all 54 request IDs in
-`audit.records.evidence->>'RequestID'` are checked in that same snapshot. Known
-records must be active/nonpending and share the expected organization; unknown
-IDs must be absent across every queried set. Each request requires exactly one
-deny row, correct outer/nested actor/action, NULL resource, closed safe evidence,
-separate valid audit/decision IDs and matching timestamps within PostgreSQL's
-microsecond precision. Known/unknown private denial reasons are not compared.
-Queries have parameter/output/time bounds, not an indexed scan-work guarantee.
-The transaction always rolls back, including success; no schema/grant/data
-mutation, public audit endpoint, provider effect or HTTP retry is introduced.
-
-The exclusive fsynced private proof contains only bound source/evidence hashes,
-instance, correlation IDs, counts, stage and booleans—not DSNs/passwords, raw SQL
-errors, audit rows/actors/decision IDs, labels, resource names or unrelated logs.
-Private credential byte buffers are cleared; garbage-collected strings are not
-claimed zeroized. Preserve the exact source/build and first failures privately.
-This establishes current canonical existence and persisted denial correlation,
-not that the resources were created by the browser, timing nondisclosure,
-outbox delivery, restart/backup/restore, TEST-009 or Phase 1 acceptance.
+The exclusive fsynced proof retains hashes, instance, correlations, counts and
+booleans—not credentials, raw SQL errors, audit rows, actors or resource names.
+This proves only current canonical existence and persisted denial correlation;
+not browser-created provenance, timing nondisclosure, outbox delivery, restart,
+backup/restore, TEST-009 or Phase 1 acceptance. Missing audit evidence fails the
+collector; it never retries HTTP to manufacture a replacement.
