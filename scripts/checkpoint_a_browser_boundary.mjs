@@ -38,7 +38,7 @@ export function keys(value, expected) {
   check(Object.keys(value).sort().join('\0') === [...expected].sort().join('\0'));
 }
 export function absolute(value) {
-  check(typeof value === 'string' && /^\/[A-Za-z0-9_.\/-]{1,500}$/.test(value));
+  check(typeof value === 'string' && /^\/[A-Za-z0-9_.+\/-]{1,500}$/.test(value));
   check(path.posix.normalize(value) === value && value !== '/' && !value.endsWith('/'));
   return value;
 }
@@ -87,12 +87,15 @@ export function claimAttempt(state, record) {
   return file;
 }
 export function validateAdmission(value, now = Date.now()) {
-  keys(value, ['format', 'status', 'scope', 'expiresAt', 'source', 'instance', 'files', 'reviews']);
+  keys(value, ['format', 'status', 'scope', 'expiresAt', 'harness', 'source', 'instance', 'files', 'reviews']);
   check(value.format === 'stead-checkpoint-a-browser-admission-v1' && value.status === 'accepted');
   check(value.scope === 'one-fresh-real-checkpoint-a-browser-run');
   check(typeof value.expiresAt === 'string' && /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/.test(value.expiresAt));
   const expiry = Date.parse(value.expiresAt);
   check(Number.isFinite(expiry) && expiry > now && expiry <= now + 86400_000);
+  keys(value.harness, ['repository', 'head', 'tree']);
+  absolute(value.harness.repository);
+  check(revision(value.harness.head) && revision(value.harness.tree));
   keys(value.source, ['repository', 'head', 'implementationRevision', 'implementationTree', 'templateSHA256', 'templateReviewSHA256', 'apiSHA256']);
   absolute(value.source.repository);
   for (const field of ['head', 'implementationRevision', 'implementationTree']) check(revision(value.source[field]));

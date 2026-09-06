@@ -25,15 +25,20 @@ configuration; it does not install a new Git dependency framework.
 The private 0600 record has the closed `stead-checkpoint-a-browser-admission-v1`
 shape in `validateAdmission` (scripts/checkpoint_a_browser_boundary.mjs):
 `status: accepted`, `scope: one-fresh-real-checkpoint-a-browser-run`, UTC
-`expiresAt` within 24 hours; exact `source` repository/HEAD, implementation
+`expiresAt` within 24 hours; separate exact clean `harness` repository/HEAD/tree
+and five runtime-file hashes; exact application `source` repository/HEAD, implementation
 revision/tree, approved-template/review and API binary SHA256s; exact `instance`
 state directory, UUID, bootstrap, activation and public certificate digests;
 the five `SOURCE_FILES` hashes; three distinct review roles
 (`security`, `qa`, `architecture-license`) with reviewer identity, exact retained
 evidence path/hash, `independentNonAuthor: true` and `disposition: accept`.
-The record contains no credentials. It must name the executing checkout, whose
-only permitted differences from its approved implementation revision are the
-two existing template approval records. A fresh supported running.json,
+The record contains no credentials. Run the command from the reviewed harness
+checkout; `source.repository` names the independently frozen application checkout.
+The application's only permitted differences from its approved implementation
+revision remain the two existing template approval records. Harness fixes do not
+replace the running application, renew its activation or change its state. Both
+clean source identities and the exact harness files are checked before and after
+execution; results distinguish application and harness revisions. A fresh supported running.json,
 supervisor identity, canonical bootstrap, API binary and TLS peer must match.
 The two real listener processes must be direct children of that supervisor,
 with fixed argv/current cwd, unchanged PID/start identities, matching executable
@@ -46,6 +51,9 @@ existing committed frontend bundle inventory with no extra/missing entries.
 No process environment is read; this is fresh-demo source attribution, not a
 new attestation claim against malicious same-user host manipulation.
 This is not a template activation bypass, source rebuild or instance provisioner.
+Admission reviewers may import the nonauthorizing `verifyInputs`, `verifyHarness`
+and `verifyIdentity` read-only diagnostics to exercise the actual preflight code.
+These do not request TLS/HTTP, acquire credentials, claim an attempt or launch a browser.
 
 Use a newly initialized, independently reviewed synthetic instance with two
 unused one-time credentials. The old `/home/skilgore/stead/.cache/stead-dev`

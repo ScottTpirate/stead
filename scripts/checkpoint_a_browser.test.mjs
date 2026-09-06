@@ -10,7 +10,7 @@ import { allowedRequest, byteBudget, absolute, readBounded, privateDirectory,
   SOURCE_FILES, ORIGIN, FORBIDDEN_STATE, STAGES, SURFACES, OPERATIONS, sha256,
   verifyDistribution, processStat, serviceCommand, listenerInodes, browserCookie,
   preserveSession, validatePreservedSession, SESSION_FILES, openedDirectoryMatches } from './checkpoint_a_browser_boundary.mjs';
-import { main as controller } from './checkpoint_a_browser.mjs';
+import { main as controller, verifyHarness, verifyIdentity, verifyInputs } from './checkpoint_a_browser.mjs';
 import { main as namespace, auditSurface } from '../tests/e2e/checkpoint_a_browser.mjs';
 import { runCheckpointAJourney } from '../tests/e2e/checkpoint_a_browser_journey.mjs';
 
@@ -20,6 +20,7 @@ const now = Date.parse('2026-09-05T00:00:00.000Z');
 function admission() {
   return { format: 'stead-checkpoint-a-browser-admission-v1', status: 'accepted',
     scope: 'one-fresh-real-checkpoint-a-browser-run', expiresAt: '2026-09-05T01:00:00.000Z',
+    harness: { repository: '/home/fixture/harness', head: 'c'.repeat(40), tree: 'd'.repeat(40) },
     source: { repository: '/home/fixture/repository', head: revision, implementationRevision: revision,
       implementationTree: revision, templateSHA256: digest, templateReviewSHA256: digest, apiSHA256: digest },
     instance: { state: '/home/fixture/repository/.cache/stead-dev', instanceID: uuid,
@@ -44,6 +45,7 @@ function fixture(task) {
 test('importing both entry points does not execute native tools or the journey', () => {
   assert.equal(typeof controller, 'function'); assert.equal(typeof namespace, 'function');
   assert.equal(typeof runCheckpointAJourney, 'function');
+  for (const diagnostic of [verifyHarness, verifyIdentity, verifyInputs]) assert.equal(typeof diagnostic, 'function');
 });
 test('held BFF asset directory cannot be relabeled by replacing its pathname', () => fixture((directory) => {
   const assets = path.join(directory, 'dist'), retained = path.join(directory, 'retained-dist');
@@ -67,6 +69,9 @@ test('closed real-workload admission binds every source file and three distinct 
     (a) => { a.expiresAt = now + 1000; }, (a) => { a.files[SOURCE_FILES[0]] = 'A'.repeat(64); },
     (a) => { delete a.files[SOURCE_FILES[1]]; }, (a) => { a.files['extra.mjs'] = digest; },
     (a) => { a.source.apiSHA256 = ''; }, (a) => { a.source.head = '--help'; },
+    (a) => { delete a.harness; }, (a) => { a.harness.head = '--help'; },
+    (a) => { a.harness.tree = 'A'.repeat(40); }, (a) => { a.harness.extra = true; },
+    (a) => { a.harness.repository = '/home/fixture/../harness'; },
     (a) => { a.instance.state = '/home/other/.cache/stead-dev'; },
     (a) => { a.source.repository = '/home/skilgore/stead'; a.instance.state = FORBIDDEN_STATE; },
     (a) => { a.reviews[1].reviewer = a.reviews[0].reviewer; }, (a) => { a.reviews[1].role = 'security'; },
@@ -78,6 +83,18 @@ test('only canonical paths accepted, never aliases or broad roots', () => {
   assert.equal(absolute('/home/fixture/source'), '/home/fixture/source');
   for (const file of ['/', '/home/../home/source', '/home//source', '/home/source/', './source', '/home/secret\n', '/home/a\0b', '/home/a b']) assert.throws(() => absolute(file));
 });
+test('approved libstdc++ basenames pass the actual bounded reader without relaxing traversal or aliases', () => fixture((directory) => {
+  for (const basename of ['libstdc++.so.6', 'libstdc++.so.6.0.36']) {
+    const file = path.join(directory, basename);
+    writeFileSync(file, 'owned synthetic library fixture', { mode: 0o600, flag: 'wx' });
+    assert.equal(absolute(file), file);
+    assert.equal(readBounded(file, 64, { privateMode: true }).toString(), 'owned synthetic library fixture');
+    assert.throws(() => readBounded(file, 1));
+    const alias = file + '-alias'; symlinkSync(file, alias);
+    assert.throws(() => readBounded(alias, 64));
+  }
+  for (const file of ['/usr/lib/../libstdc++.so.6', '/usr/lib/libstdc++*.so', '/usr/lib/libstdc++;x', '/usr/lib/libstdc++\n.so']) assert.throws(() => absolute(file));
+}));
 test('owned bounded files reject symlinks, hardlinks, widened permissions and oversize', () => fixture((directory) => {
   privateDirectory(directory);
   const file = path.join(directory, 'fixture'); writeFileSync(file, 'abc', { mode: 0o600, flag: 'wx' });

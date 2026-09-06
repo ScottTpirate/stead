@@ -13,7 +13,7 @@ import { check, sha256, readBounded, privateDirectory, noSymlinks, validateAdmis
   listenerInodes, SESSION_FILES, validatePreservedSession, openedDirectoryMatches } from './checkpoint_a_browser_boundary.mjs';
 
 const environment = { PATH: '/usr/bin', HOME: '/home/controller', LANG: 'C.UTF-8', TZ: 'UTC', FONTCONFIG_FILE: '/fixture/fonts.conf' };
-const REPO = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+const HARNESS_ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const digestFile = (file, options) => sha256(readBounded(file, 512 * 1024 * 1024, options));
 function git(repository, args, trim = true) {
   const run = spawnSync('/usr/bin/git', ['--no-optional-locks', '-c', 'core.fsmonitor=false',
@@ -51,6 +51,7 @@ function executableIdentity(pid, expectedPath, expectedDigest) {
   } finally { closeSync(descriptor); }
 }
 function runtimeSnapshot(source, state, running) {
+  const REPO = source.repository;
   const supervisorStat = processStat(procText(`/proc/${running.pid}/stat`), running.pid);
   check(supervisorStat.start === running.startTime);
   const supervisorExe = executableIdentity(running.pid, OUTER_NODE, '19235a9b678f84729464c52623f92de130a165452747c6826d3fdc13df3abcc3');
@@ -100,17 +101,30 @@ function runtimeSnapshot(source, state, running) {
   // against malicious same-user changes to host kernel/process state.
   return { supervisor: { pid: running.pid, start: running.startTime, inode: supervisorExe }, ...found };
 }
-function verifyIdentity(admission) {
+// The test harness may advance independently of the frozen application. Both
+// exact checkouts remain clean and pinned; no changed app can reuse activation.
+export function verifyHarness(admission) {
+  noSymlinks(HARNESS_ROOT);
+  check(admission.harness.repository === HARNESS_ROOT);
+  check(git(HARNESS_ROOT, ['rev-parse', '--show-toplevel']) === HARNESS_ROOT);
+  check(git(HARNESS_ROOT, ['rev-parse', 'HEAD']) === admission.harness.head);
+  check(git(HARNESS_ROOT, ['rev-parse', 'HEAD^{tree}']) === admission.harness.tree);
+  check(git(HARNESS_ROOT, ['status', '--porcelain', '--untracked-files=normal']) === '');
+  for (const [file, digest] of Object.entries(admission.files)) check(digestFile(path.join(HARNESS_ROOT, file)) === digest);
+}
+// Read-only diagnostics are callable by admission reviewers without entering
+// main's TLS/attempt/credential/namespace path. They never grant an admission.
+export function verifyIdentity(admission) {
   const { source, instance } = admission;
+  const REPO = source.repository;
   noSymlinks(source.repository); privateDirectory(instance.state);
-  check(instance.state !== FORBIDDEN_STATE && source.repository === REPO);
+  check(instance.state !== FORBIDDEN_STATE);
   check(git(REPO, ['rev-parse', '--show-toplevel']) === REPO && git(REPO, ['rev-parse', 'HEAD']) === source.head);
   check(git(REPO, ['status', '--porcelain', '--untracked-files=normal']) === '');
   check(git(REPO, ['rev-parse', `${source.implementationRevision}^{tree}`]) === source.implementationTree);
   git(REPO, ['merge-base', '--is-ancestor', source.implementationRevision, source.head]);
   const changed = git(REPO, ['diff', '--no-ext-diff', '--name-only', source.implementationRevision, source.head]).split('\n').filter(Boolean).sort();
   check(changed.length <= 2 && changed.every((file) => ['modules/authorization/localdata/approved-template.json', 'docs/governance/local-development-template-review.json'].includes(file)));
-  for (const [file, digest] of Object.entries(admission.files)) check(digestFile(path.join(REPO, file)) === digest);
   const templateFile = path.join(REPO, 'modules/authorization/localdata/approved-template.json');
   const reviewFile = path.join(REPO, 'docs/governance/local-development-template-review.json');
   check(digestFile(templateFile) === source.templateSHA256 && digestFile(reviewFile) === source.templateReviewSHA256);
@@ -155,7 +169,7 @@ async function verifyTLSPeer(certificate) {
     });
   });
 }
-function verifyInputs() {
+export function verifyInputs() {
   const bytes = readBounded(INPUTS, 1 << 20); check(sha256(bytes) === INPUTS_SHA256);
   const inputs = JSON.parse(bytes);
   check(inputs.files.length === 512 && inputs.host.length === 15);
@@ -176,7 +190,7 @@ function stage(inputs, directory, admission, certificate, sessionBinding) {
   const ready = path.join(directory, 'execution-root'), work = path.join(directory, 'work');
   mkdirSync(ready, { mode: 0o700 }); mkdirSync(work, { mode: 0o700 });
   const selected = inputs.files.filter((entry) => !['/fixture/compatibility.test.mjs', '/fixture/https-fixture'].includes(entry.destination));
-  for (const file of SOURCE_FILES.filter((file) => file.endsWith('.mjs'))) selected.push({ path: path.join(REPO, file), destination: '/runner/' + file, sha256: admission.files[file], executable: false });
+  for (const file of SOURCE_FILES.filter((file) => file.endsWith('.mjs'))) selected.push({ path: path.join(HARNESS_ROOT, file), destination: '/runner/' + file, sha256: admission.files[file], executable: false });
   const extra = [
     { name: 'localhost.crt', data: certificate },
     { name: 'session-binding.json', data: Buffer.from(JSON.stringify(sessionBinding)) },
@@ -245,6 +259,7 @@ export async function main(argv = process.argv.slice(2)) {
     admission = validateAdmission(JSON.parse(admissionBytes));
     for (const review of admission.reviews) check(digestFile(review.path) === review.sha256);
     inputs = verifyInputs();
+    verifyHarness(admission);
     phase = 'identity'; identity = verifyIdentity(admission); const { certificate } = identity;
     for (const marker of ['checkpoint-a-browser-attempt.json', 'checkpoint-a-cookie.json', 'checkpoint-a-progress.json', 'unprivileged-session-cookie']) check(!existsSync(path.join(admission.instance.state, marker)));
     phase = 'tls'; await verifyTLSPeer(certificate);
@@ -294,7 +309,7 @@ export async function main(argv = process.argv.slice(2)) {
       try {
         verifyInputs(); check(sha256(readBounded(argv[1], 32768, { privateMode: true })) === sha256(admissionBytes));
         staged.copies.forEach((entry) => check(digestFile(entry.path) === entry.sha256));
-        for (const file of SOURCE_FILES) check(digestFile(path.join(REPO, file)) === admission.files[file]);
+        verifyHarness(admission);
         check(digestFile(path.join(admission.instance.state, 'checkpoint-a-browser-attempt.json')) === attemptSHA256);
         const after = verifyIdentity(admission);
         check(after.certificate.equals(identity.certificate) && after.distribution === identity.distribution && JSON.stringify(after.runtime) === JSON.stringify(identity.runtime));
@@ -304,7 +319,8 @@ export async function main(argv = process.argv.slice(2)) {
   }
   const report = { format: 'stead-checkpoint-a-browser-run-v1', passed: passed && inputsUnchanged, phase,
     inputsUnchanged, inputsSHA256: INPUTS_SHA256, admissionSHA256: admissionBytes ? sha256(admissionBytes) : null,
-    sourceRevision: admission?.source.head ?? null, instanceID: admission?.instance.instanceID ?? null,
+    sourceRevision: admission?.source.head ?? null, harnessRevision: admission?.harness.head ?? null,
+    instanceID: admission?.instance.instanceID ?? null,
     scope: 'real-ui-only-not-sql-provider-or-release-proof', sessions, proof: inner };
   if (directory) writeFileSync(path.join(directory, 'result.json'), JSON.stringify(report) + '\n', { mode: 0o600, flag: 'wx' });
   // Path is controller-generated, never a browser/provider/exception value.
