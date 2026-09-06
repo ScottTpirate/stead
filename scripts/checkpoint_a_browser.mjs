@@ -10,7 +10,7 @@ import path from 'node:path';
 import { check, sha256, readBounded, privateDirectory, noSymlinks, validateAdmission,
   validateInnerProof, claimAttempt, byteBudget, SOURCE_FILES, OUTER_NODE, INPUTS,
   INPUTS_SHA256, FORBIDDEN_STATE, verifyDistribution, processStat, serviceCommand,
-  listenerInodes, SESSION_FILES, validatePreservedSession } from './checkpoint_a_browser_boundary.mjs';
+  listenerInodes, SESSION_FILES, validatePreservedSession, openedDirectoryMatches } from './checkpoint_a_browser_boundary.mjs';
 
 const environment = { PATH: '/usr/bin', HOME: '/home/controller', LANG: 'C.UTF-8', TZ: 'UTC', FONTCONFIG_FILE: '/fixture/fonts.conf' };
 const REPO = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
@@ -71,7 +71,7 @@ function runtimeSnapshot(source, state, running) {
     check(readlinkSync(`/proc/${pid}/ns/net`) === network && readlinkSync(`/proc/${pid}/cwd`) === REPO);
     const role = serviceCommand(args, state, REPO); check(!found[role]);
     const inode = executableIdentity(pid, path.join(state, 'stead-api'), source.apiSHA256);
-    const directory = opendirSync(`/proc/${pid}/fd`); let count = 0, ownsSocket = false;
+    const directory = opendirSync(`/proc/${pid}/fd`); let count = 0, ownsSocket = false, assets = null;
     try {
       for (let entry; (entry = directory.readSync()) !== null;) {
         check(++count <= 256 && /^[0-9]+$/.test(entry.name));
@@ -79,10 +79,18 @@ function runtimeSnapshot(source, state, running) {
         try { link = readlinkSync(`/proc/${pid}/fd/${entry.name}`); }
         catch (error) { if (error.code === 'ENOENT') continue; throw error; }
         if (link === `socket:[${sockets[role]}]`) ownsSocket = true;
+        if (role === 'web' && link === path.join(REPO, 'apps/web/dist')) {
+          const descriptor = openSync(`/proc/${pid}/fd/${entry.name}`, constants.O_RDONLY | constants.O_DIRECTORY);
+          try {
+            check(openedDirectoryMatches(descriptor, path.join(REPO, 'apps/web/dist')));
+            const held = fstatSync(descriptor, { bigint: true });
+            assets = `${held.dev}:${held.ino}`;
+          } finally { closeSync(descriptor); }
+        }
       }
     } finally { directory.closeSync(); }
-    check(ownsSocket && JSON.stringify(processStat(procText(`/proc/${pid}/stat`), pid)) === JSON.stringify(before));
-    found[role] = { pid, start: before.start, inode, socket: sockets[role] };
+    check(ownsSocket && (role !== 'web' || assets !== null) && JSON.stringify(processStat(procText(`/proc/${pid}/stat`), pid)) === JSON.stringify(before));
+    found[role] = { pid, start: before.start, inode, socket: sockets[role], assets };
   }
   check(found.api && found.web && found.api.pid !== found.web.pid);
   check(JSON.stringify(listeners()) === JSON.stringify(sockets));

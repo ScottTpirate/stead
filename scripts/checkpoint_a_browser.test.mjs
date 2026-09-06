@@ -2,14 +2,14 @@
 // namespace, installed service, live TLS or external process is invoked.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, chmodSync, symlinkSync, linkSync, readFileSync, rmSync, lstatSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, chmodSync, symlinkSync, linkSync, readFileSync, rmSync, lstatSync, openSync, closeSync, renameSync, constants } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { allowedRequest, byteBudget, absolute, readBounded, privateDirectory,
   claimAttempt, validateAdmission, validateInnerProof, validateJourney, validateAxe,
   SOURCE_FILES, ORIGIN, FORBIDDEN_STATE, STAGES, SURFACES, OPERATIONS, sha256,
   verifyDistribution, processStat, serviceCommand, listenerInodes, browserCookie,
-  preserveSession, validatePreservedSession, SESSION_FILES } from './checkpoint_a_browser_boundary.mjs';
+  preserveSession, validatePreservedSession, SESSION_FILES, openedDirectoryMatches } from './checkpoint_a_browser_boundary.mjs';
 import { main as controller } from './checkpoint_a_browser.mjs';
 import { main as namespace, auditSurface } from '../tests/e2e/checkpoint_a_browser.mjs';
 import { runCheckpointAJourney } from '../tests/e2e/checkpoint_a_browser_journey.mjs';
@@ -45,6 +45,20 @@ test('importing both entry points does not execute native tools or the journey',
   assert.equal(typeof controller, 'function'); assert.equal(typeof namespace, 'function');
   assert.equal(typeof runCheckpointAJourney, 'function');
 });
+test('held BFF asset directory cannot be relabeled by replacing its pathname', () => fixture((directory) => {
+  const assets = path.join(directory, 'dist'), retained = path.join(directory, 'retained-dist');
+  mkdirSync(assets, { mode: 0o700 });
+  const held = openSync(assets, constants.O_RDONLY | constants.O_DIRECTORY);
+  try {
+    assert.equal(openedDirectoryMatches(held, assets), true);
+    renameSync(assets, retained); mkdirSync(assets, { mode: 0o700 });
+    assert.equal(openedDirectoryMatches(held, assets), false);
+    assert.equal(openedDirectoryMatches(held, retained), true);
+    const current = openSync(assets, constants.O_RDONLY | constants.O_DIRECTORY);
+    try { assert.equal(openedDirectoryMatches(current, assets), true); }
+    finally { closeSync(current); }
+  } finally { closeSync(held); }
+}));
 test('closed real-workload admission binds every source file and three distinct reviews', () => {
   assert.deepEqual(validateAdmission(admission(), now), admission());
   for (const mutate of [

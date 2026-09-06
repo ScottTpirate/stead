@@ -223,6 +223,14 @@ export function verifyDistribution(directory, evidence) {
   return sha256(JSON.stringify(artifacts));
 }
 
+// The BFF retains an opened os.Root, so an equal pathname is insufficient after
+// a directory replacement. Compare the actual held directory, not its spelling.
+export function openedDirectoryMatches(descriptor, directory) {
+  const held = fstatSync(descriptor, { bigint: true });
+  const current = lstatSync(directory, { bigint: true });
+  return held.isDirectory() && current.isDirectory() && held.dev === current.dev && held.ino === current.ino;
+}
+
 export function processStat(text, expectedPID) {
   check(typeof text === 'string' && text.length < 8192);
   const close = text.lastIndexOf(') '); check(close > 2 && text.startsWith(`${expectedPID} (`));
