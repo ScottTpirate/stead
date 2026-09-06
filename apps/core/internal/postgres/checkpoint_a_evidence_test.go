@@ -76,6 +76,55 @@ type checkpointIdentity struct {
 }
 type checkpointExpected struct{ Actor, Action string }
 
+// Separate optional proof: never reinterpret the 80-response/54-denial report.
+type checkpointCollectionReport struct {
+	Scope           string `json:"scope"`
+	Passed          bool   `json:"passed"`
+	Stage           string `json:"stage"`
+	AdmissionHash   string `json:"admissionSHA256"`
+	InstanceID      string `json:"instanceID"`
+	SourceRevision  string `json:"sourceRevision"`
+	HarnessRevision string `json:"prior_browser_harness_revision"`
+	Discovery       string `json:"discovery_revision"`
+	RuntimeVerified bool   `json:"runtime_process_identity_reverified"`
+	Attempts        int    `json:"dispatch_attempts"`
+	Records         []struct {
+		RequestID string `json:"correlation_id"`
+		Status    int    `json:"status"`
+	} `json:"records"`
+	Denial struct {
+		checkpointRead
+		Generic bool `json:"generic_response_validated"`
+	} `json:"collection_denial"`
+}
+
+func checkpointParseCollection(data []byte, identity checkpointIdentity, admissionHash string) (map[string]checkpointExpected, error) {
+	var report checkpointCollectionReport
+	if json.Unmarshal(data, &report) != nil || !report.Passed || report.Stage != "complete" ||
+		report.Scope != "fixed-established-session-discovery-and-organization-list-denial-only" ||
+		report.AdmissionHash != admissionHash || report.InstanceID != identity.InstanceID || report.SourceRevision != identity.SourceRevision ||
+		report.HarnessRevision != identity.HarnessRevision || !regexp.MustCompile(`^[0-9a-f]{40}$`).MatchString(report.Discovery) || !report.RuntimeVerified ||
+		report.Attempts != 6 || len(report.Records) != 6 || !report.Denial.Generic || report.Denial.Principal != "denied" ||
+		report.Denial.Operation != "listOrganizations" || report.Denial.Status != 404 {
+		return nil, checkpointEvidenceRejected
+	}
+	seen := map[string]bool{}
+	for index, record := range report.Records {
+		status := 200
+		if index == 5 {
+			status = 404
+		}
+		if !checkpointCorrelation.MatchString(record.RequestID) || seen[record.RequestID] || record.Status != status {
+			return nil, checkpointEvidenceRejected
+		}
+		seen[record.RequestID] = true
+	}
+	if report.Denial.RequestID != report.Records[5].RequestID {
+		return nil, checkpointEvidenceRejected
+	}
+	return map[string]checkpointExpected{report.Denial.RequestID: {Actor: "user:" + identity.Denied, Action: "organization.list"}}, nil
+}
+
 func checkpointHash(data []byte) string {
 	sum := sha256.Sum256(data)
 	return hex.EncodeToString(sum[:])
@@ -275,7 +324,7 @@ const checkpointAuditSQL = `SELECT id::text,evidence->>'RequestID',actor,action,
  jsonb_typeof(evidence->'OccurredAt')='string' AND jsonb_typeof(evidence->'Actor'->'id')='string' AND
  jsonb_typeof(evidence->'Actor'->'type')='string' AND
  evidence->>'Reason' IN ('relationship_denied','stale_authorization_input','context_denied','existence_protected','no_explicit_authorization','provider_enforcement_denied','explicit_policy_deny','ceiling_exceeded','compartment_missing','trusted_attribute_invalid','capability_inactive','dissemination_denied','profile_handling_denied','affiliation_denied')
- ELSE false END
+ ELSE false END,evidence->>'Reason'
  FROM audit.records WHERE evidence->>'RequestID'=ANY($1::text[]) LIMIT 55`
 
 var checkpointResourceSQL = []struct{ owner, kind, query string }{
@@ -320,12 +369,24 @@ type checkpointAuditRow struct {
 	Occurred                                       time.Time
 	EvidenceOccurred                               string
 	SafeShape                                      bool
+	Reason                                         string
 }
 
 func checkpointCheckAudits(rows []checkpointAuditRow, expected map[string]checkpointExpected, now time.Time) ([]string, error) {
 	if len(rows) != 54 || len(expected) != 54 {
 		return nil, checkpointEvidenceRejected
 	}
+	return checkpointCheckAuditRows(rows, expected, now)
+}
+
+func checkpointCheckCollectionAudit(rows []checkpointAuditRow, expected map[string]checkpointExpected, now time.Time) ([]string, error) {
+	if len(rows) != 1 || len(expected) != 1 || rows[0].Action != "organization.list" || rows[0].Reason != "context_denied" {
+		return nil, checkpointEvidenceRejected
+	}
+	return checkpointCheckAuditRows(rows, expected, now)
+}
+
+func checkpointCheckAuditRows(rows []checkpointAuditRow, expected map[string]checkpointExpected, now time.Time) ([]string, error) {
 	requests, audits, decisions := map[string]bool{}, map[string]bool{}, map[string]bool{}
 	for _, row := range rows {
 		wanted, ok := expected[row.RequestID]
@@ -337,7 +398,7 @@ func checkpointCheckAudits(rows []checkpointAuditRow, expected map[string]checkp
 		audits[row.ID] = true
 		decisions[row.DecisionID] = true
 	}
-	ids := make([]string, 0, 54)
+	ids := make([]string, 0, len(expected))
 	for id := range requests {
 		ids = append(ids, id)
 	}
@@ -346,6 +407,27 @@ func checkpointCheckAudits(rows []checkpointAuditRow, expected map[string]checkp
 }
 
 func checkpointCollect(ctx context.Context, config *pgx.ConnConfig, identity checkpointIdentity, report checkpointReport, expected map[string]checkpointExpected) (matched []string, err error) {
+	if len(expected) != 54 || len(report.Resources) != 6 {
+		return nil, checkpointEvidenceRejected
+	}
+	return checkpointCollectMode(ctx, config, identity, report, expected, false)
+}
+
+func checkpointCollectCollection(ctx context.Context, config *pgx.ConnConfig, identity checkpointIdentity, expected map[string]checkpointExpected) ([]string, error) {
+	if len(expected) != 1 {
+		return nil, checkpointEvidenceRejected
+	}
+	for request, wanted := range expected {
+		if !checkpointCorrelation.MatchString(request) || wanted.Actor != "user:"+identity.Denied || wanted.Action != "organization.list" {
+			return nil, checkpointEvidenceRejected
+		}
+	}
+	return checkpointCollectMode(ctx, config, identity, checkpointReport{}, expected, true)
+}
+
+// Both fixed modes share only connection/namespace/rollback and row safety.
+// The optional collection mode never queries any canonical resource table.
+func checkpointCollectMode(ctx context.Context, config *pgx.ConnConfig, identity checkpointIdentity, report checkpointReport, expected map[string]checkpointExpected, collection bool) (matched []string, err error) {
 	conn, err := pgx.ConnectConfig(ctx, config)
 	if err != nil {
 		return nil, checkpointEvidenceRejected
@@ -388,6 +470,9 @@ func checkpointCollect(ctx context.Context, config *pgx.ConnConfig, identity che
 	}
 	slices.Sort(ids)
 	for _, query := range checkpointResourceSQL {
+		if collection {
+			break
+		}
 		if checkpointSetRole(ctx, tx, identity.InstanceID, query.owner) != nil {
 			return nil, checkpointEvidenceRejected
 		}
@@ -417,24 +502,28 @@ func checkpointCollect(ctx context.Context, config *pgx.ConnConfig, identity che
 	if checkpointSetRole(ctx, tx, identity.InstanceID, "audit") != nil {
 		return nil, checkpointEvidenceRejected
 	}
-	requests := make([]string, 0, 54)
+	requests := make([]string, 0, len(expected))
 	for id := range expected {
 		requests = append(requests, id)
 	}
 	slices.Sort(requests)
-	rows, err := tx.Query(ctx, checkpointAuditSQL, requests)
+	query := checkpointAuditSQL
+	if collection {
+		query = strings.TrimSuffix(checkpointAuditSQL, " LIMIT 55") + " LIMIT 2"
+	}
+	rows, err := tx.Query(ctx, query, requests)
 	if err != nil {
 		return nil, checkpointEvidenceRejected
 	}
 	collected := []checkpointAuditRow{}
 	for rows.Next() {
 		var row checkpointAuditRow
-		if rows.Scan(&row.ID, &row.RequestID, &row.Actor, &row.Action, &row.Decision, &row.NullResource, &row.ActorType, &row.ActorID, &row.EvidenceAction, &row.DecisionID, &row.Occurred, &row.EvidenceOccurred, &row.SafeShape) != nil {
+		if rows.Scan(&row.ID, &row.RequestID, &row.Actor, &row.Action, &row.Decision, &row.NullResource, &row.ActorType, &row.ActorID, &row.EvidenceAction, &row.DecisionID, &row.Occurred, &row.EvidenceOccurred, &row.SafeShape, &row.Reason) != nil {
 			rows.Close()
 			return nil, checkpointEvidenceRejected
 		}
 		collected = append(collected, row)
-		if len(collected) > 54 {
+		if len(collected) > len(expected) {
 			rows.Close()
 			return nil, checkpointEvidenceRejected
 		}
@@ -444,7 +533,11 @@ func checkpointCollect(ctx context.Context, config *pgx.ConnConfig, identity che
 	if err != nil {
 		return nil, checkpointEvidenceRejected
 	}
-	matched, err = checkpointCheckAudits(collected, expected, time.Now())
+	if collection {
+		matched, err = checkpointCheckCollectionAudit(collected, expected, time.Now())
+	} else {
+		matched, err = checkpointCheckAudits(collected, expected, time.Now())
+	}
 	if err != nil {
 		return nil, checkpointEvidenceRejected
 	}

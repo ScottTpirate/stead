@@ -4,7 +4,8 @@ import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { Readable } from 'node:stream';
 import test from 'node:test';
-import { discoverResources, discoveryTransport, runDiscovery } from './checkpoint_a_discovery.mjs';
+import { createPlatformClient, PlatformApiError } from '../packages/api-client/src/client.ts';
+import { discoverCollectionDenial, discoverResources, discoveryTransport, runDiscovery } from './checkpoint_a_discovery.mjs';
 
 const id = (n) => '01991c05-0000-7000-8000-' + String(n).padStart(12, '0');
 const expiresAt = Math.floor(Date.now() / 1000) + 3600;
@@ -55,20 +56,20 @@ test('missing/ambiguous pages and incorrect hierarchy or software scope fail wit
   await assert.rejects(discoverResources(f.call, { ...expected, primary: expected.denied }, sessions));
   assert.equal(f.calls.length, 1);
 });
-function transportFixture(status = 200, extraHeaders = {}) {
+function transportFixture(status = 200, extraHeaders = {}, body = '{}', collectionDenial = false) {
   const calls = [], records = [];
   const wire = discoveryTransport(Buffer.from('synthetic certificate'), '__Host-stead_session=' + 'A'.repeat(43), records, (url, options, callback) => {
     const req = new EventEmitter(); req.destroy = () => {};
     req.end = (body) => {
       calls.push({ url, options, body });
       queueMicrotask(() => {
-        const res = Readable.from([Buffer.from('{}')]); res.statusCode = status;
+        const res = Readable.from([Buffer.from(body)]); res.statusCode = status;
         res.headers = { 'x-correlation-id': 'a'.repeat(32), 'content-type': 'application/json', ...extraHeaders };
         callback(res);
       });
     };
     return req;
-  });
+  }, collectionDenial);
   return { wire, calls, records };
 }
 const init = { method: 'GET', credentials: 'same-origin', redirect: 'error', headers: { accept: 'application/json' } };
@@ -94,4 +95,54 @@ test('fixed transport enforces TLS/hostname/loopback GET; closed wire failures s
       assert.deepEqual(f.records, [{ correlation_id: 'a'.repeat(32), status }]); }
     finally { f.wire.close(); }
   }
+});
+
+const generic = (change = {}) => JSON.stringify({ correlation_id: 'a'.repeat(32), status: 404,
+  title: 'The request could not be completed.', type: 'about:blank', ...change }) + '\n';
+const problemHeaders = { 'content-type': 'application/problem+json', 'cache-control': 'no-store, no-store' };
+test('optional collection transport issues exactly one generic correlated list denial through the SDK', async () => {
+  const f = transportFixture(404, problemHeaders, generic(), true);
+  try {
+    const client = createPlatformClient({ fetchImplementation: f.wire.fetchImplementation });
+    const result = await discoverCollectionDenial((operation, options) => client.request(operation, options), f.records);
+    assert.deepEqual(result, { principal: 'denied', operation: 'listOrganizations', correlation_id: 'a'.repeat(32),
+      status: 404, generic_response_validated: true });
+    assert.equal(f.calls.length, 1); assert.equal(f.calls[0].url.pathname + f.calls[0].url.search, '/api/v1/organizations?page_size=20');
+    await assert.rejects(client.request('listOrganizations', { query: { page_size: 20 } }));
+    assert.equal(f.calls.length, 1);
+  } finally { f.wire.close(); }
+});
+test('optional collection mode rejects other routes, successful responses, metadata and malformed bodies without retries', async () => {
+  const blocked = transportFixture(404, problemHeaders, generic(), true);
+  try {
+    for (const route of ['/api/v1/session', `/api/v1/organizations/${id(1)}/teams?page_size=20`, '/api/v1/organizations?page_size=1']) {
+      await assert.rejects(blocked.wire.fetchImplementation(route, init));
+    }
+    assert.equal(blocked.calls.length, 0);
+  } finally { blocked.wire.close(); }
+  for (const [status, headers, body] of [
+    [200, {}, '{}'], [404, { ...problemHeaders, etag: 'hidden' }, generic()],
+    [404, { ...problemHeaders, 'set-cookie': 'hidden' }, generic()], [302, { location: 'https://example.com' }, ''],
+    [404, problemHeaders, generic({ detail: 'hidden' })], [404, problemHeaders, generic({ correlation_id: 'b'.repeat(32) })],
+    [404, problemHeaders, generic().trim()], [404, problemHeaders, '{"type":"hidden",' + generic().slice(1)],
+  ]) {
+    const f = transportFixture(status, headers, body, true);
+    try {
+      const client = createPlatformClient({ fetchImplementation: f.wire.fetchImplementation });
+      await assert.rejects(discoverCollectionDenial((operation, options) => client.request(operation, options), f.records));
+      assert.equal(f.calls.length, 1); assert.equal(f.records.length, 1);
+    } finally { f.wire.close(); }
+  }
+});
+test('collection proof never credits successful, unobserved, duplicate or miscorrelated SDK responses', async () => {
+  for (const [records, error] of [
+    [[], new PlatformApiError(404, 'a'.repeat(32))],
+    [[{ correlation_id: 'a'.repeat(32), status: 404 }], new PlatformApiError(404, 'b'.repeat(32))],
+    [[{ correlation_id: 'a'.repeat(32), status: 404 }], new Error('owned fixture')],
+    [[{ correlation_id: 'a'.repeat(32), status: 404 }, { correlation_id: 'b'.repeat(32), status: 404 }], new PlatformApiError(404, 'b'.repeat(32))],
+  ]) {
+    const observed = [];
+    await assert.rejects(discoverCollectionDenial(async () => { observed.push(...records); throw error; }, observed));
+  }
+  await assert.rejects(discoverCollectionDenial(async () => ({ data: { items: [] } }), []));
 });

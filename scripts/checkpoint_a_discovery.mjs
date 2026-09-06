@@ -5,9 +5,9 @@ import { open } from 'node:fs/promises';
 import { Agent, request as httpsRequest } from 'node:https';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createPlatformClient, PLATFORM_MAX_RESPONSE_BYTES } from '../packages/api-client/src/client.ts';
+import { createPlatformClient, PlatformApiError, PLATFORM_MAX_RESPONSE_BYTES } from '../packages/api-client/src/client.ts';
 import { ORIGIN, privateDirectory, readPrivate, validateDestination } from './checkpoint_a_smoke.mjs';
-import { validateDenialBootstrap, validateDenialInputs } from './checkpoint_a_denial.mjs';
+import { denialResponse, validateDenialBootstrap, validateDenialInputs } from './checkpoint_a_denial.mjs';
 import { loadEstablishedSessions, checkSession, checkBrowserBinding } from './checkpoint_a_followon.mjs';
 import { noSymlinks, readBounded, sha256, validateAdmission } from './checkpoint_a_browser_boundary.mjs';
 import { verifyIdentity } from './checkpoint_a_browser.mjs';
@@ -25,7 +25,8 @@ function git(repo, args, trim = true) {
 }
 
 // The owned request seam is for synthetic units only, never a CLI argument.
-export function discoveryTransport(certificate, cookie, records, requestImplementation = httpsRequest) {
+export function discoveryTransport(certificate, cookie, records, requestImplementation = httpsRequest, collectionDenial = false) {
+  check(typeof collectionDenial === 'boolean');
   const agent = new Agent({ keepAlive: true, maxSockets: 1, ca: certificate, rejectUnauthorized: true });
   let dispatches = 0;
   return { close: () => agent.destroy(), dispatches: () => dispatches,
@@ -33,6 +34,7 @@ export function discoveryTransport(certificate, cookie, records, requestImplemen
       const { url, headers } = validateDestination(input, init);
       check(init.method === 'GET' && init.body === undefined && /^__Host-stead_session=[A-Za-z0-9_-]{43}$/.test(cookie));
       check(input === '/api/v1/session' || /^\/api\/v1\/organizations(?:\/[0-9a-f-]{36}\/(?:teams|projects))?\?page_size=20$/.test(input));
+      if (collectionDenial) check(input === '/api/v1/organizations?page_size=20' && dispatches === 0);
       return new Promise((resolve, reject) => {
         dispatches++;
         const req = requestImplementation(url, { method: 'GET', headers: { ...Object.fromEntries(headers), Origin: ORIGIN, Cookie: cookie },
@@ -46,16 +48,33 @@ export function discoveryTransport(certificate, cookie, records, requestImplemen
               const correlation = res.headers['x-correlation-id'];
               check(/^[0-9a-f]{32}$/.test(correlation) && Number.isInteger(res.statusCode) && res.statusCode >= 200 && res.statusCode < 600);
               records.push({ correlation_id: correlation, status: res.statusCode });
-              check(res.statusCode === 200 && !res.headers['set-cookie'] && !res.headers.location);
+              check(res.statusCode === (collectionDenial ? 404 : 200) && !res.headers['set-cookie'] && !res.headers.location);
               const responseHeaders = new Headers();
               for (const [key, value] of Object.entries(res.headers)) if (value !== undefined) responseHeaders.set(key, Array.isArray(value) ? value.join(', ') : value);
-              resolve(new Response(Buffer.concat(chunks, size), { status: 200, headers: responseHeaders }));
+              const body = Buffer.concat(chunks, size);
+              if (collectionDenial) denialResponse(body, responseHeaders, res.statusCode);
+              resolve(new Response(body, { status: res.statusCode, headers: responseHeaders }));
             } catch { res.destroy(); req.destroy(); reject(new Error('Discovery response rejected')); }
           })();
         });
         req.on('error', () => reject(new Error('Discovery request failed'))); req.end();
       });
     } };
+}
+
+// Fixed sixth request only. The transport has already rejected hidden fields,
+// noncanonical problem bodies, cache metadata and response-ID disagreement.
+export async function discoverCollectionDenial(call, records) {
+  const before = records.length;
+  try { await call('listOrganizations', { query: { page_size: 20 } }); }
+  catch (error) {
+    const last = records.at(-1);
+    check(error instanceof PlatformApiError && error.status === 404 && records.length === before + 1 &&
+      last.status === 404 && error.correlationId === last.correlation_id);
+    return { principal: 'denied', operation: 'listOrganizations', correlation_id: last.correlation_id,
+      status: 404, generic_response_validated: true };
+  }
+  throw new Error('Checkpoint A collection denial rejected');
 }
 
 function select(page, predicate) {
@@ -97,18 +116,21 @@ async function preflight(checkout, work, admissionFile) {
   check(preceding.passed === true);
   const binding = checkBrowserBinding(admission, preceding, sha256(bytes));
   const sessions = await loadEstablishedSessions(work, binding);
-  return { identity, expected, binding, sessions, source: git(HERE, ['rev-parse', 'HEAD']) };
+  return { identity, expected, binding, sessions, source: git(HERE, ['rev-parse', 'HEAD']), harness: admission.harness.head };
 }
 
-export async function runDiscovery(checkout, work, admissionFile) {
+export async function runDiscovery(checkout, work, admissionFile, collectionDenial = false) {
+  check(typeof collectionDenial === 'boolean');
   await privateDirectory(work);
-  const proof = await open(path.join(work, 'checkpoint-a-discovery.json'), 'wx', 0o600);
+  const proof = await open(path.join(work, collectionDenial ? 'checkpoint-a-collection-denial.json' : 'checkpoint-a-discovery.json'), 'wx', 0o600);
   const report = { scope: 'fixed-established-session-resource-discovery-only', passed: false, stage: 'preflight', records: [],
     dispatch_attempts: 0, unknown_absence_proven: false, project_key_proven: false, browser_created_provenance_proven: false };
   let input, after; const transports = [];
   try {
     input = await preflight(checkout, work, admissionFile);
     Object.assign(report, input.binding, { discovery_revision: input.source });
+    if (collectionDenial) Object.assign(report, { scope: 'fixed-established-session-discovery-and-organization-list-denial-only',
+      prior_browser_harness_revision: input.harness, runtime_process_identity_reverified: false });
     const clients = Object.fromEntries(['primary', 'denied'].map((role) => {
       const wire = discoveryTransport(input.identity.certificate, input.sessions[role].cookie, report.records);
       transports.push(wire); return [role, createPlatformClient({ fetchImplementation: wire.fetchImplementation })];
@@ -116,11 +138,22 @@ export async function runDiscovery(checkout, work, admissionFile) {
     report.stage = 'reads';
     const signal = AbortSignal.timeout(120_000);
     const ids = await discoverResources((role, operation, options) => clients[role].request(operation, { ...options, signal }), input.expected, input.sessions);
-    check(report.records.length === 5 && new Set(report.records.map((r) => r.correlation_id)).size === 5);
+    if (collectionDenial) {
+      report.stage = 'collection_denial';
+      const wire = discoveryTransport(input.identity.certificate, input.sessions.denied.cookie, report.records, httpsRequest, true);
+      transports.push(wire);
+      const client = createPlatformClient({ fetchImplementation: wire.fetchImplementation });
+      report.collection_denial = await discoverCollectionDenial((operation, options) => client.request(operation, { ...options, signal }), report.records);
+    }
+    const count = collectionDenial ? 6 : 5;
+    check(report.records.length === count && new Set(report.records.map((r) => r.correlation_id)).size === count);
     report.stage = 'recheck'; after = await preflight(checkout, work, admissionFile);
     check(JSON.stringify(after) === JSON.stringify(input));
-    const file = await open(path.join(work, 'checkpoint-a-discovered-resources.json'), 'wx', 0o600);
-    try { await file.writeFile(JSON.stringify(ids) + '\n'); await file.sync(); } finally { await file.close(); }
+    if (collectionDenial) report.runtime_process_identity_reverified = true;
+    if (!collectionDenial) {
+      const file = await open(path.join(work, 'checkpoint-a-discovered-resources.json'), 'wx', 0o600);
+      try { await file.writeFile(JSON.stringify(ids) + '\n'); await file.sync(); } finally { await file.close(); }
+    }
     report.passed = true; report.stage = 'complete';
   } catch { /* Keep first failure and closed correlations; never retry or retain bodies/errors. */ }
   finally {
@@ -133,8 +166,8 @@ export async function runDiscovery(checkout, work, admissionFile) {
 }
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const a = process.argv.slice(2);
-  if (a.length !== 7 || a[0] !== '--live' || a[1] !== '--checkout' || a[3] !== '--browser-work' || a[5] !== '--admission') {
-    console.error('Usage: checkpoint_a_discovery.mjs --live --checkout /fresh/checkout --browser-work /private/run/work --admission /private/admission.json'); process.exitCode = 1;
-  } else try { const r = await runDiscovery(a[2], a[4], a[6]); console.log(JSON.stringify(r)); if (!r.passed) process.exitCode = 1; }
+  if (![7, 8].includes(a.length) || (a.length === 8 && a[7] !== '--organization-list-denial') || a[0] !== '--live' || a[1] !== '--checkout' || a[3] !== '--browser-work' || a[5] !== '--admission') {
+    console.error('Usage: checkpoint_a_discovery.mjs --live --checkout /fresh/checkout --browser-work /private/run/work --admission /private/admission.json [--organization-list-denial]'); process.exitCode = 1;
+  } else try { const r = await runDiscovery(a[2], a[4], a[6], a.length === 8); console.log(JSON.stringify(r)); if (!r.passed) process.exitCode = 1; }
   catch { console.error('Checkpoint A discovery failed closed; no login or retry.'); process.exitCode = 1; }
 }
