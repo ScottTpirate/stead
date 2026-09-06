@@ -5,13 +5,13 @@ import { spawnSync } from 'node:child_process';
 import { createServer, connect } from 'node:net';
 import { pathToFileURL } from 'node:url';
 import { check, ORIGIN, CSP, byteBudget, allowedRequest, sha256, validateAxe,
-  validateJourney, validateInnerProof, preserveSession } from '../../scripts/checkpoint_a_browser_boundary.mjs';
+  validateJourney, validateInnerProof, preserveSession, serverTrustCommands } from '../../scripts/checkpoint_a_browser_boundary.mjs';
 import { runCheckpointAJourney } from './checkpoint_a_browser_journey.mjs';
 
-const fixedEnvironment = (home) => ({ PATH: '/usr/bin', HOME: home, LANG: 'C.UTF-8', TZ: 'UTC',
+export const fixedEnvironment = (home) => ({ PATH: '/usr/bin', HOME: home, LANG: 'C.UTF-8', TZ: 'UTC',
   XDG_CONFIG_HOME: `${home}/.config`, XDG_CACHE_HOME: `${home}/.cache`,
   XDG_DATA_HOME: `${home}/.local/share`, FONTCONFIG_FILE: '/fixture/fonts.conf' });
-async function deniedConnection(host, port) {
+export async function deniedConnection(host, port) {
   return new Promise((resolve) => {
     const socket = connect({ host, port });
     const finish = (denied) => { socket.destroy(); resolve(denied); };
@@ -35,7 +35,7 @@ async function ingress() {
     } finally { bytes.fill(0); }
   } finally { clearTimeout(timer); chunks.forEach((chunk) => chunk.fill(0)); }
 }
-async function startTunnel() {
+export async function startTunnel() {
   const sockets = new Set(), budget = byteBudget(); let count = 0, failed = false;
   const server = createServer((incoming) => {
     if (++count > 256 || sockets.size >= 64) { failed = true; incoming.destroy(); return; }
@@ -55,7 +55,7 @@ async function startTunnel() {
   return { good: () => !failed && !budget.exceeded,
     close: async () => { sockets.forEach((socket) => socket.destroy()); await new Promise((resolve) => server.close(resolve)); } };
 }
-async function proveSandbox(browser) {
+export async function proveSandbox(browser) {
   const session = await browser.newBrowserCDPSession();
   try {
     const { arguments: args } = await session.send('Browser.getBrowserCommandLine');
@@ -94,9 +94,7 @@ const AXE_RESULT = ` (async () => {
     return {violations,incomplete,passedRules:raw.passes.length};
   } catch { return null; }
 })() `;
-export async function auditSurface(page, surface, axeSource) {
-  const session = await page.context().newCDPSession(page);
-  try {
+export async function cspContext(session) {
     const { frameTree } = await session.send('Page.getFrameTree');
     // Chrome's protocol defaults would clear isolated-world CSP and permit
     // unsafe eval. Explicitly preserve both, with no universal world access.
@@ -115,6 +113,12 @@ export async function auditSurface(page, surface, axeSource) {
         return blocked(() => globalThis.eval('1')) && blocked(() => globalThis.Function('return 1')());
       })()` });
     check(!negative.exceptionDetails && negative.result?.value === true);
+    return parameters;
+}
+export async function auditSurface(page, surface, axeSource) {
+  const session = await page.context().newCDPSession(page);
+  try {
+    const parameters = await cspContext(session);
     const loaded = await session.send('Runtime.evaluate', { ...parameters, expression: axeSource, returnByValue: false });
     check(!loaded.exceptionDetails);
     const evaluated = await session.send('Runtime.evaluate', { ...parameters, expression: AXE_RESULT, returnByValue: true, awaitPromise: true });
@@ -166,12 +170,9 @@ export async function main() {
     timer = setTimeout(() => process.exit(1), 290_000);
     tunnel = await startTunnel();
     proof.phase = 'trust';
-    const home = '/home/trusted', nss = `${home}/.local/share/pki/nssdb`;
-    await mkdir(nss, { recursive: true, mode: 0o700 });
-    for (const args of [
-      ['-N', '--empty-password', '-d', `sql:${nss}`],
-      ['-A', '-d', `sql:${nss}`, '-n', 'stead-fresh-local-instance', '-t', 'C,,', '-i', '/fixture/localhost.crt'],
-    ]) {
+    const { home, database, commands } = serverTrustCommands('journey');
+    await mkdir(database, { recursive: true, mode: 0o700 });
+    for (const args of commands) {
       const run = spawnSync('/usr/bin/certutil', args, { env: fixedEnvironment(home), timeout: 3000, stdio: 'ignore' });
       check(run.status === 0 && !run.signal && !run.error);
     }

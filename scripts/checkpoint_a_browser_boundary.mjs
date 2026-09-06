@@ -16,6 +16,21 @@ export const SOURCE_FILES = Object.freeze([
   'tests/e2e/checkpoint_a_browser.mjs', 'tests/e2e/checkpoint_a_browser_journey.mjs',
   'Makefile',
 ]);
+export const TLS_SOURCE_FILES = Object.freeze([...SOURCE_FILES,
+  'scripts/checkpoint_a_tls.mjs', 'scripts/checkpoint_a_tls_boundary.mjs',
+  'tests/e2e/checkpoint_a_tls.mjs']);
+// Chromium's Linux NSS guidance distinguishes server-peer trust from CA trust.
+// These are fresh namespace-only homes, never a host/browser user's trust DB.
+export function serverTrustCommands(profile) {
+  check(['journey', 'untrusted', 'ca', 'peer', 'wrong_name'].includes(profile));
+  const home = profile === 'journey' ? '/home/trusted' : '/home/tls-' + profile;
+  const database = home + '/.local/share/pki/nssdb';
+  const commands = [['-N', '--empty-password', '-d', 'sql:' + database]];
+  if (profile !== 'untrusted') commands.push(['-A', '-d', 'sql:' + database,
+    '-n', 'stead-fresh-local-instance', '-t', profile === 'ca' ? 'C,,' : 'P,,',
+    '-i', '/fixture/localhost.crt']);
+  return { home, database, commands };
+}
 export const PHASES = Object.freeze(['preflight', 'identity', 'tls', 'attempt', 'staging',
   'namespace', 'trust', 'browser', 'journey', 'cleanup', 'complete']);
 export const STAGES = Object.freeze(['preflight', 'primary_login', 'organization_create_read',

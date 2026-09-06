@@ -10,7 +10,7 @@ import path from 'node:path';
 import { check, sha256, readBounded, privateDirectory, noSymlinks, validateAdmission,
   validateInnerProof, claimAttempt, byteBudget, SOURCE_FILES, OUTER_NODE, INPUTS,
   INPUTS_SHA256, FORBIDDEN_STATE, verifyDistribution, processStat, serviceCommand,
-  listenerInodes, SESSION_FILES, validatePreservedSession, openedDirectoryMatches } from './checkpoint_a_browser_boundary.mjs';
+  listenerInodes, SESSION_FILES, validatePreservedSession, openedDirectoryMatches, TLS_SOURCE_FILES } from './checkpoint_a_browser_boundary.mjs';
 
 const environment = { PATH: '/usr/bin', HOME: '/home/controller', LANG: 'C.UTF-8', TZ: 'UTC', FONTCONFIG_FILE: '/fixture/fonts.conf' };
 const HARNESS_ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
@@ -186,16 +186,17 @@ export function verifyInputs() {
   check(digestFile('/home/skilgore/stead-browser-axe-intake.kTB8mQ/USER_TERMS_ACCEPTANCE.md') === inputs.consentSHA256);
   return inputs;
 }
-function stage(inputs, directory, admission, certificate, sessionBinding) {
+export function stage(inputs, directory, admission, certificate, sessionBinding, diagnostic = false) {
+  check(typeof diagnostic === 'boolean' && (!diagnostic || sessionBinding === undefined));
+  check(admission.scope === (diagnostic ? 'one-credential-free-real-origin-tls-diagnostic' : 'one-fresh-real-checkpoint-a-browser-run'));
   const ready = path.join(directory, 'execution-root'), work = path.join(directory, 'work');
   mkdirSync(ready, { mode: 0o700 }); mkdirSync(work, { mode: 0o700 });
   const selected = inputs.files.filter((entry) => !['/fixture/compatibility.test.mjs', '/fixture/https-fixture'].includes(entry.destination));
-  for (const file of SOURCE_FILES.filter((file) => file.endsWith('.mjs'))) selected.push({ path: path.join(HARNESS_ROOT, file), destination: '/runner/' + file, sha256: admission.files[file], executable: false });
-  const extra = [
-    { name: 'localhost.crt', data: certificate },
+  for (const file of (diagnostic ? TLS_SOURCE_FILES : SOURCE_FILES).filter((file) => file.endsWith('.mjs'))) selected.push({ path: path.join(HARNESS_ROOT, file), destination: '/runner/' + file, sha256: admission.files[file], executable: false });
+  const extra = [{ name: 'localhost.crt', data: certificate }, ...(diagnostic ? [] : [
     { name: 'session-binding.json', data: Buffer.from(JSON.stringify(sessionBinding)) },
     { name: 'axe-pin.json', data: Buffer.from(JSON.stringify({ sha256: inputs.files.find((entry) => entry.destination === '/tools/axe-core/axe.min.js').sha256 })) },
-  ];
+  ])];
   for (const entry of extra) {
     const file = path.join(directory, entry.name); writeFileSync(file, entry.data, { mode: 0o600, flag: 'wx' });
     selected.push({ path: file, destination: '/fixture/' + entry.name, sha256: sha256(entry.data), executable: false });
@@ -217,9 +218,9 @@ function stage(inputs, directory, admission, certificate, sessionBinding) {
     '--cap-drop', 'ALL', '--new-session', '--die-with-parent', '--as-pid-1', ...mkdirs, ...bindings,
     '--proc', '/proc', '--dev', '/dev', '--tmpfs', '/tmp', '--tmpfs', '/home', '--dir', '/home/controller',
     '--bind', work, '/work', '--bind', path.join(directory, 'relay.sock'), '/relay.sock', '--chdir', '/work', '--remount-ro', '/',
-    '/usr/bin/node', '/runner/tests/e2e/checkpoint_a_browser.mjs'] };
+    '/usr/bin/node', diagnostic ? '/runner/tests/e2e/checkpoint_a_tls.mjs' : '/runner/tests/e2e/checkpoint_a_browser.mjs'] };
 }
-async function relay(socketPath) {
+export async function relay(socketPath) {
   const budget = byteBudget(), sockets = new Set(); let count = 0, failed = false;
   const server = createServer((incoming) => {
     if (++count > 256 || sockets.size >= 64) { failed = true; incoming.destroy(); return; }
