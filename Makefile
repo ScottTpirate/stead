@@ -68,3 +68,12 @@ checkpoint-a-tls:
 	  exec /usr/bin/env -i PATH=/usr/bin LANG=C.UTF-8 TZ=UTC \
 	  /tmp/stead-node-toolchain-26.8.1/toolchain/node-v26.8.1-linux-x64/bin/node \
 	  scripts/checkpoint_a_tls.mjs --review "$$STEAD_TLS_REVIEW"
+
+.PHONY: checkpoint-a-sql
+
+# Explicit read-only live evidence collector; never the mutating fixture suite.
+# Inputs are private paths and exact hashes, not a database URL/password.
+checkpoint-a-sql:
+	@ulimit -S -c 0 && ulimit -H -c 0 && \
+	  exec scripts/run_pinned_go.sh go test -count=1 -tags=stead_checkpoint_a_live \
+	  -run '^TestCheckpointADenialEvidenceLive$$' ./apps/core/internal/postgres

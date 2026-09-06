@@ -12,6 +12,8 @@ The inactive provider-effect store has also passed a [fresh real PostgreSQL stor
 
 The patched browser, Playwright and axe have passed an [isolated tool-compatibility test](docs/governance/dependency-evidence/browser-tool-compatibility-proof-20260905.json), including real renderer sandbox checks, verified TLS with negative controls, keyboard/reload and positive/negative axe checks. Independent QA/security verified the result and cleanup; this synthetic fixture is not Stead browser-journey or accessibility-release evidence.
 
+Fresh product testing at application `bbfcd044` and harness `8a5dc624` has passed supported startup and per-instance signed checks, but not Checkpoint A. The first fresh browser attempt failed TLS; a separate real-origin diagnostic verified the corrected private peer trust without disabling TLS or CSP. A second, distinct fresh installation reached successful login and an empty authorized Organization response, then its browser test timed out during the workspace transition. It attempted no domain creation. Actual login-screen axe checks found contrast and main-landmark nesting violations, with further contrast checks incomplete. Both failures and private installation/session evidence are retained; focused selector and accessibility corrections and a new product rerun remain required. TEST-009, TEST-010 and the complete Phase 1 release gate have not passed.
+
 ## Phase 0 package
 
 - [Reconciliation report](docs/architecture/PHASE0_RECONCILIATION_REPORT.md)

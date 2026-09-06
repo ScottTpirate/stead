@@ -235,3 +235,50 @@ or certificate rejection is retained; it is not forced to confirm the presumed
 cause. Missing evidence, unrelated network failures, cleanup failure or changed
 inputs fail the diagnostic. This does not prove login, UI interactivity, a
 full browser journey, Checkpoint A or a Phase 1 release pass.
+
+## Actual HTTP denial to persisted audit collector
+
+
+`make checkpoint-a-sql` is a separate test-only, read-only collector. Before live
+use, independently review the exact collector/build, completed follow-on report
+hash and execution scope; browser/follow-on acceptance does not activate it.
+
+```sh
+STEAD_CHECKPOINT_A_ADMISSION=/absolute/private/browser-admission.json \
+STEAD_CHECKPOINT_A_ADMISSION_SHA256=<exact-64-lowerhex-file-hash> \
+STEAD_CHECKPOINT_A_FOLLOWON=/absolute/private/completed-followon.json \
+STEAD_CHECKPOINT_A_FOLLOWON_SHA256=<exact-64-lowerhex-file-hash> \
+STEAD_CHECKPOINT_A_SQL_PROOF=/absolute/private/new-sql-proof.json \
+make checkpoint-a-sql
+```
+
+Owned 0700 parents, exclusive 0600 inputs, exact hashes and no symlink/hardlink
+aliases are required; output must not exist. The tagged live test fails missing
+prerequisites, never skips, and is absent from ordinary unit selection. Normal
+`TestCheckpointEvidence*` tests use only synthetic owned fixtures. The target
+disables core dumps. Preserve the exact source/build and first failures privately.
+
+The externally reviewed report hash binds trusted runner output. Ordinary JSON
+parsing checks completion, app/instance/harness/admission bindings, six distinct
+resource IDs, 80 unique correlations and the 54 read-404 selections (18 primary,
+36 no-grant); it does not duplicate the producer's timing/worker/SDK validation.
+Pinned existing Node helpers check public runtime/process/dist identity before
+and after, with helper bytes verified before import and no browser or HTTP call.
+
+The only secret input is the fresh state's `database-url`: its instance-derived
+NOINHERIT API login at fixed `127.0.0.1:15432/stead`, with loopback-development
+`sslmode=disable`. PG environment overrides, administrator/service DSNs, other
+credentials/configuration, arbitrary SQL, initialization and provider calls are
+not allowed. One bounded `REPEATABLE READ READ ONLY` transaction uses fixed
+existing authorization/organization/project/audit execute roles and always rolls
+back. It verifies namespace identity, three active/nonpending known resources,
+three unknown IDs absent across all four canonical sets, and exactly one safe
+NULL-resource denial per actual HTTP request ID with correct actor/action and
+separate decision identity. Queries bound output and time, not scanned rows.
+
+The exclusive fsynced proof retains hashes, instance, correlations, counts and
+booleans—not credentials, raw SQL errors, audit rows, actors or resource names.
+This proves only current canonical existence and persisted denial correlation;
+not browser-created provenance, timing nondisclosure, outbox delivery, restart,
+backup/restore, TEST-009 or Phase 1 acceptance. Missing audit evidence fails the
+collector; it never retries HTTP to manufacture a replacement.
