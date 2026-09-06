@@ -44,6 +44,13 @@ function requireCondition(condition) {
   if (!condition) throw new Error("journey_check_failed");
 }
 
+// Native SELECT labels contain option text in Playwright's label-text engine.
+// Match the control's semantic accessible name, not its label's descendants.
+export function workspaceSelect(page, name) {
+  requireCondition(["Organization", "Parent Team", "Owning Team"].includes(name));
+  return page.getByRole("combobox", { name, exact: true });
+}
+
 function matches(request, operation) {
   const url = new URL(request.url());
   const [method, path] = OPERATIONS[operation];
@@ -141,7 +148,7 @@ async function readDetails(page, item, kind) {
 
 async function emptyOrganization(page) {
   await settled(page);
-  const organization = page.getByLabel("Organization", { exact: true });
+  const organization = workspaceSelect(page, "Organization");
   requireCondition(await organization.isDisabled());
   requireCondition(await organization.locator("option").count() === 1);
   requireCondition(await organization.inputValue() === "");
@@ -232,7 +239,7 @@ export async function runCheckpointAJourney({
       await actionWithResponses(primary, [["organization_create", 201], ["team_list", 200], ["project_list", 200]],
         () => primary.getByRole("button", { name: "Create Organization", exact: true }).click());
       await settled(primary);
-      requireCondition(await primary.getByLabel("Organization", { exact: true }).locator("option").count() === 1);
+      requireCondition(await workspaceSelect(primary, "Organization").locator("option").count() === 1);
       await readDetails(primary, SYNTHETIC.organization, "organization");
       await audit(primary, "organization_detail");
     });
@@ -240,7 +247,7 @@ export async function runCheckpointAJourney({
       await navigate(primary, "Teams", true);
       await primary.getByLabel("Key", { exact: true }).fill(SYNTHETIC.parent.key);
       await primary.getByLabel("Name", { exact: true }).fill(SYNTHETIC.parent.title);
-      await primary.getByLabel("Parent Team", { exact: true }).selectOption({ label: "No parent" });
+      await workspaceSelect(primary, "Parent Team").selectOption({ label: "No parent" });
       await actionWithResponses(primary, [["team_create", 201], ["team_list", 200]],
         () => primary.getByRole("button", { name: "Create Team", exact: true }).click());
       await readDetails(primary, SYNTHETIC.parent, "team");
@@ -248,7 +255,7 @@ export async function runCheckpointAJourney({
     await step("child_team_create_read", async () => {
       await primary.getByLabel("Key", { exact: true }).fill(SYNTHETIC.child.key);
       await primary.getByLabel("Name", { exact: true }).fill(SYNTHETIC.child.title);
-      await primary.getByLabel("Parent Team", { exact: true }).selectOption({ label: SYNTHETIC.parent.title });
+      await workspaceSelect(primary, "Parent Team").selectOption({ label: SYNTHETIC.parent.title });
       await actionWithResponses(primary, [["team_create", 201], ["team_list", 200]],
         () => primary.getByRole("button", { name: "Create Team", exact: true }).click());
       await resource(primary, SYNTHETIC.child.title).getByText("Child Team · access granted separately", { exact: true }).waitFor();
@@ -260,7 +267,7 @@ export async function runCheckpointAJourney({
       await primary.getByLabel("Key", { exact: true }).fill(SYNTHETIC.project.key);
       await primary.getByLabel("Title", { exact: true }).fill(SYNTHETIC.project.title);
       await primary.getByLabel("Purpose", { exact: true }).fill(SYNTHETIC.project.purpose);
-      await primary.getByLabel("Owning Team", { exact: true }).selectOption({ label: SYNTHETIC.child.title });
+      await workspaceSelect(primary, "Owning Team").selectOption({ label: SYNTHETIC.child.title });
       await actionWithResponses(primary, [["project_create", 201], ["project_list", 200]],
         () => primary.getByRole("button", { name: "Create Project", exact: true }).click());
       await readDetails(primary, SYNTHETIC.project, "project");
@@ -278,7 +285,7 @@ export async function runCheckpointAJourney({
       await actionWithResponses(primary, [["organization_list", 200], ["team_list", 200], ["project_list", 200]],
         () => primary.getByRole("button", { name: "Refresh", exact: true }).click());
       await settled(primary);
-      await primary.getByLabel("Owning Team", { exact: true }).selectOption({ label: SYNTHETIC.child.title });
+      await workspaceSelect(primary, "Owning Team").selectOption({ label: SYNTHETIC.child.title });
       await readDetails(primary, SYNTHETIC.project, "project");
     });
     await step("keyboard_palette_focus", async () => {
@@ -329,7 +336,7 @@ export async function runCheckpointAJourney({
       requireCondition(await alert.count() === 1 && await alert.textContent() === GENERIC_DENIAL);
       requireCondition(await denied.locator(".resource-list button").count() === 0);
       requireCondition(await denied.getByRole("region", { name: "Resource details" }).count() === 0);
-      requireCondition(await denied.getByLabel("Organization", { exact: true }).isDisabled());
+      requireCondition(await workspaceSelect(denied, "Organization").isDisabled());
       await audit(denied, "denied_organization_alert");
     });
     await step("one_shot_counts", async () => {
