@@ -1,0 +1,460 @@
+// Dependency-free owned-fixture tests. No tool manifest, browser, credential,
+// namespace, installed service, live TLS or external process is invoked.
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtempSync, mkdirSync, writeFileSync, chmodSync, symlinkSync, linkSync, readFileSync, rmSync, lstatSync, openSync, closeSync, renameSync, constants } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { runInNewContext } from 'node:vm';
+import { allowedRequest, byteBudget, absolute, readBounded, privateDirectory,
+  claimAttempt, validateAdmission, validateInnerProof, validateJourney, validateAxe,
+  SOURCE_FILES, ORIGIN, FORBIDDEN_STATE, STAGES, SURFACES, OPERATIONS, JOURNEY_KEYBOARD_SUBSTEPS, sha256,
+  verifyDistribution, processStat, serviceCommand, listenerInodes, browserCookie,
+  preserveSession, validatePreservedSession, SESSION_FILES, openedDirectoryMatches } from './checkpoint_a_browser_boundary.mjs';
+import { main as controller, verifyHarness, verifyIdentity, verifyInputs } from './checkpoint_a_browser.mjs';
+import { main as namespace, auditSurface } from '../tests/e2e/checkpoint_a_browser.mjs';
+import { runCheckpointAJourney, workspaceSelect, keyboardSubsteps, loginCheckpointPrincipal } from '../tests/e2e/checkpoint_a_browser_journey.mjs';
+
+const uuid = '01991962-1234-7000-8000-123456789abc';
+const digest = 'a'.repeat(64), revision = 'b'.repeat(40);
+const now = Date.parse('2026-09-05T00:00:00.000Z');
+function admission() {
+  return { format: 'stead-checkpoint-a-browser-admission-v1', status: 'accepted',
+    scope: 'one-fresh-real-checkpoint-a-browser-run', expiresAt: '2026-09-05T01:00:00.000Z',
+    harness: { repository: '/home/fixture/harness', head: 'c'.repeat(40), tree: 'd'.repeat(40) },
+    source: { repository: '/home/fixture/repository', head: revision, implementationRevision: revision,
+      implementationTree: revision, templateSHA256: digest, templateReviewSHA256: digest, apiSHA256: digest },
+    instance: { state: '/home/fixture/repository/.cache/stead-dev', instanceID: uuid,
+      bootstrapSHA256: digest, activationDigest: 'sha256:' + digest, certificateSHA256: digest },
+    files: Object.fromEntries(SOURCE_FILES.map((file) => [file, digest])),
+    reviews: ['security', 'qa', 'architecture-license'].map((role) => ({ role, reviewer: '/review/' + role,
+      path: '/home/fixture/' + role + '.md', sha256: digest, independentNonAuthor: true, disposition: 'accept' })) };
+}
+function journey() {
+  const stages = STAGES.map(stage => stage === 'denied_login_collection_denied' ? 'denied_login_empty_views' : stage);
+  const surfaces = SURFACES.map(surface => surface === 'denied_projects_collection_error' ? 'denied_projects_empty' : surface);
+  return { format: 'stead-checkpoint-a-browser-journey-v1', status: 'completed', failedStage: null,
+    completed: stages.slice(1), timings: stages.slice(1).map((stage) => ({ stage, elapsedMs: 1 })), elapsedMs: 10,
+    network: ['primary', 'denied'].map((principal) => ({ principal, counts: Object.fromEntries(OPERATIONS.map((op) => [op, 0])),
+      requests: 0, responses: 0, failed: 0, forbidden: 0, unknownAPI: 0, overflow: false })),
+    accessibility: { status: 'collected_if_reached', surfaces: surfaces.map((surface) => ({ surface, violations: [], incomplete: [], passedRules: 1 })) },
+    denialEvidence: 'ui_only_sql_fga_and_known_unknown_checks_are_separate', contextsPreserved: true };
+}
+function fixture(task) {
+  const directory = mkdtempSync(path.join(tmpdir(), 'stead-browser-unit.')); chmodSync(directory, 0o700);
+  // Only this test's freshly created, exact private fixture is removed.
+  try { return task(directory); } finally { rmSync(directory, { recursive: true }); }
+}
+test('fixed authenticated keyboard substeps preserve first failure without retry or raw exception evidence', async () => {
+  for (const failure of [null, ...JOURNEY_KEYBOARD_SUBSTEPS]) {
+    const seen = [], evidence = { failedKeyboardSubstep: null };
+    const actions = Object.fromEntries(JOURNEY_KEYBOARD_SUBSTEPS.map(name => [name, async () => {
+      seen.push(name); if (name === failure) throw new Error('owned secret canary');
+    }]));
+    if (failure === null) await keyboardSubsteps(actions, evidence);
+    else await assert.rejects(keyboardSubsteps(actions, evidence));
+    assert.equal(evidence.failedKeyboardSubstep, failure);
+    const length = failure === null ? JOURNEY_KEYBOARD_SUBSTEPS.length : JOURNEY_KEYBOARD_SUBSTEPS.indexOf(failure) + 1;
+    assert.deepEqual(seen, JOURNEY_KEYBOARD_SUBSTEPS.slice(0, length));
+    assert.deepEqual(Object.keys(evidence), ['failedKeyboardSubstep']);
+    assert(!JSON.stringify(evidence).includes('canary'));
+  }
+});
+test('journey v3 names denied collection errors without relabeling historical v1/v2 proofs', () => {
+  const legacy = journey(), v2 = { ...journey(), format: 'stead-checkpoint-a-browser-journey-v2', failedKeyboardSubstep: null };
+  for (const value of [legacy, v2]) assert.deepEqual(validateJourney(value), value);
+  const current = { ...v2, format: 'stead-checkpoint-a-browser-journey-v3',
+    completed: STAGES.slice(1), timings: STAGES.slice(1).map(stage => ({ stage, elapsedMs: 1 })),
+    accessibility: { ...v2.accessibility, surfaces: SURFACES.map(surface => ({ surface, violations: [], incomplete: [], passedRules: 1 })) } };
+  assert.deepEqual(validateJourney(current), current);
+  assert.equal(current.accessibility.surfaces.length, 7);
+  assert.equal(current.completed[7], 'denied_login_collection_denied');
+  assert.equal(current.accessibility.surfaces[5].surface, 'denied_projects_collection_error');
+  for (const format of ['stead-checkpoint-a-browser-journey-v1', 'stead-checkpoint-a-browser-journey-v2']) {
+    const mislabeled = { ...current, format };
+    if (format.endsWith('v1')) delete mislabeled.failedKeyboardSubstep;
+    assert.throws(() => validateJourney(mislabeled));
+  }
+  assert.throws(() => validateJourney({ ...v2, format: current.format }));
+  assert.throws(() => validateJourney({ ...current, accessibility: v2.accessibility }));
+  assert.throws(() => validateJourney({ ...current, accessibility: { ...current.accessibility, surfaces: current.accessibility.surfaces.slice(0, 6) } }));
+});
+
+// Owned semantic controls/response events only: no HTTP, browser, credential
+// files or native DOM. Exercise the same helper dispatched by the real journey.
+function loginFixture(options = {}) {
+  const status = options.listStatus ?? 200, sessionStatus = options.sessionStatus ?? 200;
+  const generic = 'The request could not be completed. Please refresh or try again.';
+  const counters = { dispatches: 0, observers: 0, handoffs: 0, audits: 0, emptyControls: 0 };
+  let signedIn = false;
+  const alertCount = () => signedIn ? (options.alertCount ?? (status === 200 ? 0 : 1)) : 0;
+  const page = {
+    url: () => ORIGIN + '/', context: () => page,
+    goto: async () => { if (options.navigationFailure) throw new Error('owned navigation failure'); },
+    locator: selector => {
+      if (selector === '.product-workspace[aria-busy="false"]') return { waitFor: async () => {} };
+      assert.equal(selector, '.resource-list button');
+      return { count: async () => options.resources ?? 0 };
+    },
+    getByRole: (role, optionsForRole = {}) => {
+      const name = optionsForRole.name;
+      if (role === 'alert') return { waitFor: async () => assert(alertCount() > 0), count: async () => alertCount(), textContent: async () => options.alertText ?? generic };
+      if (role === 'region') { assert.equal(name, 'Resource details'); return { count: async () => options.details ?? 0 }; }
+      if (role === 'heading') { assert.equal(name, 'Open your workspace'); return { waitFor: async () => {} }; }
+      if (role === 'combobox') {
+        assert.deepEqual(optionsForRole, { name: 'Organization', exact: true }); counters.emptyControls++;
+        return { isDisabled: async () => options.disabled ?? true, inputValue: async () => options.selectedID ?? '',
+          locator: selector => { assert.equal(selector, 'option'); return { count: async () => options.options ?? 1,
+            textContent: async () => options.optionText ?? 'Create your first Organization' }; } };
+      }
+      assert.equal(role, 'button');
+      if (name === 'Sign out') return { count: async () => signedIn ? 1 : 0, waitFor: async () => assert(signedIn && !options.missingSignOut) };
+      assert.equal(name, 'Sign in');
+      return { click: async () => { assert.equal(counters.observers, 2); counters.dispatches++;
+        if (options.clickFailure) throw new Error('owned click failure'); signedIn = true; } };
+    },
+    getByLabel: (name, exact) => {
+      assert.equal(name, 'Setup credential'); assert.deepEqual(exact, { exact: true });
+      return { fill: async value => assert.equal(value, 'x'.repeat(43)), count: async () => signedIn ? (options.retainedCredential ? 1 : 0) : 1 };
+    },
+    waitForResponse: async predicate => {
+      counters.observers++;
+      const response = (session, code) => ({ request: () => ({ method: () => session ? 'POST' : 'GET',
+        url: () => ORIGIN + (session ? '/api/v1/session' : '/api/v1/organizations?page_size=20') }),
+        status: () => code, finished: async () => options.sessionCompletionFailure ? 'owned interrupted response' : null });
+      const session = response(true, sessionStatus), list = response(false, status);
+      const selected = predicate(session) ? session : (assert(predicate(list)), list);
+      if (options.responseFailure) throw new Error('owned response failure');
+      return selected;
+    },
+  };
+  return { counters, run: principal => loginCheckpointPrincipal({ page, credential: 'x'.repeat(43), principal,
+    audit: async (_page, surface) => { assert.equal(surface, 'primary_login'); counters.audits++; },
+    afterLogin: async (context, role) => { assert.equal(context, page); assert.equal(role, principal); counters.handoffs++;
+      if (options.handoffFailure) throw new Error('owned session handoff failure'); } }) };
+}
+test('primary authoritative-empty 200 and no-grant generic 404 are distinct successful login assertions', async () => {
+  for (const [principal, listStatus] of [['primary', 200], ['denied', 404]]) {
+    const fixture = loginFixture({ listStatus }); await fixture.run(principal);
+    assert.deepEqual(fixture.counters, { dispatches: 1, observers: 2, handoffs: 1, audits: principal === 'primary' ? 1 : 0, emptyControls: 1 });
+  }
+});
+test('login never accepts an unexpected list success/error, failed session or partial login', async () => {
+  for (const [principal, options] of [
+    ['denied', { listStatus: 200 }], ['primary', { listStatus: 404 }],
+    ...[401, 403, 500, 503].map(listStatus => ['denied', { listStatus }]),
+    ...[401, 404, 500].map(sessionStatus => ['denied', { listStatus: 404, sessionStatus }]),
+    ...['navigationFailure', 'clickFailure', 'responseFailure', 'sessionCompletionFailure', 'handoffFailure', 'missingSignOut', 'retainedCredential']
+      .map(failure => ['denied', { listStatus: 404, [failure]: true }]),
+  ]) {
+    const fixture = loginFixture(options); await assert.rejects(fixture.run(principal));
+    assert(fixture.counters.dispatches <= 1); assert(fixture.counters.handoffs <= 1);
+    if (options.sessionStatus || options.sessionCompletionFailure) assert.equal(fixture.counters.handoffs, 0);
+  }
+});
+test('denied collection requires exactly the generic alert and no resource/option/detail disclosure', async () => {
+  for (const mutation of [{ alertCount: 0 }, { alertCount: 2 }, { alertText: 'owned protected canary' },
+    { resources: 1 }, { details: 1 }, { disabled: false }, { options: 2 },
+    { selectedID: uuid }, { optionText: 'owned protected canary' }]) {
+    const fixture = loginFixture({ listStatus: 404, ...mutation });
+    await assert.rejects(fixture.run('denied')); assert.equal(fixture.counters.dispatches, 1);
+  }
+  const unexpectedAlert = loginFixture({ alertCount: 1 });
+  await assert.rejects(unexpectedAlert.run('primary'));
+});
+test('journey v2 adds one closed failure field and preserves historical v1 read compatibility', () => {
+  const legacy = journey(); assert.deepEqual(validateJourney(legacy), legacy);
+  const current = { ...journey(), format: 'stead-checkpoint-a-browser-journey-v2', failedKeyboardSubstep: null };
+  assert.deepEqual(validateJourney(current), current);
+  const failed = { ...current, status: 'failed', failedStage: 'keyboard_palette_focus',
+    completed: STAGES.slice(1, 7), timings: current.timings.slice(0, 6), failedKeyboardSubstep: 'child_read' };
+  assert.deepEqual(validateJourney(failed), failed);
+  for (const change of [
+    { failedKeyboardSubstep: 'raw private error' }, { failedKeyboardSubstep: {} },
+    { failedKeyboardSubstep: ['child_read'] }, { failedKeyboardSubstep: 'child_read', status: 'completed' },
+    { failedKeyboardSubstep: 'child_read', failedStage: 'primary_login' },
+    { exception: 'owned private canary' }, { format: 'stead-checkpoint-a-browser-journey-v3' },
+  ]) assert.throws(() => validateJourney({ ...failed, ...change }));
+  const missing = { ...current }; delete missing.failedKeyboardSubstep;
+  assert.throws(() => validateJourney(missing));
+  assert.throws(() => validateJourney({ ...legacy, failedKeyboardSubstep: null }));
+});
+test('workspace select locators use exact combobox accessible names, not option-inclusive label text', () => {
+  const calls = [], locator = {};
+  const page = { getByRole: (role, options) => { calls.push({ role, options }); return locator; },
+    getByLabel: () => { throw new Error('Option-inclusive label engine must not be used'); } };
+  for (const name of ['Organization', 'Parent Team', 'Owning Team']) {
+    assert.equal(workspaceSelect(page, name), locator);
+    assert.deepEqual(calls.at(-1), { role: 'combobox', options: { name, exact: true } });
+  }
+  assert.throws(() => workspaceSelect(page, 'OrganizationCreate your first Organization'));
+  assert.equal(calls.length, 3);
+});
+
+test('importing both entry points does not execute native tools or the journey', () => {
+  assert.equal(typeof controller, 'function'); assert.equal(typeof namespace, 'function');
+  assert.equal(typeof runCheckpointAJourney, 'function');
+  for (const diagnostic of [verifyHarness, verifyIdentity, verifyInputs]) assert.equal(typeof diagnostic, 'function');
+});
+test('held BFF asset directory cannot be relabeled by replacing its pathname', () => fixture((directory) => {
+  const assets = path.join(directory, 'dist'), retained = path.join(directory, 'retained-dist');
+  mkdirSync(assets, { mode: 0o700 });
+  const held = openSync(assets, constants.O_RDONLY | constants.O_DIRECTORY);
+  try {
+    assert.equal(openedDirectoryMatches(held, assets), true);
+    renameSync(assets, retained); mkdirSync(assets, { mode: 0o700 });
+    assert.equal(openedDirectoryMatches(held, assets), false);
+    assert.equal(openedDirectoryMatches(held, retained), true);
+    const current = openSync(assets, constants.O_RDONLY | constants.O_DIRECTORY);
+    try { assert.equal(openedDirectoryMatches(current, assets), true); }
+    finally { closeSync(current); }
+  } finally { closeSync(held); }
+}));
+test('closed real-workload admission binds every source file and three distinct reviews', () => {
+  assert.deepEqual(validateAdmission(admission(), now), admission());
+  for (const mutate of [
+    (a) => { a.status = 'proposed'; }, (a) => { a.scope = 'synthetic-browser-compatibility'; },
+    (a) => { a.expiresAt = '2026-09-04T23:59:59.000Z'; }, (a) => { a.expiresAt = '2026-09-07T00:00:00.000Z'; },
+    (a) => { a.expiresAt = now + 1000; }, (a) => { a.files[SOURCE_FILES[0]] = 'A'.repeat(64); },
+    (a) => { delete a.files[SOURCE_FILES[1]]; }, (a) => { a.files['extra.mjs'] = digest; },
+    (a) => { a.source.apiSHA256 = ''; }, (a) => { a.source.head = '--help'; },
+    (a) => { delete a.harness; }, (a) => { a.harness.head = '--help'; },
+    (a) => { a.harness.tree = 'A'.repeat(40); }, (a) => { a.harness.extra = true; },
+    (a) => { a.harness.repository = '/home/fixture/../harness'; },
+    (a) => { a.instance.state = '/home/other/.cache/stead-dev'; },
+    (a) => { a.source.repository = '/home/skilgore/stead'; a.instance.state = FORBIDDEN_STATE; },
+    (a) => { a.reviews[1].reviewer = a.reviews[0].reviewer; }, (a) => { a.reviews[1].role = 'security'; },
+    (a) => { a.reviews[0].independentNonAuthor = false; }, (a) => { a.reviews[0].disposition = 'pending'; },
+    (a) => { a.instance.primaryCredential = 'never accepted'; },
+  ]) { const value = admission(); mutate(value); assert.throws(() => validateAdmission(value, now)); }
+});
+test('only canonical paths accepted, never aliases or broad roots', () => {
+  assert.equal(absolute('/home/fixture/source'), '/home/fixture/source');
+  for (const file of ['/', '/home/../home/source', '/home//source', '/home/source/', './source', '/home/secret\n', '/home/a\0b', '/home/a b']) assert.throws(() => absolute(file));
+});
+test('approved libstdc++ basenames pass the actual bounded reader without relaxing traversal or aliases', () => fixture((directory) => {
+  for (const basename of ['libstdc++.so.6', 'libstdc++.so.6.0.36']) {
+    const file = path.join(directory, basename);
+    writeFileSync(file, 'owned synthetic library fixture', { mode: 0o600, flag: 'wx' });
+    assert.equal(absolute(file), file);
+    assert.equal(readBounded(file, 64, { privateMode: true }).toString(), 'owned synthetic library fixture');
+    assert.throws(() => readBounded(file, 1));
+    const alias = file + '-alias'; symlinkSync(file, alias);
+    assert.throws(() => readBounded(alias, 64));
+  }
+  for (const file of ['/usr/lib/../libstdc++.so.6', '/usr/lib/libstdc++*.so', '/usr/lib/libstdc++;x', '/usr/lib/libstdc++\n.so']) assert.throws(() => absolute(file));
+}));
+test('owned bounded files reject symlinks, hardlinks, widened permissions and oversize', () => fixture((directory) => {
+  privateDirectory(directory);
+  const file = path.join(directory, 'fixture'); writeFileSync(file, 'abc', { mode: 0o600, flag: 'wx' });
+  assert.equal(readBounded(file, 3, { privateMode: true }).toString(), 'abc');
+  assert.throws(() => readBounded(file, 2));
+  assert.throws(() => readBounded(file, 3, { owner: process.getuid() + 1 }));
+  const alias = path.join(directory, 'alias'); symlinkSync(file, alias); assert.throws(() => readBounded(alias, 3));
+  chmodSync(file, 0o640); assert.throws(() => readBounded(file, 3, { privateMode: true }));
+  chmodSync(file, 0o622); assert.throws(() => readBounded(file, 3)); chmodSync(file, 0o600);
+  linkSync(file, path.join(directory, 'linked')); assert.throws(() => readBounded(file, 3));
+}));
+test('one-shot marker is durable, private, exclusive and never overwritten on retry', () => fixture((directory) => {
+  const file = claimAttempt(directory, { fixture: true });
+  const prior = readFileSync(file); assert.equal(lstatSync(file).mode & 0o777, 0o600);
+  assert.throws(() => claimAttempt(directory, { fixture: false })); assert.deepEqual(readFileSync(file), prior);
+}));
+test('private state rejects symlinked parent and nonprivate root', () => fixture((directory) => {
+  const alias = directory + '-alias'; symlinkSync(directory, alias);
+  try { assert.throws(() => privateDirectory(alias)); } finally { rmSync(alias); }
+  chmodSync(directory, 0o750); assert.throws(() => privateDirectory(directory));
+}));
+test('actual UI-generated metadata requests and fixed asset paths are allowed', () => {
+  for (const resource of ['', 'inbox', 'my-work', 'projects', 'knowledge', 'teams', 'assets/index-AbC123.js', 'assets/index-A1.css']) assert.equal(allowedRequest('GET', `${ORIGIN}/${resource}`), true);
+  for (const resource of ['session', 'organizations', `organizations/${uuid}/teams`, `organizations/${uuid}/projects`]) {
+    assert.equal(allowedRequest('GET', `${ORIGIN}/api/v1/${resource}`), true);
+    assert.equal(allowedRequest('POST', `${ORIGIN}/api/v1/${resource}`), true);
+  }
+  for (const resource of ['organizations', `organizations/${uuid}/teams`, `organizations/${uuid}/projects`]) assert.equal(allowedRequest('GET', `${ORIGIN}/api/v1/${resource}?page_size=20`), true);
+  assert.equal(allowedRequest('GET', `${ORIGIN}/api/v1/projects/${uuid}`), true);
+});
+test('network assertion rejects other origins, raw provider calls, protocols and path tricks', () => {
+  for (const url of ['http://localhost:18443/', 'https://127.0.0.1:18443/', 'https://localhost:13000/',
+    'https://user@localhost:18443/', 'https://localhost.:18443/', `${ORIGIN}/#`, `${ORIGIN}/api/v1/session?`,
+    `${ORIGIN}/api/v1/session?token=secret`, `${ORIGIN}/api/v1/organizations?page_size=20&page_size=20`,
+    `${ORIGIN}/api/v1/organizations?page_size=2000`, `${ORIGIN}/api/v1/organizations?after=${uuid}&page_size=20`,
+    `${ORIGIN}/api/v1/organizations/../session`, `${ORIGIN}/api/v1/%73ession`, `${ORIGIN}/api/v1/session#x`,
+    `${ORIGIN}/api/v1/repos`, `${ORIGIN}/api/v1/session/`, `${ORIGIN}/assets/../session.js`, 'file:///etc/passwd',
+    'wss://localhost:18443/', `${ORIGIN}/\u000a`, `${ORIGIN}/api/v1/session\\extra`]) assert.equal(allowedRequest('GET', url), false, 'closed URL');
+  for (const method of ['DELETE', 'PUT', 'PATCH', 'CONNECT', 'OPTIONS', 'get']) assert.equal(allowedRequest(method, `${ORIGIN}/api/v1/session`), false);
+  assert.equal(allowedRequest('POST', `${ORIGIN}/api/v1/teams/${uuid}`), false);
+});
+test('byte budget is aggregate and permanently fails after overflow or invalid input', () => {
+  const budget = byteBudget(10); assert.equal(budget.add(6), true); assert.equal(budget.add(4), true);
+  assert.equal(budget.add(1), false); assert.equal(budget.add(0), false); assert.equal(budget.exceeded, true);
+  for (const value of [-1, NaN, Infinity, 0.5, '1']) { const item = byteBudget(10); assert.equal(item.add(value), false); }
+});
+test('only closed proof fields are retained; DOM, secrets and raw errors cannot be added', () => {
+  const good = journey(); assert.deepEqual(validateJourney(good), good);
+  for (const mutate of [
+    (j) => { j.error = 'secret'; }, (j) => { j.timings[0].stage = 'private title'; },
+    (j) => { j.completed.reverse(); }, (j) => { j.network[0].headers = {}; },
+    (j) => { j.network[0].counts.session_create = -1; }, (j) => { j.accessibility.surfaces[0].html = 'DOM'; },
+    (j) => { j.accessibility.surfaces[0].violations = [{ rule: 'label', impact: 'serious', affectedNodes: 1, html: 'DOM' }]; },
+    (j) => { j.failedStage = 'raw exception'; }, (j) => { j.completed.pop(); },
+  ]) { const value = journey(); mutate(value); assert.throws(() => validateJourney(value)); }
+  const proof = { format: 'stead-checkpoint-a-browser-proof-v1', passed: true, phase: 'complete', networkIsolated: true,
+    rendererSandbox: true, cspPreserved: true, browserCleanup: true, journey: good };
+  validateInnerProof(proof);
+  for (const field of ['networkIsolated', 'rendererSandbox', 'cspPreserved', 'browserCleanup']) assert.throws(() => validateInnerProof({ ...proof, [field]: false }));
+  assert.throws(() => validateInnerProof({ ...proof, stdout: 'secret' }));
+  assert.throws(() => validateAxe({ surface: SURFACES[0], violations: [{ rule: 'label', impact: 'serious', affectedNodes: 2049 }], incomplete: [], passedRules: 1 }, SURFACES[0]));
+});
+
+test('served dist must exactly match existing bundle evidence, including hidden manifest', () => fixture((directory) => {
+  const write = (file, bytes) => { mkdirSync(path.dirname(path.join(directory, file)), { recursive: true, mode: 0o700 }); writeFileSync(path.join(directory, file), bytes, { mode: 0o600 }); };
+  const original = [['index.html', '<html></html>'], ['.vite/manifest.json', '{}'], ['assets/app.js', 'original_fixture']];
+  original.forEach(([file, bytes]) => write(file, bytes));
+  const evidence = { schema_version: '1.3', distribution_artifacts: original.map(([file, bytes]) => ({ file, sha256: sha256(bytes), uncompressed_bytes: Buffer.byteLength(bytes) })) };
+  const pin = verifyDistribution(directory, evidence); assert.equal(typeof pin, 'string');
+  write('assets/app.js', 'stale_ui_fixture'); assert.throws(() => verifyDistribution(directory, evidence)); write('assets/app.js', 'original_fixture');
+  write('assets/extra.js', 'extra'); assert.throws(() => verifyDistribution(directory, evidence)); rmSync(path.join(directory, 'assets/extra.js'));
+  rmSync(path.join(directory, '.vite/manifest.json')); assert.throws(() => verifyDistribution(directory, evidence)); write('.vite/manifest.json', '{}');
+  mkdirSync(path.join(directory, 'extra-directory')); assert.throws(() => verifyDistribution(directory, evidence)); rmSync(path.join(directory, 'extra-directory'), { recursive: true });
+  rmSync(path.join(directory, 'assets/app.js')); symlinkSync(path.join(directory, 'index.html'), path.join(directory, 'assets/app.js')); assert.throws(() => verifyDistribution(directory, evidence)); rmSync(path.join(directory, 'assets/app.js')); write('assets/app.js', 'original_fixture');
+  assert.equal(verifyDistribution(directory, evidence), pin);
+  for (const change of [
+    (e) => { e.distribution_artifacts.push(e.distribution_artifacts[0]); },
+    (e) => { e.distribution_artifacts[0].file = '../index.html'; },
+    (e) => { e.distribution_artifacts[0].uncompressed_bytes = 8388609; },
+  ]) { const value = structuredClone(evidence); change(value); assert.throws(() => verifyDistribution(directory, value)); }
+}));
+test('process stat retains direct parent and start identity, rejecting dead or mismatched PID', () => {
+  const stat = (pid, state, parent, start) => `${pid} (test name ) with brackets) ${[state, parent, ...Array(17).fill('0'), start, '0'].join(' ')}\n`;
+  assert.deepEqual(processStat(stat(100, 'S', 50, '1234'), 100), { parent: 50, start: '1234' });
+  assert.notDeepEqual(processStat(stat(100, 'S', 51, '1234'), 100), { parent: 50, start: '1234' });
+  assert.notDeepEqual(processStat(stat(100, 'S', 50, '1235'), 100), { parent: 50, start: '1234' });
+  for (const value of [stat(101, 'S', 50, '1234'), stat(100, 'Z', 50, '1234'), stat(100, 'X', 50, '1234'), stat(100, 'S', 'bad', '1234'), stat(100, 'S', 50, '-1')]) assert.throws(() => processStat(value, 100));
+});
+test('BFF command binds current served assets, fixed upstream/listener and fresh TLS paths', () => {
+  const repo = '/home/fixture/repository', state = repo + '/.cache/stead-dev', binary = state + '/stead-api';
+  const args = [binary, 'dev-web', '--listen', '127.0.0.1:18443', '--origin', ORIGIN, '--upstream', 'http://127.0.0.1:18000',
+    '--assets', repo + '/apps/web/dist', '--tls-cert', state + '/tls/localhost.crt', '--tls-key', state + '/tls/localhost.key'];
+  assert.equal(serviceCommand([binary], state, repo), 'api'); assert.equal(serviceCommand(args, state, repo), 'web');
+  for (const index of [0, 1, 3, 5, 7, 9, 11, 13]) { const changed = [...args]; changed[index] += '-stale'; assert.throws(() => serviceCommand(changed, state, repo)); }
+  assert.throws(() => serviceCommand([...args, '--assets', repo + '/apps/web/dist'], state, repo));
+  assert.throws(() => serviceCommand([binary, '--unknown'], state, repo));
+});
+test('only unique literal-loopback API/BFF listening socket inodes are attributable', () => {
+  const header = 'sl local_address rem_address st tx_queue rx_queue tr tm->when retrnsmt uid timeout inode';
+  const row = (port, inode, { address = '0100007F', uid = 1000, state = '0A' } = {}) => `0: ${address}:${port} 00000000:0000 ${state} 00000000:00000000 00:00000000 00000000 ${uid} 0 ${inode}`;
+  const api = row('4650', '10001'), web = row('480B', '10002'), valid = `${header}\n${api}\n${web}\n`;
+  assert.deepEqual(listenerInodes(valid, header + '\n', 1000), { api: '10001', web: '10002' });
+  for (const invalid of [
+    `${header}\n${api}`, `${header}\n${api}\n${web}\n${api}`,
+    `${header}\n${row('4650', '10001', { address: '00000000' })}\n${web}`,
+    `${header}\n${row('4650', '10001', { uid: 1001 })}\n${web}`,
+    `${header}\n${row('4650', '10001', { state: '01' })}\n${web}`,
+    `${header}\n${api}\n${row('480B', '10001')}`,
+  ]) assert.throws(() => listenerInodes(invalid, header + '\n', 1000));
+  assert.throws(() => listenerInodes(valid, `${header}\n${row('480B', '20000', { address: '00000000000000000000000000000000' })}`, 1000));
+});
+test('axe requires boolean eval/Function denial in the exact CSP-constrained CDP world', async () => {
+  const run = async (negativeResult) => {
+    const calls = []; let detached = false, evaluations = 0;
+    const session = { send: async (method, args) => {
+      calls.push({ method, args });
+      if (method === 'Page.getFrameTree') return { frameTree: { frame: { id: 'owned-fixture-frame' } } };
+      if (method === 'Page.createIsolatedWorld') return { executionContextId: 7 };
+      assert.equal(method, 'Runtime.evaluate'); evaluations++;
+      if (evaluations === 1) return negativeResult;
+      if (evaluations === 2) return { result: {} };
+      return { result: { value: { violations: [], incomplete: [], passedRules: 1 } } };
+    }, detach: async () => { detached = true; } };
+    const page = { context: () => ({ newCDPSession: async () => session }) };
+    let result, error;
+    try { result = await auditSurface(page, SURFACES[0], 'original_unit_fixture_source_not_evaluated'); }
+    catch (caught) { error = caught; }
+    return { calls, result, error, detached };
+  };
+  const good = await run({ result: { value: true } }); assert.equal(good.error, undefined); assert.equal(good.detached, true);
+  const world = good.calls.find((call) => call.method === 'Page.createIsolatedWorld').args;
+  assert.equal(world.grantUniveralAccess, false); assert.match(world.contentSecurityPolicy, /script-src 'self'/);
+  const evaluations = good.calls.filter((call) => call.method === 'Runtime.evaluate'); assert.equal(evaluations.length, 3);
+  for (const call of evaluations) { assert.equal(call.args.contextId, 7); assert.equal(call.args.allowUnsafeEvalBlockedByCSP, false); }
+  assert.match(evaluations[0].args.expression, /globalThis\.eval/); assert.match(evaluations[0].args.expression, /globalThis\.Function/);
+  for (const negative of [{ result: { value: false } }, { result: { value: 'true' } }, { result: { value: true }, exceptionDetails: {} }, { result: {} }]) {
+    const failed = await run(negative); assert.ok(failed.error); assert.equal(failed.detached, true);
+    assert.equal(failed.calls.filter((call) => call.method === 'Runtime.evaluate').length, 1);
+  }
+});
+test('actual axe result expression uses only the stricter per-run Unicode option and retains nonpasses', async () => {
+  for (const outcome of ['passed', 'incomplete', 'violation']) {
+    const document = {}, calls = []; let evaluations = 0, audits = 0, detached = false;
+    const rawRule = { id: 'color-contrast', impact: 'serious', nodes: [{ target: ['owned-protected-canary'] }] };
+    const raw = { violations: outcome === 'violation' ? [rawRule] : [], incomplete: outcome === 'incomplete' ? [rawRule] : [],
+      passes: outcome === 'passed' ? [{ id: 'color-contrast' }] : [] };
+    const session = { send: async (method, args) => {
+      calls.push({ method, args });
+      if (method === 'Page.getFrameTree') return { frameTree: { frame: { id: 'owned-fixture-frame' } } };
+      if (method === 'Page.createIsolatedWorld') return { executionContextId: 7 };
+      assert.equal(method, 'Runtime.evaluate'); evaluations++;
+      assert.equal(args.allowUnsafeEvalBlockedByCSP, false); assert.equal(args.contextId, 7);
+      if (evaluations === 1) return { result: { value: true } };
+      if (evaluations === 2) { assert.equal(args.expression, 'owned_source_not_executed'); return { result: {} }; }
+      assert.equal(evaluations, 3);
+      const value = await runInNewContext(args.expression, { document, axe: { version: '4.13.0',
+        configure: () => { throw new Error('Global replacement is forbidden'); },
+        run: async (actualDocument, options) => {
+          audits++; assert.equal(actualDocument, document);
+          assert.deepEqual(JSON.parse(JSON.stringify(options)), { checks: { 'color-contrast': { options: { ignoreUnicode: false } } } });
+          return raw;
+        } } }, { timeout: 1000 });
+      return { result: { value: JSON.parse(JSON.stringify(value)) } };
+    }, detach: async () => { detached = true; } };
+    const page = { context: () => ({ newCDPSession: async () => session }) };
+    const result = await auditSurface(page, SURFACES[0], 'owned_source_not_executed');
+    assert.equal(audits, 1); assert.equal(detached, true);
+    const world = calls.find(call => call.method === 'Page.createIsolatedWorld').args;
+    assert.equal(world.grantUniveralAccess, false); assert.match(world.contentSecurityPolicy, /script-src 'self'/);
+    const finding = { rule: 'color-contrast', impact: 'serious', affectedNodes: 1 };
+    assert.deepEqual(result, { surface: SURFACES[0], violations: outcome === 'violation' ? [finding] : [],
+      incomplete: outcome === 'incomplete' ? [finding] : [], passedRules: outcome === 'passed' ? 1 : 0 });
+    assert(!JSON.stringify(result).includes('canary'));
+  }
+});
+const unitCookie = () => ({ name: '__Host-stead_session', value: 'A'.repeat(43), domain: 'localhost', path: '/',
+  expires: (now + 3600_000) / 1000, httpOnly: true, secure: true, sameSite: 'Strict' });
+const unitBinding = () => ({ admissionSHA256: digest, sourceRevision: revision, instanceID: uuid });
+test('private browser handoff accepts only one exact established host-only cookie', () => {
+  assert.equal(browserCookie([unitCookie()], now).credential.origin, ORIGIN);
+  for (const cookies of [[], [unitCookie(), unitCookie()]]) assert.throws(() => browserCookie(cookies, now));
+  for (const [key, value] of [
+    ['name', 'stead_session'], ['value', 'B'.repeat(43)], ['value', 'A'.repeat(42)], ['domain', '.localhost'],
+    ['domain', '127.0.0.1'], ['path', '/api'], ['httpOnly', false], ['secure', false], ['sameSite', 'Lax'],
+    ['expires', -1], ['expires', now / 1000], ['expires', Infinity], ['expires', (now + 86400_001) / 1000],
+    ['partitionKey', 'https://localhost'],
+  ]) assert.throws(() => browserCookie([{ ...unitCookie(), [key]: value }], now));
+});
+test('established session is source-bound in separate exclusive private files, never overwritten', () => fixture((directory) => {
+  const role = 'primary', binding = unitBinding(); preserveSession(directory, role, [unitCookie()], binding, now);
+  const file = path.join(directory, SESSION_FILES[role]), metadataFile = path.join(directory, 'primary-session-binding.json');
+  const bytes = readFileSync(file), metadataBytes = readFileSync(metadataFile);
+  assert.equal(lstatSync(file).mode & 0o777, 0o600); assert.equal(lstatSync(metadataFile).mode & 0o777, 0o600);
+  const credential = JSON.parse(bytes), metadata = JSON.parse(metadataBytes);
+  assert.deepEqual(Object.keys(credential).sort(), ['cookie', 'origin']);
+  validatePreservedSession(credential, metadata, role, binding, now);
+  assert.throws(() => preserveSession(directory, role, [unitCookie()], binding, now));
+  assert.deepEqual(readFileSync(file), bytes); assert.deepEqual(readFileSync(metadataFile), metadataBytes);
+  for (const [key, value] of [['role', 'denied'], ['instanceID', revision], ['sourceRevision', 'c'.repeat(40)],
+    ['admissionSHA256', 'd'.repeat(64)], ['cookieSHA256', '0'.repeat(64)], ['expiresAt', now / 1000]]) {
+    assert.throws(() => validatePreservedSession(credential, { ...metadata, [key]: value }, role, binding, now));
+  }
+  assert.throws(() => validatePreservedSession({ ...credential, body: 'not retained' }, metadata, role, binding, now));
+}));
+test('partial handoff stays preserved/ambiguous and missing cookies never create output', () => fixture((directory) => {
+  assert.throws(() => preserveSession(directory, 'denied', [], unitBinding(), now));
+  const bindingFile = path.join(directory, 'denied-session-binding.json');
+  writeFileSync(bindingFile, 'original interrupted fixture', { mode: 0o600, flag: 'wx' });
+  assert.throws(() => preserveSession(directory, 'denied', [unitCookie()], unitBinding(), now));
+  assert.equal(readFileSync(bindingFile, 'utf8'), 'original interrupted fixture');
+  const file = path.join(directory, SESSION_FILES.denied), before = readFileSync(file);
+  assert.throws(() => preserveSession(directory, 'denied', [unitCookie()], unitBinding(), now));
+  assert.deepEqual(readFileSync(file), before);
+}));

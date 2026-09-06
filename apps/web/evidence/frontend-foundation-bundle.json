@@ -4,7 +4,7 @@
   "contract": "PERF-005",
   "generated_by": "apps/web/scripts/measure-bundle.mjs",
   "measurement_method": "Exact inventory, SHA-256 binding, bounded reads, and executable capability classification for every transformed browser artifact plus uncompressed file bytes and Node zlib level 9 over closed Vite manifest JavaScript graphs with stable shared-chunk attribution",
-  "scope": "Wave 0 original non-import foundation",
+  "scope": "Checkpoint A generated-client UI integration; live product acceptance pending",
   "mature_interface_perf005_complete": false,
   "lazy_boundaries_are_placeholders": true,
   "minimal_foundation_baseline_bytes_gzip": 60808,
@@ -27,7 +27,7 @@
   "distribution_artifacts": [
     {
       "file": ".vite/manifest.json",
-      "sha256": "0e4ffe35121410350d39faa213a087d67ef033e9726d4b537a29dde9e65455a6",
+      "sha256": "44a9bdc138d769940e7c7d22069c2af0d61e3e67b65353efe332172d44784e5f",
       "uncompressed_bytes": 1546
     },
     {
@@ -56,14 +56,14 @@
       "uncompressed_bytes": 59
     },
     {
-      "file": "assets/index-CQIDk0L8.js",
-      "sha256": "ed2282b98e602e2481097a92e2346bfb934bf99fd2e90cce41d3d89df62b6acb",
-      "uncompressed_bytes": 333987
+      "file": "assets/index-B2RLJEce.js",
+      "sha256": "e6d6a18e9a5b93ba256a94370ea112f1c354a5fd507013772094d7209ab47472",
+      "uncompressed_bytes": 412748
     },
     {
-      "file": "assets/index-flqa-JJY.css",
-      "sha256": "069b92488fb96f8eba703a7f851a2087cad8d6ae1d5ca040068d8acaf4d93199",
-      "uncompressed_bytes": 17156
+      "file": "assets/index-CwzQs1fy.css",
+      "sha256": "58198e2909962b993fe160c7746e4491354b5ea186156f7609e794ea7d5f7a4e",
+      "uncompressed_bytes": 19389
     },
     {
       "file": "assets/migration-BtQwf3v_.js",
@@ -72,7 +72,7 @@
     },
     {
       "file": "index.html",
-      "sha256": "08fffb932af477cc37a45b31c467d794bd4e070938d857cbfe316c2bb99d24e9",
+      "sha256": "0d73023ef2499f9b2fcb6da9af0b8d437ff77f411bf5683ca73fbd23c50a27ad",
       "uncompressed_bytes": 444
     }
   ],
@@ -163,7 +163,7 @@
       "unsafeStaticNetworkTargets": []
     },
     {
-      "file": "assets/index-CQIDk0L8.js",
+      "file": "assets/index-B2RLJEce.js",
       "dynamicResourceTargets": 19,
       "dynamicNetworkCalls": 1,
       "externalDestinations": [],
@@ -202,16 +202,16 @@
     }
   ],
   "eager_javascript": {
-    "uncompressed_bytes": 333987,
-    "gzip_bytes": 73389,
-    "delta_bytes_gzip": 12581,
+    "uncompressed_bytes": 412748,
+    "gzip_bytes": 78606,
+    "delta_bytes_gzip": 17798,
     "files": [
       {
         "source": "index.html",
-        "file": "assets/index-CQIDk0L8.js",
-        "sha256": "ed2282b98e602e2481097a92e2346bfb934bf99fd2e90cce41d3d89df62b6acb",
-        "uncompressed_bytes": 333987,
-        "gzip_bytes": 73389
+        "file": "assets/index-B2RLJEce.js",
+        "sha256": "e6d6a18e9a5b93ba256a94370ea112f1c354a5fd507013772094d7209ab47472",
+        "uncompressed_bytes": 412748,
+        "gzip_bytes": 78606
       }
     ]
   },

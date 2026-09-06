@@ -860,6 +860,10 @@ func validatePreparedEvidence(unsigned UnsignedActivation, profileEvidenceRequir
 }
 
 func validateUnsignedActivation(unsigned UnsignedActivation) error {
+	return validateUnsignedActivationMode(unsigned, false)
+}
+
+func validateUnsignedActivationMode(unsigned UnsignedActivation, localDevelopment bool) error {
 	if len(unsigned.Files) > MaxArchiveFiles || len(unsigned.Manifest.Files) > MaxArchiveFiles || len(unsigned.EvidenceManifest.Reports) > MaxArchiveFiles || len(unsigned.EvidenceManifest.ReviewReceipts) > MaxReviewReceipts || len(unsigned.EvidenceManifest.WaiverReceipts) > MaxWaiverReceipts {
 		return contractError("metadata_cardinality_limit", "unsigned_activation", nil)
 	}
@@ -977,22 +981,31 @@ func validateUnsignedActivation(unsigned UnsignedActivation) error {
 	if SHA256Digest(unsigned.EvidenceManifestBytes) != unsigned.EvidenceManifestDigest || unsigned.Manifest.EvidenceManifestDigest != unsigned.EvidenceManifestDigest {
 		return contractError("evidence_manifest_identity_mismatch", "evidence_manifest", nil)
 	}
-	var evidence PreSigningEvidenceManifestV1
-	if err := decodeStrict(unsigned.EvidenceManifestBytes, &evidence); err != nil {
-		return err
-	}
-	if !reflect.DeepEqual(evidence, unsigned.EvidenceManifest) {
-		return contractError("evidence_manifest_struct_mismatch", "evidence_manifest", nil)
-	}
-	canonicalEvidence, err := marshalCanonical(unsigned.EvidenceManifest)
-	if err != nil {
-		return err
-	}
-	if !bytes.Equal(canonicalEvidence, unsigned.EvidenceManifestBytes) {
-		return contractError("noncanonical_evidence_manifest", "evidence_manifest", nil)
-	}
-	if err := validatePreparedEvidence(unsigned, profileEvidenceRequirements); err != nil {
-		return err
+	if localDevelopment {
+		if len(profileEvidenceRequirements) != 0 {
+			return contractError("unsupported_local_profile_mapping", "profiles", nil)
+		}
+		if err := validateLocalDevelopmentEvidence(unsigned); err != nil {
+			return err
+		}
+	} else {
+		var evidence PreSigningEvidenceManifestV1
+		if err := decodeStrict(unsigned.EvidenceManifestBytes, &evidence); err != nil {
+			return err
+		}
+		if !reflect.DeepEqual(evidence, unsigned.EvidenceManifest) {
+			return contractError("evidence_manifest_struct_mismatch", "evidence_manifest", nil)
+		}
+		canonicalEvidence, err := marshalCanonical(unsigned.EvidenceManifest)
+		if err != nil {
+			return err
+		}
+		if !bytes.Equal(canonicalEvidence, unsigned.EvidenceManifestBytes) {
+			return contractError("noncanonical_evidence_manifest", "evidence_manifest", nil)
+		}
+		if err := validatePreparedEvidence(unsigned, profileEvidenceRequirements); err != nil {
+			return err
+		}
 	}
 	actualFiles := manifestFileList(unsigned.Files)
 	if !reflect.DeepEqual(actualFiles, unsigned.Manifest.Files) {

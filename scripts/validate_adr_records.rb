@@ -4393,7 +4393,7 @@ end
 migration_namespace_issue = issues["STEAD-P1-017"]
 if migration_namespace_issue
   expected_requirements = %w[ARCH-004 DEP-005 OPS-003 OPS-004 TEST-007]
-  expected_dependencies = %w[GATE-P0-APPROVED STEAD-P1-001 STEAD-P1-015]
+  expected_dependencies = %w[GATE-P0-APPROVED STEAD-P1-001 STEAD-P1-012 STEAD-P1-015]
   expected_owned_directories = %w[
     modules/migration
     tests/contract/migration
@@ -4414,6 +4414,7 @@ if migration_namespace_issue
   ]
 
   failures << "STEAD-P1-017 owner must be WS-11" unless migration_namespace_issue["owner"] == "WS-11"
+  failures << "STEAD-P1-017 must be deferred to Phase 2" unless migration_namespace_issue["phase"] == "phase-2" && migration_namespace_issue["status"] == "PHASE_GATED"
   failures << "STEAD-P1-017 requirements must match live issue #30" unless migration_namespace_issue["requirement_ids"] == expected_requirements
   failures << "STEAD-P1-017 dependencies must remain limited to its gate, foundation, and generic harness" unless migration_namespace_issue["dependencies"] == expected_dependencies
   failures << "STEAD-P1-017 owned directories must remain WS-11 migration-only" unless migration_namespace_issue["owned_directories"] == expected_owned_directories
@@ -4510,9 +4511,16 @@ end
   dependent_issue = issues[dependent_issue_id]
   if dependent_issue.nil?
     failures << "implementation issue catalog: missing #{dependent_issue_id}"
-  elsif !Array(dependent_issue["dependencies"]).include?("STEAD-P1-017")
-    failures << "#{dependent_issue_id} dependencies omit STEAD-P1-017"
+  elsif Array(dependent_issue["dependencies"]).include?("STEAD-P1-017")
+    failures << "#{dependent_issue_id} must not materialize the deferred STEAD-P1-017 namespace in Phase 1"
   end
+end
+
+phase_two_migration = issues["STEAD-P2-009"]
+if phase_two_migration.nil?
+  failures << "implementation issue catalog: missing STEAD-P2-009"
+elsif !Array(phase_two_migration["dependencies"]).include?("STEAD-P1-017")
+  failures << "STEAD-P2-009 must materialize the deferred STEAD-P1-017 namespace before its first importer"
 end
 
 implementation_assignments = {

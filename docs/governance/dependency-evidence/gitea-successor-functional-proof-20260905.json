@@ -1,0 +1,52 @@
+{
+  "recordedAt": "2026-09-05T19:25:44.322Z",
+  "disposition": "ISOLATED_PROVIDER_CAPABILITY_PROOF_NOT_STEAD_INTEGRATION_OR_RELEASE_APPROVAL",
+  "source": "https://github.com/go-gitea/gitea/commit/cf0f4dce72a8799e8afe5307be7470caf6936dba",
+  "sourceUnmodified": true,
+  "sourceKind": "upstream development snapshot, not a signed stable release",
+  "binarySha256": "baa9f7f8d3acd4e92e9e009d4e1356377a4371074a16d207a92b309f907eec68",
+  "build": "upstream backend target; approved Go 1.27.0; linux/amd64; CGO disabled; no frontend build or bindata",
+  "controllerSourceSha256": "7b66461df2ca40b07506dadf1af6c9a280aefa092e337d5998af082592d8ad9e",
+  "controllerSha256": "196a1247775c7f70d4ca4ea859676cbbda7d9c2a08d8179d36ce14f0680407df",
+  "profileSha256": "feab47de52cc0cde47b4d2885211ca7fccbdc3a1e4ebab85373ccfdbaea86550",
+  "inputsSha256": "f534329dc42885618cffb0bae741be9e0c3329d3b6bdc3c7006a54857d486c14",
+  "noticesSha256": "d2dfd73e2a4c569042a844da8b4e2216a31f4b6f566e6c44f782a12f1f384185",
+  "executionScope": "One reviewed fresh private synthetic REVIEW-NONRUNTIME probe; no host network, production data or credentials",
+  "resultSha256": "da967e442f148a83e1cbbc0c9feb6f2a2f74ed9523dcb7ed27545508c9e0fd6c",
+  "httpObservationsSha256": "eedf492f18d4d9c14715c66a6fa20de93a63bc5157148c0554aa4e9e2d978d62",
+  "controllerExitCode": 0,
+  "recordedHttpOperations": 28,
+  "readinessPollingIncluded": false,
+  "independentQA": {
+    "reviewer": "/root/unprivileged_qa_review",
+    "disposition": "ACCEPT_RECORDED_STOCK_PROVIDER_CAPABILITIES_AND_COMPLETED_CLEANUP_ONLY",
+    "evidenceSha256": "f68acb693e0231438b679a26893bf2154a96ed34202b30aef160eb5a8432f0f8",
+    "reviewSha256": "73ec723890682fc5cb46fca28d400a8b6503b2c615994e04b91d479fd216b903"
+  },
+  "passed": [
+    "Stock Gitea initializes its own fresh PostgreSQL schema through its supported migrate command; no Stead query of provider tables",
+    "Two distinct authenticated synthetic provider principals",
+    "Two private repositories created through documented APIs",
+    "Issue create, read, update and read-back",
+    "Markdown file create, read, SHA-preconditioned update and read-back",
+    "Stale file update returns 422 and subsequent read preserves the accepted content and SHA",
+    "Repository, issue and file known/nonexistent pairs return identical 66-byte 404 bodies to the unprivileged principal",
+    "Denied issue and file mutations return 404; subsequent authorized reads show one issue and unchanged file content",
+    "Controller exits successfully after deferred service shutdown; PostgreSQL logs clean shutdown",
+    "Independent QA verifies exact source/input/result/observation bindings, no surviving probe found among inspectable same-UID process executable/mount/network identities, and unchanged live Stead listener identities; two pre-existing system processes have recorded inspection limitations"
+  ],
+  "securityAndLicenseLimits": [
+    "Raw vulnerability findings remain retained; the stripped-binary govulncheck result is not clean. Deprecated OpenPGP packages are absent from the exact source import graph and recovered binary function inventory.",
+    "Retained native OS findings were evaluated for fixed synthetic inputs and enforced loopback-only isolation, not waived for production or untrusted content.",
+    "OFFLINE_MODE and deprecated picture switches are not credited as isolation controls. Actual dynamic defaults and the network namespace were reviewed.",
+    "The exact Couchbase BUSL non-production grant and complete adjacent notices cover this private use only; no production or redistribution conclusion is inferred.",
+    "Binary, images, source assets, credentials and raw probe state remain outside Stead product, release, installer, air-gap artifacts and their SBOMs."
+  ],
+  "remaining": [
+    "Real Stead provider adapter, central durable effect permits, provider read scopes and projection integration",
+    "OKF/Commonplace compatibility, service-principal authorization, asynchronous delivery and browser Work/Docs path",
+    "Issue stale-version rejection, concurrency/replay/recovery, supported version matrix, backup/restore and release gates",
+    "Separate reviewed activation before any successor use in the running Stead installation"
+  ],
+  "preservation": "All four failed setup fixtures, exact earlier controllers and their reviews remain preserved alongside the successful private run. No fixture was repaired or reused; the working Stead installation was not changed."
+}

@@ -1,0 +1,58 @@
+{
+  "date": "2026-09-05",
+  "scope": "Fresh isolated real PostgreSQL storage test; inactive provider effect implementation, not provider authorization or release acceptance",
+  "source_revision": "2df8e3fc07332b3b032e9cebd88bb2ed5e3b6e8b",
+  "source_tree": "2f38062c68b4fe1a95e56978e0fe62d80bdf29ef",
+  "test_binary_sha256": "fb6ff9ba890765c8786b0a673a18dd3d4dae5a81932397cbc5be9269858d02d8",
+  "toolchain": "Pinned Go 1.27.0, linux/amd64/v1, CGO_ENABLED=0, trimpath; three byte-identical builds, no dynamic interpreter or library section",
+  "postgresql_version": "18.6",
+  "image_platform": "sha256:f9fe3c8946c2f696d9835598a46bc584350acb925028ea1a47977ad9b93bd7c4",
+  "runner_sha256": "c2627bc1682ce28f949633d3ead2b004a53b97f45645c7a2852f0a6203924306",
+  "inside_script_sha256": "7a6a977569c68db9884ee38b9fa4b5d5b19c700f3c0b0c506d1a68bc795a47bc",
+  "native_manifest_sha256": "1d59cb61542a21fd602fd26f5ed3db96b5e3557d3396c812580c471244162368",
+  "native_entries_verified_before_and_after": 5605,
+  "additional_host_runner_files_verified": 5,
+  "acceptance_sha256": "5654dea7848e422c7106e483782225c23155d4dad065039ba96433e74a45c69c",
+  "result": {
+    "status": "passed",
+    "exit_code": 0,
+    "named_test": "TestLivePostgresBootstrapRolesSessionAndAtomicity",
+    "test_elapsed_seconds": 0.69,
+    "effect_storage_subtest_seconds": 0.24,
+    "timing_scope": "Single storage test execution, not product latency or a performance gate",
+    "result_sha256": "ae321e3b28c14ee915aec746853107ecf8238b79a3d222e86dbe901097388bcd",
+    "stdout_sha256": "75c4a0e296fdec4a94ccd8231d67ef6f8f81bf9416084b0a01dd4e54a030a27e",
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "generated_plaintext_password_absent_from_four_retained_logs": true,
+    "native_inputs_unchanged": true,
+    "clean_postgresql_shutdown": true
+  },
+  "executed_checks": [
+    "Fresh bootstrap preflight, two-user bootstrap rollback, SCRAM and exact owner-role/catalog checks",
+    "Actual transaction commit, rollback, immutable outbox routing and keyset pagination",
+    "Bounded aggregate security reads: 100 resources, 17 actual SQL statements in the fixed repository test",
+    "Atomic effect/audit/outbox writes and rollback after injected failures following actual audit/outbox INSERTs",
+    "Two concurrent full-record compare-and-swap updates have exactly one winner; stale and changed immutable bindings deny",
+    "One original Project operation reservation; duplicate reservation rolls back",
+    "Issued, consumed and reconciling rows prevent revocation acknowledgment",
+    "Mismatched terminal index, truncated record, case-aliased record, malformed label and oversized JSON deny",
+    "Malformed inspection and forced inspection timeout preserve committed pending and leave identity active",
+    "Test-owned storage transactions do not mint process execution provenance"
+  ],
+  "reviews": {
+    "source_qa_sha256": "72c26016006a5ec565122505cbc00dcfbb33c32174a6a60b8ce397021387d029",
+    "source_security_sha256": "976ce028c476e5dd70e74561a18a4b94e93021010223160ddb7182da92461e88",
+    "harness_security_sha256": "410f313ae96f898d03749cd6bcc600c1441b6d5aa694a16b8790379ef1822631",
+    "runtime_qa_sha256": "b3986ac875304f32af122a98ef0cc7cefbb8429ebb2a782198a7ff54c710d906",
+    "qa_before_sha256": "1c9ce6238ba22b6a137d0bc8199adec4fe1d17b98729bc891d7b329209b9a9e3",
+    "qa_after_sha256": "e39f9a44f64ca3e02915d46e41f6bc7127575e9acd441fb48f87efea219689a0",
+    "full_foundation_check_sha256": "e16e42ef8c5554b9e134346ead2366fb61db64babbc0a1da205db146541113c2"
+  },
+  "cleanup_qa": "All nine live listener identities and the installation-directory identity unchanged. No fixture executable/mount match among 181 same-UID processes; two historical system processes retain executable-inspection limits. Clean PostgreSQL shutdown at 21:39:47.923 UTC. The short-lived private namespace ID was not independently captured.",
+  "limits": [
+    "Existing approved runtime driver and scoped non-distributed PostgreSQL image were reused unchanged; source/test-binary scans report zero findings at the reviewed database snapshot, not a vulnerability-free guarantee.",
+    "Fresh private synthetic data and disposable credentials only, read-only public native files, UID/GID 70, dropped capabilities and unshared network; Unix sockets only. No live Stead data or credentials were used.",
+    "The helper invokes a private storage transaction plan, not successful public sealed EffectStore authorization. No provider I/O, proof-based terminalizer, cancellation orchestration, service-owned recovery or provider activation is demonstrated.",
+    "No production schema migration, upgrade/recovery, complete audit/outbox delivery, product performance, TEST-009 or Phase 1 release completion is claimed. No prior fixture or rejected binary was reused or deleted."
+  ]
+}

@@ -1,0 +1,116 @@
+{
+  "schema_version": "1.0.0",
+  "status": "accepted",
+  "scope": "Initial synthetic local-development template/compiler/test source only; not an instance artifact, production approval or Phase 1 release.",
+  "owner_decision_revision": "83d2bfef6c08227f2d15d465c7ada316c5934a31",
+  "source_revision": "3555709c34c8d8b9edadcb2351763b55b7595ab7",
+  "source_tree": "de05041ae2d528e4bab58b4da4ddaf1d207c105a",
+  "core_digest": "sha256:ea8c3e2c50f91f9fb372a4ae9d08b5164ed791bd15b2c0b6a1b0b7d6705f49cc",
+  "reviews": [
+    {
+      "role": "architecture-contract-owner",
+      "reviewer_id": "/root/collection_template_architecture",
+      "disposition": "accept",
+      "independent_non_author": true,
+      "evidence": "Independently reproduced actual Go Core/static API, all 111 prior guards plus nine new, 98 focused Go, 30 race and 28 browser-fixture tests. Verified all eight actual source commands and retained nine mutation survivors."
+    },
+    {
+      "role": "qa",
+      "reviewer_id": "/root/integrated_candidate_qa",
+      "disposition": "accept",
+      "independent_non_author": true,
+      "evidence": "Independently reproduced actual Core/API/bundle and 111-to-120 inventory. Own 30 localcheck race, 371 affected Go events with two explicit live skips, 79 Node and 43 frontend tests passed. All eight actual root commands verified; no live-test credit for skips."
+    },
+    {
+      "role": "security",
+      "reviewer_id": "/root/focused_corrections_security",
+      "disposition": "accept",
+      "independent_non_author": true,
+      "evidence": "Independently verified full pinned toolchain, actual Go Core/API, inventory and nine bounded commands. All eight root commands verified. Actual 111/120 passes unchanged 90-percent floor; nine survivors remain explicit coverage limitations, not exclusions or waivers."
+    }
+  ],
+  "evidence": [
+    {
+      "path": "/home/skilgore/stead-template-3555709-architecture-20260906.Kq2tdPJd/REVIEW.md",
+      "sha256": "dcaa45729d04cd71a7ffbfbcec5a3bf3b5fec55713dc03455eaed0429414c54a",
+      "result": "Distinct independent architecture/contract-owner ACCEPT for this exact source/Core only."
+    },
+    {
+      "path": "/home/skilgore/stead-template-3555709-qa-20260906.pmdNAZbI/REVIEW.md",
+      "sha256": "905037155e18ced96d8f3f1d9f3798fc4e391fa53292dcd120f0363018f641aa",
+      "result": "Distinct independent QA ACCEPT for this exact source/Core only."
+    },
+    {
+      "path": "/home/skilgore/stead-template-3555709-security-20260906.24z7uKrM/SECURITY-REVIEW.md",
+      "sha256": "100125a2b0f444573530ef9fd8ca240c1dcbb089be01d4f240fded591902db20",
+      "result": "Distinct independent security ACCEPT for this exact source/Core only."
+    },
+    {
+      "path": "/home/skilgore/stead-template-collection-successor-20260906.vfNjQ6sN/source-inspection.stdout",
+      "sha256": "83e8248cd2d227b566a700a491c084b2539df5200c25bfa184216f9da9b633a8",
+      "result": "Actual source executable self-inspection exit 0; final descendant requires its own verification."
+    },
+    {
+      "path": "/home/skilgore/stead-template-collection-successor-20260906.vfNjQ6sN/core.json",
+      "sha256": "8dff0248bb8cae5e4ac01d08b3841b09271219179a900acc78900628f55abc4b",
+      "result": "Actual source Core, independently verified through the Go CoreDigest function by all three reviewers."
+    },
+    {
+      "path": "/home/skilgore/stead-template-collection-successor-20260906.vfNjQ6sN/conformance.stdout",
+      "sha256": "6ea5533f36371f83e8b94461d87fb4b82d73786935359a05f0544863e6e7d2ae",
+      "result": "Actual separate cold source conformance exit 0, 32/32. Empty artifact subject, not installation evidence."
+    },
+    {
+      "path": "/home/skilgore/stead-template-collection-successor-20260906.vfNjQ6sN/mutations.stdout",
+      "sha256": "0815f81e9171f6766a7a7d123456761822adeda302de60f1a97644a5d926427c",
+      "result": "Actual full cold source campaign exit 0, 111/120 (92.5%); all nine survivors retained, unchanged 90-percent floor. Empty artifact subject."
+    },
+    {
+      "path": "/home/skilgore/stead-template-collection-successor-20260906.vfNjQ6sN/api-vulnerability.stdout",
+      "sha256": "3605e9139d1be9a911536fb413fabad639a3d2a9cf1209137fec194cc01f2aea",
+      "result": "Actual static API binary scan exit 0 with zero finding records, govulncheck 1.7.0 database 2026-09-02. No dependency scope expansion."
+    },
+    {
+      "path": "/home/skilgore/stead-template-collection-successor-20260906.vfNjQ6sN/stead-api",
+      "sha256": "90ea51e4e5e3f14293ae7bc389bdff3fa1e8833b8373a69425d7fbbc6625ac25",
+      "result": "Exact static source API independently reproduced; not final descendant activation evidence."
+    },
+    {
+      "path": "/home/skilgore/stead-template-collection-successor-20260906.vfNjQ6sN/foundation.stdout",
+      "sha256": "c48f2cc755f5afaa1bb260c22a033e79314b8c9807226c1a9414748ac9be33e3",
+      "result": "Actual full current foundation-check exit 0; not the integrated release gate."
+    },
+    {
+      "path": "/home/skilgore/stead-template-collection-successor-20260906.vfNjQ6sN/dev-check.stdout",
+      "sha256": "fef76fa19340abee7fc9561d1a65446bf231e3a40679abb1ab744af82763f77e",
+      "result": "Actual dev-check exit 0; no fresh installation credit."
+    },
+    {
+      "path": "/home/skilgore/stead-template-collection-successor-20260906.vfNjQ6sN/source-check-results.json",
+      "sha256": "9845ad67f6732acd36b51dce0e183cbb5ce99b1cfbe5dc5d4ab9804ebbe897e7",
+      "result": "All eight actual source execution records and hashes; distinct cold caches, no prior report reused."
+    },
+    {
+      "path": "/home/skilgore/stead-template-collection-corrections-20260906.Cf5tvRO5/EXECUTION-NOTE.md",
+      "sha256": "3b2303c80328c71c513c80fb134157c6a8a5781104ec344845f4552c710ecf0a",
+      "result": "The preceding aa087ec 88-case inventory failure remains held and preserved, not accepted."
+    },
+    {
+      "path": "/home/skilgore/stead-template-3555709-security-20260906.24z7uKrM/EXECUTION-NOTE.md",
+      "sha256": "920248733d19e310a00dc2d57b8552aa3b80335b2f9c704d669ed0f8306c17a1",
+      "result": "Independent verifier first post-processing assertion failure and separate corrected verification preserved; no campaign rerun."
+    }
+  ],
+  "conditions": [
+    "Only approved-template.json and this review record may differ from the reviewed source.",
+    "Each fresh initial installation must execute actual subject-bound conformance, mutation and dependency checks and completed-archive offline verification; no results here may be copied into receipts.",
+    "Preserve all prior stopped installations, their database/Git/blob/audit/outbox/configuration/keys/policy-anchor state, failed browser evidence and private session material. This source is not approved to upgrade or relabel those activations.",
+    "Production and nonlocal consumers reject development trust and evidence.",
+    "No renewal, rotation, recovery, upgrade, promotion, untrusted data or provider-object use is approved by this record.",
+    "Startup catalog inspection uses a transient separate read-only administrative process, not continuous privileged API monitoring.",
+    "Pass actual final metadata-descendant executable self-verification and scan before fresh startup; source review and matching older binary bytes do not activate this revision.",
+    "Real-browser source approval is not fresh workload admission; exact running instance, tools and workload need their separately required distinct reviews. Session cookies and all installation evidence remain private."
+  ],
+  "supersedes_source_revision": "0d2917235e205f275039b817cc17b7d8966cf377",
+  "correction": "Admits required collection-denial audit, accurate denied-collection browser expectations, palette grouping and stricter Unicode contrast evaluation. A focused selector correction restores every prior guard and adds nine collection guards after the held 88-case predecessor. The actual 120-case campaign passes the unchanged floor with all nine survivors retained. No policy, dependency, provider, derivation or release scope changes; fresh actual product verification remains required."
+}

@@ -491,7 +491,8 @@ func copyBranchCoverageTree(sourceRoot, destinationRoot string) error {
 		if err != nil {
 			return err
 		}
-		if entry.Name() == ".git" || entry.Name() == "node_modules" {
+		// Local service data and signing/credential state are never test source.
+		if entry.Name() == ".git" || entry.Name() == "node_modules" || entry.Name() == ".cache" {
 			if entry.IsDir() {
 				return filepath.SkipDir
 			}

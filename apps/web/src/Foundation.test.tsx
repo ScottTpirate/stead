@@ -1,6 +1,6 @@
 import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   Button,
@@ -9,6 +9,13 @@ import {
 } from "../../../packages/design-system/src/index";
 
 import { Foundation } from "./Foundation";
+import { platformClient } from "./platform";
+import { PlatformApiError } from "../../../packages/api-client/src/index";
+
+beforeEach(() => {
+  // Shell unit tests have no network. The live product smoke is separate.
+  vi.spyOn(platformClient, "request").mockRejectedValue(new PlatformApiError(401));
+});
 
 const forbiddenCapabilityLinks = () =>
   ["Code", "Delivery"].flatMap((name) =>
@@ -17,10 +24,34 @@ const forbiddenCapabilityLinks = () =>
 
 afterEach(() => {
   cleanup();
+  vi.restoreAllMocks();
   window.history.replaceState(null, "", "/");
 });
 
 describe("Foundation", () => {
+  it("presents command results as a named group of native buttons", async () => {
+    const user = userEvent.setup();
+    render(<Foundation />);
+    await user.click(screen.getByRole("button", { name: /Search or jump/u }));
+    const group = screen.getByRole("group", { name: "Command results" });
+    expect(within(group).getAllByRole("button").map((button) => button.textContent?.replace("↵", ""))).toEqual([
+      "Home", "Inbox", "My Work", "Projects", "Knowledge", "Teams",
+    ]);
+    expect(within(group).queryAllByRole("option")).toHaveLength(0);
+    await user.type(screen.getByRole("textbox", { name: "Search commands" }), "Teams");
+    const result = within(group).getByRole("button", { name: "Teams" });
+    result.focus();
+    await user.keyboard("{Enter}");
+    expect(window.location.pathname).toBe("/teams");
+  });
+
+  it("exposes one top-level main landmark reachable by the skip link", () => {
+    render(<Foundation />);
+    const main = screen.getByRole("main");
+    expect(main.parentElement?.closest("section[aria-label], section[aria-labelledby], aside, nav, header, footer, main, [role='region']")).toBeNull();
+    expect(screen.getByRole("link", { name: "Skip to content" }).getAttribute("href")).toBe("#" + main.id);
+  });
+
   it("keeps the universal navigation keyboard-operable", async () => {
     const user = userEvent.setup();
 
