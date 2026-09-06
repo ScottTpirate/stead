@@ -18,13 +18,14 @@ then stops all processes without deleting fixture data. A bounded
 `--hold-seconds=300` supports independent live protocol checks. Intake execution
 is **not** independent dependency approval or Stead product activation.
 
-The normal `up`, `down`, `status` and `smoke` command path is staged but remains
-fail-closed until the real API/bootstrap,
-worker, signed-policy and HTTPS web consumers are integrated. It must not be
-reported as seven-service or Checkpoint A acceptance yet. The Docker Compose
-variant remains unimplemented pending an independently reviewed networking
-configuration compatible with the exact local-policy template. Makefile entry
-points are present and delegate to the approval-gated rootless launcher:
+The normal `up`, `down`, `status` and `smoke` rootless path integrates the real
+API/bootstrap, worker, signed-policy and HTTPS web consumers. Startup remains
+fail-closed on exact-source, dependency and per-installation verification;
+previous successful installations do not activate changed source. Service smoke
+is not Checkpoint A acceptance. The Docker Compose variant remains unimplemented
+pending an independently reviewed networking configuration compatible with the
+exact local-policy template. Makefile entry points delegate to the
+approval-gated rootless launcher:
 
 ```sh
 make dev-check  # focused launcher and authenticated worker tests; no services
