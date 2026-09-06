@@ -76,7 +76,7 @@ The self-signed local server certificate is imported as an NSS trusted peer
 
 The journey creates one Organization, parent/child Teams and general Project,
 reads their details, reloads/refreshes, checks keyboard navigation and observes
-the separate no-grant user's empty views and generic denied creation. It never
+the separate no-grant user's generic denied collection and denied creation. It never
 uses mock routes or API/test-auth hooks. Axe runs from the pinned 4.13.0 artifact
 in a CDP isolated world with the actual product CSP preserved and CSP-blocked
 unsafe eval disabled; a boolean-only eval/Function negative control must pass in
@@ -213,16 +213,19 @@ success, `checkpoint-a-discovered-resources.json` (six UUIDv7 IDs). Existing fil
 are never overwritten. Synthetic unknown IDs are **not** evidence of absence;
 the separate SQL check must establish that. No cookie/body/error is published,
 and no login/logout, mutation, SQL, provider, browser or service action exists.
-The failed browser attempts so far do not satisfy this command's prerequisites.
+Failed browser attempts do not satisfy this command's prerequisites. The
+successful run at `da037350c3e319d509207e6220af152c31b35e26` has not been
+used to execute this separate discovery or SQL workload.
 
 ## Credential-free real-shell keyboard diagnostic
 
-New full-journey results use `stead-checkpoint-a-browser-journey-v2` with one
+New full-journey results use `stead-checkpoint-a-browser-journey-v3` with one
 closed `failedKeyboardSubstep` identifier. It identifies the first failed native
 action/assertion within the authenticated keyboard stage, including the linked
 Team/Project reads; it records no exception, DOM, selector, or credential. The
 action order, assertions, network limits and one-shot policy are unchanged.
-Historical v1 evidence remains readable and does not acquire missing detail.
+Historical v1/v2 evidence remains readable and does not acquire missing detail
+or the v3 denied-collection assertion.
 An anonymous diagnostic success does not fix an authenticated journey failure;
 run the next full journey only on a separately admitted fresh installation.
 
