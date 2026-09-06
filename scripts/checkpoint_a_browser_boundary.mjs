@@ -1,7 +1,7 @@
 // Closed, dependency-free boundaries for the one-shot Checkpoint A browser run.
 // Importing this module performs no filesystem, network or browser action.
 import { createHash } from 'node:crypto';
-import { openSync, closeSync, fstatSync, readSync, lstatSync, realpathSync,
+import { openSync, closeSync, fstatSync, readSync, lstatSync, realpathSync, opendirSync,
   writeSync, fsyncSync, constants } from 'node:fs';
 import path from 'node:path';
 
@@ -180,4 +180,80 @@ export function validateInnerProof(value) {
   if (value.journey !== null) validateJourney(value.journey);
   if (value.passed) check(value.phase === 'complete' && value.networkIsolated && value.rendererSandbox && value.cspPreserved && value.browserCleanup && value.journey?.status === 'completed');
   return value;
+}
+
+// Reuse the existing committed bundle inventory; no new bundle format or build.
+// The caller compares these evidence bytes with HEAD before this local check.
+export function verifyDistribution(directory, evidence) {
+  noSymlinks(directory);
+  check(evidence.schema_version === '1.3' && Array.isArray(evidence.distribution_artifacts));
+  const artifacts = evidence.distribution_artifacts;
+  check(artifacts.length > 0 && artifacts.length <= 1024);
+  const files = new Map(), directories = new Set(['']); let total = 0;
+  for (const entry of artifacts) {
+    keys(entry, ['file', 'sha256', 'uncompressed_bytes']);
+    check(typeof entry.file === 'string' && /^[A-Za-z0-9_./-]{1,500}$/.test(entry.file));
+    check(!entry.file.startsWith('/') && path.posix.normalize(entry.file) === entry.file && !entry.file.split('/').some((part) => part === '.' || part === '..'));
+    check(hash(entry.sha256) && integer(entry.uncompressed_bytes, 8388608) && entry.uncompressed_bytes > 0 && !files.has(entry.file));
+    total += entry.uncompressed_bytes; check(total <= 33554432); files.set(entry.file, entry);
+    let parent = path.posix.dirname(entry.file);
+    while (parent !== '.') { directories.add(parent); parent = path.posix.dirname(parent); }
+  }
+  check(files.has('index.html') && files.has('.vite/manifest.json'));
+  const seen = new Set(); let entries = 0;
+  const walk = (relative, depth) => {
+    check(depth <= 16); const current = path.join(directory, relative); noSymlinks(current);
+    const stat = lstatSync(current); check(stat.isDirectory() && stat.uid === process.getuid() && !(stat.mode & 0o022));
+    const stream = opendirSync(current);
+    try {
+      for (let entry; (entry = stream.readSync()) !== null;) {
+        check(++entries <= 1024);
+        const name = relative ? relative + '/' + entry.name : entry.name;
+        if (entry.isDirectory()) { check(directories.has(name)); walk(name, depth + 1); }
+        else {
+          check(entry.isFile() && files.has(name)); const expected = files.get(name);
+          const bytes = readBounded(path.join(directory, name), 8388608);
+          check(bytes.length === expected.uncompressed_bytes && sha256(bytes) === expected.sha256); seen.add(name);
+        }
+      }
+    } finally { stream.closeSync(); }
+  };
+  walk('', 0); check(seen.size === files.size);
+  return sha256(JSON.stringify(artifacts));
+}
+
+export function processStat(text, expectedPID) {
+  check(typeof text === 'string' && text.length < 8192);
+  const close = text.lastIndexOf(') '); check(close > 2 && text.startsWith(`${expectedPID} (`));
+  const fields = text.slice(close + 2).trim().split(/\s+/);
+  check(fields.length >= 20 && fields[0] !== 'Z' && fields[0] !== 'X');
+  check(/^[1-9][0-9]*$/.test(fields[1]) && /^[0-9]{1,20}$/.test(fields[19]));
+  const parent = Number(fields[1]); check(Number.isSafeInteger(parent));
+  return { parent, start: fields[19] };
+}
+export function serviceCommand(args, state, repository) {
+  check(Array.isArray(args) && args.every((value) => typeof value === 'string'));
+  const binary = path.join(state, 'stead-api');
+  if (args.length === 1 && args[0] === binary) return 'api';
+  const web = [binary, 'dev-web', '--listen', '127.0.0.1:18443', '--origin', ORIGIN,
+    '--upstream', 'http://127.0.0.1:18000', '--assets', path.join(repository, 'apps/web/dist'),
+    '--tls-cert', path.join(state, 'tls/localhost.crt'), '--tls-key', path.join(state, 'tls/localhost.key')];
+  check(args.length === web.length && args.every((value, index) => value === web[index]));
+  return 'web';
+}
+export function listenerInodes(tcp, tcp6, uid) {
+  const result = {};
+  for (const [text, ipv6] of [[tcp, false], [tcp6, true]]) {
+    check(typeof text === 'string' && text.length <= 1048576);
+    const lines = text.trim().split('\n'); check(lines.length <= 4096 && lines[0].includes('local_address'));
+    for (const line of lines.slice(1)) {
+      const fields = line.trim().split(/\s+/); check(fields.length >= 10);
+      const [address, port] = fields[1].split(':');
+      if (!['4650', '480B'].includes(port) || fields[3] !== '0A') continue;
+      const role = port === '4650' ? 'api' : 'web';
+      check(!ipv6 && address === '0100007F' && !result[role] && fields[7] === String(uid) && /^[1-9][0-9]*$/.test(fields[9]));
+      result[role] = fields[9];
+    }
+  }
+  check(result.api && result.web && result.api !== result.web); return result;
 }

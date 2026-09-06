@@ -2,14 +2,15 @@
 // namespace, installed service, live TLS or external process is invoked.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, chmodSync, symlinkSync, linkSync, readFileSync, rmSync, lstatSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, chmodSync, symlinkSync, linkSync, readFileSync, rmSync, lstatSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { allowedRequest, byteBudget, absolute, readBounded, privateDirectory,
   claimAttempt, validateAdmission, validateInnerProof, validateJourney, validateAxe,
-  SOURCE_FILES, ORIGIN, FORBIDDEN_STATE, STAGES, SURFACES, OPERATIONS } from './checkpoint_a_browser_boundary.mjs';
+  SOURCE_FILES, ORIGIN, FORBIDDEN_STATE, STAGES, SURFACES, OPERATIONS, sha256,
+  verifyDistribution, processStat, serviceCommand, listenerInodes } from './checkpoint_a_browser_boundary.mjs';
 import { main as controller } from './checkpoint_a_browser.mjs';
-import { main as namespace } from '../tests/e2e/checkpoint_a_browser.mjs';
+import { main as namespace, auditSurface } from '../tests/e2e/checkpoint_a_browser.mjs';
 import { runCheckpointAJourney } from '../tests/e2e/checkpoint_a_browser_journey.mjs';
 
 const uuid = '01991962-1234-7000-8000-123456789abc';
@@ -123,4 +124,82 @@ test('only closed proof fields are retained; DOM, secrets and raw errors cannot 
   for (const field of ['networkIsolated', 'rendererSandbox', 'cspPreserved', 'browserCleanup']) assert.throws(() => validateInnerProof({ ...proof, [field]: false }));
   assert.throws(() => validateInnerProof({ ...proof, stdout: 'secret' }));
   assert.throws(() => validateAxe({ surface: SURFACES[0], violations: [{ rule: 'label', impact: 'serious', affectedNodes: 2049 }], incomplete: [], passedRules: 1 }, SURFACES[0]));
+});
+
+test('served dist must exactly match existing bundle evidence, including hidden manifest', () => fixture((directory) => {
+  const write = (file, bytes) => { mkdirSync(path.dirname(path.join(directory, file)), { recursive: true, mode: 0o700 }); writeFileSync(path.join(directory, file), bytes, { mode: 0o600 }); };
+  const original = [['index.html', '<html></html>'], ['.vite/manifest.json', '{}'], ['assets/app.js', 'original_fixture']];
+  original.forEach(([file, bytes]) => write(file, bytes));
+  const evidence = { schema_version: '1.3', distribution_artifacts: original.map(([file, bytes]) => ({ file, sha256: sha256(bytes), uncompressed_bytes: Buffer.byteLength(bytes) })) };
+  const pin = verifyDistribution(directory, evidence); assert.equal(typeof pin, 'string');
+  write('assets/app.js', 'stale_ui_fixture'); assert.throws(() => verifyDistribution(directory, evidence)); write('assets/app.js', 'original_fixture');
+  write('assets/extra.js', 'extra'); assert.throws(() => verifyDistribution(directory, evidence)); rmSync(path.join(directory, 'assets/extra.js'));
+  rmSync(path.join(directory, '.vite/manifest.json')); assert.throws(() => verifyDistribution(directory, evidence)); write('.vite/manifest.json', '{}');
+  mkdirSync(path.join(directory, 'extra-directory')); assert.throws(() => verifyDistribution(directory, evidence)); rmSync(path.join(directory, 'extra-directory'), { recursive: true });
+  rmSync(path.join(directory, 'assets/app.js')); symlinkSync(path.join(directory, 'index.html'), path.join(directory, 'assets/app.js')); assert.throws(() => verifyDistribution(directory, evidence)); rmSync(path.join(directory, 'assets/app.js')); write('assets/app.js', 'original_fixture');
+  assert.equal(verifyDistribution(directory, evidence), pin);
+  for (const change of [
+    (e) => { e.distribution_artifacts.push(e.distribution_artifacts[0]); },
+    (e) => { e.distribution_artifacts[0].file = '../index.html'; },
+    (e) => { e.distribution_artifacts[0].uncompressed_bytes = 8388609; },
+  ]) { const value = structuredClone(evidence); change(value); assert.throws(() => verifyDistribution(directory, value)); }
+}));
+test('process stat retains direct parent and start identity, rejecting dead or mismatched PID', () => {
+  const stat = (pid, state, parent, start) => `${pid} (test name ) with brackets) ${[state, parent, ...Array(17).fill('0'), start, '0'].join(' ')}\n`;
+  assert.deepEqual(processStat(stat(100, 'S', 50, '1234'), 100), { parent: 50, start: '1234' });
+  assert.notDeepEqual(processStat(stat(100, 'S', 51, '1234'), 100), { parent: 50, start: '1234' });
+  assert.notDeepEqual(processStat(stat(100, 'S', 50, '1235'), 100), { parent: 50, start: '1234' });
+  for (const value of [stat(101, 'S', 50, '1234'), stat(100, 'Z', 50, '1234'), stat(100, 'X', 50, '1234'), stat(100, 'S', 'bad', '1234'), stat(100, 'S', 50, '-1')]) assert.throws(() => processStat(value, 100));
+});
+test('BFF command binds current served assets, fixed upstream/listener and fresh TLS paths', () => {
+  const repo = '/home/fixture/repository', state = repo + '/.cache/stead-dev', binary = state + '/stead-api';
+  const args = [binary, 'dev-web', '--listen', '127.0.0.1:18443', '--origin', ORIGIN, '--upstream', 'http://127.0.0.1:18000',
+    '--assets', repo + '/apps/web/dist', '--tls-cert', state + '/tls/localhost.crt', '--tls-key', state + '/tls/localhost.key'];
+  assert.equal(serviceCommand([binary], state, repo), 'api'); assert.equal(serviceCommand(args, state, repo), 'web');
+  for (const index of [0, 1, 3, 5, 7, 9, 11, 13]) { const changed = [...args]; changed[index] += '-stale'; assert.throws(() => serviceCommand(changed, state, repo)); }
+  assert.throws(() => serviceCommand([...args, '--assets', repo + '/apps/web/dist'], state, repo));
+  assert.throws(() => serviceCommand([binary, '--unknown'], state, repo));
+});
+test('only unique literal-loopback API/BFF listening socket inodes are attributable', () => {
+  const header = 'sl local_address rem_address st tx_queue rx_queue tr tm->when retrnsmt uid timeout inode';
+  const row = (port, inode, { address = '0100007F', uid = 1000, state = '0A' } = {}) => `0: ${address}:${port} 00000000:0000 ${state} 00000000:00000000 00:00000000 00000000 ${uid} 0 ${inode}`;
+  const api = row('4650', '10001'), web = row('480B', '10002'), valid = `${header}\n${api}\n${web}\n`;
+  assert.deepEqual(listenerInodes(valid, header + '\n', 1000), { api: '10001', web: '10002' });
+  for (const invalid of [
+    `${header}\n${api}`, `${header}\n${api}\n${web}\n${api}`,
+    `${header}\n${row('4650', '10001', { address: '00000000' })}\n${web}`,
+    `${header}\n${row('4650', '10001', { uid: 1001 })}\n${web}`,
+    `${header}\n${row('4650', '10001', { state: '01' })}\n${web}`,
+    `${header}\n${api}\n${row('480B', '10001')}`,
+  ]) assert.throws(() => listenerInodes(invalid, header + '\n', 1000));
+  assert.throws(() => listenerInodes(valid, `${header}\n${row('480B', '20000', { address: '00000000000000000000000000000000' })}`, 1000));
+});
+test('axe requires boolean eval/Function denial in the exact CSP-constrained CDP world', async () => {
+  const run = async (negativeResult) => {
+    const calls = []; let detached = false, evaluations = 0;
+    const session = { send: async (method, args) => {
+      calls.push({ method, args });
+      if (method === 'Page.getFrameTree') return { frameTree: { frame: { id: 'owned-fixture-frame' } } };
+      if (method === 'Page.createIsolatedWorld') return { executionContextId: 7 };
+      assert.equal(method, 'Runtime.evaluate'); evaluations++;
+      if (evaluations === 1) return negativeResult;
+      if (evaluations === 2) return { result: {} };
+      return { result: { value: { violations: [], incomplete: [], passedRules: 1 } } };
+    }, detach: async () => { detached = true; } };
+    const page = { context: () => ({ newCDPSession: async () => session }) };
+    let result, error;
+    try { result = await auditSurface(page, SURFACES[0], 'original_unit_fixture_source_not_evaluated'); }
+    catch (caught) { error = caught; }
+    return { calls, result, error, detached };
+  };
+  const good = await run({ result: { value: true } }); assert.equal(good.error, undefined); assert.equal(good.detached, true);
+  const world = good.calls.find((call) => call.method === 'Page.createIsolatedWorld').args;
+  assert.equal(world.grantUniveralAccess, false); assert.match(world.contentSecurityPolicy, /script-src 'self'/);
+  const evaluations = good.calls.filter((call) => call.method === 'Runtime.evaluate'); assert.equal(evaluations.length, 3);
+  for (const call of evaluations) { assert.equal(call.args.contextId, 7); assert.equal(call.args.allowUnsafeEvalBlockedByCSP, false); }
+  assert.match(evaluations[0].args.expression, /globalThis\.eval/); assert.match(evaluations[0].args.expression, /globalThis\.Function/);
+  for (const negative of [{ result: { value: false } }, { result: { value: 'true' } }, { result: { value: true }, exceptionDetails: {} }, { result: {} }]) {
+    const failed = await run(negative); assert.ok(failed.error); assert.equal(failed.detached, true);
+    assert.equal(failed.calls.filter((call) => call.method === 'Runtime.evaluate').length, 1);
+  }
 });

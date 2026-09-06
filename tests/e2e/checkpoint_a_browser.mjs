@@ -94,7 +94,7 @@ const AXE_RESULT = ` (async () => {
     return {violations,incomplete,passedRules:raw.passes.length};
   } catch { return null; }
 })() `;
-async function auditSurface(page, surface, axeSource) {
+export async function auditSurface(page, surface, axeSource) {
   const session = await page.context().newCDPSession(page);
   try {
     const { frameTree } = await session.send('Page.getFrameTree');
@@ -106,6 +106,15 @@ async function auditSurface(page, surface, axeSource) {
     });
     const parameters = { contextId: executionContextId, silent: true, generatePreview: false,
       includeCommandLineAPI: false, allowUnsafeEvalBlockedByCSP: false, timeout: 10_000 };
+    // The protocol can retain an existing world's cached CSP until navigation.
+    // Prove enforcement in THIS exact context before axe, not just response
+    // headers or requested protocol parameters. Return one boolean only.
+    const negative = await session.send('Runtime.evaluate', { ...parameters, returnByValue: true,
+      expression: `(() => {
+        const blocked = (operation) => { try { operation(); return false; } catch (error) { return error instanceof EvalError; } };
+        return blocked(() => globalThis.eval('1')) && blocked(() => globalThis.Function('return 1')());
+      })()` });
+    check(!negative.exceptionDetails && negative.result?.value === true);
     const loaded = await session.send('Runtime.evaluate', { ...parameters, expression: axeSource, returnByValue: false });
     check(!loaded.exceptionDetails);
     const evaluated = await session.send('Runtime.evaluate', { ...parameters, expression: AXE_RESULT, returnByValue: true, awaitPromise: true });
@@ -117,7 +126,7 @@ export async function main() {
   const proof = { format: 'stead-checkpoint-a-browser-proof-v1', passed: false, phase: 'namespace',
     networkIsolated: false, rendererSandbox: false, cspPreserved: false, browserCleanup: false, journey: null };
   let browser, tunnel, credentials, timer;
-  let failed = false, violations = 0, seenDocuments = 0;
+  let failed = false, violations = 0, seenDocuments = 0, cspChecks = 0;
   try {
     check(process.getuid() === 1000 && process.argv.length === 2);
     check(/^Max core file size[ \t]+0[ \t]+0[ \t]+bytes[ \t]*$/m.test(await readFile('/proc/self/limits', 'utf8')));
@@ -177,10 +186,11 @@ export async function main() {
       auditSurface: async (page, surface) => {
         check(violations === 0 && seenDocuments > 0);
         await proveSandbox(browser); proof.rendererSandbox = true;
-        return auditSurface(page, surface, axeSource);
+        const evidence = await auditSurface(page, surface, axeSource); cspChecks++;
+        return evidence;
       } }));
     credentials.primary = ''; credentials.denied = '';
-    proof.cspPreserved = violations === 0 && seenDocuments >= 3;
+    proof.cspPreserved = violations === 0 && seenDocuments >= 3 && cspChecks === 7;
     check(proof.journey.status === 'completed' && proof.cspPreserved && tunnel.good());
     proof.phase = 'cleanup';
   } catch { failed = true; } // Never serialize native, Playwright or protocol errors.
