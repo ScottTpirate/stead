@@ -6,7 +6,7 @@ import { mkdtempSync, writeFileSync, readFileSync, readdirSync, rmSync } from 'n
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { ORIGIN, sha256, KEYBOARD_SOURCE_FILES, validateAdmission } from './checkpoint_a_browser_boundary.mjs';
+import { ORIGIN, sha256, KEYBOARD_SOURCE_FILES, FORBIDDEN_STATE, validateAdmission } from './checkpoint_a_browser_boundary.mjs';
 import { validateTLSAdmission } from './checkpoint_a_tls_boundary.mjs';
 import { KEYBOARD_SCOPE, KEYBOARD_STEPS, validateKeyboardAdmission, claimKeyboardDiagnostic, keyboardAssets,
   keyboardRequestAllowed, keyboardResponseAllowed, validateFocus, validateKeyboardProof } from './checkpoint_a_keyboard_boundary.mjs';
@@ -20,9 +20,9 @@ const focus = () => ({ dialogOpen: false, documentFocused: false, visible: true,
   triggerFocused: false, searchFocused: false, teamsFocused: false, mainFocused: false });
 const admission = () => ({ format: 'stead-checkpoint-a-keyboard-admission-v1', status: 'accepted', scope: KEYBOARD_SCOPE,
   expiresAt: '2026-09-06T06:00:00.000Z', harness: { repository: '/home/fixture/harness', head: revision, tree: revision },
-  source: { repository: repo, head: revision, implementationRevision: revision, implementationTree: revision,
+  source: { repository: '/home/fixture/fresh', head: revision, implementationRevision: revision, implementationTree: revision,
     templateSHA256: hash, templateReviewSHA256: hash, apiSHA256: hash },
-  instance: { state: repo + '/.cache/stead-dev', instanceID: '01991c05-1a00-7000-8000-000000000001', bootstrapSHA256: hash, activationDigest: 'sha256:' + hash, certificateSHA256: hash },
+  instance: { state: '/home/fixture/fresh/.cache/stead-dev', instanceID: '01991c05-1a00-7000-8000-000000000001', bootstrapSHA256: hash, activationDigest: 'sha256:' + hash, certificateSHA256: hash },
   files: Object.fromEntries(KEYBOARD_SOURCE_FILES.map((file) => [file, hash])),
   reviews: ['security', 'qa', 'architecture-license'].map((role) => ({ role, reviewer: '/review/' + role,
     path: '/home/fixture/' + role + '.md', sha256: hash, independentNonAuthor: true, disposition: 'accept' })) });
@@ -39,6 +39,16 @@ test('inert distinct scope cannot use TLS or full-journey admission', () => {
     { cookie: 'not permitted' }, { expiresAt: '2026-09-06T04:00:00.000Z' }, { files: {} }]) {
     assert.throws(() => validateKeyboardAdmission({ ...admission(), ...change }, now));
   }
+});
+test('synthetic admission is checkout-independent while retained root state remains forbidden', () => {
+  const value = admission();
+  assert.equal(value.source.repository, '/home/fixture/fresh');
+  assert.notEqual(value.source.repository, repo);
+  assert.equal(value.instance.state, value.source.repository + '/.cache/stead-dev');
+  assert.deepEqual(validateKeyboardAdmission(value, now), value);
+  const retained = admission();
+  retained.source.repository = '/home/skilgore/stead'; retained.instance.state = FORBIDDEN_STATE;
+  assert.throws(() => validateKeyboardAdmission(retained, now));
 });
 test('exact root/assets/session GETs only; credentials redirects mutation and foreign paths fail', () => {
   const assets = keyboardAssets({ distribution_artifacts: [{ file: 'index.html', sha256: hash }, { file: 'assets/index-unit.js', sha256: hash }, { file: 'assets/index-unit.css', sha256: hash }] });
@@ -65,7 +75,10 @@ test('staging and claim never include session ingress or replace the failed appl
     assert.throws(() => claimKeyboardDiagnostic(privateAdmission, { scope: KEYBOARD_SCOPE }));
     assert.equal(readFileSync(appMarker, 'utf8'), 'first failure');
     const fakeAxe = path.join(directory, 'axe.mjs'); writeFileSync(fakeAxe, 'owned synthetic tool bytes');
-    const value = admission(); value.files = Object.fromEntries(KEYBOARD_SOURCE_FILES.map((file) => [file, sha256(readFileSync(path.join(repo, file)))]));
+    const value = admission();
+    // Only owned public source/evidence reads for staging, never live admission.
+    value.source.repository = repo;
+    value.files = Object.fromEntries(KEYBOARD_SOURCE_FILES.map((file) => [file, sha256(readFileSync(path.join(repo, file)))]));
     const staged = stage({ files: [{ path: fakeAxe, destination: '/tools/axe-core/axe.min.js', sha256: sha256(readFileSync(fakeAxe)), executable: false }] }, directory, value, Buffer.from('public synthetic certificate'), undefined, 'keyboard');
     assert.deepEqual(staged.args.slice(-2), ['/usr/bin/node', '/runner/tests/e2e/checkpoint_a_keyboard.mjs']);
     assert.deepEqual(readdirSync(path.join(directory, 'execution-root/fixture')).sort(), ['axe-pin.json', 'keyboard-assets.json', 'localhost.crt']);
