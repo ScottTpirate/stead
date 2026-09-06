@@ -4,7 +4,8 @@
 // It owns acquisition, activation, network confinement, deadlines and cleanup.
 // Never retry this function after a possibly dispatched login or mutation.
 // Contexts/pages remain with the controller on success AND failure: no logout,
-// cookie export, screenshots, traces, response bodies or credential file reads.
+// screenshots, traces, response bodies or credential file reads. A reviewed
+// controller may preserve only the established session via afterLogin.
 
 const ORIGIN = "https://localhost:18443";
 const TIMEOUT = 10_000;
@@ -166,7 +167,7 @@ async function axeSurface(page, auditSurface, surface) {
  * readiness, complete accessibility, or a phase/release acceptance.
  */
 export async function runCheckpointAJourney({
-  primaryContext, deniedContext, primaryCredential, deniedCredential, auditSurface = null,
+  primaryContext, deniedContext, primaryCredential, deniedCredential, auditSurface = null, afterLogin = null,
 } = {}) {
   let stage = "preflight";
   const completed = [], accessibility = [], timings = [];
@@ -195,8 +196,15 @@ export async function runCheckpointAJourney({
     if (beforeLogin) await audit(page, "primary_login");
     await page.getByLabel("Setup credential", { exact: true }).fill(credential);
     credential = "";
-    await actionWithResponses(page, [["session_create", 200], ["organization_list", 200]],
-      () => page.getByRole("button", { name: "Sign in", exact: true }).click());
+    await actionWithResponses(page, [["organization_list", 200]], () => Promise.all([
+      (async () => {
+        const response = await page.waitForResponse((value) => matches(value.request(), "session_create"), { timeout: TIMEOUT });
+        requireCondition(response.status() === 200);
+        requireCondition(await response.finished() === null);
+        if (afterLogin) await afterLogin(page.context(), beforeLogin ? "primary" : "denied");
+      })(),
+      page.getByRole("button", { name: "Sign in", exact: true }).click(),
+    ]));
     await page.getByRole("button", { name: "Sign out", exact: true }).waitFor();
     await emptyOrganization(page);
     requireCondition(await page.getByLabel("Setup credential", { exact: true }).count() === 0);
@@ -210,6 +218,7 @@ export async function runCheckpointAJourney({
     requireCondition(typeof deniedCredential === "string" && /^[A-Za-z0-9_-]{43}$/.test(deniedCredential));
     requireCondition(primaryCredential !== deniedCredential);
     requireCondition(auditSurface === null || typeof auditSurface === "function");
+    requireCondition(afterLogin === null || typeof afterLogin === "function");
     usedContexts.add(primaryContext); usedContexts.add(deniedContext);
     const primary = await primaryContext.newPage(), denied = await deniedContext.newPage();
     for (const page of [primary, denied]) {
