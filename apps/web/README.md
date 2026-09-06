@@ -34,6 +34,21 @@ value, and unit. It never contains a route, resource ID, query, title, body, tok
 input, or profile ID. Platform transport observations likewise expose only operation ID,
 duration, status, and response byte count.
 
+Timing markers deliberately distinguish three boundaries. `cold-shell-acknowledgement`
+and `route-shell-acknowledgement` mean that the shell DOM committed, not that authorized
+data loaded. `cold-useful-content` and `route-useful-content` finish when the implemented
+Home/Teams/Projects surface commits its completed authorized reads, including an
+authoritative empty result. Pending loads, errors, and unimplemented placeholders do not
+produce useful-content samples. Home does not wait for secondary Team/Project reads.
+`cold-interactive` and `route-interactive` additionally wait for applicable controls to be
+enabled and a rendering opportunity (two animation frames); a route/auth/readiness change
+cancels the pending callback. A resolved sign-in form may be interactive without being
+authorized content. Failed/canceled spans emit no success sample, not a zero duration.
+These are application readiness markers, not browser input-delay measurements or proof
+that every possible interaction works; actual browser/golden-path measurements remain
+separate. Cold spans start at the navigation time origin; route spans start on in-app or
+history navigation. Events retain the same closed name/value/unit privacy boundary.
+
 Two gates deliberately remain outside this branch:
 
 - `DEP-APP-DEVLANE-SOURCE-7719DCAD` authorizes only an inert source reference with no

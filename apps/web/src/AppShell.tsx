@@ -42,8 +42,10 @@ function NavigationGlyph({ route }: { readonly route: PrimaryRouteId }) {
 
 function RouteSurface({ route, children }: { readonly route: RouteMatch; readonly children?: ReactNode }) {
   useLayoutEffect(() => {
-    endPerformanceSpan("route-useful-content");
-    endPerformanceSpan("cold-interactive");
+    // This is shell DOM acknowledgement only. Protected content and usable
+    // controls are measured by Workspace after its authoritative loads commit.
+    endPerformanceSpan("route-shell-acknowledgement");
+    endPerformanceSpan("cold-shell-acknowledgement");
   }, [route]);
 
   if (route.kind === "unmatched") {

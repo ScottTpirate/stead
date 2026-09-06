@@ -27,7 +27,7 @@
   "distribution_artifacts": [
     {
       "file": ".vite/manifest.json",
-      "sha256": "1c20d7924b3e9f5555f8df41bc29b0b5529cbc18015ee799f07db6303a1d41a1",
+      "sha256": "78943c168174ca61c70eedca5f1c1a4d9f1c1b82fc889d0e57bf6b1a9cf3ec1c",
       "uncompressed_bytes": 1546
     },
     {
@@ -56,14 +56,14 @@
       "uncompressed_bytes": 59
     },
     {
+      "file": "assets/index-C7AtAWxF.js",
+      "sha256": "cb2dfc19b07563d24538807245ecd21ce9f270a1613d7dcc34c1a2035a673567",
+      "uncompressed_bytes": 412510
+    },
+    {
       "file": "assets/index-CTo4Bph1.css",
       "sha256": "74cb8f55dff4437cbfc7fe38da4dda165a50058d1a88699ab56a87168248bb25",
       "uncompressed_bytes": 19391
-    },
-    {
-      "file": "assets/index-vnzM6Wvy.js",
-      "sha256": "6f9dd84711a83ec14b6aecc14ee03fedead89f7134c52194b4f10c2a49862be3",
-      "uncompressed_bytes": 410811
     },
     {
       "file": "assets/migration-BtQwf3v_.js",
@@ -72,7 +72,7 @@
     },
     {
       "file": "index.html",
-      "sha256": "1a88c532f645933643a92866c984f184066fa110a01cad4f10369433a7a30f32",
+      "sha256": "03f9178b1f8b4ddb2e581a385c446000fbd8b87559890e7746876c4b56b6bd49",
       "uncompressed_bytes": 444
     }
   ],
@@ -163,7 +163,7 @@
       "unsafeStaticNetworkTargets": []
     },
     {
-      "file": "assets/index-vnzM6Wvy.js",
+      "file": "assets/index-C7AtAWxF.js",
       "dynamicResourceTargets": 19,
       "dynamicNetworkCalls": 1,
       "externalDestinations": [],
@@ -202,16 +202,16 @@
     }
   ],
   "eager_javascript": {
-    "uncompressed_bytes": 410811,
-    "gzip_bytes": 78139,
-    "delta_bytes_gzip": 17331,
+    "uncompressed_bytes": 412510,
+    "gzip_bytes": 78540,
+    "delta_bytes_gzip": 17732,
     "files": [
       {
         "source": "index.html",
-        "file": "assets/index-vnzM6Wvy.js",
-        "sha256": "6f9dd84711a83ec14b6aecc14ee03fedead89f7134c52194b4f10c2a49862be3",
-        "uncompressed_bytes": 410811,
-        "gzip_bytes": 78139
+        "file": "assets/index-C7AtAWxF.js",
+        "sha256": "cb2dfc19b07563d24538807245ecd21ce9f270a1613d7dcc34c1a2035a673567",
+        "uncompressed_bytes": 412510,
+        "gzip_bytes": 78540
       }
     ]
   },

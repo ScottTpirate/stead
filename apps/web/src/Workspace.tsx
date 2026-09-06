@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent } from "react";
 
 import { PlatformApiError, type JsonValue, type PlatformOperationId } from "../../../packages/api-client/src/index";
 import { AppShell } from "./AppShell";
 import { clearAuthorizedPresentationState, platformClient } from "./platform";
 import type { RouteMatch } from "./routes";
+import { cancelPerformanceSpan, endPerformanceSpan } from "./performance";
 
 interface Session {
   principal: { type: string; id: string };
@@ -45,8 +46,18 @@ export function Workspace({ route, navigate }: { readonly route: RouteMatch; rea
   const [refreshRevision, setRefreshRevision] = useState(0);
   const generation = useRef(0);
   const mutationKey = useRef<{ fingerprint: string; value: string } | null>(null);
+  // Empty arrays are not evidence of a completed authorized read. These stamps
+  // describe committed presentation readiness only, never authorization.
+  const [organizationsReady, setOrganizationsReady] = useState(false);
+  const [readyCollections, setReadyCollections] = useState<{
+    session: Session; organizationID: string; generation: number; refreshRevision: number;
+  } | null>(null);
 
   const clear = useCallback(() => {
+    cancelPerformanceSpan("cold-useful-content");
+    cancelPerformanceSpan("cold-interactive");
+    cancelPerformanceSpan("route-useful-content");
+    cancelPerformanceSpan("route-interactive");
     generation.current += 1;
     setSession(null);
     setOrganizations([]);
@@ -54,6 +65,8 @@ export function Workspace({ route, navigate }: { readonly route: RouteMatch; rea
     setTeams([]);
     setProjects([]);
     setPeek(null);
+    setOrganizationsReady(false);
+    setReadyCollections(null);
     setContinuations({ organization: "", team: "", project: "" });
     mutationKey.current = null;
     clearAuthorizedPresentationState();
@@ -71,9 +84,11 @@ export function Workspace({ route, navigate }: { readonly route: RouteMatch; rea
   }, []);
 
   const loadOrganizations = useCallback(async (revision: number, after = "") => {
+    if (!after && revision === generation.current) setOrganizationsReady(false);
     const result = await platformClient.request<ResourcePage>("listOrganizations", { query: { page_size: 20, ...(after ? { after } : {}) } });
     if (revision !== generation.current) return;
     applyPage("organization", result.data, after !== "");
+    setOrganizationsReady(true);
     if (!after) setOrganizationID((current) => result.data.items.some((item) => item.id === current) ? current : result.data.items[0]?.id ?? "");
   }, [applyPage]);
 
@@ -91,6 +106,7 @@ export function Workspace({ route, navigate }: { readonly route: RouteMatch; rea
   }, [failed, loadOrganizations]);
 
   useEffect(() => {
+    setReadyCollections(null);
     setTeams([]);
     setProjects([]);
     setPeek(null);
@@ -105,6 +121,7 @@ export function Workspace({ route, navigate }: { readonly route: RouteMatch; rea
       if (controller.signal.aborted || generation.current !== revision) return;
       applyPage("team", teamList.data, false);
       applyPage("project", projectList.data, false);
+      setReadyCollections({ session, organizationID, generation: revision, refreshRevision });
     }).catch((cause: unknown) => { if (!controller.signal.aborted) failed(cause); });
     return () => { controller.abort(); };
   }, [organizationID, session, refreshRevision, failed, applyPage]);
@@ -224,6 +241,46 @@ export function Workspace({ route, navigate }: { readonly route: RouteMatch; rea
 
   const area = route.kind === "primary" ? route.route.id : "unmatched";
   const resources = area === "teams" ? teams : area === "projects" ? projects : organizations;
+  const implementedArea = area === "home" || area === "teams" || area === "projects";
+  const collectionsReady = readyCollections?.session === session &&
+    readyCollections.organizationID === organizationID &&
+    readyCollections.generation === generation.current &&
+    readyCollections.refreshRevision === refreshRevision;
+  const contentReady = !checking && !error && Boolean(session) && implementedArea &&
+    organizationsReady && (area === "home" || !organizationID || collectionsReady);
+  const loginReady = !checking && !session && !error;
+  const interactiveReady = !busy && (contentReady || loginReady);
+
+  useLayoutEffect(() => {
+    if (error || (!checking && (!session || !implementedArea))) {
+      cancelPerformanceSpan("cold-useful-content");
+      cancelPerformanceSpan("route-useful-content");
+    }
+    if (error || (session && !implementedArea)) {
+      cancelPerformanceSpan("cold-interactive");
+      cancelPerformanceSpan("route-interactive");
+    }
+    if (contentReady) {
+      endPerformanceSpan("cold-useful-content");
+      endPerformanceSpan("route-useful-content");
+    }
+    if (!interactiveReady) return;
+    // React has committed the relevant enabled controls and handlers. Allow a
+    // rendering opportunity, then verify the same ready render still exists;
+    // cleanup cancels samples on route/auth/load changes before the next frame.
+    let nextFrame: number | undefined;
+    const frame = window.requestAnimationFrame(() => {
+      nextFrame = window.requestAnimationFrame(() => {
+        endPerformanceSpan("cold-interactive");
+        endPerformanceSpan("route-interactive");
+      });
+    });
+    return () => {
+      window.cancelAnimationFrame(frame);
+      if (nextFrame !== undefined) window.cancelAnimationFrame(nextFrame);
+    };
+  }, [route, checking, session, error, implementedArea, contentReady, interactiveReady]);
+
   return <AppShell route={route} navigate={navigate} sessionLabel={session ? <button type="button" onClick={() => { void logout(); }} disabled={busy}>Sign out</button> : "Local development"}>
     <div className="product-workspace" aria-busy={checking || busy}>
       <p className="product-development" role="note">Local development · synthetic data only</p>
