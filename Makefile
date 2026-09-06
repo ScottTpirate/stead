@@ -1,7 +1,7 @@
 .PHONY: foundation-check go-check contract-check
 
 foundation-check: go-check contract-check
-	scripts/run_pinned_node.sh node --test scripts/checkpoint_a_smoke.test.mjs scripts/checkpoint_a_denial.test.mjs scripts/checkpoint_a_browser.test.mjs
+	scripts/run_pinned_node.sh node --test scripts/checkpoint_a_smoke.test.mjs scripts/checkpoint_a_denial.test.mjs scripts/checkpoint_a_browser.test.mjs scripts/checkpoint_a_tls.test.mjs
 	scripts/run_pinned_node.sh npm run typecheck
 	scripts/run_pinned_node.sh npm run test:unit --workspace=@stead/web
 	scripts/run_pinned_node.sh npm run test --workspace=@stead/web
@@ -60,3 +60,11 @@ checkpoint-a-browser:
 	  exec /usr/bin/env -i PATH=/usr/bin LANG=C.UTF-8 TZ=UTC \
 	  /tmp/stead-node-toolchain-26.8.1/toolchain/node-v26.8.1-linux-x64/bin/node \
 	  scripts/checkpoint_a_browser.mjs --review "$$STEAD_BROWSER_REVIEW"
+
+.PHONY: checkpoint-a-tls
+# Separate admission: no browser journey, setup/session input, or application marker.
+checkpoint-a-tls:
+	@test -n "$$STEAD_TLS_REVIEW" && ulimit -S -c 0 && ulimit -H -c 0 && \
+	  exec /usr/bin/env -i PATH=/usr/bin LANG=C.UTF-8 TZ=UTC \
+	  /tmp/stead-node-toolchain-26.8.1/toolchain/node-v26.8.1-linux-x64/bin/node \
+	  scripts/checkpoint_a_tls.mjs --review "$$STEAD_TLS_REVIEW"

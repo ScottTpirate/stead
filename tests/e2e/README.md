@@ -70,6 +70,9 @@ and profiles are tmpfs. The only host connection is literal 127.0.0.1:18443;
 the relay does not terminate TLS or implement CONNECT/SOCKS. Chromium's nested
 user-namespace and seccomp sandbox remain enabled. No display, DBus, GPU or
 device/driver tree is exposed. Both inherited core limits are zero.
+The self-signed local server certificate is imported as an NSS trusted peer
+(`P,,`), not a certificate authority (`C,,`), following
+[Chromium's Linux certificate guidance](https://chromium.googlesource.com/chromium/src/+/master/docs/linux/cert_management.md).
 
 The journey creates one Organization, parent/child Teams and general Project,
 reads their details, reloads/refreshes, checks keyboard navigation and observes
@@ -108,3 +111,54 @@ calls, audit/outbox durability, hierarchy authorization, known/unknown existence
 nondisclosure, complete accessibility, TEST-009 or a release gate. Those require
 separate actual backend inspection and release evidence. Sparse-access discovery
 and provider integration are not implemented by this runner.
+
+## Credential-free real-origin TLS diagnostic
+
+`scripts/checkpoint_a_tls.mjs` and `tests/e2e/checkpoint_a_tls.mjs` diagnose the
+actual fresh BFF certificate without consuming a browser journey or session.
+They require separate exact-source, tool-closure, instance and three distinct
+non-author review dispositions before execution; they do not create approvals.
+Use `STEAD_TLS_REVIEW=/absolute/private/accepted-tls-review.json make checkpoint-a-tls`.
+Imports and `scripts/run_pinned_node.sh node --test scripts/checkpoint_a_tls.test.mjs`
+run no live browser/native/service action. The test is in foundation-check.
+
+The private 0600 admission has the existing closed identity/review fields, but
+format `stead-checkpoint-a-tls-admission-v1`, scope
+`one-credential-free-real-origin-tls-diagnostic`, and all eight `TLS_SOURCE_FILES`
+hashes. It cannot authorize the real browser entrypoint. Its owned 0700 parent
+receives an exclusive fsynced `<admission-path>.tls-attempt.json` sidecar before
+execution. That diagnostic admission is one-use; the command never reads,
+rewrites or removes the application's existing browser attempt marker. Keep
+first failures. A new diagnostic requires a separate reviewed admission; it
+does not authorize replaying the failed journey's one-time credentials.
+
+The controller reuses the exact 512+15 input checks, separate frozen application
+and harness identities, active executable/socket/held-dist checks and fixed byte
+relay. Only existing public bootstrap/running/template metadata and the pinned
+public certificate are read from the application; never secret service config,
+one-time tokens, session/cookie files, private keys or provider state. No stdin
+is passed to the namespace. Only the public certificate is added to its staged
+fixture inputs: no session binding or credential ingress. Host trust/settings
+and the application certificate/keys/state remain unchanged.
+
+Four separate namespace-only HOME/NSS/browser profiles each navigate exactly
+one document: untrusted, `C,,` comparison, `P,,` peer, and `P,,` wrong-name.
+The wrong-name URL is fixed at `https://stead-wrong-host.invalid:18443/`, resolved
+only to the same isolated 127.0.0.1 relay through one fixed Chromium host rule.
+All non-document requests, assets, scripts, API calls, methods other than GET,
+redirect destinations and arbitrary hosts are blocked; no Stead application
+JavaScript is fetched and no login action occurs. Browser sandboxes, CSP and
+normal certificate/hostname verification remain enabled. No certificate-ignore,
+insecure-localhost, proxy or host trust flag is available.
+
+The closed private proof records each profile's HTTP status (or null), a fixed
+certificate/network failure category, bounded navigation/blocked counts with
+explicit overflow, and CSP/sandbox booleans. It never retains raw error text,
+native output, DOM, screenshots, response bodies/headers or credentials. A pass
+requires untrusted certificate rejection, the peer's actual 200 response with
+the exact CSP plus in-world eval/Function negative controls and renderer sandbox,
+and wrong-name certificate-name rejection. The CA comparison's actual success
+or certificate rejection is retained; it is not forced to confirm the presumed
+cause. Missing evidence, unrelated network failures, cleanup failure or changed
+inputs fail the diagnostic. This does not prove login, UI interactivity, a
+full browser journey, Checkpoint A or a Phase 1 release pass.
