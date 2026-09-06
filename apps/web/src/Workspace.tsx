@@ -47,10 +47,12 @@ export function Workspace({ route, navigate }: { readonly route: RouteMatch; rea
   const generation = useRef(0);
   const mutationKey = useRef<{ fingerprint: string; value: string } | null>(null);
   // Empty arrays are not evidence of a completed authorized read. These stamps
-  // describe committed presentation readiness only, never authorization.
+  // describe presentation outcomes only, never authorization. A settled failure
+  // ends collection loading, but must never count as useful content readiness.
   const [organizationsReady, setOrganizationsReady] = useState(false);
-  const [readyCollections, setReadyCollections] = useState<{
+  const [collectionResult, setCollectionResult] = useState<{
     session: Session; organizationID: string; generation: number; refreshRevision: number;
+    succeeded: boolean;
   } | null>(null);
 
   const clear = useCallback(() => {
@@ -66,7 +68,7 @@ export function Workspace({ route, navigate }: { readonly route: RouteMatch; rea
     setProjects([]);
     setPeek(null);
     setOrganizationsReady(false);
-    setReadyCollections(null);
+    setCollectionResult(null);
     setContinuations({ organization: "", team: "", project: "" });
     mutationKey.current = null;
     clearAuthorizedPresentationState();
@@ -106,7 +108,7 @@ export function Workspace({ route, navigate }: { readonly route: RouteMatch; rea
   }, [failed, loadOrganizations]);
 
   useEffect(() => {
-    setReadyCollections(null);
+    setCollectionResult(null);
     setTeams([]);
     setProjects([]);
     setPeek(null);
@@ -121,8 +123,12 @@ export function Workspace({ route, navigate }: { readonly route: RouteMatch; rea
       if (controller.signal.aborted || generation.current !== revision) return;
       applyPage("team", teamList.data, false);
       applyPage("project", projectList.data, false);
-      setReadyCollections({ session, organizationID, generation: revision, refreshRevision });
-    }).catch((cause: unknown) => { if (!controller.signal.aborted) failed(cause); });
+      setCollectionResult({ session, organizationID, generation: revision, refreshRevision, succeeded: true });
+    }).catch((cause: unknown) => {
+      if (controller.signal.aborted || generation.current !== revision) return;
+      setCollectionResult({ session, organizationID, generation: revision, refreshRevision, succeeded: false });
+      failed(cause);
+    });
     return () => { controller.abort(); };
   }, [organizationID, session, refreshRevision, failed, applyPage]);
 
@@ -242,10 +248,17 @@ export function Workspace({ route, navigate }: { readonly route: RouteMatch; rea
   const area = route.kind === "primary" ? route.route.id : "unmatched";
   const resources = area === "teams" ? teams : area === "projects" ? projects : organizations;
   const implementedArea = area === "home" || area === "teams" || area === "projects";
-  const collectionsReady = readyCollections?.session === session &&
-    readyCollections.organizationID === organizationID &&
-    readyCollections.generation === generation.current &&
-    readyCollections.refreshRevision === refreshRevision;
+  const collectionsSettled = collectionResult?.session === session &&
+    collectionResult.organizationID === organizationID &&
+    collectionResult.generation === generation.current &&
+    collectionResult.refreshRevision === refreshRevision;
+  const collectionsReady = collectionsSettled && collectionResult.succeeded;
+  // Home and placeholder routes do not display this background batch. Keep
+  // pending presentation separate from busy, which disables mutation controls,
+  // and expose error announcements immediately even if a sibling read is pending.
+  const displayedCollectionsPending = Boolean(session && organizationID) &&
+    (area === "teams" || area === "projects") && !collectionsSettled;
+  const workspaceBusy = !error && (checking || busy || displayedCollectionsPending);
   const contentReady = !checking && !error && Boolean(session) && implementedArea &&
     organizationsReady && (area === "home" || !organizationID || collectionsReady);
   // Unmatched RouteSurface renders its own unavailable state, not these forms.
@@ -283,7 +296,7 @@ export function Workspace({ route, navigate }: { readonly route: RouteMatch; rea
   }, [route, checking, session, error, implementedArea, contentReady, interactiveReady]);
 
   return <AppShell route={route} navigate={navigate} sessionLabel={session ? <button type="button" onClick={() => { void logout(); }} disabled={busy}>Sign out</button> : "Local development"}>
-    <div className="product-workspace" aria-busy={checking || busy}>
+    <div className="product-workspace" aria-busy={workspaceBusy}>
       <p className="product-development" role="note">Local development · synthetic data only</p>
       {error && <p className="product-error" role="alert">{error}</p>}
       {checking ? <p role="status">Checking your session…</p> : !session ? <section className="product-panel">
