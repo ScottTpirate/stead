@@ -19,6 +19,26 @@ const response = <T,>(data: T): PlatformResponse<T> => ({ data, status: 200, res
 
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
+it.each([
+  ["/", "Organization", "Create your first Organization"],
+  ["/teams", "Parent Team", "No parentAuthorized server title"],
+  ["/projects", "Owning Team", "Choose an authorized TeamAuthorized server title"],
+])("select accessible names stay exact despite descendant option text on %s", async (route, name, optionText) => {
+  vi.spyOn(platformClient, "request").mockImplementation(async <T,>(operation: string) => {
+    if (operation === "getSession") return response(session as T);
+    if (operation === "listOrganizations") return response({ items: route === "/" ? [] : [organization] } as T);
+    if (operation === "listTeams") return response({ items: [{ ...organization, kind: "team", id: "fixture-team" }] } as T);
+    return response({ items: [] } as T);
+  });
+  render(<Workspace route={matchRoute(route)} navigate={() => {}} />);
+  if (route !== "/") await screen.findByRole("option", { name: "Authorized server title" });
+  const select = await screen.findByRole("combobox", { name, exact: true }) as HTMLSelectElement;
+  // Matches the native label text Playwright 1.63's label engine traverses.
+  // This DOM regression is not a Playwright/browser execution claim.
+  expect(select.labels?.[0].textContent).toBe(name + optionText);
+  expect(select.disabled).toBe(route === "/");
+});
+
 // Isolated UI behavior tests: generated-client transport validation and live
 // product acceptance are separate. No listener, browser, or DB is simulated here.
 it("clears the disposable credential and creates through the generated client", async () => {
