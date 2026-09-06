@@ -1,6 +1,6 @@
 // One-shot real Checkpoint A workload. No tool download or implicit admission.
 import { readFileSync, lstatSync, mkdirSync, mkdtempSync, copyFileSync, chmodSync,
-  writeFileSync, existsSync, constants } from 'node:fs';
+  writeFileSync, existsSync, openSync, closeSync, readSync, readlinkSync, fstatSync, opendirSync, constants } from 'node:fs';
 import { createServer, connect } from 'node:net';
 import { connect as tlsConnect } from 'node:tls';
 import { X509Certificate } from 'node:crypto';
@@ -9,18 +9,88 @@ import { pathToFileURL, fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { check, sha256, readBounded, privateDirectory, noSymlinks, validateAdmission,
   validateInnerProof, claimAttempt, byteBudget, SOURCE_FILES, OUTER_NODE, INPUTS,
-  INPUTS_SHA256, FORBIDDEN_STATE } from './checkpoint_a_browser_boundary.mjs';
+  INPUTS_SHA256, FORBIDDEN_STATE, verifyDistribution, processStat, serviceCommand,
+  listenerInodes } from './checkpoint_a_browser_boundary.mjs';
 
 const environment = { PATH: '/usr/bin', HOME: '/home/controller', LANG: 'C.UTF-8', TZ: 'UTC', FONTCONFIG_FILE: '/fixture/fonts.conf' };
 const REPO = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const digestFile = (file, options) => sha256(readBounded(file, 512 * 1024 * 1024, options));
-function git(repository, args) {
+function git(repository, args, trim = true) {
   const run = spawnSync('/usr/bin/git', ['--no-optional-locks', '-c', 'core.fsmonitor=false',
     '-c', 'core.untrackedCache=false', '-C', repository, ...args], {
     env: { PATH: '/usr/bin', GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null' },
     timeout: 5000, maxBuffer: 1 << 20, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'],
   });
-  check(run.status === 0 && !run.error && !run.signal); return run.stdout.trim();
+  check(run.status === 0 && !run.error && !run.signal); return trim ? run.stdout.trim() : run.stdout;
+}
+function boundedDescriptor(descriptor, limit) {
+  const bytes = Buffer.alloc(limit + 1); let total = 0;
+  while (total < bytes.length) {
+    const count = readSync(descriptor, bytes, total, bytes.length - total, null);
+    if (count === 0) break; total += count;
+  }
+  check(total > 0 && total <= limit); return bytes.subarray(0, total);
+}
+function procText(file, limit = 8192) {
+  const descriptor = openSync(file, constants.O_RDONLY | constants.O_NOFOLLOW);
+  try { return boundedDescriptor(descriptor, limit).toString('utf8'); }
+  finally { closeSync(descriptor); }
+}
+function executableIdentity(pid, expectedPath, expectedDigest) {
+  check(readlinkSync(`/proc/${pid}/exe`) === expectedPath);
+  // Deliberately open this kernel magic link: unlike hashing a pathname, this
+  // reads the inode actually executing. No /proc environment or secret reads.
+  const descriptor = openSync(`/proc/${pid}/exe`, constants.O_RDONLY);
+  try {
+    const actual = fstatSync(descriptor, { bigint: true }), disk = lstatSync(expectedPath, { bigint: true });
+    check(actual.isFile() && actual.nlink === 1n && actual.uid === BigInt(process.getuid()) && !(actual.mode & 0o6022n));
+    check(actual.dev === disk.dev && actual.ino === disk.ino && actual.size > 0n && actual.size <= 536870912n);
+    check(sha256(boundedDescriptor(descriptor, Number(actual.size))) === expectedDigest);
+    check(readlinkSync(`/proc/${pid}/exe`) === expectedPath);
+    return `${actual.dev}:${actual.ino}`;
+  } finally { closeSync(descriptor); }
+}
+function runtimeSnapshot(source, state, running) {
+  const supervisorStat = processStat(procText(`/proc/${running.pid}/stat`), running.pid);
+  check(supervisorStat.start === running.startTime);
+  const supervisorExe = executableIdentity(running.pid, OUTER_NODE, '19235a9b678f84729464c52623f92de130a165452747c6826d3fdc13df3abcc3');
+  const network = readlinkSync('/proc/self/ns/net');
+  check(readlinkSync(`/proc/${running.pid}/ns/net`) === network && readlinkSync(`/proc/${running.pid}/cwd`) === REPO);
+  const listeners = () => listenerInodes(procText('/proc/self/net/tcp', 1048576), procText('/proc/self/net/tcp6', 1048576), process.getuid());
+  const sockets = listeners();
+  const childIDs = procText(`/proc/${running.pid}/task/${running.pid}/children`).trim().split(/\s+/);
+  check(childIDs.length > 0 && childIDs.length <= 32 && new Set(childIDs).size === childIDs.length);
+  const found = {};
+  for (const raw of childIDs) {
+    check(/^[1-9][0-9]{0,9}$/.test(raw)); const pid = Number(raw);
+    const text = procText(`/proc/${pid}/cmdline`); check(text.endsWith('\0'));
+    const args = text.slice(0, -1).split('\0');
+    if (args[0] !== path.join(state, 'stead-api')) continue;
+    const before = processStat(procText(`/proc/${pid}/stat`), pid);
+    check(before.parent === running.pid && BigInt(before.start) >= BigInt(running.startTime));
+    check(readlinkSync(`/proc/${pid}/ns/net`) === network && readlinkSync(`/proc/${pid}/cwd`) === REPO);
+    const role = serviceCommand(args, state, REPO); check(!found[role]);
+    const inode = executableIdentity(pid, path.join(state, 'stead-api'), source.apiSHA256);
+    const directory = opendirSync(`/proc/${pid}/fd`); let count = 0, ownsSocket = false;
+    try {
+      for (let entry; (entry = directory.readSync()) !== null;) {
+        check(++count <= 256 && /^[0-9]+$/.test(entry.name));
+        let link;
+        try { link = readlinkSync(`/proc/${pid}/fd/${entry.name}`); }
+        catch (error) { if (error.code === 'ENOENT') continue; throw error; }
+        if (link === `socket:[${sockets[role]}]`) ownsSocket = true;
+      }
+    } finally { directory.closeSync(); }
+    check(ownsSocket && JSON.stringify(processStat(procText(`/proc/${pid}/stat`), pid)) === JSON.stringify(before));
+    found[role] = { pid, start: before.start, inode, socket: sockets[role] };
+  }
+  check(found.api && found.web && found.api.pid !== found.web.pid);
+  check(JSON.stringify(listeners()) === JSON.stringify(sockets));
+  check(JSON.stringify(processStat(procText(`/proc/${running.pid}/stat`), running.pid)) === JSON.stringify(supervisorStat));
+  // Kept in controller memory only; no process table, argv or filesystem paths
+  // enter the browser report. This is fresh-demo attribution, not attestation
+  // against malicious same-user changes to host kernel/process state.
+  return { supervisor: { pid: running.pid, start: running.startTime, inode: supervisorExe }, ...found };
 }
 function verifyIdentity(admission) {
   const { source, instance } = admission;
@@ -39,6 +109,10 @@ function verifyIdentity(admission) {
   const template = JSON.parse(readBounded(templateFile, 1 << 20)), review = JSON.parse(readBounded(reviewFile, 1 << 20));
   check(template.status === 'approved' && review.status === 'accepted' && template.core.source_revision === source.implementationRevision && template.core.source_tree === source.implementationTree);
   check(review.source_revision === source.implementationRevision && review.source_tree === source.implementationTree);
+  const evidencePath = 'apps/web/evidence/frontend-foundation-bundle.json';
+  const evidenceBytes = readBounded(path.join(REPO, evidencePath), 1048576);
+  check(sha256(evidenceBytes) === sha256(git(REPO, ['show', `${source.head}:${evidencePath}`], false)));
+  const distribution = verifyDistribution(path.join(REPO, 'apps/web/dist'), JSON.parse(evidenceBytes));
   check(digestFile(path.join(instance.state, 'stead-api')) === source.apiSHA256);
   const bootstrapBytes = readBounded(path.join(instance.state, 'bootstrap.json'), 16384, { privateMode: true });
   check(sha256(bootstrapBytes) === instance.bootstrapSHA256);
@@ -54,10 +128,9 @@ function verifyIdentity(admission) {
   const cmdline = readFileSync(`/proc/${running.pid}/cmdline`); check(cmdline.length < 8192);
   const args = cmdline.toString('utf8').split('\0').filter(Boolean);
   check(args.length === 3 && args[0] === OUTER_NODE && args[1] === path.join(REPO, 'scripts/dev_stack.mjs') && args[2] === '__run');
-  for (const marker of ['checkpoint-a-browser-attempt.json', 'checkpoint-a-cookie.json', 'checkpoint-a-progress.json', 'unprivileged-session-cookie']) check(!existsSync(path.join(instance.state, marker)));
   const certificate = readBounded(path.join(instance.state, 'tls/localhost.crt'), 16384, { privateMode: true });
   check(sha256(certificate) === instance.certificateSHA256);
-  return certificate;
+  return { certificate, distribution, runtime: runtimeSnapshot(source, instance.state, running) };
 }
 async function verifyTLSPeer(certificate) {
   const expected = new X509Certificate(certificate);
@@ -153,7 +226,7 @@ async function execute(args, credentials) {
 }
 export async function main(argv = process.argv.slice(2)) {
   let phase = 'preflight', directory, transport, inputs, staged, admissionBytes, admission, inner = null;
-  let passed = false, inputsUnchanged = false, credentials;
+  let passed = false, inputsUnchanged = false, credentials, identity, attemptSHA256;
   try {
     check(argv.length === 2 && argv[0] === '--review');
     check(!Object.keys(process.env).some((name) => !['PATH', 'LANG', 'TZ'].includes(name)));
@@ -162,12 +235,14 @@ export async function main(argv = process.argv.slice(2)) {
     admission = validateAdmission(JSON.parse(admissionBytes));
     for (const review of admission.reviews) check(digestFile(review.path) === review.sha256);
     inputs = verifyInputs();
-    phase = 'identity'; const certificate = verifyIdentity(admission);
+    phase = 'identity'; identity = verifyIdentity(admission); const { certificate } = identity;
+    for (const marker of ['checkpoint-a-browser-attempt.json', 'checkpoint-a-cookie.json', 'checkpoint-a-progress.json', 'unprivileged-session-cookie']) check(!existsSync(path.join(admission.instance.state, marker)));
     phase = 'tls'; await verifyTLSPeer(certificate);
     // A failed or interrupted attempt is not automatically reusable. This record
     // is intentionally retained even when no login was dispatched.
-    phase = 'attempt'; claimAttempt(admission.instance.state, { format: 'stead-checkpoint-a-browser-attempt-v1',
+    phase = 'attempt'; const attempt = claimAttempt(admission.instance.state, { format: 'stead-checkpoint-a-browser-attempt-v1',
       admissionSHA256: sha256(admissionBytes), instanceID: admission.instance.instanceID, sourceRevision: admission.source.head, startedAt: new Date().toISOString() });
+    attemptSHA256 = digestFile(attempt);
     directory = mkdtempSync('/home/skilgore/stead-checkpoint-a-browser-run.'); chmodSync(directory, 0o700);
     phase = 'staging'; staged = stage(inputs, directory, admission, certificate);
     transport = await relay(path.join(directory, 'relay.sock'));
@@ -191,6 +266,9 @@ export async function main(argv = process.argv.slice(2)) {
         verifyInputs(); check(sha256(readBounded(argv[1], 32768, { privateMode: true })) === sha256(admissionBytes));
         staged.copies.forEach((entry) => check(digestFile(entry.path) === entry.sha256));
         for (const file of SOURCE_FILES) check(digestFile(path.join(REPO, file)) === admission.files[file]);
+        check(digestFile(path.join(admission.instance.state, 'checkpoint-a-browser-attempt.json')) === attemptSHA256);
+        const after = verifyIdentity(admission);
+        check(after.certificate.equals(identity.certificate) && after.distribution === identity.distribution && JSON.stringify(after.runtime) === JSON.stringify(identity.runtime));
         inputsUnchanged = true;
       } catch { passed = false; }
     }

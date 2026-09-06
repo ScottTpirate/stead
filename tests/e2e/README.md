@@ -30,6 +30,14 @@ The record contains no credentials. It must name the executing checkout, whose
 only permitted differences from its approved implementation revision are the
 two existing template approval records. A fresh supported running.json,
 supervisor identity, canonical bootstrap, API binary and TLS peer must match.
+The two real listener processes must be direct children of that supervisor,
+with fixed argv/current cwd, unchanged PID/start identities, matching executable
+inodes and hashes, and ownership of the unique literal-loopback API/BFF socket
+inodes. BFF argv binds the exact assets and fresh TLS paths. Before and after the
+run, every served dist file (including the hidden Vite manifest) must match the
+existing committed frontend bundle inventory with no extra/missing entries.
+No process environment is read; this is fresh-demo source attribution, not a
+new attestation claim against malicious same-user host manipulation.
 This is not a template activation bypass, source rebuild or instance provisioner.
 
 Use a newly initialized, independently reviewed synthetic instance with two
@@ -53,7 +61,8 @@ reads their details, reloads/refreshes, checks keyboard navigation and observes
 the separate no-grant user's empty views and generic denied creation. It never
 uses mock routes or API/test-auth hooks. Axe runs from the pinned 4.13.0 artifact
 in a CDP isolated world with the actual product CSP preserved and CSP-blocked
-unsafe eval disabled; no script tag, bypassCSP or product policy change is used.
+unsafe eval disabled; a boolean-only eval/Function negative control must pass in
+each exact audited world before axe. No script tag, bypassCSP or product policy change is used.
 That exact instrumentation still requires successful actual execution, not just
 syntax validation. Findings retain only bounded rule/impact/count metadata.
 
